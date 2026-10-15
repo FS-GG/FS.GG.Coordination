@@ -927,8 +927,8 @@ jobs:
           OPERATION: ${{ inputs.operation }}
         run: |
           set -euo pipefail
-          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)" = "$GITHUB_SHA"
-          test "$GITHUB_REF" = refs/heads/main
+          test "$(gh api "repos/$GITHUB_REPOSITORY/commits/execution/v0.3.0-publisher-original38495729817" --jq .sha)" = "$GITHUB_SHA"
+          test "$GITHUB_REF" = refs/tags/execution/v0.3.0-publisher-original38495729817
           test "$GITHUB_RUN_ATTEMPT" = 1
           test "$GITHUB_REPOSITORY" = FS-GG/FS.GG.Coordination
           test "$REQUESTED_PUBLISHER" = "$GITHUB_SHA"
@@ -1031,6 +1031,7 @@ jobs:
           PREFLIGHT_ONLY: ${{ inputs.preflight_only }}
           READBACK_ONLY: ${{ inputs.readback_only }}
           OPERATION: ${{ inputs.operation }}
+          GH_TOKEN: ${{ github.token }}
           PAIR_RECOVERY: ${{ inputs.pair_recovery }}
           REQUESTED_SOURCE: ${{ inputs.source }}
           REQUESTED_MERGE: ${{ inputs.protected_merge }}
@@ -1041,12 +1042,25 @@ jobs:
           test "$CLI_ONLY" = false
           test "$PREFLIGHT_ONLY" = false
           test "$READBACK_ONLY" = false
-          test "$GITHUB_REF" = refs/heads/main
+          test "$GITHUB_REF" = refs/tags/execution/v0.3.0-publisher-original38495729817
           test "$GITHUB_RUN_ATTEMPT" = 1
           test "$GITHUB_REPOSITORY" = FS-GG/FS.GG.Coordination
           test "$REQUESTED_PUBLISHER" = "$GITHUB_SHA"
-          git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
-          test "$(git rev-parse refs/remotes/origin/main)" = "$GITHUB_SHA"
+          test "$GITHUB_REF" = refs/tags/execution/v0.3.0-publisher-original38495729817
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          git fetch --no-tags origin refs/tags/execution/v0.3.0-publisher-original38495729817
+          test "$(git rev-parse 'FETCH_HEAD^{commit}')" = "$GITHUB_SHA"
+          python3 - <<'PY_PAIR_PUBLISHER'
+          import json,os,pathlib,runpy,subprocess
+          root=pathlib.Path(os.environ['RUNNER_TEMP'])/'pair-publisher-binding.json'
+          raw=subprocess.check_output(['gh','api','repos/FS-GG/FS.GG.Coordination/git/ref/tags/execution/v0.3.0-publisher-original38495729817'],timeout=30)
+          assert 0<len(raw)<=1048576
+          resolved=subprocess.check_output(['git','rev-parse','FETCH_HEAD^{commit}'],text=True,timeout=10).strip()
+          assert json.loads(raw)['object']['sha']==subprocess.check_output(['git','rev-parse','FETCH_HEAD'],text=True,timeout=10).strip()
+          env=dict(os.environ,REQUESTED_PUBLISHER=os.environ['GITHUB_SHA'])
+          proof=runpy.run_path('eng/test-callable-cli-installed-harness.py')['pair_publisher_binding'](env,json.loads(raw),resolved,json.loads(root.read_bytes()) if root.exists() else None)
+          root.write_text(json.dumps(proof,sort_keys=True)+'\n')
+          PY_PAIR_PUBLISHER
           python3 - <<'PY_PAIR_ADMISSION'
           import json,os,re
           a=json.load(open('eng/execution-pair-release-admission.json'))
@@ -1103,6 +1117,13 @@ jobs:
               *) echo "::error::pair A-to-B contains a non-publication change: $path"; exit 1 ;;
             esac
           done <<< "$changed_paths"
+          python3 - <<'PY_PAIR_SOURCE_PATHS'
+          import hashlib,json,os,pathlib,subprocess
+          paths=subprocess.check_output(['git','diff','--name-only',os.environ['SOURCE_A'],os.environ['GITHUB_SHA']],text=True).splitlines()
+          value={'publisher':os.environ['GITHUB_SHA'],'paths':{p:hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest() for p in paths},
+                 'workflowSha256':hashlib.sha256(pathlib.Path('.github/workflows/callable-cli-release-publish.yml').read_bytes()).hexdigest()}
+          (pathlib.Path(os.environ['RUNNER_TEMP'])/'pair-publisher-paths.json').write_text(json.dumps(value,sort_keys=True)+'\n')
+          PY_PAIR_SOURCE_PATHS
       - name: Authenticate and extract exactly the original pair A archive
         shell: bash
         env:
@@ -1110,6 +1131,8 @@ jobs:
         run: |
           set -euo pipefail
           mkdir "$CANDIDATE_OUTPUT" "$READBACK_OUTPUT"
+          cp "$RUNNER_TEMP/pair-publisher-binding.json" "$READBACK_OUTPUT/publisher-binding.json"
+          cp "$RUNNER_TEMP/pair-publisher-paths.json" "$READBACK_OUTPUT/publisher-paths.json"
           gh api "repos/$GITHUB_REPOSITORY/actions/runs/$CANDIDATE_RUN" > "$READBACK_OUTPUT/run.json"
           gh api "repos/$GITHUB_REPOSITORY/actions/runs/$CANDIDATE_RUN/attempts/1/jobs?per_page=100" > "$READBACK_OUTPUT/jobs.json"
           gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$CANDIDATE_ARTIFACT" > "$READBACK_OUTPUT/artifact.json"
@@ -1281,10 +1304,33 @@ jobs:
           user: ${{ env.PAIR_NUGET_USER }}
       - name: Recheck exact B and pair bytes immediately before first push
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PAIR_RULESET_TOKEN: ${{ steps.pair-ruleset-reader.outputs.token }}
         run: |
           set -euo pipefail
-          git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
-          test "$(git rev-parse refs/remotes/origin/main)" = "$GITHUB_SHA"
+          test "$GITHUB_REF" = refs/tags/execution/v0.3.0-publisher-original38495729817
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          git fetch --no-tags origin refs/tags/execution/v0.3.0-publisher-original38495729817
+          test "$(git rev-parse 'FETCH_HEAD^{commit}')" = "$GITHUB_SHA"
+          python3 - <<'PY_PAIR_PUBLISHER'
+          import json,os,pathlib,runpy,subprocess
+          root=pathlib.Path(os.environ['RUNNER_TEMP'])/'pair-publisher-binding.json'
+          raw=subprocess.check_output(['gh','api','repos/FS-GG/FS.GG.Coordination/git/ref/tags/execution/v0.3.0-publisher-original38495729817'],timeout=30)
+          assert 0<len(raw)<=1048576
+          resolved=subprocess.check_output(['git','rev-parse','FETCH_HEAD^{commit}'],text=True,timeout=10).strip()
+          assert json.loads(raw)['object']['sha']==subprocess.check_output(['git','rev-parse','FETCH_HEAD'],text=True,timeout=10).strip()
+          env=dict(os.environ,REQUESTED_PUBLISHER=os.environ['GITHUB_SHA'])
+          proof=runpy.run_path('eng/test-callable-cli-installed-harness.py')['pair_publisher_binding'](env,json.loads(raw),resolved,json.loads(root.read_bytes()) if root.exists() else None)
+          root.write_text(json.dumps(proof,sort_keys=True)+'\n')
+          PY_PAIR_PUBLISHER
+          GH_TOKEN="$PAIR_RULESET_TOKEN" gh api "repos/$GITHUB_REPOSITORY/rulesets/21633398" > "$READBACK_OUTPUT/tag-protection.json"
+          python3 - <<'PY_PAIR_POLICY_RECHECK'
+          import json,os,pathlib,runpy
+          path=pathlib.Path(os.environ['READBACK_OUTPUT'])/'tag-protection.json'
+          assert 0<path.stat().st_size<=1048576
+          runpy.run_path('eng/test-callable-cli-installed-harness.py')['pair_protection'](json.loads(path.read_bytes()),json.load(open('eng/execution-pair-release-admission.json')),json.load(open('eng/repository-settings/release-tag-ruleset.json')))
+          PY_PAIR_POLICY_RECHECK
           dotnet fsi eng/callable-cli-release.fsx verify --profile execution-pair \
             --source "$SOURCE_A" --version 0.3.0 --output "$CANDIDATE_OUTPUT"
       - name: Push both retained members to GitHub Packages first
@@ -1350,7 +1396,7 @@ jobs:
           set -euo pipefail
           python3 eng/test-callable-cli-installed-harness.py --execution-pair "$CANDIDATE_OUTPUT" public "$READBACK_OUTPUT/public-load.json"
           python3 eng/write-callable-cli-release-readback.py --execution-pair \
-            --publisher "$GITHUB_SHA" --source "$SOURCE_A" --tree "$TREE_A" --merge "$MERGE_A" \
+            --publisher "$GITHUB_SHA" --publisher-binding "$READBACK_OUTPUT/publisher-binding.json" --source "$SOURCE_A" --tree "$TREE_A" --merge "$MERGE_A" \
             --manifest "$CANDIDATE_OUTPUT/execution-pair-release-manifest.json" --manifest-sha256 "$MANIFEST_SHA" \
             --admission eng/execution-pair-release-admission.json --consumer-root "$READBACK_OUTPUT/consumers" \
             --feed-root "$READBACK_OUTPUT" --installed "$READBACK_OUTPUT/public-load.json" --original-root "$READBACK_OUTPUT" --recovery-operation "${{ inputs.operation }}" --output "$READBACK_OUTPUT/pair-release-readback.json"
@@ -1358,10 +1404,31 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          PAIR_RULESET_TOKEN: ${{ steps.pair-ruleset-reader.outputs.token }}
         run: |
           set -euo pipefail
-          git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
-          test "$(git rev-parse refs/remotes/origin/main)" = "$GITHUB_SHA"
+          test "$GITHUB_REF" = refs/tags/execution/v0.3.0-publisher-original38495729817
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          git fetch --no-tags origin refs/tags/execution/v0.3.0-publisher-original38495729817
+          test "$(git rev-parse 'FETCH_HEAD^{commit}')" = "$GITHUB_SHA"
+          python3 - <<'PY_PAIR_PUBLISHER'
+          import json,os,pathlib,runpy,subprocess
+          root=pathlib.Path(os.environ['RUNNER_TEMP'])/'pair-publisher-binding.json'
+          raw=subprocess.check_output(['gh','api','repos/FS-GG/FS.GG.Coordination/git/ref/tags/execution/v0.3.0-publisher-original38495729817'],timeout=30)
+          assert 0<len(raw)<=1048576
+          resolved=subprocess.check_output(['git','rev-parse','FETCH_HEAD^{commit}'],text=True,timeout=10).strip()
+          assert json.loads(raw)['object']['sha']==subprocess.check_output(['git','rev-parse','FETCH_HEAD'],text=True,timeout=10).strip()
+          env=dict(os.environ,REQUESTED_PUBLISHER=os.environ['GITHUB_SHA'])
+          proof=runpy.run_path('eng/test-callable-cli-installed-harness.py')['pair_publisher_binding'](env,json.loads(raw),resolved,json.loads(root.read_bytes()) if root.exists() else None)
+          root.write_text(json.dumps(proof,sort_keys=True)+'\n')
+          PY_PAIR_PUBLISHER
+          GH_TOKEN="$PAIR_RULESET_TOKEN" gh api "repos/$GITHUB_REPOSITORY/rulesets/21633398" > "$READBACK_OUTPUT/tag-protection.json"
+          python3 - <<'PY_PAIR_POLICY_RECHECK'
+          import json,os,pathlib,runpy
+          path=pathlib.Path(os.environ['READBACK_OUTPUT'])/'tag-protection.json'
+          assert 0<path.stat().st_size<=1048576
+          runpy.run_path('eng/test-callable-cli-installed-harness.py')['pair_protection'](json.loads(path.read_bytes()),json.load(open('eng/execution-pair-release-admission.json')),json.load(open('eng/repository-settings/release-tag-ruleset.json')))
+          PY_PAIR_POLICY_RECHECK
           test -z "$(git ls-remote --tags origin refs/tags/execution/v0.3.0)"
           status="$(curl --silent --show-error --max-time 30 --header "Authorization: Bearer $GH_TOKEN" --header 'Accept: application/vnd.github+json' --output "$READBACK_OUTPUT/release-before-finalization.json" --write-out '%{http_code}' "https://api.github.com/repos/$GITHUB_REPOSITORY/releases/tags/execution%2Fv0.3.0")"
           test "$status" = 404

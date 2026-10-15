@@ -533,15 +533,42 @@ PAIR_POLICY_TOKEN_CLEANUP_CONTRACT = {'enabled': False,
  'publicationAuthorized': False}
 
 
+PAIR_PUBLISHER_REF = 'refs/tags/execution/v0.3.0-publisher-original38495729817'
+
+
+def pair_publisher_binding(environment, ref_object, resolved_commit, previous=None):
+    """Closed recovery ref; failed/missing/moved observations grant no effects."""
+    publisher = environment.get('GITHUB_SHA', '')
+    if (environment.get('GITHUB_REF') != PAIR_PUBLISHER_REF
+            or environment.get('GITHUB_REPOSITORY') != 'FS-GG/FS.GG.Coordination'
+            or environment.get('GITHUB_RUN_ATTEMPT') != '1'
+            or environment.get('GITHUB_WORKFLOW_REF') != 'FS-GG/FS.GG.Coordination/.github/workflows/callable-cli-release-publish.yml@' + PAIR_PUBLISHER_REF
+            or environment.get('REQUESTED_PUBLISHER') != publisher
+            or re.fullmatch('[0-9a-f]{40}', publisher) is None
+            or not isinstance(ref_object, dict) or ref_object.get('ref') != PAIR_PUBLISHER_REF
+            or ref_object.get('object', {}).get('type') not in ('commit', 'tag')
+            or re.fullmatch('[0-9a-f]{40}', ref_object.get('object', {}).get('sha', '')) is None
+            or resolved_commit != publisher
+            or ref_object.get('object', {}).get('type') == 'commit' and ref_object['object']['sha'] != publisher):
+        raise ValueError('exact immutable publisher identity unavailable or changed')
+    value = {'ref': PAIR_PUBLISHER_REF, 'publisher': publisher,
+             'refObject': ref_object['object']['sha'], 'refType': ref_object['object']['type'],
+             'workflow': '.github/workflows/callable-cli-release-publish.yml'}
+    if previous is not None and previous != value:
+        raise ValueError('immutable publisher moved; retain partial original, observation only')
+    return value
+
+
 def pair_recovery_selection(admission):
     selected = admission['recovery']
-    expected = {'enabled', 'policyObservationEnabled', 'clientQualificationEnabled', 'policyTokenCleanup', 'operation', 'originalOperation', 'publisher', 'runId', 'runAttempt',
+    expected = {'enabled', 'policyObservationEnabled', 'clientQualificationEnabled', 'policyTokenCleanup', 'publisherRef', 'operation', 'originalOperation', 'publisher', 'runId', 'runAttempt',
                 'jobId', 'artifactId', 'archiveSha256'}
     if set(selected) != expected or any(type(selected[k]) is not bool for k in ('enabled','policyObservationEnabled','clientQualificationEnabled')):
         raise ValueError('pair recovery selection changed')
     if compact(selected['policyTokenCleanup']) != compact(PAIR_POLICY_TOKEN_CLEANUP_CONTRACT):
         raise ValueError('pair policy token cleanup closed source contract changed')
-    if (admission['enabled'] is not False
+    if (selected['publisherRef'] != PAIR_PUBLISHER_REF
+            or admission['enabled'] is not False
             or admission['operation'] != 'publish-execution-pair-030-b11fb121-four38484632631'
             or selected['originalOperation'] != admission['operation']
             or selected['operation'] != 'recover-execution-pair-030-b11fb121-original38495729817'

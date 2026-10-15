@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import os
 import json
 from pathlib import Path
 import sys
@@ -305,6 +306,7 @@ def pair_readback(arguments: list[str]) -> int:
         parser.add_argument("--" + name, required=True, type=Path)
     parser.add_argument("--original-root", type=Path)
     parser.add_argument("--recovery-operation")
+    parser.add_argument("--publisher-binding", type=Path)
     args = parser.parse_args(arguments)
     for identity in (args.publisher, args.source, args.tree, args.merge): sha(identity, 40)
     sha(args.manifest_sha256, 64)
@@ -338,6 +340,16 @@ def pair_readback(arguments: list[str]) -> int:
             refuse('pair recovery original binding missing or changed')
         import runpy
         validators = runpy.run_path(str(Path(__file__).with_name('test-callable-cli-installed-harness.py')))
+        if args.publisher_binding is None: refuse('immutable publisher binding missing')
+        binding = json.loads(args.publisher_binding.read_bytes())
+        environment = dict(os.environ, REQUESTED_PUBLISHER=args.publisher)
+        validators['pair_publisher_binding'](environment, {'ref':binding['ref'],'object':{'sha':binding['refObject'],'type':binding['refType']}},args.publisher,binding)
+        paths_path=args.publisher_binding.with_name('publisher-paths.json')
+        paths=json.loads(paths_path.read_bytes())
+        if paths['publisher']!=args.publisher or paths['workflowSha256']!=hashlib.sha256(Path(binding['workflow']).read_bytes()).hexdigest():
+            refuse('publisher workflow digest changed')
+        for path,digest in paths['paths'].items():
+            if hashlib.sha256(Path(path).read_bytes()).hexdigest()!=digest: refuse('publisher source path digest changed')
         root = args.original_root
         def bounded(name, cap=1048576):
             path = root / name
@@ -365,7 +377,11 @@ def pair_readback(arguments: list[str]) -> int:
              "source": args.source, "sourceTree": args.tree, "protectedMerge": args.merge, "version": "0.3.0", "tag": "execution/v0.3.0",
              "manifestSha256": args.manifest_sha256, "packages": members, "installedLoad": installed, "consumerQualification": consumers,
              "consumerAdoptionAccepted": False}
-    if original is not None: value['originalPublication'] = original
+    if original is not None:
+        value['originalPublication'] = original
+        value['publisherBinding'] = binding
+        value['publisherPaths'] = paths
+        value['publisherRun'] = {'runId':os.environ['GITHUB_RUN_ID'], 'runAttempt':1, 'workflow':binding['workflow']}
     value['actualEffects'] = {'githubPackages':'verified','nugetOrg':'verified','publicInstalledLoad':'verified','componentFinalization':'pending'}
     value['unresolvedState'] = ['component-finalization-native-readback']
     args.output.parent.mkdir(parents=True, exist_ok=True)

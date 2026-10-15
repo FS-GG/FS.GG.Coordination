@@ -581,8 +581,8 @@ def complete_policy_source_controls():
                      'owner: FS-GG','repositories: FS.GG.Coordination','permission-administration: write'):
         assert required in mint,required
     assert mint.count('permission-')==1 and 'skip-token-revoke:' not in mint
-    assert job.count('${{ steps.pair-ruleset-reader.outputs.token }}')==1
-    assert job.count('GH_TOKEN="$PAIR_RULESET_TOKEN"')==1
+    assert job.count('${{ steps.pair-ruleset-reader.outputs.token }}')==3
+    assert job.count('GH_TOKEN="$PAIR_RULESET_TOKEN"')==3
     assert 'GH_TOKEN: ${{ github.token }}' in observe
     assert job.index('Verify pair provenance')<job.index('Require existing App bindings')<job.index('Mint repository-scoped token')<job.index('Observe four feed cells')<job.index('Obtain selected Trusted Publishing')<job.index('Push both retained')
     def shell(body):
@@ -717,6 +717,29 @@ def pair_recovery_source_controls():
         assert forbidden not in preflight,forbidden
     assert 'publicationAuthorized' in preflight and 'pending-native-token-revocation-observation' in preflight
     assert '--execution-pair-policy-token-cleanup' in preflight and 'Independently clean' in preflight
+
+    binding=helpers['pair_publisher_binding']
+    env={'GITHUB_REF':helpers['PAIR_PUBLISHER_REF'],'GITHUB_SHA':'d'*40,'REQUESTED_PUBLISHER':'d'*40,
+         'GITHUB_REPOSITORY':'FS-GG/FS.GG.Coordination','GITHUB_RUN_ATTEMPT':'1',
+         'GITHUB_WORKFLOW_REF':'FS-GG/FS.GG.Coordination/.github/workflows/callable-cli-release-publish.yml@'+helpers['PAIR_PUBLISHER_REF']}
+    native={'ref':env['GITHUB_REF'],'object':{'type':'commit','sha':'d'*40}}
+    proof=binding(env,native,'d'*40)
+    for mode in ('main','foreign','deleted','moved','wrong-B','rerun','foreign-repo','wrong-workflow'):
+        e=copy.deepcopy(env);n=copy.deepcopy(native);previous=copy.deepcopy(proof)
+        if mode=='main':e['GITHUB_REF']='refs/heads/main'
+        if mode=='foreign':n['ref']='refs/tags/foreign'
+        if mode=='deleted':n={}
+        if mode=='moved':n['object']={'type':'tag','sha':'e'*40}
+        if mode=='wrong-B':e['REQUESTED_PUBLISHER']='e'*40
+        if mode=='rerun':e['GITHUB_RUN_ATTEMPT']='2'
+        if mode=='foreign-repo':e['GITHUB_REPOSITORY']='foreign'
+        if mode=='wrong-workflow':previous['workflow']='foreign'
+        try:binding(e,n,'d'*40,previous)
+        except ValueError:pass
+        else:raise AssertionError(mode)
+    assert job.count("PY_PAIR_PUBLISHER'")==3
+    assert job.count("PY_PAIR_POLICY_RECHECK'")==2
+    assert job.count('refs/heads/main')==1, 'only original attestation may retain main'
     print('PAIR_RECOVERY_SOURCE_CONTROLS passed native-negatives=11 verified-provenance-negatives=9 effects-disabled=true')
 
 
@@ -998,7 +1021,7 @@ if args[0]=='diff':
 if args[0]=='rev-parse':print(os.environ['TREE_A'])
 """)
             stub.chmod(0o700)
-            env={**os.environ,'PATH':str(root)+os.pathsep+os.environ['PATH'],'FIXTURE_MODE':mode,'SOURCE_A':'a'*40,'MERGE_A':'a'*40,'TREE_A':'b'*40,'GITHUB_SHA':'9'*40}
+            env={**os.environ,'PATH':str(root)+os.pathsep+os.environ['PATH'],'FIXTURE_MODE':mode,'RUNNER_TEMP':str(root),'SOURCE_A':'a'*40,'MERGE_A':'a'*40,'TREE_A':'b'*40,'GITHUB_SHA':'9'*40}
             result=subprocess.run(['bash','-c',publisher_source],env=env,capture_output=True,timeout=5)
             assert (result.returncode==0)==(mode in {'good','proof-change','metadata-change','custody-guard','custody-tests'}),(mode,result.stderr)
     with tempfile.TemporaryDirectory(prefix='pair-readback-test-') as temporary:

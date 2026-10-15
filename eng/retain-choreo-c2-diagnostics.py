@@ -531,6 +531,7 @@ PROC_RUNTIME_DATA = {'contract':'closed-existing-owner-kernel-data/1',
     'scope':'volatile metadata, never immutable source pins, membership adoption, signal authority or reservation release'}
 PROC_ORIGINAL = 'publish-execution-pair-030-b11fb121-four38484632631'
 PROC_REPOSITORY = 'FS-GG/FS.GG.Coordination'
+PROC_PUBLISHER_REF = 'refs/tags/execution/v0.3.0-publisher-original38495729817'
 PROC_WORKFLOW = '.github/workflows/callable-cli-release-publish.yml'
 # Producer source pins this persistent namespace. No descriptor, authority path,
 # output, cwd, HOME or environment value can select another operation namespace.
@@ -935,7 +936,7 @@ def proc_command_preflight(spec, *, now):
                   'publisher_source':spec['publisher'],'operation':spec['operation'],'source':spec['source'],
                   'protected_merge':spec['source'],'expected_sha256':'c8772596977e2eb172672fa393d78daab5867aefcf24aa9960a1c5627d4f7ca8'}
         expected = {'method':'POST','endpoint':'repos/'+PROC_REPOSITORY+'/actions/workflows/361038177/dispatches',
-                    'apiVersion':'2026-03-10','body':{'ref':'main','inputs':inputs},'requestLimit':1}
+                    'apiVersion':'2026-03-10','body':{'ref':PROC_PUBLISHER_REF[10:],'inputs':inputs},'requestLimit':1}
     else:
         if (set(request) != {'method','endpoint','apiVersion','body','requestLimit','runId'}
                 or request['runId'] is not None and (type(request['runId']) is not int or request['runId'] <= 0)):
@@ -949,6 +950,33 @@ def proc_command_preflight(spec, *, now):
     if spec['argv'][0] not in pinned: raise ValueError('PROC client outside runtime closure')
     if len(json.dumps(spec).encode()) > 256*1024: raise ValueError('PROC descriptor bound')
     return {'schema':COMMAND_SCHEMA,'passed':True,'role':spec['role'],'publicationAuthorized':False}
+
+
+PROC_PUBLISHER_PATHS = frozenset((
+    '.github/workflows/callable-cli-release-prepare.yml', '.github/workflows/callable-cli-release-publish.yml',
+    'eng/test-callable-cli-installed-harness.py', 'eng/execution-pair-release-admission.json',
+    'eng/write-callable-cli-release-readback.py', 'eng/repository-settings/desired.json',
+    'eng/repository-settings/release-tag-ruleset.json', 'tests/portable-workspace/release/test_execution_pair_release.py',
+    'evidence/github-substrate-v2/gs2-06-7/execution-pins-extension.json',
+    'eng/retain-choreo-c2-diagnostics.py', 'eng/tests/choreo-c2-tlc-retry/test_diagnostics.py'))
+
+
+def proc_source_correspondence(spec, correspondence):
+    if (correspondence.get('publisher')!=spec['publisher'] or correspondence.get('source')!=spec['source']
+            or correspondence.get('publisherRef')!=PROC_PUBLISHER_REF or correspondence.get('workflowPath')!=PROC_WORKFLOW
+            or correspondence.get('immutablePublisherVerified') is not True
+            or correspondence.get('originalPublisher')!=spec['originalPublisher'] or correspondence.get('protectedSourceVerified') is not True
+            or correspondence.get('aToEExactThreePaths') is not True or correspondence.get('aToPublisherExactElevenPaths') is not True):
+        raise ValueError('PROC current protected source correspondence absent')
+    paths=correspondence.get('publisherPathDigests')
+    if (not isinstance(paths,dict) or not paths or not set(paths)<=PROC_PUBLISHER_PATHS
+            or correspondence.get('publisherPaths')!=sorted(paths)
+            or any(not isinstance(d,str) or re.fullmatch('[0-9a-f]{64}',d) is None for d in paths.values())):
+        raise ValueError('PROC exact publisher path population/digests absent')
+    for path,digest in paths.items():
+        pins=[p for p in spec['pins'] if p['path'].endswith('/'+path)]
+        if len(pins)!=1 or pins[0]['sha256']!=digest:
+            raise ValueError('PROC publisher path digest differs from actual pinned source')
 
 
 def proc_regular_pin(row):
@@ -980,7 +1008,7 @@ def proc_native_correlation(spec, prior, payload):
                 and run.get('head_sha')==spec['publisher'] and run.get('event')=='workflow_dispatch'
                 and type(run.get('run_attempt')) is int and run['run_attempt']==1
                 and run.get('repository',{}).get('id')==spec['repositoryId'] and run.get('path')==PROC_WORKFLOW
-                and run.get('head_branch')=='main' and run.get('display_title')=='PROC '+spec['operation']+' @ '+spec['publisher'])
+                and run.get('head_branch')==PROC_PUBLISHER_REF[10:] and run.get('display_title')=='PROC '+spec['operation']+' @ '+spec['publisher'])
     if spec['request']['runId'] is not None:
         if not identity(payload) or payload['id']!=spec['request']['runId']:
             raise ValueError('PROC watch native correlation changed')
@@ -2430,10 +2458,7 @@ def execute_proc_command(descriptor, authority_path, authority_sha, *, measureme
             proc_runtime_evidence(spec,authority,qualification)
             proc_capacity_evidence(spec,authority,qualification.get('capacity') or {})
         correspondence=document('sourceCorrespondence')
-        if (correspondence.get('publisher')!=spec['publisher'] or correspondence.get('source')!=spec['source']
-                or correspondence.get('originalPublisher')!=spec['originalPublisher'] or correspondence.get('protectedSourceVerified') is not True
-                or correspondence.get('aToEExactThreePaths') is not True or correspondence.get('aToPublisherExactElevenPaths') is not True):
-            raise ValueError('PROC current protected source correspondence absent')
+        proc_source_correspondence(spec,correspondence)
         original_proof=validators['pair_original_failure'](admission,document('originalRun'),document('originalJobs'),document('originalArtifact'),
                                                           read_regular(spec['proofInputs']['originalArchive'],192*1024**2))
         attestation_proof=validators['pair_verified_attestation'](admission,document('verifiedAttestation'))

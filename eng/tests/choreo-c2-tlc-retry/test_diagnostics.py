@@ -61,6 +61,7 @@ class DiagnosticControls(unittest.TestCase):
         Path(native['admission']).write_text(json.dumps(admission))
         correspondence={'publisher':'d'*40,'source':'b11fb121f046898e655b779dfc6809f35fc7aac6',
                         'originalPublisher':'0ccfb6d067d912bbd8a1e26c4b56449358443b2e','protectedSourceVerified':True,
+                        'publisherRef':module.PROC_PUBLISHER_REF,'workflowPath':module.PROC_WORKFLOW,'immutablePublisherVerified':True,
                         'aToEExactThreePaths':True,'aToPublisherExactElevenPaths':True}
         Path(native['sourceCorrespondence']).write_text(json.dumps(correspondence))
         consumer=root/'consumer-fixture';consumer.mkdir()
@@ -76,6 +77,12 @@ class DiagnosticControls(unittest.TestCase):
                      ROOT/'eng/test-callable-cli-installed-harness.py',ROOT/'eng/write-callable-cli-release-readback.py',
                      Path(os.path.realpath(os.sys.executable)),module.proc_support_root()/'openssl.cnf',ca,*(Path(p) for p in native.values()),*consumer.iterdir(),*imports)):
             row=module.pin_file(path);row['mode']=path.stat().st_mode&0o777;pins.append(row)
+        correspondence['publisherPathDigests']={str(p.relative_to(ROOT)):module.pin_file(p)['sha256'] for p in
+            (ROOT/'eng/test-callable-cli-installed-harness.py',ROOT/'eng/write-callable-cli-release-readback.py')}
+        correspondence['publisherPaths']=sorted(correspondence['publisherPathDigests'])
+        Path(native['sourceCorrespondence']).write_text(json.dumps(correspondence))
+        for row in pins:
+            if row['path']==native['sourceCorrespondence']:row.update(module.pin_file(Path(native['sourceCorrespondence'])))
         native['consumerRoot']=str(root/'consumer-fixture')
         started=time.monotonic()
         spec={'schema':module.COMMAND_SCHEMA,'profile':'proc-pair-recovery-dispatch','role':'dispatch',
@@ -84,7 +91,7 @@ class DiagnosticControls(unittest.TestCase):
               'repositoryId':1346720714,'workflowId':361038177,'workflowPath':module.PROC_WORKFLOW,
               'source':correspondence['source'],'originalPublisher':correspondence['originalPublisher'],
               'request':{'method':'POST','endpoint':'repos/FS-GG/FS.GG.Coordination/actions/workflows/361038177/dispatches',
-                         'apiVersion':'2026-03-10','requestLimit':1,'body':{'ref':'main','inputs':{
+                         'apiVersion':'2026-03-10','requestLimit':1,'body':{'ref':module.PROC_PUBLISHER_REF[10:],'inputs':{
                              'execution_pair':True,'pair_recovery':True,'preflight_only':False,'cli_only':False,'readback_only':False,
                              'publisher_source':'d'*40,'operation':operation,'source':correspondence['source'],
                              'protected_merge':correspondence['source'],'expected_sha256':'c8772596977e2eb172672fa393d78daab5867aefcf24aa9960a1c5627d4f7ca8'}}},
@@ -167,6 +174,24 @@ class DiagnosticControls(unittest.TestCase):
             self.assertEqual(1,module.execute_proc_command(descriptor,approved,hashlib.sha256(approved.read_bytes()).hexdigest()))
             self.assertFalse((Path(spec['operationRoot'])/'dispatch-input.json').exists())
 
+    def test_proc_immutable_source_paths_and_dispatch_ref_are_closed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);root.chmod(0o700);spec,_,_=self.proc_fixture(root)
+            proof=json.loads(Path(spec['proofInputs']['sourceCorrespondence']).read_bytes())
+            module.proc_source_correspondence(spec,proof)
+            for mode in ('main','foreign-workflow','unknown-tag','nonpermitted-path','altered-path','missing-path'):
+                changed=copy.deepcopy(proof)
+                if mode=='main':changed['publisherRef']='refs/heads/main'
+                if mode=='foreign-workflow':changed['workflowPath']='other.yml'
+                if mode=='unknown-tag':changed['immutablePublisherVerified']=False
+                if mode=='nonpermitted-path':changed['publisherPathDigests']['src/foreign.fs']='a'*64;changed['publisherPaths']=sorted(changed['publisherPathDigests'])
+                if mode=='altered-path':changed['publisherPathDigests'][changed['publisherPaths'][0]]='a'*64
+                if mode=='missing-path':changed['publisherPaths']=[]
+                with self.assertRaises(ValueError):module.proc_source_correspondence(spec,changed)
+            for ref in ('main','foreign',module.PROC_PUBLISHER_REF):
+                changed=copy.deepcopy(spec);changed['request']['body']['ref']=ref
+                with self.assertRaises(ValueError):module.proc_command_preflight(changed,now=time.monotonic())
+
     def test_proc_actual_pin_drift_and_reporting_failure_preserve_send_slot(self):
         adapters={'pair_recovery_selection':lambda a:a['recovery'], 'pair_original_failure':lambda *a:{},
                   'pair_verified_attestation':lambda *a:{},'pair_consumers':lambda *a:{}}
@@ -216,7 +241,7 @@ class DiagnosticControls(unittest.TestCase):
             root=Path(tmp);root.chmod(0o700);spec,_,_=self.proc_fixture(root)
             spec['request']['runId']=None
             native={'id':42,'workflow_id':361038177,'head_sha':spec['publisher'],'event':'workflow_dispatch','run_attempt':1,
-                    'repository':{'id':1346720714},'path':module.PROC_WORKFLOW,'head_branch':'main',
+                    'repository':{'id':1346720714},'path':module.PROC_WORKFLOW,'head_branch':module.PROC_PUBLISHER_REF[10:],
                     'display_title':'PROC '+spec['operation']+' @ '+spec['publisher'],'created_at':'2026-10-14T04:00:00Z'}
             import datetime
             epoch=datetime.datetime(2026,10,14,4,tzinfo=datetime.timezone.utc).timestamp()

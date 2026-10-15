@@ -105,6 +105,7 @@
       "unknownGrantsPolicy": "held-until-authentic-reconciliation",
       "nativeAdmissionEstablished": false,
       "publicationAuthorized": false
-    }
+    },
+    "publisherRef": "refs/tags/execution/v0.3.0-publisher-original38495729817"
   }
 }
