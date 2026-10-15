@@ -648,8 +648,15 @@ module PortableWorkspaceExecutor =
         let ack = optional (fun () -> text 60000)
         let failure = optional (fun () -> text 4096)
         let conflicts = texts 1024 4096 |> Set.ofList
-        { Revision = revision; Original = { Command = command; QualifiedImage = image; IntentBase64 = intent
-                                           IntentDigest = intentDigest; TrustPolicyDigest = policy; SupplierSourceRevision = source; ReceiverEpoch = epoch }
+        let original: PortableSupplierAdmissionOriginal =
+            { Command = command
+              QualifiedImage = image
+              IntentBase64 = intent
+              IntentDigest = intentDigest
+              TrustPolicyDigest = policy
+              SupplierSourceRevision = source
+              ReceiverEpoch = epoch }
+        { Revision = revision; Original = original
           Phase = phase; Challenge = challenge; ChallengeLedger = ledger; Pinned = pinned; Head = head
           Sequence = sequence; EventsBase64 = events; ResponsesBase64 = responses; CheckpointBase64 = checkpoint
           AckDraftBase64 = ack; FirstFailure = failure; Conflicts = conflicts }
