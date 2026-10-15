@@ -99,7 +99,7 @@ module internal FiniteCustodyComposition =
                     && (value.EnumerateObject() |> Seq.map _.Name |> Set.ofSeq) = Set.ofList names
                 let field (value: JsonElement) (name: string) = value.GetProperty name
                 let text value name = (field value name).GetString()
-                let process = field root "process"
+                let processBinding = field root "process"
                 let source = field root "source"
                 let workflow = field root "workflow"
                 let app = field root "app"
@@ -107,7 +107,7 @@ module internal FiniteCustodyComposition =
                 let budget = window |> FiniteCustodyWindow.originalBudget |> Budget.describe
                 let number name expected = text clock name = string expected
                 keys ["mode"; "profile"; "operation"; "originalGeneration"; "invocation"; "process"; "source"; "workflow"; "clock"; "app"] root
-                && keys ["pid"; "birth"] process
+                && keys ["pid"; "birth"] processBinding
                 && keys ["childRevision"; "childClosure"; "runnerRevision"; "runnerClosure"; "contract"] source
                 && keys ["repositoryId"; "path"; "revision"; "run"; "attempt"] workflow
                 && keys ["domain"; "frequency"; "start"; "normal"; "work"; "total"] clock
@@ -116,8 +116,8 @@ module internal FiniteCustodyComposition =
                 && text root "operation" = descriptor.OriginalOperation
                 && (field root "originalGeneration").GetInt64() = descriptor.OriginalGeneration
                 && text root "invocation" = string descriptor.Identity.InvocationId
-                && (field process "pid").GetInt32() = descriptor.Process.Pid
-                && text process "birth" = descriptor.Process.BirthToken
+                && (field processBinding "pid").GetInt32() = descriptor.Process.Pid
+                && text processBinding "birth" = descriptor.Process.BirthToken
                 && text source "childRevision" = descriptor.ChildRevision
                 && text source "childClosure" = descriptor.Identity.SourceDigest
                 && text source "runnerRevision" = descriptor.RunnerRevision
