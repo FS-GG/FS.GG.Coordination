@@ -714,12 +714,16 @@ module PortableWorkspaceExecutor =
 
     type Executor(policy: PortableExecutorPolicy, runner: IPortableProcessRunner, ?clock: unit -> DateTimeOffset,
                   ?prerequisites: Map<string, PortablePrerequisiteRequirement>,
-                  ?hostReservation: PortableHostReservation) =
+                  ?hostReservation: PortableHostReservation,
+                  ?hostEvidenceCurrent: unit -> bool) =
         let clock = defaultArg clock (fun () ->
             let now = DateTimeOffset.UtcNow
             DateTimeOffset(now.Ticks - now.Ticks % 10L, TimeSpan.Zero))
         let journal = DurableJournal policy.Runtime.StateRoot
         let prerequisites = defaultArg prerequisites Map.empty
+        let evidenceCurrent () =
+            try (defaultArg hostEvidenceCurrent (fun () -> true)) ()
+            with _ -> false
 
         let attemptBinding profile command (operation: PortableReviewedOperation) =
             let contract = bindingDigest profile command operation
@@ -1166,7 +1170,7 @@ module PortableWorkspaceExecutor =
                         let decision = PortableHostAllocation.retirement (clock ()) entry.State.Reservation entry.State.Lifecycle
                         // A lost workload settlement does not erase independent termination/export evidence.
                         // Receipt absence keeps the workload outcome pending; it cannot veto reducer-authorized cleanup.
-                        if not cancellationToken.IsCancellationRequested
+                        if evidenceCurrent () && not cancellationToken.IsCancellationRequested
                            && decision.OutputDeletion = HostEligible then
                             let lifecycle = { entry.State.Lifecycle with InnerCleanup = EvidenceUnknown "inner cleanup intent persisted; completion not observed" }
                             let updated = { entry with State = { entry.State with Lifecycle = lifecycle } }
@@ -1182,7 +1186,9 @@ module PortableWorkspaceExecutor =
                         let request = requestFor (preparedForRecovery profile command operation) operation entry.HostContainerName
                                           (min command.Deadline reservation.HostLeaseExpiresAt)
                         let! cleaned = task {
-                            try return! runner.CleanupAsync(request, cancellationToken)
+                            try
+                                if evidenceCurrent () then return! runner.CleanupAsync(request, cancellationToken)
+                                else return false
                             with _ -> return false
                         }
                         if not cleaned then
@@ -1242,6 +1248,7 @@ module PortableWorkspaceExecutor =
                                     match PortableHostAllocation.executionDeadline (clock ()) reservation reservation with
                                     | Error reason -> return Refused reason
                                     | Ok _ when cancellationToken.IsCancellationRequested -> return Refused "portable-executor-deadline-refused"
+                                    | Ok _ when not (evidenceCurrent ()) -> return Refused "portable-host-supplier-evidence-expired"
                                     | Ok _ ->
                                         let! observation = task {
                                             try return! runner.RunAsync(request, cancellationToken)
@@ -1522,12 +1529,21 @@ module PortableWorkspaceExecutor =
 
     /// Concrete host-mode caller for independently authenticated supplier evidence. The underlying
     /// Executor and journal remain the only execution/recovery path; no supplier effect is invoked.
+    /// Restarts require the original independently retained supplier pins through ingress. The
+    /// executor journal cannot establish issuer/CID/inode trust from a current status document.
     type SupplierExecutor private (policy: PortableExecutorPolicy, runner: IPortableProcessRunner,
                                    initial: PortableAuthenticatedHostEvidence, clock: unit -> DateTimeOffset) =
         let original = initial.Evidence
         let mutable latest = initial
-        let executor = Executor(policy, runner, clock = clock, hostReservation = original.Reservation)
+        let executor = Executor(policy, runner, clock = clock, hostReservation = original.Reservation,
+                                hostEvidenceCurrent = (fun () -> latest.IsCurrent(clock ())))
         let command = original.Reservation.Binding.Command
+        let synchronize profile allowFresh =
+            match executor.ReadHostState(profile, command) with
+            | Ok _ -> executor.ReconcileHost(profile, command, latest.Evidence.Lifecycle) |> Result.map ignore
+            | Error "portable-reconciliation-unknown-refused" when allowFresh
+                                                                    && latest.Evidence.Lifecycle = PortableHostAllocation.emptyLifecycle -> Ok ()
+            | Error reason -> Error reason
 
         static member Create(policy, runner, evidence: PortableAuthenticatedHostEvidence, clock) =
             if isNull (box evidence) || not (evidence.IsCurrent(clock ())) then
@@ -1537,16 +1553,18 @@ module PortableWorkspaceExecutor =
         member _.ExecuteAsync(authority, profile, cancellationToken) =
             if not (latest.IsCurrent(clock ())) then
                 Task.FromResult(Refused "portable-host-supplier-evidence-expired")
-            elif latest.Evidence.Lifecycle <> PortableHostAllocation.emptyLifecycle
-                 && (executor.ReadHostState(profile, command) |> Result.isError) then
-                // Existing supplier observations cannot admit a fresh workload after journal loss.
-                Task.FromResult(Refused "portable-host-supplier-original-journal-required")
-            else executor.ExecuteAsync(authority, profile, command, cancellationToken)
+            else
+                match synchronize profile true with
+                | Error reason -> Task.FromResult(Refused reason)
+                | Ok () -> executor.ExecuteAsync(authority, profile, command, cancellationToken)
 
         member _.RecoverAsync(profile, cancellationToken) =
             if not (latest.IsCurrent(clock ())) then
                 Task.FromResult(Refused "portable-host-supplier-evidence-expired")
-            else executor.RecoverAsync(profile, command, cancellationToken)
+            else
+                match synchronize profile false with
+                | Error reason -> Task.FromResult(Refused reason)
+                | Ok () -> executor.RecoverAsync(profile, command, cancellationToken)
 
         member _.ReadHostState(profile) = executor.ReadHostState(profile, command)
 

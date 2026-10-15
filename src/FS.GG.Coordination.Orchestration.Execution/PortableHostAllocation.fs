@@ -281,7 +281,8 @@ module PortableHostSupplierIngress =
                      (bytes: byte array) =
         let refusal = Error "portable-host-supplier-evidence-refused"
         let present value = not (String.IsNullOrWhiteSpace value)
-        if isNull (box verifier) || isNull bytes || bytes.Length = 0 || bytes.Length > 65536
+        if isNull (box verifier) || isNull (box identity) || isNull (box original)
+           || isNull bytes || bytes.Length = 0 || bytes.Length > 65536
            || not (present identity.Issuer && present identity.ContainerId)
            || identity.AllocationInode = 0UL || maximumAge <= TimeSpan.Zero
            || maximumAge > TimeSpan.FromMinutes 5. then refusal
