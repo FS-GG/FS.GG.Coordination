@@ -743,6 +743,66 @@ def pair_recovery_source_controls():
     print('PAIR_RECOVERY_SOURCE_CONTROLS passed native-negatives=11 verified-provenance-negatives=9 effects-disabled=true')
 
 
+def immutable_publisher_later_gate_controls():
+    """Execute both actual later Python gates with inert Git/GitHub observations."""
+    helpers=runpy.run_path(str(ROOT/'eng/test-callable-cli-installed-harness.py'))
+    workflow='.github/workflows/callable-cli-release-publish.yml'
+    job=(ROOT/workflow).read_text().split('  execution_pair:\n',1)[1]
+    blocks=job.split("          python3 - <<'PY_PAIR_PUBLISHER'\n")[2:]
+    assert len(blocks)==2
+    gates=[compile('\n'.join(line[10:] for line in b.split('          PY_PAIR_PUBLISHER\n',1)[0].splitlines()),'later-publisher-gate','exec') for b in blocks]
+    count=0
+    for gate in gates:
+        for mode in ('good','missing-initial','missing-retained','null-retained','corrupt-retained','changed-binding',
+                     'missing-manifest','null-manifest','corrupt-manifest','path-drift','workflow-drift','missing-path',
+                     'extra-diff-path','missing-diff-path','duplicate-diff-path','altered-manifest-digest'):
+            with tempfile.TemporaryDirectory(prefix='pair-retained-gate-') as tmp:
+                root=Path(tmp);retained=root/'readback';retained.mkdir()
+                env={'GITHUB_REF':helpers['PAIR_PUBLISHER_REF'],'GITHUB_SHA':'d'*40,'REQUESTED_PUBLISHER':'d'*40,
+                     'GITHUB_REPOSITORY':'FS-GG/FS.GG.Coordination','GITHUB_RUN_ATTEMPT':'1',
+                     'GITHUB_WORKFLOW_REF':'FS-GG/FS.GG.Coordination/'+workflow+'@'+helpers['PAIR_PUBLISHER_REF'],
+                     'RUNNER_TEMP':str(root),'READBACK_OUTPUT':str(retained),'SOURCE_A':'a'*40}
+                native={'ref':env['GITHUB_REF'],'object':{'type':'commit','sha':'d'*40}}
+                binding=helpers['pair_publisher_binding'](env,native,'d'*40)
+                initial=root/'pair-publisher-binding.json';proof=retained/'publisher-binding.json';manifest=retained/'publisher-paths.json'
+                write(initial,binding);write(proof,binding)
+                for name in (workflow,'eng/execution-pair-release-admission.json'):
+                    path=root/name;path.parent.mkdir(parents=True,exist_ok=True);path.write_text('original-source')
+                paths=['eng/execution-pair-release-admission.json']
+                value={'publisher':'d'*40,'paths':{name:hashlib.sha256((root/name).read_bytes()).hexdigest() for name in paths},
+                       'workflowSha256':hashlib.sha256((root/workflow).read_bytes()).hexdigest()}
+                write(manifest,value)
+                if mode=='missing-initial':initial.unlink()
+                if mode=='missing-retained':proof.unlink()
+                if mode=='null-retained':write(proof,None);write(initial,None)
+                if mode=='corrupt-retained':proof.write_text('{')
+                if mode=='changed-binding':write(proof,{**binding,'refObject':'e'*40});write(initial,{**binding,'refObject':'e'*40})
+                if mode=='missing-manifest':manifest.unlink()
+                if mode=='null-manifest':write(manifest,None)
+                if mode=='corrupt-manifest':manifest.write_text('{')
+                if mode=='path-drift':(root/paths[0]).write_text('drift')
+                if mode=='workflow-drift':(root/workflow).write_text('drift')
+                if mode=='missing-path':(root/paths[0]).unlink()
+                if mode=='extra-diff-path':paths.append('eng/extra.py')
+                if mode=='missing-diff-path':paths=[]
+                if mode=='duplicate-diff-path':paths.append(paths[0])
+                if mode=='altered-manifest-digest':value['paths'][paths[0]]='e'*64;write(manifest,value)
+                def inert(command,**kwargs):
+                    if command[0]=='gh':return json.dumps(native).encode()
+                    if command[:3]==['git','diff','--name-only']:return '\n'.join(paths)+'\n'
+                    if command[:2]==['git','rev-parse']:return 'd'*40+'\n'
+                    raise AssertionError(command)
+                previous=Path.cwd();os.chdir(root);refused=False
+                try:
+                    with patch.dict(os.environ,env,clear=True),patch('subprocess.check_output',side_effect=inert),patch('runpy.run_path',return_value=helpers):
+                        try:exec(gate,{})
+                        except (ValueError,AssertionError,OSError,TypeError,KeyError):refused=True
+                finally:os.chdir(previous)
+                assert refused==(mode!='good'),mode
+                count+=1
+    print('PAIR_IMMUTABLE_LATER_GATES passed cases='+str(count)+' actual-prepush-and-finalization-python effects=0')
+
+
 def policy_token_cleanup_controls():
     helper = runpy.run_path(str(ROOT/'eng/test-callable-cli-installed-harness.py'))
     cleanup = helper['cleanup_pair_policy_token']
@@ -868,6 +928,7 @@ def policy_token_cleanup_controls():
 
 
 def main():
+    immutable_publisher_later_gate_controls()
     policy_token_cleanup_controls()
     pair_recovery_source_controls()
     complete_policy_source_controls()

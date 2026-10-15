@@ -345,11 +345,10 @@ def pair_readback(arguments: list[str]) -> int:
         environment = dict(os.environ, REQUESTED_PUBLISHER=args.publisher)
         validators['pair_publisher_binding'](environment, {'ref':binding['ref'],'object':{'sha':binding['refObject'],'type':binding['refType']}},args.publisher,binding)
         paths_path=args.publisher_binding.with_name('publisher-paths.json')
+        import subprocess
+        current_paths=subprocess.check_output(['git','diff','--name-only',args.source,args.publisher],text=True,timeout=10).splitlines()
+        validators['pair_publisher_recheck'](environment,{'ref':binding['ref'],'object':{'sha':binding['refObject'],'type':binding['refType']}},args.publisher,args.publisher_binding,paths_path,current_paths,Path.cwd())
         paths=json.loads(paths_path.read_bytes())
-        if paths['publisher']!=args.publisher or paths['workflowSha256']!=hashlib.sha256(Path(binding['workflow']).read_bytes()).hexdigest():
-            refuse('publisher workflow digest changed')
-        for path,digest in paths['paths'].items():
-            if hashlib.sha256(Path(path).read_bytes()).hexdigest()!=digest: refuse('publisher source path digest changed')
         root = args.original_root
         def bounded(name, cap=1048576):
             path = root / name

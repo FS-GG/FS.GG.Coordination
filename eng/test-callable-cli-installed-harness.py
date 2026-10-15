@@ -559,6 +559,40 @@ def pair_publisher_binding(environment, ref_object, resolved_commit, previous=No
     return value
 
 
+def pair_publisher_recheck(environment, ref_object, resolved_commit, binding_path, paths_path, diff_paths, source_root):
+    """Require original retained proofs and current exact source before further effects."""
+    def retained(path):
+        path = pathlib.Path(path)
+        if path.is_symlink() or not path.is_file() or not 0 < path.stat().st_size <= 1048576:
+            raise ValueError('retained immutable publisher proof missing or unsafe; observation only')
+        value = json.loads(path.read_bytes())
+        if not isinstance(value, dict):
+            raise ValueError('retained immutable publisher proof malformed; observation only')
+        return value
+    previous = retained(binding_path)
+    binding = pair_publisher_binding(environment, ref_object, resolved_commit, previous)
+    manifest = retained(paths_path)
+    paths = manifest.get('paths')
+    if (set(manifest) != {'publisher', 'paths', 'workflowSha256'}
+            or manifest['publisher'] != binding['publisher'] or not isinstance(paths, dict) or not paths
+            or not isinstance(diff_paths, list) or len(set(diff_paths)) != len(diff_paths)
+            or sorted(diff_paths) != sorted(paths)
+            or any(not isinstance(p, str) or pathlib.Path(p).is_absolute() or '..' in pathlib.Path(p).parts for p in paths)):
+        raise ValueError('retained publisher exact diff path population changed; observation only')
+    root = pathlib.Path(source_root)
+    for path, digest in paths.items():
+        source = root / path
+        if (not isinstance(digest, str) or re.fullmatch('[0-9a-f]{64}', digest) is None
+                or source.is_symlink() or not source.is_file()
+                or hashlib.sha256(source.read_bytes()).hexdigest() != digest):
+            raise ValueError('retained publisher source path digest changed; observation only')
+    workflow = root / binding['workflow']
+    if (workflow.is_symlink() or not workflow.is_file()
+            or hashlib.sha256(workflow.read_bytes()).hexdigest() != manifest['workflowSha256']):
+        raise ValueError('retained publisher workflow digest changed; observation only')
+    return binding
+
+
 def pair_recovery_selection(admission):
     selected = admission['recovery']
     expected = {'enabled', 'policyObservationEnabled', 'clientQualificationEnabled', 'policyTokenCleanup', 'publisherRef', 'operation', 'originalOperation', 'publisher', 'runId', 'runAttempt',

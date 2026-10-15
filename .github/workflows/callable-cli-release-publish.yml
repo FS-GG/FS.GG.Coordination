@@ -1321,8 +1321,10 @@ jobs:
           resolved=subprocess.check_output(['git','rev-parse','FETCH_HEAD^{commit}'],text=True,timeout=10).strip()
           assert json.loads(raw)['object']['sha']==subprocess.check_output(['git','rev-parse','FETCH_HEAD'],text=True,timeout=10).strip()
           env=dict(os.environ,REQUESTED_PUBLISHER=os.environ['GITHUB_SHA'])
-          proof=runpy.run_path('eng/test-callable-cli-installed-harness.py')['pair_publisher_binding'](env,json.loads(raw),resolved,json.loads(root.read_bytes()) if root.exists() else None)
-          root.write_text(json.dumps(proof,sort_keys=True)+'\n')
+          retained=pathlib.Path(os.environ['READBACK_OUTPUT'])
+          assert json.loads(root.read_bytes())==json.loads((retained/'publisher-binding.json').read_bytes()), 'initial publisher binding lost or changed; observation only'
+          paths=subprocess.check_output(['git','diff','--name-only',os.environ['SOURCE_A'],os.environ['GITHUB_SHA']],text=True,timeout=10).splitlines()
+          runpy.run_path('eng/test-callable-cli-installed-harness.py')['pair_publisher_recheck'](env,json.loads(raw),resolved,retained/'publisher-binding.json',retained/'publisher-paths.json',paths,pathlib.Path.cwd())
           PY_PAIR_PUBLISHER
           GH_TOKEN="$PAIR_RULESET_TOKEN" gh api "repos/$GITHUB_REPOSITORY/rulesets/21633398" > "$READBACK_OUTPUT/tag-protection.json"
           python3 - <<'PY_PAIR_POLICY_RECHECK'
@@ -1419,8 +1421,10 @@ jobs:
           resolved=subprocess.check_output(['git','rev-parse','FETCH_HEAD^{commit}'],text=True,timeout=10).strip()
           assert json.loads(raw)['object']['sha']==subprocess.check_output(['git','rev-parse','FETCH_HEAD'],text=True,timeout=10).strip()
           env=dict(os.environ,REQUESTED_PUBLISHER=os.environ['GITHUB_SHA'])
-          proof=runpy.run_path('eng/test-callable-cli-installed-harness.py')['pair_publisher_binding'](env,json.loads(raw),resolved,json.loads(root.read_bytes()) if root.exists() else None)
-          root.write_text(json.dumps(proof,sort_keys=True)+'\n')
+          retained=pathlib.Path(os.environ['READBACK_OUTPUT'])
+          assert json.loads(root.read_bytes())==json.loads((retained/'publisher-binding.json').read_bytes()), 'initial publisher binding lost or changed; observation only'
+          paths=subprocess.check_output(['git','diff','--name-only',os.environ['SOURCE_A'],os.environ['GITHUB_SHA']],text=True,timeout=10).splitlines()
+          runpy.run_path('eng/test-callable-cli-installed-harness.py')['pair_publisher_recheck'](env,json.loads(raw),resolved,retained/'publisher-binding.json',retained/'publisher-paths.json',paths,pathlib.Path.cwd())
           PY_PAIR_PUBLISHER
           GH_TOKEN="$PAIR_RULESET_TOKEN" gh api "repos/$GITHUB_REPOSITORY/rulesets/21633398" > "$READBACK_OUTPUT/tag-protection.json"
           python3 - <<'PY_PAIR_POLICY_RECHECK'
