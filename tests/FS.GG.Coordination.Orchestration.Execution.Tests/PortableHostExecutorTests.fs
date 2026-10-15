@@ -168,9 +168,9 @@ type PortableHostExecutorTests() =
               { reservation with Selection = NoSelectedOutputs } ]
         for candidate in candidates do
             execute fixture (fixture.Executor(selected = candidate)) |> refused
-            Assert.True(original = File.ReadAllBytes fixture.Journal)
+            Assert.True((original = File.ReadAllBytes fixture.Journal))
         execute fixture (fixture.Executor(legacy = true)) |> refused
-        Assert.True(original = File.ReadAllBytes fixture.Journal)
+        Assert.True((original = File.ReadAllBytes fixture.Journal))
 
     [<Fact>]
     member _.``legacy v1 remains readable and cannot become host authorization``() =
@@ -179,7 +179,7 @@ type PortableHostExecutorTests() =
         let original = File.ReadAllBytes fixture.Journal
         execute fixture (fixture.Executor()) |> refused
         recover fixture (fixture.Executor(legacy = true)) |> receipt |> ignore
-        Assert.True(original = File.ReadAllBytes fixture.Journal)
+        Assert.True((original = File.ReadAllBytes fixture.Journal))
         Assert.Equal(1, fixture.Runner.Runs)
 
     [<Fact>]
@@ -302,7 +302,7 @@ type PortableHostExecutorTests() =
         recover fixture executor |> receipt |> ignore
         fixture.Now <- fixture.At 120.
         let incoming =
-            { PortableHostAllocation.emptyLifecycle with InnerCleanup = EvidenceKnown(fixture.Observation 21. ())
+            { PortableHostAllocation.emptyLifecycle with InnerCleanup = EvidenceKnown(fixture.Observation 21. ());
                                                         OuterRetirement = EvidenceKnown(fixture.Observation 110. ()) }
         let reconciled = executor.ReconcileHost(fixture.Profile, fixture.Command, incoming) |> ok
         Assert.Equal(EvidenceKnown (), (PortableHostAllocation.retirement fixture.Now reconciled.Reservation reconciled.Lifecycle).ReservationRelease)
@@ -341,7 +341,7 @@ type PortableHostExecutorTests() =
         let original = File.ReadAllBytes fixture.Journal
         execute fixture (fixture.Executor()) |> refused
         recover fixture (fixture.Executor()) |> refused
-        Assert.True(original = File.ReadAllBytes fixture.Journal)
+        Assert.True((original = File.ReadAllBytes fixture.Journal))
         Assert.Equal(0, fixture.Runner.Cleans)
 
     [<Fact>]
@@ -353,7 +353,7 @@ type PortableHostExecutorTests() =
         let original = File.ReadAllBytes fixture.Journal
         use held = new FileStream(Path.ChangeExtension(fixture.Journal, ".lock"), FileMode.Open, FileAccess.ReadWrite, FileShare.None)
         recover fixture executor |> refused
-        Assert.True(original = File.ReadAllBytes fixture.Journal)
+        Assert.True((original = File.ReadAllBytes fixture.Journal))
         Assert.Equal(0, fixture.Runner.Cleans)
 
     [<Fact>]
