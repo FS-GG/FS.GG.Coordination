@@ -316,7 +316,7 @@ module FiniteCustodyTransportTests =
 
     type private InMemoryPhaseStream(confirmed: unit -> int) =
         inherit System.IO.MemoryStream()
-        let input = System.Threading.Channels.Channel.CreateUnbounded<int * ReadOnlyMemory<byte>>()
+        let input = System.Threading.Channels.Channel.CreateBounded<int * ReadOnlyMemory<byte>>(6)
         let mutable aborted = false
         member _.Send(required, bytes: byte array) = Assert.True(input.Writer.TryWrite((required, ReadOnlyMemory<byte> bytes)))
         member _.Abort() = aborted <- true; input.Writer.TryComplete() |> ignore
@@ -390,7 +390,19 @@ module FiniteCustodyTransportTests =
         for argument in ["-I"; "-S"; "-B"; System.IO.Path.Combine(source, "tests/release-successor-authentication/callback-fixture.py"); Convert.ToBase64String bindingBytes
                          Convert.ToBase64String(System.Text.Json.JsonSerializer.SerializeToUtf8Bytes clockBinding); resultPath] do info.ArgumentList.Add argument
         use owner = System.Diagnostics.Process.Start info
+        let mutable drain: System.Threading.Tasks.Task<string> option = None
+        let mutable ownerRetired = false
+        let retireOwner () =
+            if not ownerRetired then
+                owner.StandardInput.Close()
+                if not owner.HasExited then owner.Kill(true)
+                Assert.True(owner.WaitForExit(5000), "callback fixture retirement")
+                drain |> Option.iter (fun work -> work.WaitAsync(TimeSpan.FromSeconds 5.).GetAwaiter().GetResult() |> ignore)
+                ownerRetired <- true
+        // Covers preparation failure as well as a failed test after Run starts.
+        use ownerLifetime = { new IDisposable with member _.Dispose() = retireOwner () }
         let diagnostic = owner.StandardError.ReadToEndAsync()
+        drain <- Some diagnostic
         let mutable confirmed = fun () -> 0
         use child = new InMemoryPhaseStream(fun () -> confirmed ())
         let termination = System.Threading.Tasks.TaskCompletionSource<bool option>(System.Threading.Tasks.TaskCreationOptions.RunContinuationsAsynchronously)
@@ -441,9 +453,7 @@ module FiniteCustodyTransportTests =
             System.Threading.Interlocked.Exchange(&ticks, 300000L) |> ignore
             child.Abort()
             termination.TrySetResult(Some true) |> ignore
-            owner.StandardInput.Close()
-            if not owner.HasExited then owner.Kill(true)
-            Assert.True(owner.WaitForExit(5000), "callback fixture retirement")
+            retireOwner ()
             running.WaitAsync(TimeSpan.FromSeconds 5.).GetAwaiter().GetResult() |> ignore
             System.Threading.Tasks.Task.WhenAll(session.RetainedTasks).WaitAsync(TimeSpan.FromSeconds 5.).GetAwaiter().GetResult()
             diagnostic.WaitAsync(TimeSpan.FromSeconds 5.).GetAwaiter().GetResult() |> ignore

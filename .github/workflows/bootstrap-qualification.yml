@@ -268,10 +268,11 @@ jobs:
       - name: Run the stable qualification gate
         run: bash eng/bootstrap-gates/compiler-and-tests.sh
       - name: Upload qualification evidence
+        if: ${{ always() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: compiler-and-tests
-          path: ${{ runner.temp }}/compiler-and-tests/architecture.trx
+          path: ${{ runner.temp }}/compiler-and-tests
           if-no-files-found: error
 
   dependency-and-security:
