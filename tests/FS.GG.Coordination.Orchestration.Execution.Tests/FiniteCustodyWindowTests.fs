@@ -257,7 +257,7 @@ module FiniteCustodyWindowTests =
 
 
     let private cleanupFixture () =
-        let evidence = { Kind="inert"; Reference="fixture"; Digest=None }
+        let evidence: EvidenceRef = { Kind="inert"; Reference="fixture"; Digest=None }
         let stamp = { At=Some(at 1000L); Scope="fixture"; Generation=Some descriptor.Process; Provenance=evidence }
         let owner = { OwnerId="inert-owner"; Evidence=evidence }
         let existing =
