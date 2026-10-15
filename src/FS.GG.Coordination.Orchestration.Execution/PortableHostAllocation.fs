@@ -88,12 +88,12 @@ module PortableHostAllocation =
 
     let private present value = not (String.IsNullOrWhiteSpace value)
 
-    let private validBinding binding =
+    let private validBinding (binding: PortableHostBinding) =
         binding.Command.CommandId <> Guid.Empty
-        && ([ binding.Command.IdempotencyId; binding.Command.WorkspaceScope
-             binding.Command.ProfileId; binding.Command.SourceRevision
-             binding.QualifiedImage; binding.AllocationId; binding.WorkerId
-             binding.AllocationReceiptDigest ] |> List.forall present)
+        && ([ binding.Command.IdempotencyId; binding.Command.WorkspaceScope;
+              binding.Command.ProfileId; binding.Command.SourceRevision;
+              binding.QualifiedImage; binding.AllocationId; binding.WorkerId;
+              binding.AllocationReceiptDigest ] |> List.forall present)
 
     let private validSelection = function
         | NoSelectedOutputs -> true
@@ -116,7 +116,7 @@ module PortableHostAllocation =
             Ok (reservation.AdmittedAt.AddTicks executionTicks)
 
     /// A repeated admission must present the entire original reservation, including original dates.
-    let executionDeadline now original candidate =
+    let executionDeadline (now: DateTimeOffset) (original: PortableHostReservation) (candidate: PortableHostReservation) =
         if original <> candidate then Error "original reservation identity or limits changed"
         else
             window original
@@ -124,16 +124,16 @@ module PortableHostAllocation =
                 if now < original.AdmittedAt || now >= deadline then Error "original execution window is unavailable"
                 else Ok deadline)
 
-    let private observationValid reservation observation =
+    let private observationValid (reservation: PortableHostReservation) (observation: PortableHostObservation<'value>) =
         observation.Binding = reservation.Binding
         && present observation.ReceiptDigest
         && observation.CollectedAt >= reservation.AdmittedAt
 
-    let private known reservation = function
+    let private known (reservation: PortableHostReservation) = function
         | EvidenceKnown observation -> observationValid reservation observation
         | EvidenceMissing _ | EvidenceUnknown _ -> false
 
-    let private exportComplete reservation now = function
+    let private exportComplete (reservation: PortableHostReservation) (now: DateTimeOffset) = function
         | EvidenceKnown observation when observationValid reservation observation
                                             && observation.CollectedAt <= now
                                             && observation.CollectedAt < reservation.HostLeaseExpiresAt
@@ -145,7 +145,7 @@ module PortableHostAllocation =
         | _ -> false
 
     /// Computes permissions only; it never deletes, stops, renews, releases or writes a journal.
-    let retirement now reservation lifecycle =
+    let retirement (now: DateTimeOffset) (reservation: PortableHostReservation) (lifecycle: PortableHostLifecycle) =
         let exported = exportComplete reservation now lifecycle.Export
         let exportCollectedAt =
             match lifecycle.Export with
@@ -218,7 +218,7 @@ module PortableHostAllocation =
         | EvidenceMissing _, EvidenceMissing _ -> original
 
     /// Duplicate receipts are idempotent. Conflicts and first failure survive later success.
-    let reconcileLifecycle original incoming =
+    let reconcileLifecycle (original: PortableHostLifecycle) (incoming: PortableHostLifecycle) =
         let conflict field left right =
             match left, right with
             | EvidenceKnown first, EvidenceKnown second when first <> second -> Set.singleton field

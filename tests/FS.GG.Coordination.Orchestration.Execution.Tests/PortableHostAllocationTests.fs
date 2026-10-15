@@ -225,7 +225,7 @@ type PortableHostAllocationTests() =
         let uncertainOuter = { pendingOuter with OuterRetirement = EvidenceUnknown "request sent; response lost" }
         let uncertainOuterBeforeInner = { pendingDeletion with OuterRetirement = EvidenceUnknown "outer effect may have happened" }
         for original in [ uncertainInner; uncertainOuter; uncertainOuterBeforeInner ] do
-            for lifecycle in [ original; PortableHostAllocation.reconcileLifecycle original PortableHostAllocation.emptyLifecycle
+            for lifecycle in [ original; PortableHostAllocation.reconcileLifecycle original PortableHostAllocation.emptyLifecycle;
                                PortableHostAllocation.reconcileLifecycle PortableHostAllocation.emptyLifecycle original ] do
                 let decision = PortableHostAllocation.retirement (at 70.) reservation lifecycle
                 Assert.NotEqual(HostEligible, decision.OutputDeletion)
@@ -241,8 +241,8 @@ type PortableHostAllocationTests() =
     [<Fact>]
     member _.``future past unbound and reordered cleanup receipts never become retry permission``() =
         let invalidInner =
-            [ observation 71. (); observation -1. (); observation 59. ()
-              { observation 65. () with Binding = { binding with AllocationId = "other" } }
+            [ observation 71. (); observation -1. (); observation 59. ();
+              { observation 65. () with Binding = { binding with AllocationId = "other" } };
               { observation 65. () with ReceiptDigest = "" } ]
         for receipt in invalidInner do
             let lifecycle = { pendingOuter with InnerCleanup = EvidenceKnown receipt }
@@ -251,8 +251,8 @@ type PortableHostAllocationTests() =
             Assert.NotEqual(HostEligible, decision.OuterCleanup)
             Assert.NotEqual(EvidenceKnown (), decision.ReservationRelease)
         let invalidOuter =
-            [ observation 71. (); observation -1. (); observation 64. ()
-              { observation 70. () with Binding = { binding with WorkerId = "other" } }
+            [ observation 71. (); observation -1. (); observation 64. ();
+              { observation 70. () with Binding = { binding with WorkerId = "other" } };
               { observation 70. () with ReceiptDigest = "" } ]
         for receipt in invalidOuter do
             for basis in [ complete; pendingDeletion ] do
