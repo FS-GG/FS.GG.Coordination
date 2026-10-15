@@ -1,0 +1,2112 @@
+{
+  "$defs": {
+    "body-effect-unknown": {
+      "additionalProperties": false,
+      "properties": {
+        "effect": {
+          "enum": [
+            "create-stopped",
+            "start-original",
+            "retire-original"
+          ]
+        },
+        "first_failure_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "observed_at": {
+          "$ref": "#/$defs/utc"
+        },
+        "original_attempt_digest": {
+          "$ref": "#/$defs/digest"
+        }
+      },
+      "required": [
+        "effect",
+        "first_failure_digest",
+        "observed_at",
+        "original_attempt_digest"
+      ],
+      "type": "object"
+    },
+    "body-export-manifest": {
+      "additionalProperties": false,
+      "properties": {
+        "manifest_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "member_count": {
+          "$ref": "#/$defs/positive-u64"
+        },
+        "observed_at": {
+          "$ref": "#/$defs/utc"
+        },
+        "total_bytes": {
+          "$ref": "#/$defs/u64"
+        }
+      },
+      "required": [
+        "manifest_digest",
+        "member_count",
+        "observed_at",
+        "total_bytes"
+      ],
+      "type": "object"
+    },
+    "body-failure": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "$ref": "#/$defs/id128"
+        },
+        "first_failure_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "observed_at": {
+          "$ref": "#/$defs/utc"
+        },
+        "original_attempt_digest": {
+          "$ref": "#/$defs/digest"
+        }
+      },
+      "required": [
+        "code",
+        "first_failure_digest",
+        "observed_at",
+        "original_attempt_digest"
+      ],
+      "type": "object"
+    },
+    "body-inner-cleanup-intent": {
+      "additionalProperties": false,
+      "properties": {
+        "cid": {
+          "$ref": "#/$defs/outer-cid"
+        },
+        "observed_at": {
+          "$ref": "#/$defs/utc"
+        },
+        "receipt_digest": {
+          "$ref": "#/$defs/digest"
+        }
+      },
+      "required": [
+        "cid",
+        "observed_at",
+        "receipt_digest"
+      ],
+      "type": "object"
+    },
+    "body-inner-cleanup-observed": {
+      "additionalProperties": false,
+      "properties": {
+        "cid": {
+          "$ref": "#/$defs/outer-cid"
+        },
+        "observed_at": {
+          "$ref": "#/$defs/utc"
+        },
+        "receipt_digest": {
+          "$ref": "#/$defs/digest"
+        }
+      },
+      "required": [
+        "cid",
+        "observed_at",
+        "receipt_digest"
+      ],
+      "type": "object"
+    },
+    "body-launch-intent": {
+      "additionalProperties": false,
+      "properties": {
+        "grant_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "original_cid": {
+          "$ref": "#/$defs/outer-cid"
+        },
+        "original_image_id": {
+          "$ref": "#/$defs/outer-image-id"
+        },
+        "original_inode": {
+          "$ref": "#/$defs/positive-u64"
+        },
+        "recorded_at": {
+          "$ref": "#/$defs/utc"
+        }
+      },
+      "required": [
+        "grant_digest",
+        "original_cid",
+        "original_image_id",
+        "original_inode",
+        "recorded_at"
+      ],
+      "type": "object"
+    },
+    "body-lease-amendment": {
+      "additionalProperties": false,
+      "properties": {
+        "amendment_id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "authority_ref": {
+          "$ref": "#/$defs/host-ref"
+        },
+        "effective_at": {
+          "$ref": "#/$defs/utc"
+        },
+        "new_expiry": {
+          "$ref": "#/$defs/utc"
+        },
+        "old_expiry": {
+          "$ref": "#/$defs/utc"
+        },
+        "previous_lease_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "previous_lease_kind": {
+          "enum": [
+            "creation-receipt",
+            "lease-amendment"
+          ]
+        }
+      },
+      "required": [
+        "amendment_id",
+        "authority_ref",
+        "effective_at",
+        "new_expiry",
+        "old_expiry",
+        "previous_lease_digest",
+        "previous_lease_kind"
+      ],
+      "type": "object"
+    },
+    "body-outer-retire-intent": {
+      "additionalProperties": false,
+      "properties": {
+        "cid": {
+          "$ref": "#/$defs/outer-cid"
+        },
+        "grant_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "observed_at": {
+          "$ref": "#/$defs/utc"
+        },
+        "receipt_digest": {
+          "$ref": "#/$defs/digest"
+        }
+      },
+      "required": [
+        "cid",
+        "grant_digest",
+        "observed_at",
+        "receipt_digest"
+      ],
+      "type": "object"
+    },
+    "body-outer-retire-observed": {
+      "additionalProperties": false,
+      "properties": {
+        "cid": {
+          "$ref": "#/$defs/outer-cid"
+        },
+        "grant_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "observed_at": {
+          "$ref": "#/$defs/utc"
+        },
+        "receipt_digest": {
+          "$ref": "#/$defs/digest"
+        }
+      },
+      "required": [
+        "cid",
+        "grant_digest",
+        "observed_at",
+        "receipt_digest"
+      ],
+      "type": "object"
+    },
+    "body-start-invoked": {
+      "additionalProperties": false,
+      "properties": {
+        "grant_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "original_cid": {
+          "$ref": "#/$defs/outer-cid"
+        },
+        "original_image_id": {
+          "$ref": "#/$defs/outer-image-id"
+        },
+        "original_inode": {
+          "$ref": "#/$defs/positive-u64"
+        },
+        "recorded_at": {
+          "$ref": "#/$defs/utc"
+        }
+      },
+      "required": [
+        "grant_digest",
+        "original_cid",
+        "original_image_id",
+        "original_inode",
+        "recorded_at"
+      ],
+      "type": "object"
+    },
+    "body-termination": {
+      "additionalProperties": false,
+      "properties": {
+        "cid": {
+          "$ref": "#/$defs/outer-cid"
+        },
+        "observed_at": {
+          "$ref": "#/$defs/utc"
+        },
+        "receipt_digest": {
+          "$ref": "#/$defs/digest"
+        }
+      },
+      "required": [
+        "cid",
+        "observed_at",
+        "receipt_digest"
+      ],
+      "type": "object"
+    },
+    "body-unit-activation-observed": {
+      "additionalProperties": false,
+      "properties": {
+        "activation_at": {
+          "$ref": "#/$defs/utc"
+        },
+        "boot_id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "cid": {
+          "$ref": "#/$defs/outer-cid"
+        },
+        "receipt_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "unit_invocation_id": {
+          "$ref": "#/$defs/unit-invocation-id"
+        },
+        "unit_name": {
+          "$ref": "#/$defs/unit-name"
+        }
+      },
+      "required": [
+        "activation_at",
+        "boot_id",
+        "cid",
+        "receipt_digest",
+        "unit_invocation_id",
+        "unit_name"
+      ],
+      "type": "object"
+    },
+    "body-workload-exit": {
+      "additionalProperties": false,
+      "properties": {
+        "command_id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "exit_code": {
+          "$ref": "#/$defs/exit-i32"
+        },
+        "observed_at": {
+          "$ref": "#/$defs/utc"
+        },
+        "receipt_digest": {
+          "$ref": "#/$defs/digest"
+        }
+      },
+      "required": [
+        "command_id",
+        "exit_code",
+        "observed_at",
+        "receipt_digest"
+      ],
+      "type": "object"
+    },
+    "body-zero-selection-census": {
+      "additionalProperties": false,
+      "properties": {
+        "observed_at": {
+          "$ref": "#/$defs/utc"
+        },
+        "receipt_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "selection_digest": {
+          "$ref": "#/$defs/digest"
+        }
+      },
+      "required": [
+        "observed_at",
+        "receipt_digest",
+        "selection_digest"
+      ],
+      "type": "object"
+    },
+    "command": {
+      "additionalProperties": false,
+      "properties": {
+        "causation_id": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/id128"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "command_id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "component_id": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/id128"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "deadline": {
+          "$ref": "#/$defs/utc"
+        },
+        "expected_workflow_revision": {
+          "$ref": "#/$defs/u64"
+        },
+        "fence_generation": {
+          "$ref": "#/$defs/u64"
+        },
+        "idempotency_id": {
+          "$ref": "#/$defs/id128"
+        },
+        "operation": {
+          "$ref": "#/$defs/id128"
+        },
+        "profile_id": {
+          "$ref": "#/$defs/id128"
+        },
+        "profile_revision": {
+          "$ref": "#/$defs/u64"
+        },
+        "source_revision": {
+          "$ref": "#/$defs/source128"
+        },
+        "workspace_scope": {
+          "$ref": "#/$defs/id128"
+        }
+      },
+      "required": [
+        "causation_id",
+        "command_id",
+        "component_id",
+        "deadline",
+        "expected_workflow_revision",
+        "fence_generation",
+        "idempotency_id",
+        "operation",
+        "profile_id",
+        "profile_revision",
+        "source_revision",
+        "workspace_scope"
+      ],
+      "type": "object"
+    },
+    "creation-challenge": {
+      "additionalProperties": false,
+      "properties": {
+        "challenge_id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "challenge_nonce": {
+          "$ref": "#/$defs/nonce256"
+        },
+        "correlation_id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "intent_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "issued_at": {
+          "$ref": "#/$defs/utc"
+        },
+        "not_after": {
+          "$ref": "#/$defs/utc"
+        },
+        "schema": {
+          "const": "fsgg.v3.creation-challenge/1"
+        }
+      },
+      "required": [
+        "challenge_id",
+        "challenge_nonce",
+        "correlation_id",
+        "intent_digest",
+        "issued_at",
+        "not_after",
+        "schema"
+      ],
+      "type": "object"
+    },
+    "creation-core": {
+      "additionalProperties": false,
+      "properties": {
+        "allocation_device": {
+          "$ref": "#/$defs/u64"
+        },
+        "allocation_fs_uuid": {
+          "$ref": "#/$defs/uuid"
+        },
+        "allocation_inode": {
+          "$ref": "#/$defs/positive-u64"
+        },
+        "boot_id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "challenge_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "cid": {
+          "$ref": "#/$defs/outer-cid"
+        },
+        "correlation_id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "created_at": {
+          "$ref": "#/$defs/utc"
+        },
+        "host_lease_authority_ref": {
+          "$ref": "#/$defs/host-ref"
+        },
+        "host_lease_expires_at": {
+          "$ref": "#/$defs/utc"
+        },
+        "host_lease_origin_at": {
+          "$ref": "#/$defs/utc"
+        },
+        "host_maximum_runtime_cap_ticks": {
+          "$ref": "#/$defs/ticks"
+        },
+        "host_min_cleanup_reserve_ticks": {
+          "$ref": "#/$defs/ticks"
+        },
+        "host_min_export_reserve_ticks": {
+          "$ref": "#/$defs/ticks"
+        },
+        "image_id": {
+          "$ref": "#/$defs/outer-image-id"
+        },
+        "intent_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "operation_id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "pool_id": {
+          "$ref": "#/$defs/id128"
+        },
+        "profile": {
+          "const": "signed-hold-v1"
+        },
+        "schema": {
+          "const": "fsgg.v3.creation-core/1"
+        },
+        "stopped_at": {
+          "$ref": "#/$defs/utc"
+        },
+        "supplier_source_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "supplier_source_revision": {
+          "$ref": "#/$defs/source128"
+        },
+        "unit_config_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "unit_file_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "unit_name": {
+          "$ref": "#/$defs/unit-name"
+        }
+      },
+      "required": [
+        "allocation_device",
+        "allocation_fs_uuid",
+        "allocation_inode",
+        "boot_id",
+        "challenge_digest",
+        "cid",
+        "correlation_id",
+        "created_at",
+        "host_lease_authority_ref",
+        "host_lease_expires_at",
+        "host_lease_origin_at",
+        "host_maximum_runtime_cap_ticks",
+        "host_min_cleanup_reserve_ticks",
+        "host_min_export_reserve_ticks",
+        "image_id",
+        "intent_digest",
+        "operation_id",
+        "pool_id",
+        "profile",
+        "schema",
+        "stopped_at",
+        "supplier_source_digest",
+        "supplier_source_revision",
+        "unit_config_digest",
+        "unit_file_digest",
+        "unit_name"
+      ],
+      "type": "object"
+    },
+    "digest": {
+      "maxLength": 64,
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "effect-admission": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "effect": {
+              "const": "create-stopped"
+            },
+            "expected_head": {
+              "$ref": "#/$defs/null"
+            },
+            "grant_id": {
+              "$ref": "#/$defs/uuid"
+            },
+            "intent_digest": {
+              "$ref": "#/$defs/digest"
+            },
+            "issued_at": {
+              "$ref": "#/$defs/utc"
+            },
+            "not_after": {
+              "$ref": "#/$defs/utc"
+            },
+            "not_before": {
+              "$ref": "#/$defs/utc"
+            },
+            "operation_id": {
+              "$ref": "#/$defs/null"
+            },
+            "reservation_digest": {
+              "$ref": "#/$defs/null"
+            },
+            "schema": {
+              "const": "fsgg.v3.effect-admission/1"
+            },
+            "scope_digest": {
+              "$ref": "#/$defs/digest"
+            },
+            "source_revision": {
+              "$ref": "#/$defs/source128"
+            }
+          },
+          "required": [
+            "effect",
+            "expected_head",
+            "grant_id",
+            "intent_digest",
+            "issued_at",
+            "not_after",
+            "not_before",
+            "operation_id",
+            "reservation_digest",
+            "schema",
+            "scope_digest",
+            "source_revision"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "effect": {
+              "const": "start-original"
+            },
+            "expected_head": {
+              "$ref": "#/$defs/digest"
+            },
+            "grant_id": {
+              "$ref": "#/$defs/uuid"
+            },
+            "intent_digest": {
+              "$ref": "#/$defs/digest"
+            },
+            "issued_at": {
+              "$ref": "#/$defs/utc"
+            },
+            "not_after": {
+              "$ref": "#/$defs/utc"
+            },
+            "not_before": {
+              "$ref": "#/$defs/utc"
+            },
+            "operation_id": {
+              "$ref": "#/$defs/uuid"
+            },
+            "reservation_digest": {
+              "$ref": "#/$defs/digest"
+            },
+            "schema": {
+              "const": "fsgg.v3.effect-admission/1"
+            },
+            "scope_digest": {
+              "$ref": "#/$defs/digest"
+            },
+            "source_revision": {
+              "$ref": "#/$defs/source128"
+            }
+          },
+          "required": [
+            "effect",
+            "expected_head",
+            "grant_id",
+            "intent_digest",
+            "issued_at",
+            "not_after",
+            "not_before",
+            "operation_id",
+            "reservation_digest",
+            "schema",
+            "scope_digest",
+            "source_revision"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "effect": {
+              "const": "retire-original"
+            },
+            "expected_head": {
+              "$ref": "#/$defs/digest"
+            },
+            "grant_id": {
+              "$ref": "#/$defs/uuid"
+            },
+            "intent_digest": {
+              "$ref": "#/$defs/digest"
+            },
+            "issued_at": {
+              "$ref": "#/$defs/utc"
+            },
+            "not_after": {
+              "$ref": "#/$defs/utc"
+            },
+            "not_before": {
+              "$ref": "#/$defs/utc"
+            },
+            "operation_id": {
+              "$ref": "#/$defs/uuid"
+            },
+            "reservation_digest": {
+              "$ref": "#/$defs/digest"
+            },
+            "schema": {
+              "const": "fsgg.v3.effect-admission/1"
+            },
+            "scope_digest": {
+              "$ref": "#/$defs/digest"
+            },
+            "source_revision": {
+              "$ref": "#/$defs/source128"
+            }
+          },
+          "required": [
+            "effect",
+            "expected_head",
+            "grant_id",
+            "intent_digest",
+            "issued_at",
+            "not_after",
+            "not_before",
+            "operation_id",
+            "reservation_digest",
+            "schema",
+            "scope_digest",
+            "source_revision"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "exit-i32": {
+      "maxLength": 11,
+      "pattern": "^(?:0|[1-9][0-9]{0,8}|1[0-9]{9}|20[0-9]{8}|21[0-3][0-9]{7}|214[0-6][0-9]{6}|2147[0-3][0-9]{5}|21474[0-7][0-9]{4}|214748[0-2][0-9]{3}|2147483[0-5][0-9]{2}|21474836[0-3][0-9]|214748364[0-7]|-(?:[1-9][0-9]{0,8}|1[0-9]{9}|20[0-9]{8}|21[0-3][0-9]{7}|214[0-6][0-9]{6}|2147[0-3][0-9]{5}|21474[0-7][0-9]{4}|214748[0-2][0-9]{3}|2147483[0-5][0-9]{2}|21474836[0-3][0-9]|214748364[0-8]))$",
+      "type": "string"
+    },
+    "export-readback": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "durable-output-readback"
+            },
+            "manifest_digest": {
+              "$ref": "#/$defs/digest"
+            },
+            "member_count": {
+              "$ref": "#/$defs/positive-u64"
+            },
+            "observed_head": {
+              "$ref": "#/$defs/digest"
+            },
+            "operation_id": {
+              "$ref": "#/$defs/uuid"
+            },
+            "readback_at": {
+              "$ref": "#/$defs/utc"
+            },
+            "receiver_journal_digest": {
+              "$ref": "#/$defs/digest"
+            },
+            "reservation_digest": {
+              "$ref": "#/$defs/digest"
+            },
+            "schema": {
+              "const": "fsgg.v3.export-readback/1"
+            },
+            "selection_digest": {
+              "$ref": "#/$defs/digest"
+            },
+            "total_bytes": {
+              "$ref": "#/$defs/u64"
+            }
+          },
+          "required": [
+            "kind",
+            "manifest_digest",
+            "member_count",
+            "observed_head",
+            "operation_id",
+            "readback_at",
+            "receiver_journal_digest",
+            "reservation_digest",
+            "schema",
+            "selection_digest",
+            "total_bytes"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "zero-selection-census-accepted"
+            },
+            "manifest_digest": {
+              "$ref": "#/$defs/null"
+            },
+            "member_count": {
+              "$ref": "#/$defs/null"
+            },
+            "observed_head": {
+              "$ref": "#/$defs/digest"
+            },
+            "operation_id": {
+              "$ref": "#/$defs/uuid"
+            },
+            "readback_at": {
+              "$ref": "#/$defs/utc"
+            },
+            "receiver_journal_digest": {
+              "$ref": "#/$defs/digest"
+            },
+            "reservation_digest": {
+              "$ref": "#/$defs/digest"
+            },
+            "schema": {
+              "const": "fsgg.v3.export-readback/1"
+            },
+            "selection_digest": {
+              "$ref": "#/$defs/digest"
+            },
+            "total_bytes": {
+              "$ref": "#/$defs/null"
+            }
+          },
+          "required": [
+            "kind",
+            "manifest_digest",
+            "member_count",
+            "observed_head",
+            "operation_id",
+            "readback_at",
+            "receiver_journal_digest",
+            "reservation_digest",
+            "schema",
+            "selection_digest",
+            "total_bytes"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "genesis": {
+      "additionalProperties": false,
+      "properties": {
+        "creation_core": {
+          "$ref": "#/$defs/creation-core"
+        },
+        "creation_core_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "creation_receipt_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "observed_at": {
+          "$ref": "#/$defs/utc"
+        },
+        "predecessor_head": {
+          "type": "null"
+        },
+        "reservation": {
+          "$ref": "#/$defs/reservation"
+        },
+        "reservation_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "schema": {
+          "const": "fsgg.v3.genesis/1"
+        },
+        "sequence": {
+          "const": "0"
+        }
+      },
+      "required": [
+        "creation_core",
+        "creation_core_digest",
+        "creation_receipt_digest",
+        "observed_at",
+        "predecessor_head",
+        "reservation",
+        "reservation_digest",
+        "schema",
+        "sequence"
+      ],
+      "type": "object"
+    },
+    "host-ref": {
+      "maxLength": 4096,
+      "minLength": 1,
+      "pattern": "^[ -~]+$",
+      "type": "string"
+    },
+    "id128": {
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$",
+      "type": "string"
+    },
+    "nonce256": {
+      "format": "nonce256",
+      "maxLength": 43,
+      "pattern": "^[A-Za-z0-9_-]{43}$",
+      "type": "string"
+    },
+    "null": {
+      "type": "null"
+    },
+    "outer-cid": {
+      "maxLength": 64,
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "outer-image-id": {
+      "maxLength": 64,
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "positive-u64": {
+      "maxLength": 20,
+      "pattern": "^(?:[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|18446744073709550[0-9]{3}|18446744073709551[0-5][0-9]{2}|1844674407370955160[0-9]{1}|1844674407370955161[0-4][0-9]{0}|18446744073709551615)$",
+      "type": "string"
+    },
+    "qualified-inner-image": {
+      "maxLength": 256,
+      "minLength": 72,
+      "pattern": "^[^ ].*@sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "receiver-acceptance": {
+      "additionalProperties": false,
+      "properties": {
+        "accepted_at": {
+          "$ref": "#/$defs/utc"
+        },
+        "correlation_id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "genesis_head": {
+          "$ref": "#/$defs/digest"
+        },
+        "intent_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "kind": {
+          "const": "original-genesis-accepted"
+        },
+        "operation_id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "receiver_journal_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "reservation_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "schema": {
+          "const": "fsgg.v3.receiver-acceptance/1"
+        }
+      },
+      "required": [
+        "accepted_at",
+        "correlation_id",
+        "genesis_head",
+        "intent_digest",
+        "kind",
+        "operation_id",
+        "receiver_journal_digest",
+        "reservation_digest",
+        "schema"
+      ],
+      "type": "object"
+    },
+    "receiver-intent": {
+      "additionalProperties": false,
+      "properties": {
+        "command_deadline": {
+          "$ref": "#/$defs/utc"
+        },
+        "command_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "correlation_id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "created_at": {
+          "$ref": "#/$defs/utc"
+        },
+        "intent_id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "qualified_inner_image": {
+          "$ref": "#/$defs/qualified-inner-image"
+        },
+        "requested_cleanup_reserve_ticks": {
+          "$ref": "#/$defs/ticks"
+        },
+        "requested_export_reserve_ticks": {
+          "$ref": "#/$defs/ticks"
+        },
+        "requested_host_lease_not_after": {
+          "$ref": "#/$defs/utc"
+        },
+        "requested_maximum_runtime_ticks": {
+          "$ref": "#/$defs/ticks"
+        },
+        "requested_profile": {
+          "const": "signed-hold-v1"
+        },
+        "requested_source_revision": {
+          "$ref": "#/$defs/source128"
+        },
+        "schema": {
+          "const": "fsgg.v3.receiver-intent/1"
+        },
+        "selection": {
+          "$ref": "#/$defs/selection"
+        }
+      },
+      "required": [
+        "command_deadline",
+        "command_digest",
+        "correlation_id",
+        "created_at",
+        "intent_id",
+        "qualified_inner_image",
+        "requested_cleanup_reserve_ticks",
+        "requested_export_reserve_ticks",
+        "requested_host_lease_not_after",
+        "requested_maximum_runtime_ticks",
+        "requested_profile",
+        "requested_source_revision",
+        "schema",
+        "selection"
+      ],
+      "type": "object"
+    },
+    "reservation": {
+      "additionalProperties": false,
+      "properties": {
+        "admitted_at": {
+          "$ref": "#/$defs/utc"
+        },
+        "cleanup_reserve_ticks": {
+          "$ref": "#/$defs/ticks"
+        },
+        "command": {
+          "$ref": "#/$defs/command"
+        },
+        "correlation_id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "creation_receipt_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "export_reserve_ticks": {
+          "$ref": "#/$defs/ticks"
+        },
+        "host_lease_expires_at": {
+          "$ref": "#/$defs/utc"
+        },
+        "intent_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "maximum_runtime_ticks": {
+          "$ref": "#/$defs/ticks"
+        },
+        "operation_id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "original_deadline": {
+          "$ref": "#/$defs/utc"
+        },
+        "qualified_inner_image": {
+          "$ref": "#/$defs/qualified-inner-image"
+        },
+        "receiver_source_revision": {
+          "$ref": "#/$defs/source128"
+        },
+        "schema": {
+          "const": "fsgg.v3.reservation/1"
+        },
+        "selection": {
+          "$ref": "#/$defs/selection"
+        },
+        "worker_id": {
+          "$ref": "#/$defs/id128"
+        }
+      },
+      "required": [
+        "admitted_at",
+        "cleanup_reserve_ticks",
+        "command",
+        "correlation_id",
+        "creation_receipt_digest",
+        "export_reserve_ticks",
+        "host_lease_expires_at",
+        "intent_digest",
+        "maximum_runtime_ticks",
+        "operation_id",
+        "original_deadline",
+        "qualified_inner_image",
+        "receiver_source_revision",
+        "schema",
+        "selection",
+        "worker_id"
+      ],
+      "type": "object"
+    },
+    "response-challenge": {
+      "additionalProperties": false,
+      "properties": {
+        "challenge_id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "challenge_nonce": {
+          "$ref": "#/$defs/nonce256"
+        },
+        "issued_at": {
+          "$ref": "#/$defs/utc"
+        },
+        "known_head": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/digest"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "not_after": {
+          "$ref": "#/$defs/utc"
+        },
+        "operation_id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "purpose": {
+          "enum": [
+            "genesis-readback",
+            "state-readback",
+            "retirement-readback"
+          ]
+        },
+        "reservation_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "schema": {
+          "const": "fsgg.v3.response-challenge/1"
+        }
+      },
+      "required": [
+        "challenge_id",
+        "challenge_nonce",
+        "issued_at",
+        "known_head",
+        "not_after",
+        "operation_id",
+        "purpose",
+        "reservation_digest",
+        "schema"
+      ],
+      "type": "object"
+    },
+    "selection": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "none"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "digest": {
+              "$ref": "#/$defs/digest"
+            },
+            "kind": {
+              "const": "selected"
+            },
+            "member_count": {
+              "$ref": "#/$defs/positive-u64"
+            },
+            "total_bytes": {
+              "$ref": "#/$defs/u64"
+            }
+          },
+          "required": [
+            "digest",
+            "kind",
+            "member_count",
+            "total_bytes"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "signed-envelope": {
+      "additionalProperties": false,
+      "properties": {
+        "payload": {
+          "format": "canonical-base64url",
+          "maxLength": 60000,
+          "pattern": "^[A-Za-z0-9_-]+$",
+          "type": "string"
+        },
+        "signature": {
+          "format": "canonical-base64url",
+          "maxLength": 2731,
+          "pattern": "^[A-Za-z0-9_-]+$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "payload",
+        "signature"
+      ],
+      "type": "object"
+    },
+    "source128": {
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9_-]{1,128}$",
+      "type": "string"
+    },
+    "supplier-event": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "body": {
+              "$ref": "#/$defs/body-lease-amendment"
+            },
+            "kind": {
+              "const": "lease-amendment"
+            },
+            "occurred_at": {
+              "$ref": "#/$defs/utc"
+            },
+            "operation_id": {
+              "$ref": "#/$defs/uuid"
+            },
+            "predecessor_head": {
+              "$ref": "#/$defs/digest"
+            },
+            "reservation_digest": {
+              "$ref": "#/$defs/digest"
+            },
+            "schema": {
+              "const": "fsgg.v3.supplier-event/1"
+            },
+            "sequence": {
+              "$ref": "#/$defs/positive-u64"
+            }
+          },
+          "required": [
+            "body",
+            "kind",
+            "occurred_at",
+            "operation_id",
+            "predecessor_head",
+            "reservation_digest",
+            "schema",
+            "sequence"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "body": {
+              "$ref": "#/$defs/body-launch-intent"
+            },
+            "kind": {
+              "const": "launch-intent"
+            },
+            "occurred_at": {
+              "$ref": "#/$defs/utc"
+            },
+            "operation_id": {
+              "$ref": "#/$defs/uuid"
+            },
+            "predecessor_head": {
+              "$ref": "#/$defs/digest"
+            },
+            "reservation_digest": {
+              "$ref": "#/$defs/digest"
+            },
+            "schema": {
+              "const": "fsgg.v3.supplier-event/1"
+            },
+            "sequence": {
+              "$ref": "#/$defs/positive-u64"
+            }
+          },
+          "required": [
+            "body",
+            "kind",
+            "occurred_at",
+            "operation_id",
+            "predecessor_head",
+            "reservation_digest",
+            "schema",
+            "sequence"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "body": {
+              "$ref": "#/$defs/body-start-invoked"
+            },
+            "kind": {
+              "const": "start-invoked"
+            },
+            "occurred_at": {
+              "$ref": "#/$defs/utc"
+            },
+            "operation_id": {
+              "$ref": "#/$defs/uuid"
+            },
+            "predecessor_head": {
+              "$ref": "#/$defs/digest"
+            },
+            "reservation_digest": {
+              "$ref": "#/$defs/digest"
+            },
+            "schema": {
+              "const": "fsgg.v3.supplier-event/1"
+            },
+            "sequence": {
+              "$ref": "#/$defs/positive-u64"
+            }
+          },
+          "required": [
+            "body",
+            "kind",
+            "occurred_at",
+            "operation_id",
+            "predecessor_head",
+            "reservation_digest",
+            "schema",
+            "sequence"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "body": {
+              "$ref": "#/$defs/body-unit-activation-observed"
+            },
+            "kind": {
+              "const": "unit-activation-observed"
+            },
+            "occurred_at": {
+              "$ref": "#/$defs/utc"
+            },
+            "operation_id": {
+              "$ref": "#/$defs/uuid"
+            },
+            "predecessor_head": {
+              "$ref": "#/$defs/digest"
+            },
+            "reservation_digest": {
+              "$ref": "#/$defs/digest"
+            },
+            "schema": {
+              "const": "fsgg.v3.supplier-event/1"
+            },
+            "sequence": {
+              "$ref": "#/$defs/positive-u64"
+            }
+          },
+          "required": [
+            "body",
+            "kind",
+            "occurred_at",
+            "operation_id",
+            "predecessor_head",
+            "reservation_digest",
+            "schema",
+            "sequence"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "body": {
+              "$ref": "#/$defs/body-workload-exit"
+            },
+            "kind": {
+              "const": "workload-exit"
+            },
+            "occurred_at": {
+              "$ref": "#/$defs/utc"
+            },
+            "operation_id": {
+              "$ref": "#/$defs/uuid"
+            },
+            "predecessor_head": {
+              "$ref": "#/$defs/digest"
+            },
+            "reservation_digest": {
+              "$ref": "#/$defs/digest"
+            },
+            "schema": {
+              "const": "fsgg.v3.supplier-event/1"
+            },
+            "sequence": {
+              "$ref": "#/$defs/positive-u64"
+            }
+          },
+          "required": [
+            "body",
+            "kind",
+            "occurred_at",
+            "operation_id",
+            "predecessor_head",
+            "reservation_digest",
+            "schema",
+            "sequence"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "body": {
+              "$ref": "#/$defs/body-termination"
+            },
+            "kind": {
+              "const": "termination"
+            },
+            "occurred_at": {
+              "$ref": "#/$defs/utc"
+            },
+            "operation_id": {
+              "$ref": "#/$defs/uuid"
+            },
+            "predecessor_head": {
+              "$ref": "#/$defs/digest"
+            },
+            "reservation_digest": {
+              "$ref": "#/$defs/digest"
+            },
+            "schema": {
+              "const": "fsgg.v3.supplier-event/1"
+            },
+            "sequence": {
+              "$ref": "#/$defs/positive-u64"
+            }
+          },
+          "required": [
+            "body",
+            "kind",
+            "occurred_at",
+            "operation_id",
+            "predecessor_head",
+            "reservation_digest",
+            "schema",
+            "sequence"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "body": {
+              "$ref": "#/$defs/body-inner-cleanup-intent"
+            },
+            "kind": {
+              "const": "inner-cleanup-intent"
+            },
+            "occurred_at": {
+              "$ref": "#/$defs/utc"
+            },
+            "operation_id": {
+              "$ref": "#/$defs/uuid"
+            },
+            "predecessor_head": {
+              "$ref": "#/$defs/digest"
+            },
+            "reservation_digest": {
+              "$ref": "#/$defs/digest"
+            },
+            "schema": {
+              "const": "fsgg.v3.supplier-event/1"
+            },
+            "sequence": {
+              "$ref": "#/$defs/positive-u64"
+            }
+          },
+          "required": [
+            "body",
+            "kind",
+            "occurred_at",
+            "operation_id",
+            "predecessor_head",
+            "reservation_digest",
+            "schema",
+            "sequence"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "body": {
+              "$ref": "#/$defs/body-inner-cleanup-observed"
+            },
+            "kind": {
+              "const": "inner-cleanup-observed"
+            },
+            "occurred_at": {
+              "$ref": "#/$defs/utc"
+            },
+            "operation_id": {
+              "$ref": "#/$defs/uuid"
+            },
+            "predecessor_head": {
+              "$ref": "#/$defs/digest"
+            },
+            "reservation_digest": {
+              "$ref": "#/$defs/digest"
+            },
+            "schema": {
+              "const": "fsgg.v3.supplier-event/1"
+            },
+            "sequence": {
+              "$ref": "#/$defs/positive-u64"
+            }
+          },
+          "required": [
+            "body",
+            "kind",
+            "occurred_at",
+            "operation_id",
+            "predecessor_head",
+            "reservation_digest",
+            "schema",
+            "sequence"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "body": {
+              "$ref": "#/$defs/body-export-manifest"
+            },
+            "kind": {
+              "const": "export-manifest"
+            },
+            "occurred_at": {
+              "$ref": "#/$defs/utc"
+            },
+            "operation_id": {
+              "$ref": "#/$defs/uuid"
+            },
+            "predecessor_head": {
+              "$ref": "#/$defs/digest"
+            },
+            "reservation_digest": {
+              "$ref": "#/$defs/digest"
+            },
+            "schema": {
+              "const": "fsgg.v3.supplier-event/1"
+            },
+            "sequence": {
+              "$ref": "#/$defs/positive-u64"
+            }
+          },
+          "required": [
+            "body",
+            "kind",
+            "occurred_at",
+            "operation_id",
+            "predecessor_head",
+            "reservation_digest",
+            "schema",
+            "sequence"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "body": {
+              "$ref": "#/$defs/body-zero-selection-census"
+            },
+            "kind": {
+              "const": "zero-selection-census"
+            },
+            "occurred_at": {
+              "$ref": "#/$defs/utc"
+            },
+            "operation_id": {
+              "$ref": "#/$defs/uuid"
+            },
+            "predecessor_head": {
+              "$ref": "#/$defs/digest"
+            },
+            "reservation_digest": {
+              "$ref": "#/$defs/digest"
+            },
+            "schema": {
+              "const": "fsgg.v3.supplier-event/1"
+            },
+            "sequence": {
+              "$ref": "#/$defs/positive-u64"
+            }
+          },
+          "required": [
+            "body",
+            "kind",
+            "occurred_at",
+            "operation_id",
+            "predecessor_head",
+            "reservation_digest",
+            "schema",
+            "sequence"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "body": {
+              "$ref": "#/$defs/body-outer-retire-intent"
+            },
+            "kind": {
+              "const": "outer-retire-intent"
+            },
+            "occurred_at": {
+              "$ref": "#/$defs/utc"
+            },
+            "operation_id": {
+              "$ref": "#/$defs/uuid"
+            },
+            "predecessor_head": {
+              "$ref": "#/$defs/digest"
+            },
+            "reservation_digest": {
+              "$ref": "#/$defs/digest"
+            },
+            "schema": {
+              "const": "fsgg.v3.supplier-event/1"
+            },
+            "sequence": {
+              "$ref": "#/$defs/positive-u64"
+            }
+          },
+          "required": [
+            "body",
+            "kind",
+            "occurred_at",
+            "operation_id",
+            "predecessor_head",
+            "reservation_digest",
+            "schema",
+            "sequence"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "body": {
+              "$ref": "#/$defs/body-outer-retire-observed"
+            },
+            "kind": {
+              "const": "outer-retire-observed"
+            },
+            "occurred_at": {
+              "$ref": "#/$defs/utc"
+            },
+            "operation_id": {
+              "$ref": "#/$defs/uuid"
+            },
+            "predecessor_head": {
+              "$ref": "#/$defs/digest"
+            },
+            "reservation_digest": {
+              "$ref": "#/$defs/digest"
+            },
+            "schema": {
+              "const": "fsgg.v3.supplier-event/1"
+            },
+            "sequence": {
+              "$ref": "#/$defs/positive-u64"
+            }
+          },
+          "required": [
+            "body",
+            "kind",
+            "occurred_at",
+            "operation_id",
+            "predecessor_head",
+            "reservation_digest",
+            "schema",
+            "sequence"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "body": {
+              "$ref": "#/$defs/body-effect-unknown"
+            },
+            "kind": {
+              "const": "effect-unknown"
+            },
+            "occurred_at": {
+              "$ref": "#/$defs/utc"
+            },
+            "operation_id": {
+              "$ref": "#/$defs/uuid"
+            },
+            "predecessor_head": {
+              "$ref": "#/$defs/digest"
+            },
+            "reservation_digest": {
+              "$ref": "#/$defs/digest"
+            },
+            "schema": {
+              "const": "fsgg.v3.supplier-event/1"
+            },
+            "sequence": {
+              "$ref": "#/$defs/positive-u64"
+            }
+          },
+          "required": [
+            "body",
+            "kind",
+            "occurred_at",
+            "operation_id",
+            "predecessor_head",
+            "reservation_digest",
+            "schema",
+            "sequence"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "body": {
+              "$ref": "#/$defs/body-failure"
+            },
+            "kind": {
+              "const": "failure"
+            },
+            "occurred_at": {
+              "$ref": "#/$defs/utc"
+            },
+            "operation_id": {
+              "$ref": "#/$defs/uuid"
+            },
+            "predecessor_head": {
+              "$ref": "#/$defs/digest"
+            },
+            "reservation_digest": {
+              "$ref": "#/$defs/digest"
+            },
+            "schema": {
+              "const": "fsgg.v3.supplier-event/1"
+            },
+            "sequence": {
+              "$ref": "#/$defs/positive-u64"
+            }
+          },
+          "required": [
+            "body",
+            "kind",
+            "occurred_at",
+            "operation_id",
+            "predecessor_head",
+            "reservation_digest",
+            "schema",
+            "sequence"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "supplier-response": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "challenge_digest": {
+              "$ref": "#/$defs/digest"
+            },
+            "collected_at": {
+              "$ref": "#/$defs/utc"
+            },
+            "events": {
+              "items": {
+                "format": "canonical-base64url",
+                "maxLength": 35682,
+                "pattern": "^[A-Za-z0-9_-]+$",
+                "type": "string"
+              },
+              "maxItems": 1,
+              "minItems": 1,
+              "type": "array"
+            },
+            "from_head": {
+              "$ref": "#/$defs/null"
+            },
+            "mode": {
+              "const": "genesis"
+            },
+            "operation_id": {
+              "$ref": "#/$defs/uuid"
+            },
+            "purpose": {
+              "enum": [
+                "genesis-readback",
+                "state-readback",
+                "retirement-readback"
+              ]
+            },
+            "reservation_digest": {
+              "$ref": "#/$defs/digest"
+            },
+            "schema": {
+              "const": "fsgg.v3.supplier-response/1"
+            },
+            "to_head": {
+              "$ref": "#/$defs/digest"
+            }
+          },
+          "required": [
+            "challenge_digest",
+            "collected_at",
+            "events",
+            "from_head",
+            "mode",
+            "operation_id",
+            "purpose",
+            "reservation_digest",
+            "schema",
+            "to_head"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "challenge_digest": {
+              "$ref": "#/$defs/digest"
+            },
+            "collected_at": {
+              "$ref": "#/$defs/utc"
+            },
+            "events": {
+              "items": {
+                "format": "canonical-base64url",
+                "maxLength": 25015,
+                "pattern": "^[A-Za-z0-9_-]+$",
+                "type": "string"
+              },
+              "maxItems": 16,
+              "minItems": 1,
+              "type": "array"
+            },
+            "from_head": {
+              "$ref": "#/$defs/digest"
+            },
+            "mode": {
+              "const": "append"
+            },
+            "operation_id": {
+              "$ref": "#/$defs/uuid"
+            },
+            "purpose": {
+              "enum": [
+                "genesis-readback",
+                "state-readback",
+                "retirement-readback"
+              ]
+            },
+            "reservation_digest": {
+              "$ref": "#/$defs/digest"
+            },
+            "schema": {
+              "const": "fsgg.v3.supplier-response/1"
+            },
+            "to_head": {
+              "$ref": "#/$defs/digest"
+            }
+          },
+          "required": [
+            "challenge_digest",
+            "collected_at",
+            "events",
+            "from_head",
+            "mode",
+            "operation_id",
+            "purpose",
+            "reservation_digest",
+            "schema",
+            "to_head"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "challenge_digest": {
+              "$ref": "#/$defs/digest"
+            },
+            "collected_at": {
+              "$ref": "#/$defs/utc"
+            },
+            "events": {
+              "items": {
+                "format": "canonical-base64url",
+                "maxLength": 35682,
+                "pattern": "^[A-Za-z0-9_-]+$",
+                "type": "string"
+              },
+              "maxItems": 1,
+              "minItems": 1,
+              "type": "array"
+            },
+            "from_head": {
+              "$ref": "#/$defs/digest"
+            },
+            "mode": {
+              "const": "unchanged"
+            },
+            "operation_id": {
+              "$ref": "#/$defs/uuid"
+            },
+            "purpose": {
+              "enum": [
+                "genesis-readback",
+                "state-readback",
+                "retirement-readback"
+              ]
+            },
+            "reservation_digest": {
+              "$ref": "#/$defs/digest"
+            },
+            "schema": {
+              "const": "fsgg.v3.supplier-response/1"
+            },
+            "to_head": {
+              "$ref": "#/$defs/digest"
+            }
+          },
+          "required": [
+            "challenge_digest",
+            "collected_at",
+            "events",
+            "from_head",
+            "mode",
+            "operation_id",
+            "purpose",
+            "reservation_digest",
+            "schema",
+            "to_head"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "ticks": {
+      "maxLength": 19,
+      "pattern": "^(?:[1-9][0-9]{0,17}|[1-8][0-9]{18}|9[0-1][0-9]{17}|92[0-1][0-9]{16}|922[0-2][0-9]{15}|9223[0-2][0-9]{14}|92233[0-6][0-9]{13}|922337[0-1][0-9]{12}|92233720[0-2][0-9]{10}|922337203[0-5][0-9]{9}|9223372036[0-7][0-9]{8}|92233720368[0-4][0-9]{7}|922337203685[0-3][0-9]{6}|9223372036854[0-6][0-9]{5}|92233720368547[0-6][0-9]{4}|922337203685477[0-4][0-9]{3}|9223372036854775[0-7][0-9]{2}|922337203685477580[0-6][0-9]{0}|9223372036854775807)$",
+      "type": "string"
+    },
+    "u64": {
+      "maxLength": 20,
+      "pattern": "^(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|18446744073709550[0-9]{3}|18446744073709551[0-5][0-9]{2}|1844674407370955160[0-9]{1}|1844674407370955161[0-4][0-9]{0}|18446744073709551615)$",
+      "type": "string"
+    },
+    "unit-invocation-id": {
+      "maxLength": 32,
+      "pattern": "^[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "unit-name": {
+      "maxLength": 256,
+      "minLength": 1,
+      "pattern": "^[^/\\\\\\s]+$",
+      "type": "string"
+    },
+    "utc": {
+      "format": "utc-microseconds",
+      "maxLength": 27,
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{6}Z$",
+      "type": "string"
+    },
+    "uuid": {
+      "maxLength": 36,
+      "not": {
+        "const": "00000000-0000-0000-0000-000000000000"
+      },
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:fsgg:v3:supplier-wire:1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/receiver-intent"
+    },
+    {
+      "$ref": "#/$defs/creation-challenge"
+    },
+    {
+      "$ref": "#/$defs/creation-core"
+    },
+    {
+      "$ref": "#/$defs/reservation"
+    },
+    {
+      "$ref": "#/$defs/genesis"
+    },
+    {
+      "$ref": "#/$defs/supplier-event"
+    },
+    {
+      "$ref": "#/$defs/response-challenge"
+    },
+    {
+      "$ref": "#/$defs/supplier-response"
+    },
+    {
+      "$ref": "#/$defs/receiver-acceptance"
+    },
+    {
+      "$ref": "#/$defs/export-readback"
+    },
+    {
+      "$ref": "#/$defs/effect-admission"
+    }
+  ],
+  "title": "Inactive untrusted supplier wire profile; no capability or effect authority",
+  "x-capabilities": {
+    "authentication": false,
+    "durableReplay": false,
+    "grantConsumption": false,
+    "native": false
+  },
+  "x-domains": [
+    "intent",
+    "creation",
+    "reservation",
+    "event",
+    "challenge",
+    "response",
+    "receiver-acceptance",
+    "manifest",
+    "command",
+    "selection",
+    "creation-receipt",
+    "signed-envelope",
+    "genesis",
+    "grant",
+    "export-readback",
+    "lease-amendment"
+  ],
+  "x-required-semantic-gates": [
+    "C1 exact bytes and typed family-specific nested/enclosing limits",
+    "UTC calendar/precision and checked original tick/deadline arithmetic",
+    "Exact original I/C/R/challenge/selection/head/domain joins",
+    "Retained current-head equality, sequence/fork and lease-predecessor state",
+    "Independent issuer/pin/signature/request/grant authentication",
+    "Durable replay/ACK/grant state and installed/native interlocks"
+  ],
+  "x-source-contracts": {
+    "v2": "55371425d0589b08d3665f739992b71cb9608806cfa02e2a56ea4aa647641e18",
+    "v3": "614eb8c9e03155939baaf7c7552d3983b29ed745149f1b354f6eec2a0e5b6c25",
+    "v4": "292772ca8b76d2b38fe5b3f8151e42af84ec708c8dd1088cde21dff1691f7c60"
+  }
+}
