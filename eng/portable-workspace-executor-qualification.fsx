@@ -13,6 +13,35 @@ open FS.GG.Coordination.Orchestration.Execution
 let fail message =
     raise (InvalidOperationException message)
 
+// Host-owner integration uses this maintained journey with its independently authenticated
+// transport. A caller-supplied status file is never a verifier. The supplier transport remains
+// an explicit prerequisite; this script does not discover credentials or provision allocations.
+let qualifyAuthenticatedSupplier
+    (verifier: IPortableHostSupplierVerifier option)
+    (identity: PortableHostSupplierIdentity)
+    (reservation: PortableHostReservation)
+    (bytes: byte array)
+    (policy: PortableExecutorPolicy)
+    (authority: PortableWorkspaceAuthority)
+    (profile: PortableWorkspaceProfile)
+    (clock: unit -> DateTimeOffset)
+    (cancellationToken: CancellationToken) =
+    match verifier with
+    | None -> Error "authenticated supplier transport is unavailable; host qualification is held"
+    | Some source ->
+        PortableHostSupplierIngress.authenticate source identity reservation (clock ()) (TimeSpan.FromSeconds 30.) bytes
+        |> Result.bind (fun evidence ->
+            let runner = PortableWorkspacePodmanRunner policy.Runtime :> IPortableProcessRunner
+            PortableWorkspaceExecutor.SupplierExecutor.Create(policy, runner, evidence, clock)
+            |> Result.bind (fun caller ->
+                let outcome = caller.ExecuteAsync(authority, profile, cancellationToken).GetAwaiter().GetResult()
+                caller.ReadHostState profile
+                |> Result.map (fun state ->
+                    // Retain the original caller and journal. Export readback must be authenticated
+                    // through Reconcile before RecoverAsync can request inner cleanup. Outer
+                    // retirement remains independently owned and is never invoked by this harness.
+                    caller, outcome, state)))
+
 let options =
     fsi.CommandLineArgs
     |> Array.skip 1
@@ -21,6 +50,12 @@ let options =
         | [| name; value |] when name.StartsWith("--", StringComparison.Ordinal) -> name[2..], value
         | _ -> fail "arguments must be --name value pairs")
     |> Map.ofArray
+
+// No production host-owner verifier is installed by this source-only integration. Refuse before
+// fixture replacement, directory creation, native probing or workload launch, rather than silently
+// running the legacy path and labeling it host qualification.
+if options.ContainsKey "supplier-evidence" || options.ContainsKey "supplier-mode" then
+    fail "host qualification requires an independently authenticated supplier transport; unsealed status is not supported"
 
 let required name =
     options

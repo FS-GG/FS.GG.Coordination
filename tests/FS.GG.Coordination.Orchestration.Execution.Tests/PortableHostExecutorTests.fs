@@ -2,6 +2,8 @@ namespace FS.GG.Coordination.Orchestration.Execution.Tests
 
 open System
 open System.IO
+open System.Security.Cryptography
+open System.Text
 open System.Threading
 open System.Threading.Tasks
 open FS.GG.Coordination.Orchestration.Execution
@@ -96,6 +98,7 @@ type private HostExecutorFixture() =
     member _.Profile = profile
     member _.Command = command
     member _.Authority = authority
+    member _.Policy = policy
     member _.Reservation = reservation
     member _.Manifest = manifest
     member _.Executor(?selected: PortableHostReservation, ?legacy: bool) =
@@ -127,6 +130,139 @@ module private HostExecutorAssertions =
 open HostExecutorAssertions
 
 type PortableHostExecutorTests() =
+    [<Fact>]
+    member _.``restart merges authenticated uncertain or retired effects before cleanup``() =
+        for field in [ "inner-unknown"; "outer-unknown"; "outer-known" ] do
+            use fixture = new HostExecutorFixture()
+            let executor = fixture.Executor()
+            execute fixture executor |> receipt |> ignore
+            ready fixture executor
+            let journal = fixture.Journal
+            let lifecycle =
+                match field with
+                | "inner-unknown" -> { PortableHostAllocation.emptyLifecycle with InnerCleanup = EvidenceUnknown "original request uncertain" }
+                | "outer-unknown" -> { PortableHostAllocation.emptyLifecycle with OuterRetirement = EvidenceUnknown "original retirement uncertain" }
+                | _ -> { PortableHostAllocation.emptyLifecycle with OuterRetirement = EvidenceKnown(fixture.Observation 20. ()) }
+            let bytes = Encoding.UTF8.GetBytes field
+            let identity = { Issuer = "controlled-host"; ContainerId = "controlled-cid"; AllocationDevice = 5UL; AllocationInode = 17UL }
+            let verifier =
+                { new IPortableHostSupplierVerifier with
+                    member _.Authenticate _ =
+                        Ok { Identity = identity; Reservation = fixture.Reservation; CollectedAt = fixture.Now
+                             ReceiptDigest = Convert.ToHexString(SHA256.HashData bytes).ToLowerInvariant(); Lifecycle = lifecycle } }
+            let evidence = PortableHostSupplierIngress.authenticate verifier identity fixture.Reservation fixture.Now (TimeSpan.FromSeconds 5.) bytes |> ok
+            let caller = PortableWorkspaceExecutor.SupplierExecutor.Create(fixture.Policy, fixture.Runner, evidence, (fun () -> fixture.Now)) |> ok
+            caller.RecoverAsync(fixture.Profile, CancellationToken.None) |> wait |> receipt |> ignore
+            caller.ExecuteAsync(fixture.Authority, fixture.Profile, CancellationToken.None) |> wait |> receipt |> ignore
+            Assert.Equal(1, fixture.Runner.Runs)
+            Assert.Equal(0, fixture.Runner.Cleans)
+            Assert.Equal(journal, fixture.Journal)
+            let state = caller.ReadHostState fixture.Profile |> ok
+            match field with
+            | "inner-unknown" -> Assert.Equal(lifecycle.InnerCleanup, state.Lifecycle.InnerCleanup)
+            | _ -> Assert.Equal(lifecycle.OuterRetirement, state.Lifecycle.OuterRetirement)
+
+    [<Fact>]
+    member _.``supplier freshness is checked after durable reservation at the actual runner handoff``() =
+        use fixture = new HostExecutorFixture()
+        let bytes = Encoding.UTF8.GetBytes "controlled admission before preparation"
+        let identity = { Issuer = "controlled-host"; ContainerId = "controlled-cid"; AllocationDevice = 5UL; AllocationInode = 17UL }
+        let verifier =
+            { new IPortableHostSupplierVerifier with
+                member _.Authenticate _ =
+                    Ok { Identity = identity; Reservation = fixture.Reservation; CollectedAt = fixture.Start
+                         ReceiptDigest = Convert.ToHexString(SHA256.HashData bytes).ToLowerInvariant()
+                         Lifecycle = PortableHostAllocation.emptyLifecycle } }
+        let evidence = PortableHostSupplierIngress.authenticate verifier identity fixture.Reservation fixture.Start (TimeSpan.FromSeconds 5.) bytes |> ok
+        let clock () =
+            let root = Path.Combine(fixture.Policy.Runtime.StateRoot, "journal-v1")
+            if Directory.Exists root && Directory.GetFiles(root, "*.bin").Length > 0 then fixture.At 10.
+            else fixture.Start
+        let caller = PortableWorkspaceExecutor.SupplierExecutor.Create(fixture.Policy, fixture.Runner, evidence, clock) |> ok
+        caller.ExecuteAsync(fixture.Authority, fixture.Profile, CancellationToken.None) |> wait |> refused
+        Assert.Equal(0, fixture.Runner.Runs)
+        Assert.Equal(0, fixture.Runner.Cleans)
+        Assert.Equal(fixture.Reservation, (caller.ReadHostState fixture.Profile |> ok).Reservation)
+
+    [<Fact>]
+    member _.``supplier expiry after cleanup intent preserves unknown without crossing cleanup port``() =
+        use fixture = new HostExecutorFixture()
+        let original = fixture.Executor()
+        execute fixture original |> receipt |> ignore
+        ready fixture original
+        let beforeIntent = File.ReadAllBytes fixture.Journal
+        let current () = File.ReadAllBytes fixture.Journal = beforeIntent
+        let executor =
+            PortableWorkspaceExecutor.Executor(fixture.Policy, fixture.Runner, clock = (fun () -> fixture.Now),
+                                               hostReservation = fixture.Reservation, hostEvidenceCurrent = current)
+        recover fixture executor |> receipt |> ignore
+        Assert.Equal(0, fixture.Runner.Cleans)
+        match (state fixture executor).Lifecycle.InnerCleanup with
+        | EvidenceUnknown _ -> ()
+        | other -> failwithf "Expected retained cleanup intent, got %A" other
+        recover fixture executor |> receipt |> ignore
+        Assert.Equal(0, fixture.Runner.Cleans)
+
+    [<Fact>]
+    member _.``authenticated supplier caller preserves the production journal and both cleanup layers``() =
+        use fixture = new HostExecutorFixture()
+        let bytes = Encoding.UTF8.GetBytes "controlled transport evidence"
+        let identity = { Issuer = "controlled-host"; ContainerId = "controlled-cid"; AllocationDevice = 5UL; AllocationInode = 17UL }
+        let authenticate selectedIdentity lifecycle =
+            let verifier =
+                { new IPortableHostSupplierVerifier with
+                    member _.Authenticate _ =
+                        Ok { Identity = selectedIdentity; Reservation = fixture.Reservation; CollectedAt = fixture.Now
+                             ReceiptDigest = Convert.ToHexString(SHA256.HashData bytes).ToLowerInvariant()
+                             Lifecycle = lifecycle } }
+            PortableHostSupplierIngress.authenticate verifier selectedIdentity fixture.Reservation fixture.Now (TimeSpan.FromSeconds 5.) bytes |> ok
+        let create evidence =
+            PortableWorkspaceExecutor.SupplierExecutor.Create(fixture.Policy, fixture.Runner, evidence, (fun () -> fixture.Now)) |> ok
+        let initial = authenticate identity PortableHostAllocation.emptyLifecycle
+        let caller = create initial
+        caller.ExecuteAsync(fixture.Authority, fixture.Profile, CancellationToken.None) |> wait |> receipt |> ignore
+        Assert.Equal(1, fixture.Runner.Runs)
+        Assert.Equal(0, fixture.Runner.Cleans)
+        fixture.Now <- fixture.At 10.
+        // Stale evidence cannot authorize cleanup, and reconstruction never renews it.
+        caller.RecoverAsync(fixture.Profile, CancellationToken.None) |> wait |> refused
+        Assert.True(PortableWorkspaceExecutor.SupplierExecutor.Create(fixture.Policy, fixture.Runner, initial, (fun () -> fixture.Now)) |> Result.isError)
+        let exported =
+            { PortableHostAllocation.emptyLifecycle with
+                Export = EvidenceKnown(fixture.Observation 10. (DurableManifestReadback fixture.Manifest)) }
+        let changed = authenticate { identity with AllocationInode = 18UL } exported
+        Assert.True(caller.Reconcile(fixture.Profile, changed) |> Result.isError)
+        let fresh = authenticate identity exported
+        caller.Reconcile(fixture.Profile, fresh) |> ok |> ignore
+        let reconstructed = create fresh
+        reconstructed.RecoverAsync(fixture.Profile, CancellationToken.None) |> wait |> receipt |> ignore
+        Assert.Equal(1, fixture.Runner.Runs)
+        Assert.Equal(1, fixture.Runner.Cleans)
+        let current = reconstructed.ReadHostState fixture.Profile |> ok
+        Assert.Equal(fixture.Reservation, current.Reservation)
+        Assert.NotEqual(EvidenceKnown (), (PortableHostAllocation.retirement fixture.Now fixture.Reservation current.Lifecycle).ReservationRelease)
+        let retired =
+            { exported with OuterRetirement = EvidenceKnown(fixture.Observation 10. ()) }
+        let terminal = reconstructed.Reconcile(fixture.Profile, authenticate identity retired) |> ok
+        Assert.Equal(EvidenceKnown (), (PortableHostAllocation.retirement fixture.Now fixture.Reservation terminal.Lifecycle).ReservationRelease)
+        Assert.Equal(1, fixture.Runner.Cleans)
+
+    [<Fact>]
+    member _.``authenticated supplier observations cannot relaunch after original journal loss``() =
+        use fixture = new HostExecutorFixture()
+        let bytes = Encoding.UTF8.GetBytes "controlled existing termination"
+        let identity = { Issuer = "controlled-host"; ContainerId = "controlled-cid"; AllocationDevice = 5UL; AllocationInode = 17UL }
+        let verifier =
+            { new IPortableHostSupplierVerifier with
+                member _.Authenticate _ =
+                    Ok { Identity = identity; Reservation = fixture.Reservation; CollectedAt = fixture.Now
+                         ReceiptDigest = Convert.ToHexString(SHA256.HashData bytes).ToLowerInvariant()
+                         Lifecycle = { PortableHostAllocation.emptyLifecycle with Termination = EvidenceKnown(fixture.Observation 0. ()) } } }
+        let evidence = PortableHostSupplierIngress.authenticate verifier identity fixture.Reservation fixture.Now (TimeSpan.FromSeconds 5.) bytes |> ok
+        let caller = PortableWorkspaceExecutor.SupplierExecutor.Create(fixture.Policy, fixture.Runner, evidence, (fun () -> fixture.Now)) |> ok
+        caller.ExecuteAsync(fixture.Authority, fixture.Profile, CancellationToken.None) |> wait |> refused
+        Assert.Equal(0, fixture.Runner.Runs)
+
     [<Fact>]
     member _.``actual runner uses original deadline and restart retains exact reservation``() =
         use fixture = new HostExecutorFixture()

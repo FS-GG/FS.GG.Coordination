@@ -4,5 +4,6 @@
   <ItemGroup><PackageReference Include="FsQuint" /><PackageReference Include="Microsoft.NET.Test.Sdk" /><PackageReference Include="xunit" /><PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" /></ItemGroup>
   <ItemGroup><ProjectReference Include="..\..\src\FS.GG.Coordination.Orchestration.Execution\FS.GG.Coordination.Orchestration.Execution.fsproj" /></ItemGroup>
   <ItemGroup><Content Include="..\..\contracts\portable-workspace\v1\examples\*.json" Link="Contracts\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" /></ItemGroup>
+<ItemGroup><Content Include="..\..\contracts\portable-workspace\v1\supplier-evidence-sizing-vectors.json" Link="Contracts\supplier-evidence-sizing-vectors.json" CopyToOutputDirectory="PreserveNewest" /></ItemGroup>
 <ItemGroup><Content Include="Fixtures/preflight/*.json" CopyToOutputDirectory="PreserveNewest" /></ItemGroup>
 </Project>
