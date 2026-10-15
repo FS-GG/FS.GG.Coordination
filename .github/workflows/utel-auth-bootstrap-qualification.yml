@@ -7,6 +7,7 @@ on:
       - src/FS.GG.Coordination.Orchestration.Execution/Custody/build-utel-auth.py
       - tests/utel-auth-bootstrap/**
       - .github/workflows/utel-auth-bootstrap-qualification.yml
+      - evidence/github-substrate-v2/gs2-06-7/execution-pins-extension.json
   push:
     branches: [main]
     paths:
@@ -14,6 +15,7 @@ on:
       - src/FS.GG.Coordination.Orchestration.Execution/Custody/build-utel-auth.py
       - tests/utel-auth-bootstrap/**
       - .github/workflows/utel-auth-bootstrap-qualification.yml
+      - evidence/github-substrate-v2/gs2-06-7/execution-pins-extension.json
 
 permissions:
   contents: read

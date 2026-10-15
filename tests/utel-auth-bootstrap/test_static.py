@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import ast
+import hashlib
+import json
 import os
 import pathlib
 import re
@@ -15,6 +17,8 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 SOURCE = ROOT / "src/FS.GG.Coordination.Orchestration.Execution/Custody/utel-auth-bootstrap.c"
 BUILDER = ROOT / "src/FS.GG.Coordination.Orchestration.Execution/Custody/build-utel-auth.py"
 WORKFLOW = ROOT / ".github/workflows/utel-auth-bootstrap-qualification.yml"
+PIN_EXTENSION = ROOT / 'evidence/github-substrate-v2/gs2-06-7/execution-pins-extension.json'
+PIN_PATH = 'evidence/github-substrate-v2/gs2-06-7/execution-pins-extension.json'
 FALSE_FIELDS = (
     "productionAvailable", "credentialIngressAvailable", "sameTokenCleanupAvailable",
     "nativeConstructorAvailable", "authorized",
@@ -47,6 +51,7 @@ def check_workflow(text: str) -> None:
                   'if: always()', 'if-no-files-found: warn',
                   'github.event.pull_request.head.sha || github.sha'):
         assert value in text, value
+    assert text.count(PIN_PATH) == 2
 
 
 def check_runtime_testcase_assignments(text: str) -> None:
@@ -59,6 +64,19 @@ def check_runtime_testcase_assignments(text: str) -> None:
                 if (isinstance(target, ast.Attribute) and isinstance(target.value, ast.Name)
                         and target.value.id == 'HostedRuntime' and target.attr in protected):
                     raise AssertionError(f'unittest method shadowed: {target.attr}')
+
+
+def check_workflow_pin_entry(extension: dict) -> None:
+    path = '.github/workflows/utel-auth-bootstrap-qualification.yml'
+    matching = [item for item in extension['documents'] if item['path'] == path]
+    assert len(matching) == 1
+    observed = set(re.findall(r'(?m)^\s*(?:-\s*)?uses:\s*([^\s#]+)', WORKFLOW.read_text()))
+    entry = matching[0]
+    assert set(entry) == {'kind', 'path', 'sha256', 'externalReferences', 'localReferences'}
+    assert entry['kind'] == 'workflow'
+    assert entry['sha256'] == hashlib.sha256(WORKFLOW.read_bytes()).hexdigest()
+    assert set(entry['externalReferences']) == observed
+    assert entry['localReferences'] == []
 
 
 class StaticControls(unittest.TestCase):
@@ -86,6 +104,7 @@ class StaticControls(unittest.TestCase):
         assert spec and spec.loader
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
+        self.assertIn(PIN_PATH, module.INPUTS)
         self.assertIs(module.HostedRuntime.run, unittest.TestCase.run)
         self.assertNotIn('run', module.HostedRuntime.__dict__)
         check_runtime_testcase_assignments(runtime.read_text())
@@ -96,10 +115,27 @@ class StaticControls(unittest.TestCase):
     def test_workflow_read_only(self) -> None:
         check_workflow(WORKFLOW.read_text())
 
+    def test_workflow_immutable_pin_inventory_and_mutants(self) -> None:
+        extension = json.loads(PIN_EXTENSION.read_text())
+        check_workflow_pin_entry(extension)
+        missing = json.loads(PIN_EXTENSION.read_text())
+        missing['documents'] = [item for item in missing['documents'] if
+                                item['path'] != '.github/workflows/utel-auth-bootstrap-qualification.yml']
+        with self.assertRaises(AssertionError):
+            check_workflow_pin_entry(missing)
+        changed = json.loads(PIN_EXTENSION.read_text())
+        entry = next(item for item in changed['documents'] if
+                     item['path'] == '.github/workflows/utel-auth-bootstrap-qualification.yml')
+        entry['sha256'] = '0' * 64
+        with self.assertRaises(AssertionError):
+            check_workflow_pin_entry(changed)
+
     def test_workflow_oidc_mutant_refused(self) -> None:
         with self.assertRaises(AssertionError):
             check_workflow(WORKFLOW.read_text().replace('  contents: read',
                                                      '  contents: read\n  id-token: write', 1))
+        with self.assertRaises(AssertionError):
+            check_workflow(WORKFLOW.read_text().replace(PIN_PATH, 'unbound-path', 1))
 
     def test_builder_fresh_directory_refusal_before_compiler(self) -> None:
         import importlib.util
@@ -107,6 +143,7 @@ class StaticControls(unittest.TestCase):
         assert spec and spec.loader
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
+        self.assertIn(PIN_PATH, module.INPUTS)
         head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
         with tempfile.TemporaryDirectory(dir=os.environ.get('RUNNER_TEMP')) as directory:
             existing = pathlib.Path(directory)

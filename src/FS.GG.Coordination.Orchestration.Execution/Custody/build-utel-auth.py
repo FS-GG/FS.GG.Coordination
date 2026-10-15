@@ -20,6 +20,7 @@ INPUTS = (
     "tests/utel-auth-bootstrap/test_static.py",
     "tests/utel-auth-bootstrap/test_runtime.py",
     ".github/workflows/utel-auth-bootstrap-qualification.yml",
+    "evidence/github-substrate-v2/gs2-06-7/execution-pins-extension.json",
 )
 FLAGS = (
     "-static", "-Os", "-s", "-fstack-protector-strong", "-D_FORTIFY_SOURCE=3",
