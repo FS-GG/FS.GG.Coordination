@@ -37,3 +37,30 @@ monotone replacement so an older callback cannot erase a newer retained snapshot
 The finite production profile remains unavailable. These checks establish source
 codec/reducer behavior only; native supervision, durable result replacement,
 child-directed credential custody and installed consumer acceptance remain separate.
+
+
+`controls.fsx` also loads the exact internal `FiniteCustodyComposition.fs` source
+against the compiled protocol and window. This keeps the composition internal
+without granting assembly-wide test access. Its separate ingress and parser tasks
+keep early child bytes observable while a validator or durable writer is blocked.
+The supervisor samples only the original clock, cached protocol/task state and
+last-thread observation; channel I/O, domain callbacks and retirement requests run
+on retained tasks. Full write counts and exact durable readback precede ACK
+confirmation. A fake child advances only after the internal confirmed-ACK ordinal
+is observed. This controlled timing is not native channel qualification.
+
+The closed descriptor binds the independently expected original operation,
+generation, invocation, source/runtime/runner identities, workflow, App/install,
+channel roles and result destination. Its wire binding also joins source, workflow,
+App/install, process and the original finite clock cutoffs. The runtime closure,
+channel roles and destination are independently supplied descriptor expectations;
+the current domain wire schema does not carry them. Reusing the same admission
+owner refuses a consumed invocation. The caller must retain that owner through the
+original operation window; constructing a new owner does not authorize replay.
+
+Composed controls cover source/native/runner refusal before channel work, repeated
+admission, full lifecycle, outstanding retention at the original work/total cutoffs,
+late successful readback and partial ACK writes. They exercise fake ports only.
+`JoinCleanup` retains the supplied custody owner whenever last-thread termination
+or any local task remains unresolved and preserves pre-existing unknown task facts.
+These controls are source drafts until executed under an admitted CLR profile.

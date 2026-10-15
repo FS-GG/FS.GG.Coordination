@@ -55,3 +55,18 @@ module FiniteCustodyWindowTests =
     [<Fact>]
     let ``source profile remains unavailable for production`` () =
         Assert.False FiniteCustodyWindow.productionAvailable
+
+    [<Fact>]
+    let ``larger original cleanup reserve is retained by composition preparation`` () =
+        let original = budget 100. 30.
+        let window = FiniteCustodyWindow.prepare (at 1000L) original |> accepted
+        let description = window |> FiniteCustodyWindow.originalBudget |> Budget.describe
+        Assert.Equal(1000L, description.StartedAt)
+        Assert.Equal(56000L, FiniteCustodyWindow.normalWorkExpiresAt window)
+        Assert.Equal(71000L, description.WorkExpiresAt)
+        Assert.Equal(101000L, description.TotalExpiresAt)
+
+    [<Fact>]
+    let ``same clock UUID with changed frequency cannot join original grant`` () =
+        let foreign = { Domain = { domain with Frequency = 1001L }; Ticks = 1000L }
+        Assert.Equal(Error ClockDomainMismatch, FiniteCustodyWindow.prepare foreign (budget 300. 15.))
