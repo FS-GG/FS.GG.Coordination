@@ -313,3 +313,139 @@ module FiniteCustodyTransportTests =
                 Assert.Equal(1, writes)
                 Assert.Equal(FS.GG.Execution.Contracts.Settled, session.LocalTasks)
     }
+
+    type private InMemoryPhaseStream(confirmed: unit -> int) =
+        inherit System.IO.MemoryStream()
+        let input = System.Threading.Channels.Channel.CreateUnbounded<int * ReadOnlyMemory<byte>>()
+        let mutable aborted = false
+        member _.Send(required, bytes: byte array) = Assert.True(input.Writer.TryWrite((required, ReadOnlyMemory<byte> bytes)))
+        member _.Abort() = aborted <- true; input.Writer.TryComplete() |> ignore
+        member _.Complete() = input.Writer.TryComplete() |> ignore
+        override _.ReadAsync(buffer: Memory<byte>, _: System.Threading.CancellationToken) =
+            System.Threading.Tasks.ValueTask<int>(task {
+                let! available = input.Reader.WaitToReadAsync().AsTask()
+                if not available then return 0
+                else
+                    let! required, bytes = input.Reader.ReadAsync().AsTask()
+                    while not aborted && confirmed () < required do do! System.Threading.Tasks.Task.Delay 1
+                    if aborted then return 0
+                    else
+                        bytes.CopyTo buffer
+                        return bytes.Length })
+
+    type private InMemoryControlStream(onWrite: ReadOnlyMemory<byte> -> unit) =
+        inherit System.IO.MemoryStream()
+        override _.WriteAsync(bytes: ReadOnlyMemory<byte>, _: System.Threading.CancellationToken) =
+            onWrite bytes
+            System.Threading.Tasks.ValueTask.CompletedTask
+
+    [<Fact>]
+    let ``hosted callback pair uses actual Python sink with in memory child streams only`` () = task {
+        // The gate supplies an immutable pinned owner checkout. This fixture has
+        // two processes: this test supervisor and a callback-only Python owner.
+        // No authentication child, FD provisioner or native custody is exercised.
+        let source = Environment.GetEnvironmentVariable "FSGG_UTEL_CALLBACK_SOURCE"
+        Assert.True(not (String.IsNullOrWhiteSpace source) && System.IO.Path.IsPathFullyQualified source, "pinned callback source required")
+        use vectors = System.Text.Json.JsonDocument.Parse(ReadOnlyMemory<byte>(System.IO.File.ReadAllBytes(System.IO.Path.Combine(source, "tests/release-successor-authentication/callback-vectors.json"))))
+        let exchanges = vectors.RootElement.GetProperty("exchanges").EnumerateArray() |> Seq.toArray
+        let trustedBind = PhaseCallbackProtocol.decode (Convert.FromHexString(exchanges[0].GetProperty("request").GetString()))
+        let bindingBytes = Convert.FromBase64String trustedBind.Data.Value
+        use document = System.Text.Json.JsonDocument.Parse(ReadOnlyMemory<byte> bindingBytes)
+        let bound = document.RootElement
+        let text (element: System.Text.Json.JsonElement) name = element.GetProperty(name: string).GetString()
+        let sourcePins = bound.GetProperty "source"
+        let workflow = bound.GetProperty "workflow"
+        let processBinding = bound.GetProperty "process"
+        let clockBinding = bound.GetProperty "clock"
+        let app = bound.GetProperty "app"
+        let domain: FS.GG.Execution.Contracts.ClockDomain = { Id = Guid.Parse(text clockBinding "domain"); Frequency = 1000L }
+        let mutable ticks = 1L
+        let at value: FS.GG.Execution.Contracts.ClockStamp = { Domain = domain; Ticks = value }
+        let original = FS.GG.Execution.Contracts.Budget.create (at 0L) (TimeSpan.FromSeconds 300.) (TimeSpan.FromSeconds 15.) |> Result.defaultWith (fun _ -> failwith "fixture-budget")
+        let evidence = Environment.GetEnvironmentVariable "FSGG_UTEL_CALLBACK_EVIDENCE"
+        let root = System.IO.Path.Combine((if String.IsNullOrWhiteSpace evidence then System.IO.Path.GetTempPath() else evidence), "utel-callback-pair-" + Guid.NewGuid().ToString("N"))
+        System.IO.Directory.CreateDirectory root |> ignore
+        System.IO.File.SetUnixFileMode(root, System.IO.UnixFileMode.UserRead ||| System.IO.UnixFileMode.UserWrite ||| System.IO.UnixFileMode.UserExecute)
+        let resultPath = System.IO.Path.Combine(root, "callback-result.json")
+        let descriptor: FiniteCustodyInertDescriptor =
+            { Mode = "inert"
+              Identity = { InvocationId = Guid.Parse(text bound "invocation"); Execution = None; LaunchOrdinal = 0UL
+                           SourceDigest = text sourcePins "childClosure"; ProfileId = FiniteCustodyWindow.profileId; ProfileDigest = String.replicate 64 "f" }
+              OriginalOperation = "utel-rel-21"; OriginalGeneration = 2L; DomainProfile = text bound "profile"
+              Process = { Platform = "inert"; ScopeId = "in-memory-phase-fixture"; Pid = processBinding.GetProperty("pid").GetInt32(); BirthToken = text processBinding "birth" }
+              ChildRevision = text sourcePins "childRevision"; RunnerRevision = text sourcePins "runnerRevision"
+              RunnerClosure = text sourcePins "runnerClosure"; ContractDigest = text sourcePins "contract"; RuntimeClosure = String.replicate 64 "0"
+              WorkflowRepository = workflow.GetProperty("repositoryId").GetUInt64(); WorkflowPath = text workflow "path"; WorkflowRevision = text workflow "revision"
+              WorkflowRun = 0UL; WorkflowAttempt = 0u; App = app.GetProperty("id").GetUInt64(); Installation = app.GetProperty("installation").GetUInt64()
+              ChannelRoles = ["parent-start-and-ack"; "child-phase-result"]; ResultDestination = resultPath }
+        let phases = exchanges |> Array.filter (fun row -> (PhaseCallbackProtocol.decode(Convert.FromHexString(row.GetProperty("request").GetString()))).Kind = "validate")
+                     |> Array.map (fun row -> PhaseCallbackProtocol.decode(Convert.FromHexString(row.GetProperty("request").GetString())) |> _.Data.Value |> Convert.FromBase64String)
+        let info = System.Diagnostics.ProcessStartInfo("python3")
+        info.UseShellExecute <- false
+        info.RedirectStandardInput <- true
+        info.RedirectStandardOutput <- true
+        info.RedirectStandardError <- true
+        info.Environment.Clear()
+        info.Environment["PATH"] <- "/usr/bin:/bin"
+        for argument in ["-I"; "-S"; "-B"; System.IO.Path.Combine(source, "tests/release-successor-authentication/callback-fixture.py"); Convert.ToBase64String bindingBytes
+                         Convert.ToBase64String(System.Text.Json.JsonSerializer.SerializeToUtf8Bytes clockBinding); resultPath] do info.ArgumentList.Add argument
+        use owner = System.Diagnostics.Process.Start info
+        let diagnostic = owner.StandardError.ReadToEndAsync()
+        let mutable confirmed = fun () -> 0
+        use child = new InMemoryPhaseStream(fun () -> confirmed ())
+        let termination = System.Threading.Tasks.TaskCompletionSource<bool option>(System.Threading.Tasks.TaskCreationOptions.RunContinuationsAsynchronously)
+        let mutable acknowledgments = 0
+        use control = new InMemoryControlStream(fun bytes ->
+            use row = System.Text.Json.JsonDocument.Parse(bytes.Slice 4)
+            match text row.RootElement "k" with
+            | "start" -> child.Send(0, phases[0])
+            | "ack" ->
+                acknowledgments <- acknowledgments + 1
+                match row.RootElement.GetProperty("n").GetInt32() with
+                | 1 -> child.Send(1, phases[1])
+                | 2 -> child.Send(2, phases[2]); child.Send(2, phases[3])
+                | 4 -> child.Send(4, phases[4]); child.Send(4, phases[5]); child.Complete()
+                | _ -> failwith "fixture-ack-order"
+            | _ -> failwith "fixture-control-kind")
+        let channels: FiniteCustodyInertChannels =
+            { ChildResults = child; ChildControl = control; OwnerResponses = owner.StandardOutput.BaseStream; OwnerRequests = owner.StandardInput.BaseStream
+              RequestRetirement = fun () -> child.Abort(); termination.TrySetResult(Some true) |> ignore; System.Threading.Tasks.Task.FromResult true
+              Termination = termination.Task }
+        let clock = { new FS.GG.Execution.Contracts.IMonotonicClock with member _.Now() = at (System.Threading.Interlocked.Read(&ticks)) }
+        let session = FiniteCustodySessionAdapter.Prepare(FiniteCustodyInertAdmission(), descriptor, { descriptor with ResultDestination = resultPath }, clock,
+                          original, ReadOnlyMemory<byte>(bindingBytes), channels, System.Threading.CancellationToken.None) |> Result.defaultWith failwith
+        confirmed <- fun () -> session.ConfirmedAckOrdinal
+        let observedExit = task {
+            do! owner.WaitForExitAsync()
+            termination.TrySetResult(Some true) |> ignore }
+        let running = session.Run()
+        try
+            let! outcome = running.WaitAsync(TimeSpan.FromSeconds 20.)
+            let outcome = outcome |> Result.defaultWith failwith
+            do! observedExit.WaitAsync(TimeSpan.FromSeconds 5.)
+            do! System.Threading.Tasks.Task.WhenAll(session.RetainedTasks).WaitAsync(TimeSpan.FromSeconds 5.)
+            let! diagnostic = diagnostic
+            Assert.Equal(0, owner.ExitCode)
+            Assert.Equal("", diagnostic)
+            Assert.True(outcome.ProtocolComplete)
+            Assert.Equal(None, outcome.StopReason)
+            Assert.Equal(3, acknowledgments)
+            Assert.Equal(FS.GG.Execution.Contracts.Settled, session.LocalTasks)
+            use retained = System.Text.Json.JsonDocument.Parse(ReadOnlyMemory<byte>(System.IO.File.ReadAllBytes resultPath))
+            let projection = retained.RootElement.GetProperty "authenticationSession"
+            let expected = vectors.RootElement.GetProperty "finalReadback"
+            Assert.Equal(text expected "binding", text projection "binding")
+            Assert.Equal(text expected "frameDigest", text projection "frameDigest")
+            Assert.Equal(6, projection.GetProperty("ordinal").GetInt32())
+        finally
+            System.Threading.Interlocked.Exchange(&ticks, 300000L) |> ignore
+            child.Abort()
+            termination.TrySetResult(Some true) |> ignore
+            owner.StandardInput.Close()
+            if not owner.HasExited then owner.Kill(true)
+            Assert.True(owner.WaitForExit(5000), "callback fixture retirement")
+            running.WaitAsync(TimeSpan.FromSeconds 5.).GetAwaiter().GetResult() |> ignore
+            System.Threading.Tasks.Task.WhenAll(session.RetainedTasks).WaitAsync(TimeSpan.FromSeconds 5.).GetAwaiter().GetResult()
+            diagnostic.WaitAsync(TimeSpan.FromSeconds 5.).GetAwaiter().GetResult() |> ignore
+            if String.IsNullOrWhiteSpace evidence then System.IO.Directory.Delete(root, true)
+    }

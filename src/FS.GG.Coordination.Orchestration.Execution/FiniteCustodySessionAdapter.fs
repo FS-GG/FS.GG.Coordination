@@ -130,6 +130,8 @@ type FiniteCustodyInertAdmission() =
 /// Narrow callable facade over the maintained inert composition. Native mode
 /// refuses before clocks, channels, retirement or any caller callback is invoked.
 type FiniteCustodySessionAdapter private (session: FiniteCustodyComposition.Session, bridge: FiniteCustodyCallbackBridge.Endpoint) =
+    /// Source fixture observation only; never a native grant.
+    member internal _.ConfirmedAckOrdinal = session.ConfirmedAckOrdinal
     member _.RetainedTasks = Array.append session.RetainedTasks bridge.Tasks
     member _.LocalTasks = if session.LocalTasks = Outstanding || bridge.LocalTasks = Outstanding then Outstanding else Settled
     member _.JoinCleanup(existing, stamp, owner) =
