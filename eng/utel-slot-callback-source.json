@@ -1,0 +1,10 @@
+{
+  "schema": "fsgg.utel-callback-source/3",
+  "profile": "inert-slot-callback-pair/1",
+  "repository": "FS-GG/.github",
+  "revision": "b0f528e2cd23d9f314a4af679de6da3f4e07262c",
+  "manifestSha256": "ae82ca4f8c56fe981d88d7d26e3242c0c2f3ee09750bd74b17ed4e117eccb049",
+  "vectorsSha256": "edb142bac8a253be2e031c7a5ccad1f75ab669a55ec6d9f598439130e43836aa",
+  "bundleDigest": "b73ce545011cc1156bbcf49f2bb98f174e33b970d221b32c0bad6e83b21b5862",
+  "qualification": "inert managed callback transport to framed Python owner and controlled typed slot backend; no whole-population fit, native authority, credentials or original-operation effects"
+}

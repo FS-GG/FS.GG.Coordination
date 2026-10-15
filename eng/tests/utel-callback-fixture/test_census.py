@@ -43,12 +43,13 @@ class CensusControls(unittest.TestCase):
 
 class PairControls(unittest.TestCase):
     @contextlib.contextmanager
-    def pair(self):
+    def pair(self, slot=False):
         with tempfile.TemporaryDirectory() as temporary:
             root = pathlib.Path(temporary)
             owner, producer = root / 'owner', root / 'producer'
             rows = []
-            for repo, paths in helper['PAIR_ROLES'].items():
+            roles = helper['SLOT_PAIR_ROLES'] if slot else helper['PAIR_ROLES']
+            for repo, paths in roles.items():
                 base = owner if repo == 'FS-GG/.github' else producer
                 for path in paths:
                     file = base / path
@@ -63,19 +64,53 @@ class PairControls(unittest.TestCase):
                         'files': rows, 'bundleDigest': bundle}
             vectors = {'schema': 'fsgg.authentication-callback-vectors/1',
                        'binding': {'source': {'contract': bundle}}}
-            manifest_path, vectors_path = owner / helper['MANIFEST_PATH'], owner / helper['VECTORS_PATH']
+            manifest_name = helper['SLOT_MANIFEST_PATH' if slot else 'MANIFEST_PATH']
+            vectors_name = helper['SLOT_VECTORS_PATH' if slot else 'VECTORS_PATH']
+            manifest_path, vectors_path = owner / manifest_name, owner / vectors_name
             manifest_path.write_text(json.dumps(manifest))
             vectors_path.write_text(json.dumps(vectors))
             pin = {'schema': 'fsgg.utel-callback-source/2', 'repository': 'FS-GG/.github',
                    'revision': 'a' * 40, 'manifestSha256': helper['digest'](manifest_path),
                    'vectorsSha256': helper['digest'](vectors_path), 'bundleDigest': bundle,
                    'qualification': 'inert fixture'}
+            if slot:
+                pin.update(schema='fsgg.utel-callback-source/3', profile=helper['SLOT_PROFILE'])
             with patch.dict(helper['validate_pair'].__globals__, {'ROOT': producer}):
                 yield pin, owner, producer, manifest, vectors
 
     def test_closed_pair_accepts_exact_twelve_roles_and_vectors(self):
         with self.pair() as (pin, owner, _, manifest, _):
             self.assertEqual(manifest, helper['validate_pair'](pin, owner))
+
+    def test_slot_profile_accepts_exact_sixteen_roles(self):
+        with self.pair(slot=True) as (pin, owner, _, manifest, _):
+            self.assertEqual(16, len(manifest['files']))
+            self.assertEqual(manifest, helper['validate_pair'](pin, owner))
+
+    def test_slot_profile_unknown_and_crossed_profiles_and_paths_refuse(self):
+        with self.pair(slot=True) as (pin, owner, _, _, _):
+            for changed in [dict(pin, profile='unknown'), dict(pin, profile='inert-callback-pair/1'),
+                            dict(pin, entryPath=helper['SLOT_ENTRY_PATH']),
+                            dict(pin, manifestPath=helper['SLOT_MANIFEST_PATH']),
+                            {key: value for key, value in pin.items() if key != 'profile'},
+                            dict(pin, schema='fsgg.utel-callback-source/2')]:
+                with self.subTest(changed=changed):
+                    with self.assertRaises(RuntimeError): helper['validate_pair'](changed, owner)
+
+    def test_slot_profile_rehashed_foreign_role_and_crossed_vectors_refuse(self):
+        for mutation in ['foreign-role', 'crossed-vectors']:
+            with self.pair(slot=True) as (pin, owner, _, manifest, vectors):
+                if mutation == 'foreign-role':
+                    manifest['files'][0]['path'] = 'scripts/release-successor-publish.py'
+                else:
+                    vectors['binding']['source']['contract'] = 'f' * 64
+                manifest_path = owner / helper['SLOT_MANIFEST_PATH']
+                vectors_path = owner / helper['SLOT_VECTORS_PATH']
+                manifest_path.write_text(json.dumps(manifest))
+                vectors_path.write_text(json.dumps(vectors))
+                pin.update(manifestSha256=helper['digest'](manifest_path), vectorsSha256=helper['digest'](vectors_path))
+                with self.subTest(mutation=mutation):
+                    with self.assertRaises(RuntimeError): helper['validate_pair'](pin, owner)
 
     def test_legacy_schema_unknown_pin_fields_and_wrong_repository_refuse(self):
         with self.pair() as (pin, owner, _, _, _):

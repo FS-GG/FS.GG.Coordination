@@ -23,6 +23,7 @@
     "FS.GG.Coordination.Orchestration.Execution.Tests.FiniteCustodyTransportTests.callback bridge keeps typed deadline cancellation and clock refusal before send",
     "FS.GG.Coordination.Orchestration.Execution.Tests.FiniteCustodyTransportTests.callback response boundary preserves typed stop and reader custody after full write",
     "FS.GG.Coordination.Orchestration.Execution.Tests.FiniteCustodyTransportTests.composition preserves typed callback failure before its next supervisor sample",
-    "FS.GG.Coordination.Orchestration.Execution.Tests.FiniteCustodyTransportTests.hosted callback pair uses actual Python sink with in memory child streams only"
+    "FS.GG.Coordination.Orchestration.Execution.Tests.FiniteCustodyTransportTests.hosted callback pair uses actual Python sink with in memory child streams only",
+    "FS.GG.Coordination.Orchestration.Execution.Tests.FiniteCustodyTransportTests.hosted slot callback pair confirms terminal response and six exact controlled slots without input EOF"
   ]
 }
