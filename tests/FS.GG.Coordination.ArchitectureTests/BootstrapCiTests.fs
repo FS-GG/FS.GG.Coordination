@@ -1142,10 +1142,12 @@ let ``bootstrap control surface stays typed thin and bounded`` () =
     Assert.InRange(lineCount "src/FS.GG.Coordination.Qualification.Contracts/BootstrapCi.fs", 1, 2500)
     Assert.InRange(lineCount "src/FS.GG.Coordination.Qualification.Contracts/QualificationReuse.fs", 1, 1500)
     // Producer restore/test/TRX census adds nine guarded lines to the existing shell budget.
-    Assert.InRange(gateLines, 1, 859)
+    // The finite-custody cohort adds three lines: measured 858 -> 861, preserving one spare line.
+    Assert.InRange(gateLines, 1, 862)
     // Producer invocations add eight distinct lines; the compiler subject guard adds one.
     // Focused host-allocation tests add three: start time, test invocation, and fresh TRX census.
-    Assert.InRange(uniqueGateLines, 1, 643)
+    // Focused finite-custody tests add three more distinct lines: measured 643 -> 646.
+    Assert.InRange(uniqueGateLines, 1, 646)
     Assert.DoesNotContain("requiredRunFragments", core)
     Assert.DoesNotContain("workflowSha256", core)
     Assert.DoesNotContain("Text.RegularExpressions", core)
