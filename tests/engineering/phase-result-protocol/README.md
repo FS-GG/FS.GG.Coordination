@@ -77,6 +77,9 @@ permission to replay an operation.
 The source scenarios cover native/source/runner/binding refusal, repeated admission,
 a six-phase inert lifecycle, partial ACKs, blocked retention, early ingress, blocked
 validation, cancellation, read/retirement failure and late callback refusal.
+Successful start writes, ACK writes and retention callbacks also exercise
+cancellation and normal/work expiry before the next supervisor poll. These source
+cases preserve the original stop source instead of reporting a transport failure.
 `JoinCleanup` retains the supplied owner before supervision is sealed and whenever
 termination or local tasks remain unresolved. Existing unknown cleanup facts remain
 unknown. Domain callbacks returning `Ok` are inert stand-ins, so UTEL payload-domain

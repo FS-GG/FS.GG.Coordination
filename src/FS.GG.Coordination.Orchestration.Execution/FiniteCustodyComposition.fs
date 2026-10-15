@@ -183,12 +183,19 @@ module internal FiniteCustodyComposition =
                         lastTick <- now.Ticks
                         FiniteCustodyWindow.remaining now window |> Result.map (fun view -> now, view))
             with _ -> Error InvalidBudget
-        let admitted () =
+        // Inspect the actual stop source immediately after successful callbacks.
+        // The independent supervisor need not win a scheduling race to classify it.
+        let checkpoint normalWork requireRunning =
             match sample () with
-            | Ok(now, _) -> not token.IsCancellationRequested && not (lock gate (fun () -> refusal))
-                            && not ports.Termination.IsCompleted
-                            && FiniteCustodyWindow.normalWorkAllowed now window
-            | _ -> false
+            | Error _ -> requestStop OwnerLost; None
+            | Ok _ when token.IsCancellationRequested -> requestStop CallerCancellation; None
+            | Ok(now, view) when view.WorkExpired || (normalWork && not (FiniteCustodyWindow.normalWorkAllowed now window)) ->
+                requestStop WorkDeadline
+                None
+            | Ok _ when requireRunning && ports.Termination.IsCompleted -> requestStop OwnerLost; None
+            | Ok _ when lock gate (fun () -> refusal) -> None
+            | Ok(now, _) -> Some now
+        let admitted () = checkpoint true true |> Option.isSome
         let terminated () =
             ports.Termination.IsCompletedSuccessfully && ports.Termination.Result = Some true
         let localTasks () =
@@ -220,6 +227,7 @@ module internal FiniteCustodyComposition =
                                     | _ -> true
                             let validate value =
                                 let result = ports.Validate value
+                                if Result.isError result then refuse ()
                                 // A blocked validator returning later must not restore
                                 // admission or start a new persistence callback.
                                 if mayReduce () then result else Error "finite-composition-stopped"
@@ -235,29 +243,41 @@ module internal FiniteCustodyComposition =
                                 match retained with
                                 | Ok receipt when receipt.Binding = snapshot.Binding
                                                   && receipt.Ordinal = snapshot.Ordinal
-                                                  && receipt.FrameDigest = snapshot.Digest -> ()
+                                                  && receipt.FrameDigest = snapshot.Digest ->
+                                    checkpoint false false |> ignore
                                 | _ -> refuse ()
                             | Ok true ->
                                 match protocol.BeginRetention(snapshot, ports.PersistAndReadback) with
                                 | Error _ -> refuse ()
                                 | Ok retained ->
-                                    let! _ = retained.Completion
-                                    // A late callback cannot obtain another clock grant.
-                                    match sample () with
-                                    | Error _ -> refuse ()
-                                    | Ok(now, _) when not token.IsCancellationRequested && not (lock gate (fun () -> refusal)) ->
-                                        match protocol.TakeAck(now, window, retained) with
-                                        | Error _ -> refuse ()
-                                        | Ok bytes ->
-                                            let! complete = write bytes
-                                            if complete then
-                                                match sample () with
-                                                | Ok(sent, _) when not token.IsCancellationRequested && not (lock gate (fun () -> refusal)) ->
-                                                    match protocol.ConfirmAckSent(sent, window, snapshot) with
-                                                    | Error _ -> refuse ()
-                                                    | Ok () -> lock gate (fun () -> confirmedAckOrdinal <- snapshot.Ordinal)
-                                                | _ -> refuse ()
-                                    | _ -> refuse ()
+                                    let! readback = retained.Completion
+                                    // Record a genuine callback/readback failure before
+                                    // inspecting cancellation or deadlines that follow it.
+                                    let exact =
+                                        match readback with
+                                        | Ok receipt -> receipt.Binding = snapshot.Binding
+                                                        && receipt.Ordinal = snapshot.Ordinal
+                                                        && receipt.FrameDigest = snapshot.Digest
+                                        | Error _ -> false
+                                    if not exact then refuse ()
+                                    else
+                                        let normalWork = snapshot.Kind <> "revocation-possible"
+                                        // A late successful callback cannot obtain a new
+                                        // grant, and its actual stop source stays visible.
+                                        match checkpoint normalWork false with
+                                        | None -> ()
+                                        | Some now ->
+                                            match protocol.TakeAck(now, window, retained) with
+                                            | Error _ -> refuse ()
+                                            | Ok bytes ->
+                                                let! complete = write bytes
+                                                if complete then
+                                                    match checkpoint normalWork false with
+                                                    | None -> ()
+                                                    | Some sent ->
+                                                        match protocol.ConfirmAckSent(sent, window, snapshot) with
+                                                        | Error _ -> refuse ()
+                                                        | Ok () -> lock gate (fun () -> confirmedAckOrdinal <- snapshot.Ordinal)
                 if protocol.FinishInput() |> Result.isError then refuse ()
                 else lock gate (fun () -> inputComplete <- true)
             with _ -> refuse () }
@@ -266,6 +286,7 @@ module internal FiniteCustodyComposition =
                 let mutable reading = true
                 while reading do
                     let! bytes = ports.Read()
+                    checkpoint false false |> ignore
                     if bytes.IsEmpty then reading <- false
                     else
                         // Feed at ingress, independently of blocked validation, retention
@@ -318,20 +339,9 @@ module internal FiniteCustodyComposition =
                                 if complete && admitted () then
                                     launch (fun () -> parse () :> Task) |> ignore
                                     launch (fun () -> read () :> Task) |> ignore
-                                else refuse ()
-                            else
-                                match sample () with
-                                | Error _ -> requestStop OwnerLost
-                                | _ when token.IsCancellationRequested -> requestStop CallerCancellation
-                                | _ when ports.Termination.IsCompleted -> requestStop OwnerLost
-                                | _ -> requestStop WorkDeadline
+                                // Partial/failed writes already latched their cause;
+                                // successful writes are classified by admitted above.
                         with _ -> refuse () } :> Task) |> ignore
-                else
-                    match sample () with
-                    | Error _ -> requestStop OwnerLost
-                    | _ when token.IsCancellationRequested -> requestStop CallerCancellation
-                    | _ when ports.Termination.IsCompleted -> requestStop OwnerLost
-                    | _ -> requestStop WorkDeadline
                 let mutable waiting = true
                 while waiting do
                     let current = sample ()

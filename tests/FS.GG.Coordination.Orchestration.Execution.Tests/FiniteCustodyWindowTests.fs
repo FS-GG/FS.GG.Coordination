@@ -167,6 +167,7 @@ module FiniteCustodyWindowTests =
         member _.FailRead() = input.Writer.TryComplete(InvalidOperationException "inert-read-failure") |> ignore
         member _.Terminate() = termination.TrySetResult(Some true) |> ignore
         member _.Expire() = Interlocked.Exchange(&ticks,301000L) |> ignore
+        member _.NormalExpires() = Interlocked.Exchange(&ticks,271000L) |> ignore
         member _.WorkExpires() = Interlocked.Exchange(&ticks,286000L) |> ignore
         member _.Persist with set callback = persist <- callback
         member _.WriteCount with set callback = writeCount <- callback
@@ -433,3 +434,66 @@ module FiniteCustodyWindowTests =
         fixture.Eof(); fixture.Expire()
         let outcome = wait running |> accepted
         require "mismatched-sink-cannot-enable-ack" (fixture.Writes=1 && session.ConfirmedAckOrdinal=0 && not outcome.ProtocolComplete)
+
+    [<Theory>]
+    [<InlineData(1, "cancellation")>]
+    [<InlineData(1, "normal-expiry")>]
+    [<InlineData(1, "work-expiry")>]
+    [<InlineData(2, "cancellation")>]
+    [<InlineData(2, "normal-expiry")>]
+    [<InlineData(2, "work-expiry")>]
+    let ``successful write classifies stop source before next supervisor poll`` (writeOrdinal: int, cause: string) =
+        use cancellation = new CancellationTokenSource()
+        use fixture = new Fixture(cancellation=cancellation.Token)
+        let completed = TaskCompletionSource<unit>(TaskCreationOptions.RunContinuationsAsynchronously)
+        fixture.WriteCount <- fun bytes ->
+            if fixture.Writes=writeOrdinal then
+                match cause with
+                | "cancellation" -> cancellation.Cancel()
+                | "normal-expiry" -> fixture.NormalExpires()
+                | "work-expiry" -> fixture.WorkExpires()
+                | _ -> failwith "unsupported-inert-cause"
+                completed.TrySetResult() |> ignore
+            // The transport succeeds fully; classification must describe the
+            // cancellation/deadline observed after this callback, not sink failure.
+            bytes.Length
+        let session = fixture.Prepare(Admission(),descriptor,descriptor) |> accepted
+        let running = fixture.Run session
+        if writeOrdinal=2 then
+            waitUntil (fun () -> fixture.Writes=1) |> fun work -> work.GetAwaiter().GetResult()
+            fixture.Send(child 1 "ready" ("{\"binding\":"+bindingText+"}"))
+        wait completed.Task
+        waitUntil (fun () -> fixture.Retirements=1) |> fun work -> work.GetAwaiter().GetResult()
+        fixture.Eof(); fixture.Expire()
+        let outcome = wait running |> accepted
+        let expected = if cause="cancellation" then CallerCancellation else WorkDeadline
+        require "successful-write-retains-actual-stop-source" (outcome.StopReason=Some expected)
+        require "stopped-successful-write-never-opens-next-phase" (fixture.Writes=writeOrdinal && session.ConfirmedAckOrdinal=0 && not outcome.ProtocolComplete)
+
+    [<Theory>]
+    [<InlineData("cancellation")>]
+    [<InlineData("normal-expiry")>]
+    [<InlineData("work-expiry")>]
+    let ``successful retention classifies stop source before taking ACK`` (cause: string) =
+        use cancellation = new CancellationTokenSource()
+        use fixture = new Fixture(cancellation=cancellation.Token)
+        let completed = TaskCompletionSource<unit>(TaskCreationOptions.RunContinuationsAsynchronously)
+        fixture.Persist <- fun snapshot ->
+            match cause with
+            | "cancellation" -> cancellation.Cancel()
+            | "normal-expiry" -> fixture.NormalExpires()
+            | "work-expiry" -> fixture.WorkExpires()
+            | _ -> failwith "unsupported-inert-cause"
+            completed.TrySetResult() |> ignore
+            readback snapshot
+        let session = fixture.Prepare(Admission(),descriptor,descriptor) |> accepted
+        let running = fixture.Run session
+        waitUntil (fun () -> fixture.Writes=1) |> fun work -> work.GetAwaiter().GetResult()
+        fixture.Send(child 1 "ready" ("{\"binding\":"+bindingText+"}"))
+        wait completed.Task
+        waitUntil (fun () -> fixture.Retirements=1) |> fun work -> work.GetAwaiter().GetResult()
+        fixture.Eof(); fixture.Expire()
+        let outcome = wait running |> accepted
+        let expected = if cause="cancellation" then CallerCancellation else WorkDeadline
+        require "successful-retention-retains-actual-stop-source" (outcome.StopReason=Some expected)
+        require "stopped-retention-never-takes-ack" (fixture.Writes=1 && session.ConfirmedAckOrdinal=0 && not outcome.ProtocolComplete)
