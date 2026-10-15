@@ -336,6 +336,10 @@ def wire_context(raw, family, schema, context):
             body = event['body']
             if event['kind'] in {'launch-intent', 'start-invoked'} and any(body[a] != creation[b] for a, b in [('original_cid', 'cid'), ('original_image_id', 'image_id'), ('original_inode', 'allocation_inode')]):
                 raise WireRefused('original-launch-identity')
+            if event['kind'] in {'termination', 'inner-cleanup-intent', 'inner-cleanup-observed', 'outer-retire-intent', 'outer-retire-observed'} and body['cid'] != creation['cid']:
+                raise WireRefused('original-effect-cid')
+            if event['kind'] == 'workload-exit' and body['command_id'] != reservation['command']['command_id']:
+                raise WireRefused('original-workload-command')
             if event['kind'] == 'unit-activation-observed':
                 if not seen_start or any(body[key] != creation[key] for key in ['unit_name', 'boot_id', 'cid']):
                     raise WireRefused('original-activation-identity-or-order')
