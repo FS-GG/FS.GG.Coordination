@@ -21,9 +21,9 @@ spec.loader.exec_module(module)
 
 
 class DiagnosticControls(unittest.TestCase):
-    def proc_fixture(self, root, mode='good'):
+    def proc_fixture(self, root, mode='good', profile='proc-pair-recovery-dispatch'):
         """Declared proof adapters are inert fixtures, never runtime/effect acceptance."""
-        operation='recover-execution-pair-030-b11fb121-original38495729817'
+        operation=module.PROC_PROFILES[profile]
         # Only tests replace the producer constant. Neither production descriptor
         # nor a matching newly authored authority can alter this namespace.
         namespace=patch.object(module,'PROC_OPERATION_BASE',root/'producer-state')
@@ -34,7 +34,11 @@ class DiagnosticControls(unittest.TestCase):
         client=root/'inert-curl'
         body={'workflow_run_id':42,'run_url':'https://api.github.com/repos/FS-GG/FS.GG.Coordination/actions/runs/42',
               'html_url':'https://github.com/FS-GG/FS.GG.Coordination/actions/runs/42'}
-        if mode=='foreign':body['run_url']=body['run_url'].replace('Coordination/','Foreign/')
+        if profile=='proc-publisher-promotion':
+            body={'ref':module.PROC_PUBLISHER_REF,'node_id':'inert','url':'https://api.github.com/repos/FS-GG/FS.GG.Coordination/git/refs/'+module.PROC_PUBLISHER_REF[5:],
+                  'object':{'type':'commit','sha':'d'*40,'url':'https://api.github.com/repos/FS-GG/FS.GG.Coordination/git/commits/'+'d'*40}}
+        if profile=='proc-publisher-promotion' and mode=='foreign':body['ref']='refs/tags/foreign'
+        if mode=='foreign' and profile!='proc-publisher-promotion':body['run_url']=body['run_url'].replace('Coordination/','Foreign/')
         if mode=='no-id':body={}
         extra=''
         if mode=='unexpected-read':
@@ -44,6 +48,9 @@ class DiagnosticControls(unittest.TestCase):
         meta={'httpCode':'202' if mode=='202' else '200',
               'effectiveUrl':'https://api.github.com/repos/FS-GG/FS.GG.Coordination/actions/workflows/361038177/dispatches',
               'redirects':0,'sslVerifyResult':0}
+        if profile=='proc-publisher-promotion':
+            meta['httpCode']='422' if mode=='collision' else '202' if mode=='202' else '201'
+            meta['effectiveUrl']='https://api.github.com/repos/FS-GG/FS.GG.Coordination/git/refs'
         client.write_text('#!/usr/bin/python3\nimport sys,time,os\nif sys.argv[1:]==["--version"]:print("curl inert-source-control");sys.exit(0)\n'
                           +'assert "GH_TOKEN" not in os.environ\n'+extra+'time.sleep(.2)\n'+
                           ('sys.exit(7)\n' if mode=='lost' else
@@ -56,8 +63,10 @@ class DiagnosticControls(unittest.TestCase):
         ca=support/'trusted-ca.pem';ca.write_text('inert-fixture-ca')
         native={key:str(root/(key+'.json')) for key in ('admission','originalRun','originalJobs','originalArtifact',
                                                         'originalArchive','verifiedAttestation','sourceCorrespondence','runtimeQualification')}
+        if profile=='proc-publisher-promotion':native['promotionEvidence']=str(root/'promotion-evidence.json')
         for name in native.values():Path(name).write_text('{}')
         admission={'enabled':False,'recovery':{'enabled':True,'policyObservationEnabled':False}}
+        if profile=='proc-publisher-promotion':admission['recovery']['promotion']={'enabled':True,'sourceTrustAccepted':True,'operation':operation,'ref':module.PROC_PUBLISHER_REF,'kind':'lightweight'}
         Path(native['admission']).write_text(json.dumps(admission))
         correspondence={'publisher':'d'*40,'source':'b11fb121f046898e655b779dfc6809f35fc7aac6',
                         'originalPublisher':'0ccfb6d067d912bbd8a1e26c4b56449358443b2e','protectedSourceVerified':True,
@@ -85,7 +94,7 @@ class DiagnosticControls(unittest.TestCase):
             if row['path']==native['sourceCorrespondence']:row.update(module.pin_file(Path(native['sourceCorrespondence'])))
         native['consumerRoot']=str(root/'consumer-fixture')
         started=time.monotonic()
-        spec={'schema':module.COMMAND_SCHEMA,'profile':'proc-pair-recovery-dispatch','role':'dispatch',
+        spec={'schema':module.COMMAND_SCHEMA,'profile':profile,'role':'dispatch',
               'campaign':'unified-roadmap-20261003','item':'V2-PROC-01.6','attempt':'inert-source-control',
               'originalOperation':module.PROC_ORIGINAL,'operation':operation,'publisher':'d'*40,
               'repositoryId':1346720714,'workflowId':361038177,'workflowPath':module.PROC_WORKFLOW,
@@ -102,6 +111,9 @@ class DiagnosticControls(unittest.TestCase):
                              'LANG':'C','LC_ALL':'C','TZ':'UTC','OPENSSL_CONF':str(module.proc_support_root()/'openssl.cnf')},
               'operationRoot':str(slot),'qualificationAttempt':None,'started':started,'workDeadline':started+5,'totalDeadline':started+15,'cleanupSeconds':10,
               'rssBytes':512*1024**2,'addressSpaceBytes':512*1024**2,'logBytes':1024**2,'diskBytes':16*1024**2,'cpuAffinity':sorted(os.sched_getaffinity(0))}
+        if profile=='proc-publisher-promotion':
+            spec['request']={'method':'POST','endpoint':'repos/FS-GG/FS.GG.Coordination/git/refs','apiVersion':'2026-03-10','requestLimit':1,
+                             'body':{'ref':module.PROC_PUBLISHER_REF,'sha':spec['publisher']}}
         # Canonical-shaped inert evidence exercises joins, never supplies genuine gh qualification.
         capacity={'directory':'/sys/fs/cgroup','independentPrivateScope':True,'heldStoresUsed':False,'activeWorkers':None,
                   'identity':module.proc_read_identity('/sys/fs/cgroup'),'membership':Path('/proc/self/cgroup').read_text()}
@@ -134,6 +146,59 @@ class DiagnosticControls(unittest.TestCase):
                    'independentCapacityQualified':True,'sourceAlternativesReviewSha256':'a'*64,'runtimeQualification':qualification}
         approved=root/'selected-authority.json';approved.write_text(json.dumps(authority))
         return spec,descriptor,approved
+
+    def test_proc_promotion_closed_profile_one_use_and_unknown_send(self):
+        # Actual canonical controller and shared owner; only inert client/verification adapters.
+        real=__import__('runpy').run_path(str(ROOT/'eng/test-callable-cli-installed-harness.py'))
+        adapters={'pair_recovery_selection':lambda a:a['recovery'],'pair_original_failure':lambda *a:{},
+                  'pair_verified_attestation':lambda *a:{},'pair_consumers':lambda *a:{},
+                  'pair_promotion_acceptance':lambda *a:{'sourcePredicatesPassed':True},
+                  'pair_promotion_response':real['pair_promotion_response']}
+        for mode in ('good','lost','202','collision','foreign','no-id','timeout'):
+            with self.subTest(mode=mode),tempfile.TemporaryDirectory() as tmp:
+                root=Path(tmp);root.chmod(0o700);spec,descriptor,approved=self.proc_fixture(root,mode,profile='proc-publisher-promotion')
+                module.proc_command_preflight(spec,now=time.monotonic())
+                self.assertNotEqual(module.proc_operation_root(module.PROC_PROFILES['proc-pair-recovery-dispatch']),Path(spec['operationRoot']))
+                for change in ('method','ref','sha','endpoint','slot'):
+                    bad=copy.deepcopy(spec)
+                    if change=='method':bad['request']['method']='PATCH'
+                    if change=='ref':bad['request']['body']['ref']='refs/tags/foreign'
+                    if change=='sha':bad['request']['body']['sha']='a'*40
+                    if change=='endpoint':bad['request']['endpoint']+='/extra'
+                    if change=='slot':bad['operationRoot']=str(root/'fresh-slot')
+                    with self.assertRaises(ValueError):module.proc_command_preflight(bad,now=time.monotonic())
+                with patch('runpy.run_path',return_value=adapters),patch.dict(os.environ,{'GH_TOKEN':'inert-only'}):
+                    status=module.execute_proc_command(descriptor,approved,hashlib.sha256(approved.read_bytes()).hexdigest())
+                    self.assertEqual(0 if mode=='good' else 1,status)
+                    slot=Path(spec['operationRoot']);before=(slot/'command.json').read_bytes();result=json.loads(before)
+                    self.assertEqual('consumed-accepted' if mode=='good' else 'consumed-unknown',result['sendState'])
+                    self.assertFalse(result['publicationAccepted'])
+                    if mode=='good':self.assertFalse(result['nativeResponse']['promotionAccepted'])
+                    self.assertEqual(1,module.execute_proc_command(descriptor,approved,hashlib.sha256(approved.read_bytes()).hexdigest()))
+                    self.assertEqual(before,(slot/'command.json').read_bytes())
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);root.chmod(0o700);spec,descriptor,approved=self.proc_fixture(root,profile='proc-publisher-promotion')
+            slot=Path(spec['operationRoot']);(slot/'command.json').unlink()
+            with patch('runpy.run_path',return_value=adapters),patch.dict(os.environ,{'GH_TOKEN':'inert-only'}):
+                self.assertEqual(1,module.execute_proc_command(descriptor,approved,hashlib.sha256(approved.read_bytes()).hexdigest()))
+            self.assertFalse((slot/'command.json').exists());self.assertFalse((slot/'dispatch-input.json').exists())
+
+    def test_proc_promotion_disabled_and_untrusted_evidence_launch_no_client(self):
+        selected=json.loads((ROOT/'eng/execution-pair-release-admission.json').read_bytes())['recovery']
+        for mode in ('disabled','untrusted'):
+            with self.subTest(mode=mode),tempfile.TemporaryDirectory() as tmp:
+                root=Path(tmp);root.chmod(0o700);spec,descriptor,approved=self.proc_fixture(root,profile='proc-publisher-promotion')
+                recovery=selected if mode=='disabled' else json.loads(Path(spec['proofInputs']['admission']).read_bytes())['recovery']
+                def acceptance(*args):
+                    if mode=='untrusted':raise ValueError('authenticated native acceptance unavailable')
+                    return {}
+                adapters={'pair_recovery_selection':lambda a:recovery,'pair_original_failure':lambda *a:{},
+                          'pair_verified_attestation':lambda *a:{},'pair_consumers':lambda *a:{},'pair_promotion_acceptance':acceptance}
+                slot=Path(spec['operationRoot']);before=(slot/'command.json').read_bytes()
+                with patch('runpy.run_path',return_value=adapters),patch.dict(os.environ,{'GH_TOKEN':'inert-only'}):
+                    self.assertEqual(1,module.execute_proc_command(descriptor,approved,hashlib.sha256(approved.read_bytes()).hexdigest()))
+                self.assertEqual(before,(slot/'command.json').read_bytes());self.assertFalse((slot/'dispatch-input.json').exists())
+                self.assertFalse((slot/'client-preflight.log').exists())
 
     def test_proc_transport_one_use_and_uncertainty_keep_canonical_state(self):
         # Actual shared owner and subprocess; fake curl never reaches a network or credential.

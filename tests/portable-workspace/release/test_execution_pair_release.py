@@ -743,6 +743,103 @@ def pair_recovery_source_controls():
     print('PAIR_RECOVERY_SOURCE_CONTROLS passed native-negatives=11 verified-provenance-negatives=9 effects-disabled=true')
 
 
+def promotion_acceptance_inert_controls():
+    helpers=runpy.run_path(str(ROOT/'eng/test-callable-cli-installed-harness.py'));publisher='d'*40
+    workflow='.github/workflows/optimistic-parallel-validation.yml';now=time.time()
+    policy=json.loads((ROOT/'eng/repository-settings/release-tag-ruleset.json').read_bytes());policy['id']=21633398
+    native={'repository':{'id':1346720714},'commit':{'sha':publisher,'committer':{'id':10},'parents':[{'sha':'a'*40}],
+            'commit':{'tree':{'sha':'e'*40},'verification':{'verified':True,'reason':'valid','signature':'inert-signature','payload':'inert-final-payload'}}},
+        'pull':{'number':90,'head':{'sha':publisher,'repo':{'id':1346720714}},'base':{'ref':'main','repo':{'id':1346720714}},'state':'open','merged':False},
+        'reviews':{'total_count':1,'reviews':[{'commit_id':publisher,'state':'COMMENTED','user':{'id':20},'pull_request_url':'https://api.github.com/repos/FS-GG/FS.GG.Coordination/pulls/90'}]},
+        'threads':{'pageInfo':{'hasNextPage':False},'nodes':[{'isResolved':True}]},
+        'checks':{'total_count':7,'check_runs':[{'name':name,'head_sha':publisher,'app':{'id':15368},'status':'completed','conclusion':'success','check_suite':{'id':30,'head_sha':publisher}} for name in helpers['PAIR_PROMOTION_CONTEXTS']]},
+        'runs':{'total_count':1,'workflow_runs':[{'id':40,'path':workflow,'head_sha':publisher,'run_attempt':1,'repository':{'id':1346720714},'event':'pull_request','workflow_id':50,'pull_requests':[{'number':90,'head':{'sha':publisher}}],'status':'completed','conclusion':'success','check_suite_id':30}]},
+        'jobs':{'total_count':1,'jobs':[{'run_id':40,'head_sha':publisher,'run_attempt':1,'status':'completed','conclusion':'success'}]},
+        'workflowBytes':{workflow:'inert-trusted-workflow'},'tagBefore':{'status':404,'ref':helpers['PAIR_PUBLISHER_REF']},'policy':policy}
+    trust={'evidenceSha256':hashlib.sha256(helpers['compact'](native)).hexdigest(),'signer':{'id':10,'signatureSha256':hashlib.sha256(b'inert-signature').hexdigest(),'payloadSha256':hashlib.sha256(b'inert-final-payload').hexdigest(),'tree':'e'*40,'parents':['a'*40]},
+        'reviewerId':20,'pullNumber':90,'repositoryId':1346720714,'workflows':{workflow:{'id':50,'sha256':hashlib.sha256(b'inert-trusted-workflow').hexdigest()}},'observedAt':now,'deadline':now+90}
+    branch='routine/inert-publisher-B';trust['branch']=branch;native['pull']['head']['ref']=branch
+    native['runs']={'total_count':3,'workflow_runs':[]};native['jobs']={'total_count':0,'jobs':[]};native['checks']={'total_count':0,'check_runs':[]}
+    trust['workflows']={};native['workflowBytes']={}
+    for ordinal,path in enumerate(('.github/workflows/bootstrap-qualification.yml','.github/workflows/routine-eligibility.yml',workflow)):
+        runid=40+ordinal;suiteid=30+ordinal
+        trust['workflows'][path]={'id':50+ordinal,'sha256':hashlib.sha256(b'inert-trusted-workflow').hexdigest()};native['workflowBytes'][path]='inert-trusted-workflow'
+        native['runs']['workflow_runs'].append({'id':runid,'path':path,'head_sha':publisher,'head_branch':branch,'run_attempt':1,'repository':{'id':1346720714},'event':'pull_request_target' if ordinal==1 else 'pull_request','workflow_id':50+ordinal,'pull_requests':[{'number':90,'head':{'sha':publisher}}],'status':'completed','conclusion':'success','check_suite_id':suiteid})
+        names=sorted(helpers['PAIR_PROMOTION_CONTEXTS']-{'routine-eligibility'}) if ordinal==0 else ['routine-eligibility'] if ordinal==1 else ['full-coherent']
+        for name in names:
+            jobid=100+len(native['jobs']['jobs'])
+            native['jobs']['jobs'].append({'id':jobid,'name':name,'run_id':runid,'head_sha':publisher,'run_attempt':1,'status':'completed','conclusion':'success','check_run_url':'https://api.github.com/repos/FS-GG/FS.GG.Coordination/check-runs/'+str(jobid)})
+            native['checks']['check_runs'].append({'id':jobid,'name':name,'head_sha':publisher,'app':{'id':15368},'status':'completed','conclusion':'success','check_suite':{'id':suiteid,'head_sha':publisher},'details_url':'https://github.com/FS-GG/FS.GG.Coordination/actions/runs/'+str(runid)+'/job/'+str(jobid)})
+    native['checks']['total_count']=len(native['checks']['check_runs']);native['jobs']['total_count']=len(native['jobs']['jobs'])
+    trust['evidenceSha256']=hashlib.sha256(helpers['compact'](native)).hexdigest()
+    assert helpers['pair_promotion_acceptance'](native,trust,publisher,now)['promotionAccepted'] is False
+    modes=('unsigned','signer','payload','tree','parent','review-commit','reviewer','rejection','threads','pagination','spoofed-check','pending-check','failed-check','wrong-check-head','missing-check','coherent-failure','workflow-bytes','rerun','job-head','existing-tag','unknown-tag','policy-missing','policy-bypass','stale','untrusted-acquisition','source-substitution','wrong-job','wrong-detail','routine-event','required-producer','foreign-PR')
+    for mode in modes:
+        n=copy.deepcopy(native);t=copy.deepcopy(trust);b=publisher
+        if mode=='wrong-job':n['jobs']['jobs'][0]['id']=999
+        if mode=='wrong-detail':n['checks']['check_runs'][0]['details_url']='https://github.com/foreign/run'
+        if mode=='routine-event':n['runs']['workflow_runs'][1]['event']='pull_request'
+        if mode=='required-producer':n['checks']['check_runs'][0]['check_suite']['id']=32
+        if mode=='foreign-PR':n['pull']['number']=91
+        if mode=='unsigned':n['commit']['commit']['verification']['verified']=False
+        if mode=='signer':n['commit']['committer']['id']=99
+        if mode=='payload':n['commit']['commit']['verification']['payload']='altered'
+        if mode=='tree':n['commit']['commit']['tree']['sha']='f'*40
+        if mode=='parent':n['commit']['parents']=[]
+        if mode=='review-commit':n['reviews']['reviews'][0]['commit_id']='a'*40
+        if mode=='reviewer':n['reviews']['reviews'][0]['user']['id']=99
+        if mode=='rejection':n['reviews']['reviews'][0]['state']='CHANGES_REQUESTED'
+        if mode=='threads':n['threads']['nodes'][0]['isResolved']=False
+        if mode=='pagination':n['threads']['pageInfo']['hasNextPage']=True
+        if mode=='spoofed-check':n['checks']['check_runs'][0]['app']['id']=99
+        if mode=='pending-check':n['checks']['check_runs'][0]['status']='in_progress'
+        if mode=='failed-check':n['checks']['check_runs'][0]['conclusion']='failure'
+        if mode=='wrong-check-head':n['checks']['check_runs'][0]['head_sha']='a'*40
+        if mode=='missing-check':n['checks']['check_runs'].pop()
+        if mode=='coherent-failure':n['runs']['workflow_runs'][0]['conclusion']='failure'
+        if mode=='workflow-bytes':n['workflowBytes'][workflow]='altered'
+        if mode=='rerun':n['runs']['workflow_runs'][0]['run_attempt']=2
+        if mode=='job-head':n['jobs']['jobs'][0]['head_sha']='a'*40
+        if mode=='existing-tag':n['tagBefore']['status']=200
+        if mode=='unknown-tag':n['tagBefore']['status']=403
+        if mode=='policy-missing':n['policy'].pop('bypass_actors')
+        if mode=='policy-bypass':n['policy']['bypass_actors']=[{'actor_id':1}]
+        if mode=='stale':t['observedAt']=now-61
+        if mode=='source-substitution':b='b11fb121f046898e655b779dfc6809f35fc7aac6'
+        if mode!='untrusted-acquisition':t['evidenceSha256']=hashlib.sha256(helpers['compact'](n)).hexdigest()
+        else:t['evidenceSha256']='0'*64
+        try:helpers['pair_promotion_acceptance'](n,t,b,now)
+        except (ValueError,KeyError,TypeError):pass
+        else:raise AssertionError(mode)
+    response={'ref':helpers['PAIR_PUBLISHER_REF'],'node_id':'inert','url':'https://api.github.com/repos/FS-GG/FS.GG.Coordination/git/refs/'+helpers['PAIR_PUBLISHER_REF'][5:],'object':{'type':'commit','sha':publisher,'url':'https://api.github.com/repos/FS-GG/FS.GG.Coordination/git/commits/'+publisher}}
+    assert helpers['pair_promotion_response'](response,publisher)['promotionAccepted'] is False
+    for mode in ('partial','wrong-B','annotated','foreign'):
+        n=copy.deepcopy(response)
+        if mode=='partial':n.pop('object')
+        if mode=='wrong-B':n['object']['sha']='a'*40
+        if mode=='annotated':n['object']['type']='tag'
+        if mode=='foreign':n['ref']='refs/tags/foreign'
+        try:helpers['pair_promotion_response'](n,publisher)
+        except (ValueError,KeyError):pass
+        else:raise AssertionError(mode)
+    readback=runpy.run_path(str(ROOT/'eng/write-callable-cli-release-readback.py'))['publisher_promotion_readback']
+    original={'operation':helpers['PAIR_PROMOTION_OPERATION'],'publisher':publisher,'sendState':'consumed-unknown'}
+    for mode in ('complete','partial-ref','unsigned','policy-failure','unknown-cleanup'):
+        observed={'refStatus':200,'ref':response,'commit':copy.deepcopy(native['commit']),'policy':copy.deepcopy(policy),'cleanup':'observed-revoked'}
+        if mode=='partial-ref':observed['refStatus']=404
+        if mode=='unsigned':observed['commit']['commit']['verification']['verified']=False
+        if mode=='policy-failure':observed['policy'].pop('bypass_actors')
+        if mode=='unknown-cleanup':observed['cleanup']='unknown'
+        selected={'observedAt':now,'signer':trust['signer'],'readbackSha256':hashlib.sha256(helpers['compact'](observed)).hexdigest()}
+        result=readback(original,observed,selected,publisher,now)
+        assert result['promotionAccepted'] is False and result['resendAllowed'] is False
+        assert result['refVerified']==(mode!='partial-ref')
+        assert result['signatureVerified']==(mode!='unsigned')
+        assert result['policyVerified']==(mode!='policy-failure')
+        assert result['sendState']=='consumed-unknown'
+    print('PAIR_PROMOTION_INERT_ACCEPTANCE passed negatives='+str(len(modes)+4)+' native-acquisition=fixture-only effect=false')
+
+
 def immutable_publisher_later_gate_controls():
     """Execute both actual later Python gates with inert Git/GitHub observations."""
     helpers=runpy.run_path(str(ROOT/'eng/test-callable-cli-installed-harness.py'))
@@ -928,6 +1025,7 @@ def policy_token_cleanup_controls():
 
 
 def main():
+    promotion_acceptance_inert_controls()
     immutable_publisher_later_gate_controls()
     policy_token_cleanup_controls()
     pair_recovery_source_controls()

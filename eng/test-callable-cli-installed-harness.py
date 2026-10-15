@@ -593,12 +593,105 @@ def pair_publisher_recheck(environment, ref_object, resolved_commit, binding_pat
     return binding
 
 
+PAIR_PROMOTION_OPERATION = 'promote-execution-publisher-b11fb121-original38495729817'
+PAIR_PROMOTION_SELECTION = {'enabled':False, 'operation':PAIR_PROMOTION_OPERATION,
+    'ref':PAIR_PUBLISHER_REF, 'kind':'lightweight', 'sourceTrustAccepted':False}
+PAIR_PROMOTION_CONTEXTS = {'bootstrap-recovery','compiler-and-tests','dependency-and-security',
+                         'deterministic-build','evidence-manifest','package-install-smoke','routine-eligibility'}
+
+
+def pair_promotion_acceptance(native, trust, publisher, now):
+    """Verify pinned native evidence; trust/capabilities must come from root authority.
+
+    Inert fixtures exercise these predicates. No JSON assertion authenticates its own
+    acquisition or nominates an authorized signer/reviewer. The root must separately
+    accept that contract and pin the authenticated acquisition in its authority.
+    """
+    if (not isinstance(trust,dict) or set(trust)!={'evidenceSha256','signer','reviewerId','repositoryId','workflows','deadline','observedAt','pullNumber','branch'}
+            or trust['repositoryId']!=1346720714 or not 0<=now-trust['observedAt']<=60
+            or not now<trust['deadline']<=trust['observedAt']+90
+            or hashlib.sha256(compact(native)).hexdigest()!=trust['evidenceSha256']):
+        raise ValueError('promotion root-pinned authenticated acquisition/trust unavailable or stale')
+    if publisher in ('b11fb121f046898e655b779dfc6809f35fc7aac6','0ccfb6d067d912bbd8a1e26c4b56449358443b2e') or not re.fullmatch('[0-9a-f]{40}',publisher):raise ValueError('promotion exact signed B missing')
+    commit=native['commit'];verification=commit['commit']['verification']
+    if (commit['sha']!=publisher or native['repository']['id']!=1346720714
+            or verification['verified'] is not True or verification['reason']!='valid'
+            or not verification.get('signature') or not verification.get('payload')
+            or commit['committer']['id']!=trust['signer']['id']
+            or hashlib.sha256(verification['signature'].encode()).hexdigest()!=trust['signer']['signatureSha256']
+            or hashlib.sha256(verification['payload'].encode()).hexdigest()!=trust['signer']['payloadSha256']
+            or commit['commit']['tree']['sha']!=trust['signer']['tree']
+            or [p['sha'] for p in commit['parents']]!=trust['signer']['parents']):
+        raise ValueError('promotion signed final commit/signer/payload/tree/parent differs')
+    pr=native['pull'];reviews=native['reviews'];threads=native['threads']
+    if (pr['head']['ref']!=trust['branch'] or pr['number']!=trust['pullNumber'] or pr['base']['ref']!='main' or pr['head']['sha']!=publisher or pr['head']['repo']['id']!=1346720714
+            or pr['base']['repo']['id']!=1346720714 or pr['state']!='open' or pr['merged'] is not False
+            or reviews['total_count']!=len(reviews['reviews']) or not reviews['reviews']
+            or threads['pageInfo']['hasNextPage'] is not False or any(t['isResolved'] is not True for t in threads['nodes'])
+            or any(v['pull_request_url']!='https://api.github.com/repos/FS-GG/FS.GG.Coordination/pulls/'+str(trust['pullNumber']) or v['commit_id']!=publisher or v['state'] not in ('APPROVED','COMMENTED') for v in reviews['reviews'])
+            or not any(v['user']['id']==trust['reviewerId'] for v in reviews['reviews'])):
+        raise ValueError('promotion exact-B authorized native review/rejection/threads unavailable')
+    checks=native['checks'];runs=native['runs'];jobs=native['jobs']
+    if (type(checks['total_count']) is not int or checks['total_count']!=len(checks['check_runs']) or not 7<=checks['total_count']<100
+            or not PAIR_PROMOTION_CONTEXTS<={c['name'] for c in checks['check_runs']}
+            or len({c['id'] for c in checks['check_runs']})!=len(checks['check_runs'])
+            or any(sum(c['name']==name for c in checks['check_runs'])!=1 for name in PAIR_PROMOTION_CONTEXTS)
+            or type(runs['total_count']) is not int or runs['total_count']!=len(runs['workflow_runs']) or not runs['workflow_runs']
+            or type(jobs['total_count']) is not int or jobs['total_count']!=len(jobs['jobs']) or len({j['id'] for j in jobs['jobs']})!=len(jobs['jobs']) or not jobs['jobs']):
+        raise ValueError('promotion complete required/coherent native populations absent')
+    seen=set()
+    for run in runs['workflow_runs']:
+        selection=trust['workflows'].get(run['path'])
+        if (not selection or run['id'] in seen or run['head_sha']!=publisher or run['run_attempt']!=1
+                or run['repository']['id']!=1346720714 or run['head_branch']!=trust['branch']
+                or run['event']!=('pull_request_target' if run['path']=='.github/workflows/routine-eligibility.yml' else 'pull_request')
+                or not isinstance(run.get('pull_requests'),list) or len(run['pull_requests'])!=1
+                or run['pull_requests'][0].get('number')!=trust['pullNumber'] or run['pull_requests'][0].get('head',{}).get('sha')!=publisher
+                or run['workflow_id']!=selection['id'] or run['status']!='completed' or run['conclusion']!='success'
+                or hashlib.sha256(native['workflowBytes'][run['path']].encode()).hexdigest()!=selection['sha256']):
+            raise ValueError('promotion trusted workflow/run/head/coherent result differs')
+        seen.add(run['id'])
+    if {run['path'] for run in runs['workflow_runs']}!=set(trust['workflows']) or set(trust['workflows'])!={'.github/workflows/bootstrap-qualification.yml','.github/workflows/routine-eligibility.yml','.github/workflows/optimistic-parallel-validation.yml'}:
+        raise ValueError('promotion full coherent workflow absent')
+    for c in checks['check_runs']:
+        matched=[run for run in runs['workflow_runs'] if run['check_suite_id']==c['check_suite']['id']]
+        job=[j for j in jobs['jobs'] if j['id']==c['id']]
+        expected_path='.github/workflows/routine-eligibility.yml' if c['name']=='routine-eligibility' else '.github/workflows/bootstrap-qualification.yml'
+        if (c['head_sha']!=publisher or c['app']['id']!=15368 or c['status']!='completed' or c['conclusion']!='success'
+                or len(matched)!=1 or c['check_suite']['head_sha']!=publisher
+                or c['name'] in PAIR_PROMOTION_CONTEXTS and matched[0]['path']!=expected_path
+                or len(job)!=1 or job[0]['name']!=c['name'] or job[0]['run_id']!=matched[0]['id']
+                or c['details_url']!='https://github.com/FS-GG/FS.GG.Coordination/actions/runs/'+str(matched[0]['id'])+'/job/'+str(c['id'])
+                or job[0]['check_run_url']!='https://api.github.com/repos/FS-GG/FS.GG.Coordination/check-runs/'+str(c['id'])):
+            raise ValueError('promotion required check origin/head/result differs')
+    for job in jobs['jobs']:
+        if (job['run_id'] not in seen or job['head_sha']!=publisher or job['run_attempt']!=1
+                or job['status']!='completed' or job['conclusion']!='success'):
+            raise ValueError('promotion native job population differs')
+    if {j['run_id'] for j in jobs['jobs']}!=seen or native['tagBefore']!={'status':404,'ref':PAIR_PUBLISHER_REF}:
+        raise ValueError('promotion tag preexists/unknown or native jobs incomplete')
+    pair_protection(native['policy'], {'tagProtection':{'rulesetId':21633398,'policySha256':'5182bb35a6dd682cef84ac9ce4210cfd09f38b7410d8c9cf9bae42866bcb81da'}},native['policy'])
+    return {'publisher':publisher,'operation':PAIR_PROMOTION_OPERATION,'reviewCommit':publisher,
+            'acquisitionSha256':trust['evidenceSha256'],'sourcePredicatesPassed':True,
+            'promotionAccepted':False,'publicationAuthorized':False}
+
+
+def pair_promotion_response(value, publisher):
+    if value!={'ref':PAIR_PUBLISHER_REF,'node_id':value.get('node_id'),'url':'https://api.github.com/repos/FS-GG/FS.GG.Coordination/git/refs/'+PAIR_PUBLISHER_REF[5:],
+               'object':{'type':'commit','sha':publisher,'url':'https://api.github.com/repos/FS-GG/FS.GG.Coordination/git/commits/'+publisher}} or not value.get('node_id'):
+        raise ValueError('promotion response exact lightweight ref/B differs; consumed unknown')
+    return {'ref':PAIR_PUBLISHER_REF,'publisher':publisher,'creationResponseObserved':True,
+            'independentReadback':'pending','promotionAccepted':False}
+
+
 def pair_recovery_selection(admission):
     selected = admission['recovery']
-    expected = {'enabled', 'policyObservationEnabled', 'clientQualificationEnabled', 'policyTokenCleanup', 'publisherRef', 'operation', 'originalOperation', 'publisher', 'runId', 'runAttempt',
+    expected = {'enabled', 'policyObservationEnabled', 'clientQualificationEnabled', 'policyTokenCleanup', 'promotion', 'publisherRef', 'operation', 'originalOperation', 'publisher', 'runId', 'runAttempt',
                 'jobId', 'artifactId', 'archiveSha256'}
     if set(selected) != expected or any(type(selected[k]) is not bool for k in ('enabled','policyObservationEnabled','clientQualificationEnabled')):
         raise ValueError('pair recovery selection changed')
+    if selected['promotion'] != PAIR_PROMOTION_SELECTION:
+        raise ValueError('promotion remains disabled pending source trust and native capability acceptance')
     if compact(selected['policyTokenCleanup']) != compact(PAIR_POLICY_TOKEN_CLEANUP_CONTRACT):
         raise ValueError('pair policy token cleanup closed source contract changed')
     if (selected['publisherRef'] != PAIR_PUBLISHER_REF
