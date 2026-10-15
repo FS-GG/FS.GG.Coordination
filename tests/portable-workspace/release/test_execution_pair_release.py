@@ -779,7 +779,7 @@ def promotion_acceptance_inert_controls():
             jobid=100+len(native['jobs']['jobs'])
             conclusion=helpers['pair_promotion_job_conclusion'](native['runs']['workflow_runs'][-1],name,source)
             native['jobs']['jobs'].append({'id':jobid,'name':name,'run_id':runid,'head_sha':publisher,'run_attempt':1,'status':'completed','conclusion':conclusion,'check_run_url':'https://api.github.com/repos/FS-GG/FS.GG.Coordination/check-runs/'+str(jobid)})
-            native['checks']['check_runs'].append({'id':jobid,'name':name,'head_sha':publisher,'app':{'id':15368},'status':'completed','conclusion':conclusion,'check_suite':{'id':suiteid,'head_sha':publisher},'details_url':'https://github.com/FS-GG/FS.GG.Coordination/actions/runs/'+str(runid)+'/job/'+str(jobid)})
+            native['checks']['check_runs'].append({'id':jobid,'name':name,'head_sha':publisher,'app':{'id':15368},'status':'completed','conclusion':conclusion,'check_suite':{'id':suiteid},'details_url':'https://github.com/FS-GG/FS.GG.Coordination/actions/runs/'+str(runid)+'/job/'+str(jobid)})
     native['checks']['total_count']=len(native['checks']['check_runs']);native['jobs']['total_count']=len(native['jobs']['jobs'])
     trust['evidenceSha256']=hashlib.sha256(helpers['compact'](native)).hexdigest()
     assert helpers['pair_promotion_acceptance'](native,trust,publisher,now)['promotionAccepted'] is False

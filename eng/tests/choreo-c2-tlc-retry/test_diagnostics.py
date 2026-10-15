@@ -12,6 +12,7 @@ import time
 import hashlib
 import contextlib
 import io
+import resource
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[3]

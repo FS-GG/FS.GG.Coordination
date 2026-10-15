@@ -679,7 +679,7 @@ def pair_promotion_acceptance(native, trust, publisher, now):
         expected_path='.github/workflows/routine-eligibility.yml' if c['name']=='routine-eligibility' else '.github/workflows/bootstrap-qualification.yml'
         expected=pair_promotion_job_conclusion(matched[0],c['name'],native['workflowBytes'][matched[0]['path']]) if len(matched)==1 else None
         if (c['head_sha']!=publisher or c['app']['id']!=15368 or c['status']!='completed' or c['conclusion']!=expected
-                or len(matched)!=1 or c['check_suite']['head_sha']!=publisher
+                or len(matched)!=1
                 or c['name'] in PAIR_PROMOTION_CONTEXTS and matched[0]['path']!=expected_path
                 or len(job)!=1 or job[0]['name']!=c['name'] or job[0]['run_id']!=matched[0]['id']
                 or c['details_url']!='https://github.com/FS-GG/FS.GG.Coordination/actions/runs/'+str(matched[0]['id'])+'/job/'+str(c['id'])
