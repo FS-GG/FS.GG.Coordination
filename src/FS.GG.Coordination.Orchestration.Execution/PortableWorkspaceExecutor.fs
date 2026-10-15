@@ -172,7 +172,7 @@ type PortableHostExecutionState =
     }
 
 type private PortableHostJournalEntry =
-    { BindingDigest: string; ContainerName: string; State: PortableHostExecutionState }
+    { BindingDigest: string; HostContainerName: string; State: PortableHostExecutionState }
 
 type private PortableJournalEntry =
     | PortableRunning of commandId: Guid * bindingDigest: string * containerName: string
@@ -435,7 +435,7 @@ module PortableWorkspaceExecutor =
 
     let private writeHost (writer: BinaryWriter) (entry: PortableHostJournalEntry) =
         writer.Write entry.BindingDigest
-        writer.Write entry.ContainerName
+        writer.Write entry.HostContainerName
         let reservation = entry.State.Reservation
         writeHostBinding writer reservation.Binding
         writeDate writer reservation.AdmittedAt
@@ -493,7 +493,7 @@ module PortableWorkspaceExecutor =
         if count < 0 || count > 1024 then invalidOp "portable-host-conflicts-size-refused"
         let conflicts = [ for _ in 1 .. count -> reader.ReadString() ] |> Set.ofList
         let receipt = if reader.ReadBoolean() then Some(readReceipt reader) else None
-        { BindingDigest = digest; ContainerName = containerName
+        { BindingDigest = digest; HostContainerName = containerName
           State = { Reservation = reservation; Receipt = receipt
                     Lifecycle = { WorkloadExit = exit; Termination = termination; InnerCleanup = inner
                                   Export = exported; OuterRetirement = outer; FirstFailure = failure
@@ -1101,17 +1101,17 @@ module PortableWorkspaceExecutor =
                         | _ -> return receipt
             }
 
-        let hostDigest profile command operation reservation =
+        let hostDigest (profile: PortableWorkspaceProfile) (command: PortableWorkspaceCommand) (operation: PortableReviewedOperation) (reservation: PortableHostReservation) =
             use stream = new MemoryStream()
             use writer = new BinaryWriter(stream, Encoding.UTF8, true)
             writer.Write(bindingDigest profile command operation)
             writeHost writer
-                { BindingDigest = ""; ContainerName = ""
+                { BindingDigest = ""; HostContainerName = ""
                   State = { Reservation = reservation; Lifecycle = PortableHostAllocation.emptyLifecycle; Receipt = None } }
             writer.Flush()
             sha256 (stream.ToArray())
 
-        let selectHost profile command reservation =
+        let selectHost (profile: PortableWorkspaceProfile) (command: PortableWorkspaceCommand) (reservation: PortableHostReservation) =
             selectReviewedOperation profile command
             |> Result.bind (fun operation ->
                 if reservation.Binding.Command <> command
@@ -1121,7 +1121,7 @@ module PortableWorkspaceExecutor =
                     Error "portable-host-binding-refused"
                 else Ok(operation, hostDigest profile command operation reservation))
 
-        let readHostEntry profile command reservation =
+        let readHostEntry (profile: PortableWorkspaceProfile) (command: PortableWorkspaceCommand) (reservation: PortableHostReservation) =
             selectHost profile command reservation
             |> Result.bind (fun (operation, digest) ->
                 journal.Read(command.WorkspaceScope, command.IdempotencyId)
@@ -1157,7 +1157,7 @@ module PortableWorkspaceExecutor =
                 | _ -> false
             { state with Receipt = state.Receipt |> Option.map (fun receipt -> { receipt with CleanupCompleted = cleanupCompleted }) }
 
-        let cleanupHost profile command operation digest (cancellationToken: CancellationToken) =
+        let cleanupHost (profile: PortableWorkspaceProfile) (command: PortableWorkspaceCommand) (operation: PortableReviewedOperation) digest (cancellationToken: CancellationToken) =
             task {
                 // The same durable lock commits Unknown before control crosses into a destructive port.
                 // A reentrant call sees Unknown; neither false nor an exception clears that original intent.
@@ -1179,7 +1179,7 @@ module PortableWorkspaceExecutor =
                     match intent with
                     | Ok(Some(Some entry)) ->
                         let reservation = entry.State.Reservation
-                        let request = requestFor (preparedForRecovery profile command operation) operation entry.ContainerName
+                        let request = requestFor (preparedForRecovery profile command operation) operation entry.HostContainerName
                                           (min command.Deadline reservation.HostLeaseExpiresAt)
                         let! cleaned = task {
                             try return! runner.CleanupAsync(request, cancellationToken)
@@ -1208,7 +1208,7 @@ module PortableWorkspaceExecutor =
                     | _ -> return Refused "portable-journal-unavailable"
             }
 
-        let executeHost authority profile command reservation cancellationToken =
+        let executeHost (authority: PortableWorkspaceAuthority) (profile: PortableWorkspaceProfile) (command: PortableWorkspaceCommand) (reservation: PortableHostReservation) (cancellationToken: CancellationToken) =
             task {
                 match readHostEntry profile command reservation with
                 | Error reason -> return Refused reason
@@ -1229,7 +1229,7 @@ module PortableWorkspaceExecutor =
                             | Ok (), Ok originalDeadline when not cancellationToken.IsCancellationRequested ->
                                 let containerName = "fsgg-portable-" + digest[..23]
                                 let entry =
-                                    { BindingDigest = digest; ContainerName = containerName
+                                    { BindingDigest = digest; HostContainerName = containerName
                                       State = { Reservation = reservation; Lifecycle = PortableHostAllocation.emptyLifecycle; Receipt = None } }
                                 match journal.ReserveHost(command.WorkspaceScope, command.IdempotencyId, entry) with
                                 | Error reason -> return Refused reason
