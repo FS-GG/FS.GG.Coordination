@@ -163,9 +163,21 @@ type PortableReconciliationObservation =
         TerminationObserved: bool
     }
 
+/// Host mode is explicitly selected by an authenticated adapter; these values do not authenticate evidence.
+type PortableHostExecutionState =
+    {
+        Reservation: PortableHostReservation
+        Lifecycle: PortableHostLifecycle
+        Receipt: PortableExecutionReceipt option
+    }
+
+type private PortableHostJournalEntry =
+    { BindingDigest: string; HostContainerName: string; State: PortableHostExecutionState }
+
 type private PortableJournalEntry =
     | PortableRunning of commandId: Guid * bindingDigest: string * containerName: string
     | PortableSettled of bindingDigest: string * receipt: PortableExecutionReceipt
+    | PortableHost of PortableHostJournalEntry
 
 type private PortableLaunchDisposition =
     | UsePortableOutcome of PortableExecutionOutcome
@@ -365,6 +377,128 @@ module PortableWorkspaceExecutor =
             TerminationObserved = reader.ReadBoolean()
         }
 
+    // Host records use a distinct schema under the same authoritative key and lock.
+    let private writeHostBinding (writer: BinaryWriter) (binding: PortableHostBinding) =
+        let command = PortableWorkspaceContract.commandBytes binding.Command |> Result.defaultWith invalidOp
+        writer.Write(Convert.ToBase64String command)
+        writer.Write binding.QualifiedImage
+        writer.Write binding.AllocationId
+        writer.Write binding.WorkerId
+        writer.Write binding.AllocationReceiptDigest
+
+    let private readHostBinding (reader: BinaryReader) : PortableHostBinding =
+        { Command = reader.ReadString() |> Convert.FromBase64String |> PortableWorkspaceContract.parseCommand |> Result.defaultWith invalidOp
+          QualifiedImage = reader.ReadString()
+          AllocationId = reader.ReadString()
+          WorkerId = reader.ReadString()
+          AllocationReceiptDigest = reader.ReadString() }
+
+    let private writeDate (writer: BinaryWriter) (value: DateTimeOffset) =
+        writer.Write value.Ticks
+        writer.Write value.Offset.Ticks
+
+    let private readDate (reader: BinaryReader) =
+        let ticks = reader.ReadInt64()
+        let offset = reader.ReadInt64()
+        DateTimeOffset(ticks, TimeSpan.FromTicks offset)
+
+    let private writeManifest (writer: BinaryWriter) (value: PortableHostExportManifest) =
+        writer.Write value.Digest
+        writer.Write value.MemberCount
+        writer.Write value.TotalBytes
+
+    let private readManifest (reader: BinaryReader) : PortableHostExportManifest =
+        { Digest = reader.ReadString(); MemberCount = reader.ReadUInt64(); TotalBytes = reader.ReadUInt64() }
+
+    let private writeHostEvidence (writeValue: BinaryWriter -> 'value -> unit) (writer: BinaryWriter) (evidence: PortableEvidence<PortableHostObservation<'value>>) =
+        match evidence with
+        | EvidenceMissing reason -> writer.Write 0uy; writer.Write(reason: string)
+        | EvidenceUnknown reason -> writer.Write 1uy; writer.Write(reason: string)
+        | EvidenceKnown observation ->
+            writer.Write 2uy
+            writeHostBinding writer observation.Binding
+            writeDate writer observation.CollectedAt
+            writer.Write observation.ReceiptDigest
+            writeValue writer observation.Value
+
+    let private readHostEvidence (readValue: BinaryReader -> 'value) (reader: BinaryReader) =
+        match reader.ReadByte() with
+        | 0uy -> EvidenceMissing(reader.ReadString())
+        | 1uy -> EvidenceUnknown(reader.ReadString())
+        | 2uy ->
+            let binding = readHostBinding reader
+            let collectedAt = readDate reader
+            let digest = reader.ReadString()
+            let value = readValue reader
+            EvidenceKnown { Binding = binding; CollectedAt = collectedAt; ReceiptDigest = digest; Value = value }
+        | _ -> invalidOp "portable-host-evidence-schema-refused"
+
+    let private writeHost (writer: BinaryWriter) (entry: PortableHostJournalEntry) =
+        writer.Write entry.BindingDigest
+        writer.Write entry.HostContainerName
+        let reservation = entry.State.Reservation
+        writeHostBinding writer reservation.Binding
+        writeDate writer reservation.AdmittedAt
+        writeDate writer reservation.HostLeaseExpiresAt
+        writer.Write reservation.MaximumRuntime.Ticks
+        writer.Write reservation.ExportReserve.Ticks
+        writer.Write reservation.CleanupReserve.Ticks
+        match reservation.Selection with
+        | NoSelectedOutputs -> writer.Write 0uy
+        | SelectedOutputs manifest -> writer.Write 1uy; writeManifest writer manifest
+        let lifecycle = entry.State.Lifecycle
+        writeHostEvidence (fun (w: BinaryWriter) (v: int) -> w.Write v) writer lifecycle.WorkloadExit
+        writeHostEvidence (fun _ () -> ()) writer lifecycle.Termination
+        writeHostEvidence (fun _ () -> ()) writer lifecycle.InnerCleanup
+        writeHostEvidence (fun w value ->
+            match value with
+            | HostCensusConfirmsZeroSelection -> w.Write 0uy
+            | DurableManifestReadback manifest -> w.Write 1uy; writeManifest w manifest) writer lifecycle.Export
+        writeHostEvidence (fun _ () -> ()) writer lifecycle.OuterRetirement
+        writeOptionalString writer lifecycle.FirstFailure
+        if lifecycle.ReconciliationConflicts.Count > 1024 then invalidOp "portable-host-conflicts-size-refused"
+        writer.Write lifecycle.ReconciliationConflicts.Count
+        for conflict in lifecycle.ReconciliationConflicts do writer.Write conflict
+        writer.Write entry.State.Receipt.IsSome
+        entry.State.Receipt |> Option.iter (writeReceipt writer)
+
+    let private readHost (reader: BinaryReader) =
+        let digest = reader.ReadString()
+        let containerName = reader.ReadString()
+        let binding = readHostBinding reader
+        let admittedAt = readDate reader
+        let expiresAt = readDate reader
+        let runtime = TimeSpan.FromTicks(reader.ReadInt64())
+        let export = TimeSpan.FromTicks(reader.ReadInt64())
+        let cleanup = TimeSpan.FromTicks(reader.ReadInt64())
+        let selection =
+            match reader.ReadByte() with
+            | 0uy -> NoSelectedOutputs
+            | 1uy -> SelectedOutputs(readManifest reader)
+            | _ -> invalidOp "portable-host-selection-schema-refused"
+        let reservation =
+            { Binding = binding; AdmittedAt = admittedAt; HostLeaseExpiresAt = expiresAt
+              MaximumRuntime = runtime; ExportReserve = export; CleanupReserve = cleanup; Selection = selection }
+        let exit = readHostEvidence (fun r -> r.ReadInt32()) reader
+        let termination = readHostEvidence (fun _ -> ()) reader
+        let inner = readHostEvidence (fun _ -> ()) reader
+        let exported = readHostEvidence (fun r ->
+            match r.ReadByte() with
+            | 0uy -> HostCensusConfirmsZeroSelection
+            | 1uy -> DurableManifestReadback(readManifest r)
+            | _ -> invalidOp "portable-host-export-schema-refused") reader
+        let outer = readHostEvidence (fun _ -> ()) reader
+        let failure = readOptionalString reader
+        let count = reader.ReadInt32()
+        if count < 0 || count > 1024 then invalidOp "portable-host-conflicts-size-refused"
+        let conflicts = [ for _ in 1 .. count -> reader.ReadString() ] |> Set.ofList
+        let receipt = if reader.ReadBoolean() then Some(readReceipt reader) else None
+        { BindingDigest = digest; HostContainerName = containerName
+          State = { Reservation = reservation; Receipt = receipt
+                    Lifecycle = { WorkloadExit = exit; Termination = termination; InnerCleanup = inner
+                                  Export = exported; OuterRetirement = outer; FirstFailure = failure
+                                  ReconciliationConflicts = conflicts } } }
+
     type private DurableJournal(stateRoot: string) =
         let journalRoot = Path.Combine(stateRoot, "journal-v1")
 
@@ -399,19 +533,21 @@ module PortableWorkspaceExecutor =
                 use stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read)
                 use reader = new BinaryReader(stream, Encoding.UTF8, false)
 
-                if reader.ReadString() <> "fsgg.portable-execution-journal/1" then
-                    invalidOp "portable-journal-schema-refused"
-
+                let schema = reader.ReadString()
                 let entry =
-                    match reader.ReadByte() with
-                    | 1uy ->
-                        PortableRunning(
-                            Guid.ParseExact(reader.ReadString(), "D"),
-                            reader.ReadString(),
-                            reader.ReadString()
-                        )
-                    | 2uy -> PortableSettled(reader.ReadString(), readReceipt reader)
-                    | _ -> invalidOp "portable-journal-state-refused"
+                    match schema with
+                    | "fsgg.portable-execution-host-journal/1" -> PortableHost(readHost reader)
+                    | "fsgg.portable-execution-journal/1" ->
+                      match reader.ReadByte() with
+                      | 1uy ->
+                          PortableRunning(
+                              Guid.ParseExact(reader.ReadString(), "D"),
+                              reader.ReadString(),
+                              reader.ReadString()
+                          )
+                      | 2uy -> PortableSettled(reader.ReadString(), readReceipt reader)
+                      | _ -> invalidOp "portable-journal-state-refused"
+                    | _ -> invalidOp "portable-journal-schema-refused"
 
                 if stream.Position <> stream.Length then
                     invalidOp "portable-journal-trailing-bytes-refused"
@@ -426,21 +562,28 @@ module PortableWorkspaceExecutor =
                     new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None)
 
                 use writer = new BinaryWriter(stream, Encoding.UTF8, true)
-                writer.Write "fsgg.portable-execution-journal/1"
-
                 match entry with
-                | PortableRunning(commandId, binding, containerName) ->
-                    writer.Write 1uy
-                    writer.Write(commandId.ToString("D"))
-                    writer.Write binding
-                    writer.Write containerName
-                | PortableSettled(binding, receipt) ->
-                    writer.Write 2uy
-                    writer.Write binding
-                    writeReceipt writer receipt
+                | PortableHost host ->
+                    writer.Write "fsgg.portable-execution-host-journal/1"
+                    writeHost writer host
+                | _ ->
+                  writer.Write "fsgg.portable-execution-journal/1"
+                  match entry with
+                  | PortableRunning(commandId, binding, containerName) ->
+                      writer.Write 1uy
+                      writer.Write(commandId.ToString("D"))
+                      writer.Write binding
+                      writer.Write containerName
+                  | PortableSettled(binding, receipt) ->
+                      writer.Write 2uy
+                      writer.Write binding
+                      writeReceipt writer receipt
+                  | PortableHost _ -> invalidOp "portable-journal-state-refused"
 
                 writer.Flush()
                 stream.Flush true
+                if stream.Length > int64 PortableWorkspaceContract.maximumDocumentBytes * 4L then
+                    invalidOp "portable-journal-size-refused"
                 File.Move(temporary, path, true)
             finally
                 if File.Exists temporary then
@@ -460,7 +603,8 @@ module PortableWorkspaceExecutor =
             | :? UnauthorizedAccessException
             | :? InvalidDataException
             | :? InvalidOperationException
-            | :? FormatException -> Error "portable-journal-unavailable"
+            | :? FormatException
+            | :? ArgumentException -> Error "portable-journal-unavailable"
 
         member _.Read(workspaceScope, idempotencyId) =
             locked workspaceScope idempotencyId read
@@ -472,6 +616,21 @@ module PortableWorkspaceExecutor =
                 | None ->
                     write path (PortableRunning(commandId, binding, containerName))
                     Choice2Of2())
+
+        member _.ReserveHost(workspaceScope, idempotencyId, entry) =
+            locked workspaceScope idempotencyId (fun path ->
+                match read path with
+                | Some existing -> Choice1Of2 existing
+                | None -> write path (PortableHost entry); Choice2Of2())
+
+        member _.ChangeHost(workspaceScope, idempotencyId, digest, change) =
+            locked workspaceScope idempotencyId (fun path ->
+                match read path with
+                | Some(PortableHost entry) when entry.BindingDigest = digest ->
+                    let updated, result = change entry
+                    write path (PortableHost updated)
+                    Some result
+                | _ -> None)
 
         member _.Abandon(workspaceScope, idempotencyId, binding) =
             locked workspaceScope idempotencyId (fun path ->
@@ -554,7 +713,8 @@ module PortableWorkspaceExecutor =
             now.AddTicks duration.Ticks
 
     type Executor(policy: PortableExecutorPolicy, runner: IPortableProcessRunner, ?clock: unit -> DateTimeOffset,
-                  ?prerequisites: Map<string, PortablePrerequisiteRequirement>) =
+                  ?prerequisites: Map<string, PortablePrerequisiteRequirement>,
+                  ?hostReservation: PortableHostReservation) =
         let clock = defaultArg clock (fun () ->
             let now = DateTimeOffset.UtcNow
             DateTimeOffset(now.Ticks - now.Ticks % 10L, TimeSpan.Zero))
@@ -941,7 +1101,225 @@ module PortableWorkspaceExecutor =
                         | _ -> return receipt
             }
 
-        member _.ExecuteAsync
+        let hostDigest (profile: PortableWorkspaceProfile) (command: PortableWorkspaceCommand) (operation: PortableReviewedOperation) (reservation: PortableHostReservation) =
+            use stream = new MemoryStream()
+            use writer = new BinaryWriter(stream, Encoding.UTF8, true)
+            writer.Write(bindingDigest profile command operation)
+            writeHost writer
+                { BindingDigest = ""; HostContainerName = ""
+                  State = { Reservation = reservation; Lifecycle = PortableHostAllocation.emptyLifecycle; Receipt = None } }
+            writer.Flush()
+            sha256 (stream.ToArray())
+
+        let selectHost (profile: PortableWorkspaceProfile) (command: PortableWorkspaceCommand) (reservation: PortableHostReservation) =
+            selectReviewedOperation profile command
+            |> Result.bind (fun operation ->
+                if reservation.Binding.Command <> command
+                   || reservation.Binding.QualifiedImage <> operation.QualifiedImage
+                   || reservation.MaximumRuntime <= TimeSpan.Zero
+                   || reservation.MaximumRuntime.TotalSeconds > float profile.MaximumRuntimeSeconds then
+                    Error "portable-host-binding-refused"
+                else Ok(operation, hostDigest profile command operation reservation))
+
+        let readHostEntry (profile: PortableWorkspaceProfile) (command: PortableWorkspaceCommand) (reservation: PortableHostReservation) =
+            selectHost profile command reservation
+            |> Result.bind (fun (operation, digest) ->
+                journal.Read(command.WorkspaceScope, command.IdempotencyId)
+                |> Result.bind (function
+                    | Some(PortableHost entry) when entry.BindingDigest = digest && entry.State.Reservation = reservation ->
+                        Ok(operation, digest, Some entry)
+                    | Some _ -> Error "portable-executor-idempotency-conflict"
+                    | None -> Ok(operation, digest, None)))
+
+        // Receipt cleanup is a projection of durable lifecycle evidence, independent of workload outcome
+        // and outer retirement. Reconciliation can confirm a lost acknowledgement or expose a conflict.
+        let projectHostReceipt now (state: PortableHostExecutionState) =
+            let reservation = state.Reservation
+            let lifecycle = state.Lifecycle
+            let validObservation (observation: PortableHostObservation<'value>) =
+                observation.Binding = reservation.Binding
+                && not (String.IsNullOrWhiteSpace observation.ReceiptDigest)
+                && observation.CollectedAt >= reservation.AdmittedAt
+                && observation.CollectedAt <= now
+            let cleanupCompleted =
+                match lifecycle.Export, lifecycle.Termination, lifecycle.InnerCleanup with
+                | EvidenceKnown exported, EvidenceKnown termination, EvidenceKnown inner
+                    when lifecycle.ReconciliationConflicts.IsEmpty
+                         && validObservation exported && validObservation termination && validObservation inner
+                         && exported.CollectedAt < min reservation.HostLeaseExpiresAt reservation.Binding.Command.Deadline
+                         && inner.CollectedAt >= exported.CollectedAt
+                         && inner.CollectedAt >= termination.CollectedAt
+                         && Result.isOk (PortableHostAllocation.executionDeadline reservation.AdmittedAt reservation reservation) ->
+                    match reservation.Selection, exported.Value with
+                    | SelectedOutputs expected, DurableManifestReadback actual -> expected = actual
+                    | NoSelectedOutputs, HostCensusConfirmsZeroSelection -> true
+                    | _ -> false
+                | _ -> false
+            { state with Receipt = state.Receipt |> Option.map (fun receipt -> { receipt with CleanupCompleted = cleanupCompleted }) }
+
+        let cleanupHost (profile: PortableWorkspaceProfile) (command: PortableWorkspaceCommand) (operation: PortableReviewedOperation) digest (cancellationToken: CancellationToken) =
+            task {
+                // The same durable lock commits Unknown before control crosses into a destructive port.
+                // A reentrant call sees Unknown; neither false nor an exception clears that original intent.
+                let intent =
+                    journal.ChangeHost(command.WorkspaceScope, command.IdempotencyId, digest, fun entry ->
+                        let decision = PortableHostAllocation.retirement (clock ()) entry.State.Reservation entry.State.Lifecycle
+                        // A lost workload settlement does not erase independent termination/export evidence.
+                        // Receipt absence keeps the workload outcome pending; it cannot veto reducer-authorized cleanup.
+                        if not cancellationToken.IsCancellationRequested
+                           && decision.OutputDeletion = HostEligible then
+                            let lifecycle = { entry.State.Lifecycle with InnerCleanup = EvidenceUnknown "inner cleanup intent persisted; completion not observed" }
+                            let updated = { entry with State = { entry.State with Lifecycle = lifecycle } }
+                            updated, Some updated
+                        else entry, None)
+                match intent with
+                | Error reason -> return Refused reason
+                | Ok None -> return Refused "portable-host-journal-conflict"
+                | Ok(Some None) | Ok(Some(Some _)) ->
+                    match intent with
+                    | Ok(Some(Some entry)) ->
+                        let reservation = entry.State.Reservation
+                        let request = requestFor (preparedForRecovery profile command operation) operation entry.HostContainerName
+                                          (min command.Deadline reservation.HostLeaseExpiresAt)
+                        let! cleaned = task {
+                            try return! runner.CleanupAsync(request, cancellationToken)
+                            with _ -> return false
+                        }
+                        if not cleaned then
+                            journal.ChangeHost(command.WorkspaceScope, command.IdempotencyId, digest, fun current ->
+                                let lifecycle = { current.State.Lifecycle with
+                                                    FirstFailure = current.State.Lifecycle.FirstFailure |> Option.orElse (Some "inner-cleanup-unconfirmed") }
+                                { current with State = { current.State with Lifecycle = lifecycle } }, ()) |> ignore
+                        else
+                            // Inner callback success says nothing about independently observed outer retirement.
+                            let observedAt = clock ()
+                            let observed =
+                                { Binding = reservation.Binding; CollectedAt = observedAt
+                                  ReceiptDigest = "executor-inner-cleanup-" + digest; Value = () }
+                            journal.ChangeHost(command.WorkspaceScope, command.IdempotencyId, digest, fun current ->
+                                let incoming = { PortableHostAllocation.emptyLifecycle with InnerCleanup = EvidenceKnown observed }
+                                let lifecycle = PortableHostAllocation.reconcileLifecycle current.State.Lifecycle incoming
+                                let state = projectHostReceipt observedAt { current.State with Lifecycle = lifecycle }
+                                { current with State = state }, ()) |> ignore
+                    | _ -> ()
+                    match journal.Read(command.WorkspaceScope, command.IdempotencyId) with
+                    | Ok(Some(PortableHost entry)) when entry.BindingDigest = digest ->
+                        return entry.State.Receipt |> Option.map Duplicate |> Option.defaultValue (PendingDuplicate command.CommandId)
+                    | _ -> return Refused "portable-journal-unavailable"
+            }
+
+        let executeHost (authority: PortableWorkspaceAuthority) (profile: PortableWorkspaceProfile) (command: PortableWorkspaceCommand) (reservation: PortableHostReservation) (cancellationToken: CancellationToken) =
+            task {
+                match readHostEntry profile command reservation with
+                | Error reason -> return Refused reason
+                | Ok(operation, digest, Some _) ->
+                    return! cleanupHost profile command operation digest cancellationToken
+                | Ok(operation, digest, None) ->
+                    match refuseBeforeLaunch authority profile command,
+                          PortableHostAllocation.executionDeadline (clock ()) reservation reservation with
+                    | Error reason, _ | _, Error reason -> return Refused reason
+                    | Ok(prepared, _, _), Ok deadline ->
+                        let! attempt = prepareAttemptAsync profile command operation deadline cancellationToken
+                        match attempt with
+                        | Error reason -> return Refused reason
+                        | Ok attempt ->
+                            match consumeAttempt profile command operation attempt,
+                                  PortableHostAllocation.executionDeadline (clock ()) reservation reservation with
+                            | Error reason, _ | _, Error reason -> return Refused reason
+                            | Ok (), Ok originalDeadline when not cancellationToken.IsCancellationRequested ->
+                                let containerName = "fsgg-portable-" + digest[..23]
+                                let entry =
+                                    { BindingDigest = digest; HostContainerName = containerName
+                                      State = { Reservation = reservation; Lifecycle = PortableHostAllocation.emptyLifecycle; Receipt = None } }
+                                match journal.ReserveHost(command.WorkspaceScope, command.IdempotencyId, entry) with
+                                | Error reason -> return Refused reason
+                                | Ok(Choice1Of2(PortableHost prior)) when prior.BindingDigest = digest ->
+                                    return! cleanupHost profile command operation digest cancellationToken
+                                | Ok(Choice1Of2 _) -> return Refused "portable-executor-idempotency-conflict"
+                                | Ok(Choice2Of2()) ->
+                                    let request = requestFor prepared operation containerName originalDeadline
+                                    // Recheck the original window after durable reservation and before crossing RunAsync.
+                                    match PortableHostAllocation.executionDeadline (clock ()) reservation reservation with
+                                    | Error reason -> return Refused reason
+                                    | Ok _ when cancellationToken.IsCancellationRequested -> return Refused "portable-executor-deadline-refused"
+                                    | Ok _ ->
+                                        let! observation = task {
+                                            try return! runner.RunAsync(request, cancellationToken)
+                                            with _ ->
+                                                return { ExecutionStarted = true; ExitCode = None; StandardOutput = Array.empty
+                                                         StandardError = Array.empty; CancellationRequested = cancellationToken.IsCancellationRequested
+                                                         TerminationObserved = false; Interrupted = true; OutputLimitExceeded = false
+                                                         OutputComplete = false; SourceTree = None; SnapshotSha256 = None
+                                                         RuntimeIdentity = None; ContainerIdentity = Some containerName
+                                                         VerificationObserved = false; VerificationOutput = None
+                                                         VerificationCustodyLimitExceeded = false; Refusal = None }
+                                        }
+                                        let receipt = receiptFromObservation prepared operation observation
+                                        let observedAt = clock ()
+                                        let observed value =
+                                            { Binding = reservation.Binding; CollectedAt = observedAt
+                                              ReceiptDigest = "executor-workload-" + digest; Value = value }
+                                        let lifecycle =
+                                            { PortableHostAllocation.emptyLifecycle with
+                                                WorkloadExit = observation.ExitCode |> Option.map (observed >> EvidenceKnown) |> Option.defaultValue (EvidenceUnknown "workload exit unavailable")
+                                                Termination = if observation.TerminationObserved then EvidenceKnown(observed ()) else EvidenceUnknown "termination not observed"
+                                                FirstFailure = receipt.Result.Error |> Option.map (fun failure -> failure.Code) }
+                                        match journal.ChangeHost(command.WorkspaceScope, command.IdempotencyId, digest, fun current ->
+                                            let merged = PortableHostAllocation.reconcileLifecycle current.State.Lifecycle lifecycle
+                                            let state = projectHostReceipt observedAt { current.State with Lifecycle = merged; Receipt = Some receipt }
+                                            { current with State = state }, ()) with
+                                        | Ok(Some ()) ->
+                                            let! outcome = cleanupHost profile command operation digest cancellationToken
+                                            match outcome with
+                                            | Duplicate updated -> return Completed updated
+                                            | other -> return other
+                                        | _ -> return Refused "portable-journal-settlement-refused"
+                            | _ -> return Refused "portable-executor-deadline-refused"
+            }
+
+        member this.ExecuteAsync(authority, profile, command, cancellationToken) =
+            match hostReservation with
+            | None -> this.ExecuteLegacyAsync(authority, profile, command, cancellationToken)
+            | Some reservation -> executeHost authority profile command reservation cancellationToken
+
+        member this.RecoverAsync(profile, command, cancellationToken) =
+            match hostReservation with
+            | None -> this.RecoverLegacyAsync(profile, command, cancellationToken)
+            | Some reservation ->
+                task {
+                    match readHostEntry profile command reservation with
+                    | Error reason -> return Refused reason
+                    | Ok(_, _, None) -> return Refused "portable-reconciliation-unknown-refused"
+                    | Ok(operation, digest, Some _) -> return! cleanupHost profile command operation digest cancellationToken
+                }
+
+        /// Reads the original durable state. This does not authenticate synthetic adapter observations.
+        member _.ReadHostState(profile, command) =
+            match hostReservation with
+            | None -> Error "portable-host-mode-required"
+            | Some reservation ->
+                readHostEntry profile command reservation
+                |> Result.bind (function
+                    | _, _, Some entry -> Ok entry.State
+                    | _ -> Error "portable-reconciliation-unknown-refused")
+
+        /// Bounded observation only: never calls RunAsync, RecoverAsync, CleanupAsync or an outer transport.
+        member _.ReconcileHost(profile, command, incoming: PortableHostLifecycle) =
+            match hostReservation with
+            | None -> Error "portable-host-mode-required"
+            | Some reservation ->
+                readHostEntry profile command reservation
+                |> Result.bind (fun (_, digest, entry) ->
+                    match entry with
+                    | None -> Error "portable-reconciliation-unknown-refused"
+                    | Some _ ->
+                        journal.ChangeHost(command.WorkspaceScope, command.IdempotencyId, digest, fun current ->
+                            let lifecycle = PortableHostAllocation.reconcileLifecycle current.State.Lifecycle incoming
+                            let state = projectHostReceipt (clock ()) { current.State with Lifecycle = lifecycle }
+                            { current with State = state }, state)
+                        |> Result.bind (Option.map Ok >> Option.defaultValue (Error "portable-host-journal-conflict")))
+
+        member private _.ExecuteLegacyAsync
             (
                 authority: PortableWorkspaceAuthority,
                 profile: PortableWorkspaceProfile,
@@ -1072,7 +1450,7 @@ module PortableWorkspaceExecutor =
                             | _ -> return Refused "portable-journal-settlement-refused"
                 }
 
-        member _.RecoverAsync
+        member private _.RecoverLegacyAsync
             (profile: PortableWorkspaceProfile, command: PortableWorkspaceCommand, cancellationToken: CancellationToken)
             =
             task {
