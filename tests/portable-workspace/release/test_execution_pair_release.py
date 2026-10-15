@@ -763,19 +763,43 @@ def promotion_acceptance_inert_controls():
     trust['workflows']={};native['workflowBytes']={}
     for ordinal,path in enumerate(('.github/workflows/bootstrap-qualification.yml','.github/workflows/routine-eligibility.yml',workflow)):
         runid=40+ordinal;suiteid=30+ordinal
-        trust['workflows'][path]={'id':50+ordinal,'sha256':hashlib.sha256(b'inert-trusted-workflow').hexdigest()};native['workflowBytes'][path]='inert-trusted-workflow'
+        source=(ROOT/path).read_text()
+        trust['workflows'][path]={'id':50+ordinal,'sha256':hashlib.sha256(source.encode()).hexdigest()};native['workflowBytes'][path]=source
         native['runs']['workflow_runs'].append({'id':runid,'path':path,'head_sha':publisher,'head_branch':branch,'run_attempt':1,'repository':{'id':1346720714},'event':'pull_request_target' if ordinal==1 else 'pull_request','workflow_id':50+ordinal,'pull_requests':[{'number':90,'head':{'sha':publisher}}],'status':'completed','conclusion':'success','check_suite_id':suiteid})
-        names=sorted(helpers['PAIR_PROMOTION_CONTEXTS']-{'routine-eligibility'}) if ordinal==0 else ['routine-eligibility'] if ordinal==1 else ['full-coherent']
+        names=re.findall(r'^  ([a-zA-Z0-9_-]+):$',source.split('\njobs:\n',1)[1],re.M)
+        if ordinal==0:
+            shards=re.search(r'        shard: \[([^\]]+)\]',source).group(1).split(', ')
+            names.remove('canonical-quint-semantic');names.extend('canonical-quint-semantic ('+shard+')' for shard in shards)
+        if ordinal==2:
+            plan=json.loads((ROOT/'eng/optimistic-qualification-plan.json').read_bytes())
+            names.remove('run-partition')
+            names.extend('coherent-execution (partition-'+str(n)+')' for n in (0,2,3,4,5))
+            names.extend('coherent-execution (formal-'+shard+')' for shard in [*plan['formalFanout']['semanticShards'],plan['formalFanout']['performanceShard']])
         for name in names:
             jobid=100+len(native['jobs']['jobs'])
-            native['jobs']['jobs'].append({'id':jobid,'name':name,'run_id':runid,'head_sha':publisher,'run_attempt':1,'status':'completed','conclusion':'success','check_run_url':'https://api.github.com/repos/FS-GG/FS.GG.Coordination/check-runs/'+str(jobid)})
-            native['checks']['check_runs'].append({'id':jobid,'name':name,'head_sha':publisher,'app':{'id':15368},'status':'completed','conclusion':'success','check_suite':{'id':suiteid,'head_sha':publisher},'details_url':'https://github.com/FS-GG/FS.GG.Coordination/actions/runs/'+str(runid)+'/job/'+str(jobid)})
+            conclusion=helpers['pair_promotion_job_conclusion'](native['runs']['workflow_runs'][-1],name,source)
+            native['jobs']['jobs'].append({'id':jobid,'name':name,'run_id':runid,'head_sha':publisher,'run_attempt':1,'status':'completed','conclusion':conclusion,'check_run_url':'https://api.github.com/repos/FS-GG/FS.GG.Coordination/check-runs/'+str(jobid)})
+            native['checks']['check_runs'].append({'id':jobid,'name':name,'head_sha':publisher,'app':{'id':15368},'status':'completed','conclusion':conclusion,'check_suite':{'id':suiteid,'head_sha':publisher},'details_url':'https://github.com/FS-GG/FS.GG.Coordination/actions/runs/'+str(runid)+'/job/'+str(jobid)})
     native['checks']['total_count']=len(native['checks']['check_runs']);native['jobs']['total_count']=len(native['jobs']['jobs'])
     trust['evidenceSha256']=hashlib.sha256(helpers['compact'](native)).hexdigest()
     assert helpers['pair_promotion_acceptance'](native,trust,publisher,now)['promotionAccepted'] is False
-    modes=('unsigned','signer','payload','tree','parent','review-commit','reviewer','rejection','threads','pagination','spoofed-check','pending-check','failed-check','wrong-check-head','missing-check','coherent-failure','workflow-bytes','rerun','job-head','existing-tag','unknown-tag','policy-missing','policy-bypass','stale','untrusted-acquisition','source-substitution','wrong-job','wrong-detail','routine-event','required-producer','foreign-PR')
+    modes=('unsigned','signer','payload','tree','parent','review-commit','reviewer','rejection','threads','pagination','spoofed-check','pending-check','failed-check','wrong-check-head','missing-check','coherent-failure','workflow-bytes','rerun','job-head','existing-tag','unknown-tag','policy-missing','policy-bypass','stale','untrusted-acquisition','source-substitution','wrong-job','wrong-detail','routine-event','required-producer','foreign-PR','unexpected-skip','required-skip','expected-skip-success','skip-wrong-workflow','skip-condition-drift','missing-expected-skip','skipped-job-pending')
     for mode in modes:
         n=copy.deepcopy(native);t=copy.deepcopy(trust);b=publisher
+        skipped=[j for j in n['jobs']['jobs'] if j['conclusion']=='skipped']
+        if mode in ('unexpected-skip','required-skip'):
+            selected=next(j for j in n['jobs']['jobs'] if j['name']==('compiler-and-tests' if mode=='required-skip' else 'shared-build'))
+            selected['conclusion']='skipped';next(c for c in n['checks']['check_runs'] if c['id']==selected['id'])['conclusion']='skipped'
+        if mode=='expected-skip-success':
+            skipped[0]['conclusion']='success';next(c for c in n['checks']['check_runs'] if c['id']==skipped[0]['id'])['conclusion']='success'
+        if mode=='skip-wrong-workflow':skipped[0]['run_id']=42
+        if mode=='skip-condition-drift':
+            path='.github/workflows/optimistic-parallel-validation.yml';n['workflowBytes'][path]=n['workflowBytes'][path].replace("false && github.event_name == 'pull_request'","github.event_name == 'pull_request'")
+            t['workflows'][path]['sha256']=hashlib.sha256(n['workflowBytes'][path].encode()).hexdigest()
+        if mode=='missing-expected-skip':
+            n['jobs']['jobs'].remove(skipped[0]);n['checks']['check_runs']=[c for c in n['checks']['check_runs'] if c['id']!=skipped[0]['id']]
+            n['jobs']['total_count']-=1;n['checks']['total_count']-=1
+        if mode=='skipped-job-pending':skipped[0]['status']='queued'
         if mode=='wrong-job':n['jobs']['jobs'][0]['id']=999
         if mode=='wrong-detail':n['checks']['check_runs'][0]['details_url']='https://github.com/foreign/run'
         if mode=='routine-event':n['runs']['workflow_runs'][1]['event']='pull_request'
@@ -837,6 +861,7 @@ def promotion_acceptance_inert_controls():
         assert result['signatureVerified']==(mode!='unsigned')
         assert result['policyVerified']==(mode!='policy-failure')
         assert result['sendState']=='consumed-unknown'
+    print('PAIR_PROMOTION_COMPLETE_POPULATION passed jobs='+str(native['jobs']['total_count'])+' expected-skips=2 full-profile=true')
     print('PAIR_PROMOTION_INERT_ACCEPTANCE passed negatives='+str(len(modes)+4)+' native-acquisition=fixture-only effect=false')
 
 

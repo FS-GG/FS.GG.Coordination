@@ -600,6 +600,25 @@ PAIR_PROMOTION_CONTEXTS = {'bootstrap-recovery','compiler-and-tests','dependency
                          'deterministic-build','evidence-manifest','package-install-smoke','routine-eligibility'}
 
 
+PAIR_PROMOTION_PR_SKIPS = {
+    ('.github/workflows/bootstrap-qualification.yml','qualification-economics'): "    if: ${{ github.event_name == 'schedule' }}",
+    ('.github/workflows/optimistic-parallel-validation.yml','offline-formal-shadow'): "    if: ${{ false && github.event_name == 'pull_request' }}",
+}
+
+
+def pair_promotion_job_conclusion(run, name, workflow_source):
+    """Only two exact PR skips justified by the already pinned workflow bytes."""
+    condition=PAIR_PROMOTION_PR_SKIPS.get((run['path'],name))
+    if condition is None:return 'success'
+    marker='\n  '+name+':\n'
+    if run['event']!='pull_request' or workflow_source.count(marker)!=1:
+        raise ValueError('promotion skip has no exact trusted workflow/event job')
+    block=re.split(r'\n  (?=\S)',workflow_source.split(marker,1)[1],maxsplit=1)[0]
+    if condition not in block.splitlines():
+        raise ValueError('promotion skip condition differs from pinned workflow source')
+    return 'skipped'
+
+
 def pair_promotion_acceptance(native, trust, publisher, now):
     """Verify pinned native evidence; trust/capabilities must come from root authority.
 
@@ -635,6 +654,7 @@ def pair_promotion_acceptance(native, trust, publisher, now):
     if (type(checks['total_count']) is not int or checks['total_count']!=len(checks['check_runs']) or not 7<=checks['total_count']<100
             or not PAIR_PROMOTION_CONTEXTS<={c['name'] for c in checks['check_runs']}
             or len({c['id'] for c in checks['check_runs']})!=len(checks['check_runs'])
+            or {c['id'] for c in checks['check_runs']}!={j['id'] for j in jobs['jobs']}
             or any(sum(c['name']==name for c in checks['check_runs'])!=1 for name in PAIR_PROMOTION_CONTEXTS)
             or type(runs['total_count']) is not int or runs['total_count']!=len(runs['workflow_runs']) or not runs['workflow_runs']
             or type(jobs['total_count']) is not int or jobs['total_count']!=len(jobs['jobs']) or len({j['id'] for j in jobs['jobs']})!=len(jobs['jobs']) or not jobs['jobs']):
@@ -657,7 +677,8 @@ def pair_promotion_acceptance(native, trust, publisher, now):
         matched=[run for run in runs['workflow_runs'] if run['check_suite_id']==c['check_suite']['id']]
         job=[j for j in jobs['jobs'] if j['id']==c['id']]
         expected_path='.github/workflows/routine-eligibility.yml' if c['name']=='routine-eligibility' else '.github/workflows/bootstrap-qualification.yml'
-        if (c['head_sha']!=publisher or c['app']['id']!=15368 or c['status']!='completed' or c['conclusion']!='success'
+        expected=pair_promotion_job_conclusion(matched[0],c['name'],native['workflowBytes'][matched[0]['path']]) if len(matched)==1 else None
+        if (c['head_sha']!=publisher or c['app']['id']!=15368 or c['status']!='completed' or c['conclusion']!=expected
                 or len(matched)!=1 or c['check_suite']['head_sha']!=publisher
                 or c['name'] in PAIR_PROMOTION_CONTEXTS and matched[0]['path']!=expected_path
                 or len(job)!=1 or job[0]['name']!=c['name'] or job[0]['run_id']!=matched[0]['id']
@@ -665,9 +686,15 @@ def pair_promotion_acceptance(native, trust, publisher, now):
                 or job[0]['check_run_url']!='https://api.github.com/repos/FS-GG/FS.GG.Coordination/check-runs/'+str(c['id'])):
             raise ValueError('promotion required check origin/head/result differs')
     for job in jobs['jobs']:
+        producer=[run for run in runs['workflow_runs'] if run['id']==job['run_id']]
+        expected=pair_promotion_job_conclusion(producer[0],job['name'],native['workflowBytes'][producer[0]['path']]) if len(producer)==1 else None
         if (job['run_id'] not in seen or job['head_sha']!=publisher or job['run_attempt']!=1
-                or job['status']!='completed' or job['conclusion']!='success'):
+                or job['status']!='completed' or job['conclusion']!=expected):
             raise ValueError('promotion native job population differs')
+    for run in runs['workflow_runs']:
+        for path,name in PAIR_PROMOTION_PR_SKIPS:
+            if path==run['path'] and sum(j['run_id']==run['id'] and j['name']==name for j in jobs['jobs'])!=1:
+                raise ValueError('promotion expected skipped job population absent or duplicated')
     if {j['run_id'] for j in jobs['jobs']}!=seen or native['tagBefore']!={'status':404,'ref':PAIR_PUBLISHER_REF}:
         raise ValueError('promotion tag preexists/unknown or native jobs incomplete')
     pair_protection(native['policy'], {'tagProtection':{'rulesetId':21633398,'policySha256':'5182bb35a6dd682cef84ac9ce4210cfd09f38b7410d8c9cf9bae42866bcb81da'}},native['policy'])
