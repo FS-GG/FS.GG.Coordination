@@ -51,8 +51,10 @@ type PortableHostLifecycle =
     {
         WorkloadExit: PortableEvidence<PortableHostObservation<int>>
         Termination: PortableEvidence<PortableHostObservation<unit>>
+        /// Missing is unrequested; attempted cleanup with absent completion evidence is Unknown.
         InnerCleanup: PortableEvidence<PortableHostObservation<unit>>
         Export: PortableEvidence<PortableHostObservation<PortableHostExportCompletion>>
+        /// Missing is unrequested; attempted retirement with absent completion evidence is Unknown.
         OuterRetirement: PortableEvidence<PortableHostObservation<unit>>
         FirstFailure: string option
         ReconciliationConflicts: Set<string>
@@ -71,13 +73,15 @@ type PortableHostRetirementDecision =
 
 [<RequireQualifiedAccess>]
 module PortableHostAllocation =
+    /// Initial state before any cleanup request. Missing means unrequested, not a lost receipt.
+    /// An attempted effect without an authentic completion receipt must be represented as Unknown.
     let emptyLifecycle =
         {
             WorkloadExit = EvidenceMissing "workload exit not observed"
             Termination = EvidenceUnknown "termination not observed"
-            InnerCleanup = EvidenceUnknown "inner cleanup not observed"
+            InnerCleanup = EvidenceMissing "inner cleanup not requested"
             Export = EvidenceMissing "durable export or host census not observed"
-            OuterRetirement = EvidenceUnknown "outer retirement not independently observed"
+            OuterRetirement = EvidenceMissing "outer retirement not requested"
             FirstFailure = None
             ReconciliationConflicts = Set.empty
         }
@@ -161,7 +165,7 @@ module PortableHostAllocation =
             match lifecycle.Termination, lifecycle.InnerCleanup with
             | EvidenceKnown termination, EvidenceKnown inner -> inner.CollectedAt >= termination.CollectedAt
             | _ -> false
-        let outputDeletion =
+        let cleanupPreconditions =
             match window reservation with
             | Error reason -> HostHeld reason
             | Ok _ when not lifecycle.ReconciliationConflicts.IsEmpty -> HostHeld "conflicting lifecycle evidence remains unresolved"
@@ -173,11 +177,20 @@ module PortableHostAllocation =
             | Ok _ when (min reservation.HostLeaseExpiresAt reservation.Binding.Command.Deadline) - now < reservation.CleanupReserve ->
                 HostHeld "insufficient original cleanup reserve"
             | Ok _ -> HostEligible
+        let outputDeletion =
+            match cleanupPreconditions, lifecycle.InnerCleanup, lifecycle.OuterRetirement with
+            | HostEligible, EvidenceMissing _, EvidenceMissing _ -> HostEligible
+            | HostEligible, EvidenceKnown _, _ -> HostHeld "inner cleanup already observed; do not replay"
+            | HostEligible, EvidenceUnknown _, _ -> HostHeld "original inner cleanup effect is uncertain; do not replay"
+            | HostEligible, _, _ -> HostHeld "outer retirement observed or uncertain; do not delete outputs"
+            | held, _, _ -> held
         let outerCleanup =
-            match outputDeletion with
-            | HostEligible when observedAfterExport lifecycle.InnerCleanup && innerAfterTermination -> HostEligible
-            | HostEligible -> HostHeld "inner cleanup after export not observed"
-            | held -> held
+            match cleanupPreconditions, lifecycle.OuterRetirement with
+            | HostEligible, EvidenceMissing _ when observedAfterExport lifecycle.InnerCleanup && innerAfterTermination -> HostEligible
+            | HostEligible, EvidenceMissing _ -> HostHeld "inner cleanup after export and termination not observed"
+            | HostEligible, EvidenceKnown _ -> HostHeld "outer retirement already observed; do not replay"
+            | HostEligible, EvidenceUnknown _ -> HostHeld "original outer retirement effect is uncertain; do not replay"
+            | held, _ -> held
         let release =
             let retirementAfterInner =
                 match lifecycle.InnerCleanup, lifecycle.OuterRetirement with
