@@ -477,6 +477,7 @@ type PortableSupplierTranscriptObservation =
       IntentDigest: string
       TrustPolicyDigest: string
       ChallengeDigest: string
+      Purpose: string
       OriginalReservation: PortableHostReservation
       Identity: PortableHostSupplierIdentity
       OuterImageId: string
@@ -549,8 +550,11 @@ module PortableSupplierAdmission =
         && value.SupplierSourceRevision = original.SupplierSourceRevision
     let private transcriptBytes (state: PortableSupplierAdmissionState) =
         let pinned =
-            state.Pinned |> Option.map (fun p -> [p.CreationBase64; p.CreationReceiptBase64; p.ReservationBase64]) |> Option.defaultValue []
-        [state.Original.IntentBase64] @ pinned @ state.EventsBase64 @ state.ResponsesBase64
+            state.Pinned
+            |> Option.map (fun p -> [p.CreationBase64; p.CreationReceiptBase64; p.ReservationBase64; p.ResponseBase64] @ p.EventsBase64)
+            |> Option.defaultValue []
+        [state.Original.IntentBase64] @ pinned @ (state.Challenge |> Option.map (fun p -> p.BytesBase64) |> Option.toList)
+        @ state.EventsBase64 @ state.ResponsesBase64
         @ (state.CheckpointBase64 |> Option.toList) @ (state.AckDraftBase64 |> Option.toList)
     /// Validate bounded immutable source data. It is never a durable/authentication/effect predicate.
     let validate (state: PortableSupplierAdmissionState) =
@@ -640,7 +644,14 @@ module PortableSupplierAdmission =
                     | Ok value ->
                         let sourceBytes = if value.Kind = SupplierCreation then value.CreationReceiptBase64 else value.ResponseBase64
                         let identity = value.Identity
-                        let valid = sameOriginal state.Original value && value.ChallengeDigest = challenge.Digest
+                        let purposeMatches =
+                            value.Purpose = challenge.Purpose
+                            && (match value.Kind, state.Phase, challenge.Purpose with
+                                | SupplierCreation, SupplierIntentStored, "creation" -> true
+                                | SupplierGenesis, SupplierAwaitingGenesis, "genesis-readback" -> true
+                                | (SupplierAppend | SupplierUnchanged), SupplierGenesisAccepted, ("state-readback" | "retirement-readback") -> true
+                                | _ -> false)
+                        let valid = purposeMatches && sameOriginal state.Original value && value.ChallengeDigest = challenge.Digest
                                     && value.CollectedAt >= challenge.IssuedAt && value.CollectedAt <= now
                                     && now - value.CollectedAt <= TimeSpan.FromSeconds 30.
                                     && present identity.Issuer && present identity.ContainerId && identity.AllocationInode <> 0UL
@@ -667,7 +678,7 @@ module PortableSupplierAdmission =
         else
             match state.Challenge with
             | None -> Error "supplier-admission-no-pending-challenge"
-            | Some challenge when value.ChallengeDigest <> challenge.Digest -> Error "supplier-admission-challenge-changed"
+            | Some challenge when value.ChallengeDigest <> challenge.Digest || value.Purpose <> challenge.Purpose -> Error "supplier-admission-challenge-changed"
             | Some challenge ->
                 let pinnedMatches = state.Pinned |> Option.forall (fun pinned ->
                     pinned.Identity = value.Identity && pinned.OuterImageId = value.OuterImageId
@@ -689,10 +700,10 @@ module PortableSupplierAdmission =
                         | Ok bytes when value.ToHead = Some(domain "signed-envelope" bytes) ->
                             candidate SupplierGenesisAccepted value.ToHead 0UL value.EventsBase64
                         | _ -> Error "supplier-admission-genesis-head-refused"
-                    | SupplierUnchanged, _ when state.Head.IsSome && value.FromHead = state.Head && value.ToHead = state.Head
+                    | SupplierUnchanged, SupplierGenesisAccepted when state.Head.IsSome && value.FromHead = state.Head && value.ToHead = state.Head
                                                  && value.Sequence = state.Sequence && value.EventsBase64 = (state.EventsBase64 |> List.rev |> List.truncate 1 |> List.rev) ->
                         candidate state.Phase state.Head state.Sequence state.EventsBase64
-                    | SupplierAppend, _ when state.Head.IsSome && value.FromHead = state.Head && not value.EventsBase64.IsEmpty
+                    | SupplierAppend, SupplierGenesisAccepted when state.Head.IsSome && value.FromHead = state.Head && not value.EventsBase64.IsEmpty
                                               && state.Sequence <= UInt64.MaxValue - uint64 value.EventsBase64.Length
                                               && value.Sequence = state.Sequence + uint64 value.EventsBase64.Length ->
                         match raw 18761 (List.last value.EventsBase64) with

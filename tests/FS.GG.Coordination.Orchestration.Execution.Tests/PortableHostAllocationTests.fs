@@ -424,7 +424,7 @@ module SupplierAdmissionFixtures =
         let challenge = state.Challenge.Value
         let event = "synthetic-event-" + Guid.NewGuid().ToString("D")
         { Kind = kind; IntentDigest = state.Original.IntentDigest; TrustPolicyDigest = state.Original.TrustPolicyDigest
-          ChallengeDigest = challenge.Digest
+          ChallengeDigest = challenge.Digest; Purpose = challenge.Purpose
           OriginalReservation = { HostFixtures.reservation with Binding = { HostFixtures.binding with Command = state.Original.Command; QualifiedImage = state.Original.QualifiedImage } }
           Identity = { Issuer = "controlled-fake-only"; ContainerId = "synthetic-original-cid"; AllocationDevice = 2UL; AllocationInode = 3UL }
           OuterImageId = String.replicate 64 "c"; SupplierSourceRevision = state.Original.SupplierSourceRevision
@@ -546,3 +546,44 @@ type SupplierAdmissionBoundaryTests() =
         let overflow = { boundary with ResponsesBase64 = List.take full responses @ [bytes (remainder + 1)] }
         Assert.True(PortableSupplierAdmission.validate overflow |> Result.isError)
         Assert.Equal(original.Original, overflow.Original)
+
+    [<Fact>]
+    member _.``purpose and kind bind to pending challenge and implemented source phase``() =
+        let pending = SupplierAdmissionFixtures.initial () |> SupplierAdmissionFixtures.pending
+        let value = SupplierAdmissionFixtures.observation SupplierCreation pending
+        let raw = Convert.FromBase64String value.CreationReceiptBase64
+        for changed in [ { value with Purpose = "state-readback" }; { value with Kind = SupplierUnchanged } ] do
+            let adapter = { new IPortableSupplierTranscriptAuthenticator with member _.Authenticate _ = Ok changed }
+            Assert.True(PortableSupplierAdmission.verify adapter (SupplierAdmissionFixtures.at 3.) 200L pending raw |> Result.isError)
+        let genesis = SupplierAdmissionFixtures.genesis () |> SupplierAdmissionFixtures.pending
+        let unchanged = SupplierAdmissionFixtures.observation SupplierUnchanged genesis
+        let response = Convert.FromBase64String unchanged.ResponseBase64
+        for purpose in ["creation"; "genesis-readback"; "unknown"] do
+            let adapter = { new IPortableSupplierTranscriptAuthenticator with member _.Authenticate _ = Ok { unchanged with Purpose = purpose } }
+            Assert.True(PortableSupplierAdmission.verify adapter (SupplierAdmissionFixtures.at 3.) 200L genesis response |> Result.isError)
+        let adapter = { new IPortableSupplierTranscriptAuthenticator with member _.Authenticate _ = Ok unchanged }
+        Assert.True(PortableSupplierAdmission.verify adapter (SupplierAdmissionFixtures.at 3.) 200L { genesis with Phase = SupplierIntentStored } response |> Result.isError)
+
+    [<Fact>]
+    member _.``serialized pinned copies and pending challenge all count toward transcript cap``() =
+        let genesis = SupplierAdmissionFixtures.genesis () |> SupplierAdmissionFixtures.pending
+        let p = genesis.Pinned.Value
+        let decoded value = Convert.FromBase64String(value).Length
+        let existing =
+            [genesis.Original.IntentBase64; p.CreationBase64; p.CreationReceiptBase64; p.ReservationBase64; p.ResponseBase64; genesis.Challenge.Value.BytesBase64]
+            @ p.EventsBase64 @ genesis.EventsBase64 @ genesis.ResponsesBase64
+            |> List.sumBy decoded
+        let remaining = PortableSupplierAdmission.MaximumTranscriptBytes - existing
+        let bytes n = Array.create<byte> n 120uy |> Convert.ToBase64String
+        let full, remainder = remaining / 65536, remaining % 65536
+        let appended = List.replicate full (bytes 65536) @ [bytes remainder]
+        let boundary = { genesis with ResponsesBase64 = genesis.ResponsesBase64 @ appended }
+        Assert.True(PortableSupplierAdmission.validate boundary |> Result.isOk)
+        let tooMuch = { boundary with ResponsesBase64 = genesis.ResponsesBase64 @ List.replicate full (bytes 65536) @ [bytes (remainder + 1)] }
+        Assert.True(PortableSupplierAdmission.validate tooMuch |> Result.isError)
+        // Both serialized copies of a nested event are deliberately charged separately.
+        let changedPinned = { p with EventsBase64 = p.EventsBase64 @ [SupplierAdmissionFixtures.b64 "one-more-copy"] }
+        Assert.True(PortableSupplierAdmission.validate { boundary with Pinned = Some changedPinned } |> Result.isError)
+        let expandedChallenge = String.replicate 45000 "x"
+        let changedPending = { genesis.Challenge.Value with BytesBase64 = SupplierAdmissionFixtures.b64 expandedChallenge; Digest = SupplierAdmissionFixtures.domain "challenge" expandedChallenge }
+        Assert.True(PortableSupplierAdmission.validate { boundary with Challenge = Some changedPending } |> Result.isError)

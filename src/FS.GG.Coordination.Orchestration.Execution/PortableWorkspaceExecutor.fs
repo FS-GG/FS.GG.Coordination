@@ -524,7 +524,7 @@ module PortableWorkspaceExecutor =
             writer.Write(memory.ToArray())
         let observation (value: PortableSupplierTranscriptObservation) =
             writer.Write(match value.Kind with SupplierCreation -> 0uy | SupplierGenesis -> 1uy | SupplierAppend -> 2uy | SupplierUnchanged -> 3uy)
-            for value in [value.IntentDigest; value.TrustPolicyDigest; value.ChallengeDigest] do text 64 value
+            for value in [value.IntentDigest; value.TrustPolicyDigest; value.ChallengeDigest; value.Purpose] do text 64 value
             reservation value.OriginalReservation
             text 4096 value.Identity.Issuer; text 4096 value.Identity.ContainerId
             writer.Write value.Identity.AllocationDevice; writer.Write value.Identity.AllocationInode
@@ -588,6 +588,7 @@ module PortableWorkspaceExecutor =
             let intent = text 64
             let policy = text 64
             let challenge = text 64
+            let purpose = text 64
             let original = reservation ()
             let issuer = text 4096
             let cid = text 4096
@@ -604,7 +605,7 @@ module PortableWorkspaceExecutor =
             let head = optional (fun () -> text 64)
             let sequence = reader.ReadUInt64()
             let collected = readDate reader
-            { Kind = kind; IntentDigest = intent; TrustPolicyDigest = policy; ChallengeDigest = challenge
+            { Kind = kind; IntentDigest = intent; TrustPolicyDigest = policy; ChallengeDigest = challenge; Purpose = purpose
               OriginalReservation = original; Identity = { Issuer = issuer; ContainerId = cid; AllocationDevice = device; AllocationInode = inode }
               OuterImageId = image; SupplierSourceRevision = source; CreationBase64 = creation; CreationReceiptBase64 = receipt
               ReservationBase64 = reserved; ResponseBase64 = response; EventsBase64 = events; FromHead = previous
