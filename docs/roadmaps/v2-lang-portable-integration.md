@@ -407,14 +407,16 @@ proof and an executable, admitted scope before the P4 execution owner can choose
 a native attempt. Until then, retain the canonical installed diagnostic result
 and continue independent source/documentation work; no execution date is promised.
 
-The public-safe route-selection draft
+The root reports that public-safe route-selection draft
 `v2-diag-p4-current-qualifier-route-selection-20261015` validated with `writes=0`,
-but typed `intake apply` failed at the production-v1 admission read and created
-no issue or board record. That original refusal remains evidence. This owner-plan
-decision uses the already selected roadmap's routine source route; it is not a
-formal filing, an intake fallback or permission to create an issue through raw
-GitHub calls. No source change here activates legacy v1 admission or authorizes
-credentials, dispatch, provider enrollment, installation or publication.
+then typed `intake apply` failed at the production-v1 admission read without an
+issue or board write. No independently retained result artifact or fresh board
+verification supports this report; formal filing and current board state remain
+unverified. Preserve the original reported refusal. This owner-plan decision uses
+the already selected roadmap's routine source route; it is not a formal filing,
+an intake fallback or permission to create an issue through raw GitHub calls.
+No source change here activates legacy v1 admission or authorizes credentials,
+dispatch, provider enrollment, installation or publication.
 
 ## C2 source qualification
 
