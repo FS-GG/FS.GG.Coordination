@@ -105,6 +105,14 @@
       "unknownGrantsPolicy": "held-until-authentic-reconciliation",
       "nativeAdmissionEstablished": false,
       "publicationAuthorized": false
+    },
+    "publisherRef": "refs/tags/execution/v0.3.0-publisher-original38495729817",
+    "promotion": {
+      "enabled": false,
+      "operation": "promote-execution-publisher-b11fb121-original38495729817",
+      "ref": "refs/tags/execution/v0.3.0-publisher-original38495729817",
+      "kind": "lightweight",
+      "sourceTrustAccepted": false
     }
   }
 }

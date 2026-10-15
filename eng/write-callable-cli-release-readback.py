@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import os
 import json
 from pathlib import Path
 import sys
@@ -297,6 +298,44 @@ def pair_consumers(admission: dict, root: Path) -> dict:
             'networkReachable':True, 'hardContainment':False, 'consumerAdoptionAccepted':False, 'publicationAuthorized':False}
 
 
+def publisher_promotion_readback(original, observed, trust, publisher, now):
+    """Independent pinned observations preserve unknown promotion, never renew send."""
+    import runpy
+    validators=runpy.run_path(str(Path(__file__).with_name('test-callable-cli-installed-harness.py')))
+    operation=validators['PAIR_PROMOTION_OPERATION']
+    if (original.get('operation')!=operation or original.get('sendState') not in ('send-started','consumed-accepted','consumed-unknown')
+            or original.get('publisher')!=publisher
+            or not isinstance(trust,dict) or not 0<=now-trust.get('observedAt',-1)<=60
+            or trust.get('readbackSha256')!=hashlib.sha256(json.dumps(observed,sort_keys=True,separators=(',',':')).encode()).hexdigest()):
+        raise ValueError('promotion original/pinned independent acquisition unavailable')
+    result={'operation':operation,'publisher':publisher,'sendState':original['sendState'],
+            'refVerified':False,'signatureVerified':False,'policyVerified':False,
+            'cleanup':observed.get('cleanup','unknown'),'errors':[],
+            'promotionAccepted':False,'publicationAuthorized':False,'resendAllowed':False}
+    try:
+        if observed['refStatus']!=200:raise ValueError('independent exact ref missing/denied/unknown')
+        validators['pair_promotion_response'](observed['ref'],publisher)
+        result['refVerified']=True
+    except (ValueError,KeyError,TypeError) as error:result['errors'].append(str(error))
+    try:
+        commit=observed['commit'];verification=commit['commit']['verification'];signer=trust['signer']
+        if (commit['sha']!=publisher or commit['committer']['id']!=signer['id']
+                or verification['verified'] is not True or verification['reason']!='valid'
+                or hashlib.sha256(verification['signature'].encode()).hexdigest()!=signer['signatureSha256']
+                or hashlib.sha256(verification['payload'].encode()).hexdigest()!=signer['payloadSha256']
+                or commit['commit']['tree']['sha']!=signer['tree'] or [p['sha'] for p in commit['parents']]!=signer['parents']):
+            raise ValueError('independent signed B/signer/payload changed')
+        result['signatureVerified']=True
+    except (ValueError,KeyError,TypeError) as error:result['errors'].append(str(error))
+    try:
+        policy=observed['policy']
+        validators['pair_protection'](policy,{'tagProtection':{'rulesetId':21633398,'policySha256':'5182bb35a6dd682cef84ac9ce4210cfd09f38b7410d8c9cf9bae42866bcb81da'}},policy)
+        result['policyVerified']=True
+    except (ValueError,KeyError,TypeError) as error:result['errors'].append(str(error))
+    # Source preparation cannot authenticate native collection or establish cleanup.
+    return result
+
+
 def pair_readback(arguments: list[str]) -> int:
     parser = argparse.ArgumentParser()
     for name in ("publisher", "source", "tree", "merge", "manifest-sha256"):
@@ -305,6 +344,7 @@ def pair_readback(arguments: list[str]) -> int:
         parser.add_argument("--" + name, required=True, type=Path)
     parser.add_argument("--original-root", type=Path)
     parser.add_argument("--recovery-operation")
+    parser.add_argument("--publisher-binding", type=Path)
     args = parser.parse_args(arguments)
     for identity in (args.publisher, args.source, args.tree, args.merge): sha(identity, 40)
     sha(args.manifest_sha256, 64)
@@ -338,6 +378,15 @@ def pair_readback(arguments: list[str]) -> int:
             refuse('pair recovery original binding missing or changed')
         import runpy
         validators = runpy.run_path(str(Path(__file__).with_name('test-callable-cli-installed-harness.py')))
+        if args.publisher_binding is None: refuse('immutable publisher binding missing')
+        binding = json.loads(args.publisher_binding.read_bytes())
+        environment = dict(os.environ, REQUESTED_PUBLISHER=args.publisher)
+        validators['pair_publisher_binding'](environment, {'ref':binding['ref'],'object':{'sha':binding['refObject'],'type':binding['refType']}},args.publisher,binding)
+        paths_path=args.publisher_binding.with_name('publisher-paths.json')
+        import subprocess
+        current_paths=subprocess.check_output(['git','diff','--name-only',args.source,args.publisher],text=True,timeout=10).splitlines()
+        validators['pair_publisher_recheck'](environment,{'ref':binding['ref'],'object':{'sha':binding['refObject'],'type':binding['refType']}},args.publisher,args.publisher_binding,paths_path,current_paths,Path.cwd())
+        paths=json.loads(paths_path.read_bytes())
         root = args.original_root
         def bounded(name, cap=1048576):
             path = root / name
@@ -365,7 +414,11 @@ def pair_readback(arguments: list[str]) -> int:
              "source": args.source, "sourceTree": args.tree, "protectedMerge": args.merge, "version": "0.3.0", "tag": "execution/v0.3.0",
              "manifestSha256": args.manifest_sha256, "packages": members, "installedLoad": installed, "consumerQualification": consumers,
              "consumerAdoptionAccepted": False}
-    if original is not None: value['originalPublication'] = original
+    if original is not None:
+        value['originalPublication'] = original
+        value['publisherBinding'] = binding
+        value['publisherPaths'] = paths
+        value['publisherRun'] = {'runId':os.environ['GITHUB_RUN_ID'], 'runAttempt':1, 'workflow':binding['workflow']}
     value['actualEffects'] = {'githubPackages':'verified','nugetOrg':'verified','publicInstalledLoad':'verified','componentFinalization':'pending'}
     value['unresolvedState'] = ['component-finalization-native-readback']
     args.output.parent.mkdir(parents=True, exist_ok=True)
