@@ -189,12 +189,14 @@ module FiniteCustodyWindowTests =
     let ``descriptor admission refuses native drift and replay`` () =
         use admissionFixture = new Fixture()
         let admission = Admission()
+        let nativeDescriptor = { descriptor with Mode="native" }
         require "composed-native-refused-before-channel-work"
-            (admissionFixture.Prepare(admission,descriptor,{descriptor with Mode="native"}) |> rejected)
+            (admissionFixture.Prepare(admission,nativeDescriptor,nativeDescriptor) |> rejected)
         require "composed-wrong-source-refused-before-channel-work"
             (admissionFixture.Prepare(admission,descriptor,{descriptor with Identity={descriptor.Identity with SourceDigest=String.replicate 64 "0"}}) |> rejected)
+        let unsupportedRunner = { descriptor with Identity={descriptor.Identity with ProfileId="unsupported"} }
         require "composed-unsupported-runner-refused"
-            (admissionFixture.Prepare(admission,descriptor,{descriptor with Identity={descriptor.Identity with ProfileId="unsupported"}}) |> rejected)
+            (admissionFixture.Prepare(admission,unsupportedRunner,unsupportedRunner) |> rejected)
         require "composed-no-admission-io" (admissionFixture.Writes=0 && admissionFixture.Retirements=0)
         admissionFixture.Prepare(admission,descriptor,descriptor) |> accepted |> ignore
         require "composed-repeated-descriptor-refused" (admissionFixture.Prepare(admission,descriptor,descriptor) |> rejected)
@@ -282,7 +284,10 @@ module FiniteCustodyWindowTests =
         use fixture = new Fixture()
         let wrongSource = { descriptor with Identity={descriptor.Identity with SourceDigest=String.replicate 64 "0"} }
         require "independent-wire-source-must-join" (fixture.Prepare(Admission(),wrongSource,wrongSource) |> rejected)
-        let extra = ReadOnlyMemory<byte>(Encoding.ASCII.GetBytes(bindingText.Insert(1,"\"extra\":true,")))
+        // Keep lexical key order so the closed-key check, rather than canonical
+        // framing, must reject the otherwise valid extra field.
+        let extraText = bindingText.Replace("\"invocation\":", "\"extra\":true,\"invocation\":")
+        let extra = ReadOnlyMemory<byte>(Encoding.ASCII.GetBytes extraText)
         require "closed-wire-fields" (fixture.Prepare(Admission(),descriptor,descriptor,binding=extra) |> rejected)
         fixture.ClockDomain <- {domain with Id=Guid.NewGuid()}
         require "original-clock-domain-must-join" (fixture.Prepare(Admission(),descriptor,descriptor) |> rejected)
