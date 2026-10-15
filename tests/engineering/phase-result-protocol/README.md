@@ -131,3 +131,26 @@ caller copies, owner/backend/peer storage and object overhead. The complete
 physical population remains unproved and must refuse admission. No sink,
 filesystem, signer, credential, native constructor or original-operation effect
 is introduced by this source profile.
+
+## Same-execution terminal cut source witness
+
+The terminal-cut source test holds the Python controlled backend inside its
+sixth readback stage while the managed callback transport's actual
+`WriteAsync` request memories and independent endpoint copies remain live.
+A fresh test nonce, canonical binding digest and digest of the thirteen
+requests read by Python bind both observations to one execution. The pinned
+Python slot lifetime observer samples sixteen object identities and lengths
+before and after the managed readback; its release requires the exact nonce,
+binding, request, ordinal and stage. The test then checks all six typed slots,
+three ACKs, terminal confirmation and settled retained tasks. Failure retires
+the child and joins retained tasks. Separate Python controls retain the
+original readback, short-write and flush uncertainty cases.
+
+This witnesses one held source cut and its scoped aliases. The managed
+endpoint's thirteen supplied requests and thirteen deliberate copies account
+for 25,738 logical bytes. The selected Python observer lists 11,660 logical
+bytes across sixteen objects. These scoped counts exclude other live objects,
+allocator capacity, task/channel storage and uncertain paths; they are not
+a complete simultaneous physical population or a 65,536-byte fit. The test
+does not establish native authentication, host custody, replay permission,
+original-operation effects or installed adoption.
