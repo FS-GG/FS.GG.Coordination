@@ -1,6 +1,10 @@
 namespace FS.GG.Coordination.Orchestration.Execution.Tests
 
 open System
+open System.IO
+open System.Security.Cryptography
+open System.Text
+open System.Text.Json
 open FS.GG.Coordination.Orchestration.Execution
 open Xunit
 
@@ -60,6 +64,130 @@ module private HostFixtures =
 open HostFixtures
 
 type PortableHostAllocationTests() =
+    [<Fact>]
+    member _.``supplier sizing matches shared cross-language exact-byte boundary vectors``() =
+        // These are source qualification fixtures, not installed/native acceptance evidence.
+        let path = Path.Combine(AppContext.BaseDirectory, "Contracts", "supplier-evidence-sizing-vectors.json")
+        use document = JsonDocument.Parse(File.ReadAllBytes path)
+        let b64 size byteValue =
+            Convert.ToBase64String(Array.create size byteValue).TrimEnd('=').Replace('+', '-').Replace('/', '_')
+        for row in document.RootElement.GetProperty("cases").EnumerateArray() do
+            let number (name: string) = row.GetProperty(name).GetInt32()
+            let kind = row.GetProperty("kind").GetString()
+            let events () = row.GetProperty("events").EnumerateArray() |> Seq.map _.GetInt32() |> Seq.toList
+            let result =
+                match kind with
+                | "base64" -> PortableSupplierProtocol.base64UrlBytes (number "raw")
+                | "envelope" -> PortableSupplierProtocol.envelopeBytes (number "payload") (number "signature")
+                | "genesis" -> PortableSupplierProtocol.genesisBytes (number "creation") (number "reservation") (number "overhead")
+                | "response" -> PortableSupplierProtocol.responseBytes (row.GetProperty("genesis").GetBoolean()) (number "metadata") (events ())
+                | _ -> failwith "unknown shared vector kind"
+            if row.GetProperty("expected").ValueKind = JsonValueKind.Null then
+                Assert.True(Result.isError result, row.GetProperty("name").GetString())
+            else
+                let actual = match result with Ok value -> value | Error reason -> failwith reason
+                Assert.Equal(number "expected", actual)
+                if kind = "envelope" then
+                    let wire = sprintf "{\"payload\":\"%s\",\"signature\":\"%s\"}\n" (b64 (number "payload") 120uy) (b64 (number "signature") 115uy)
+                    let bytes = Encoding.ASCII.GetBytes wire
+                    Assert.Equal(actual, bytes.Length)
+                    Assert.Equal(row.GetProperty("wireSha256").GetString(), Convert.ToHexString(SHA256.HashData bytes).ToLowerInvariant())
+                elif kind = "response" then
+                    let encodedEvents = events () |> List.map (fun length -> "\"" + b64 length 101uy + "\"") |> String.concat ","
+                    let wire = "{\"events\":[" + encodedEvents + "],\"m\":\"" + String.replicate (number "metadata" - 9) "x" + "\"}\n"
+                    Assert.Equal(actual, Encoding.ASCII.GetByteCount wire)
+                    Assert.True(PortableSupplierProtocol.envelopeBytes actual PortableSupplierProtocol.MaximumSignatureBytes |> Result.isOk)
+
+    [<Fact>]
+    member _.``supplier effects require their own exact unconsumed grants and isolated hold profile``() =
+        let state =
+            { Profile = SignedHoldV1Profile; IntentDigest = "intent"; ReservationDigest = None; OperationId = None
+              OriginalDeadline = at 90.; DurableIntent = true; DurableOriginals = false
+              StoppedAndIdentityUnchanged = false; SourcesUnchanged = true
+              DurableAuthenticatedReceiverAcceptance = false; LaunchIntentOrStartAlreadyRecorded = false
+              OriginalWorkAndReservesFit = true; CapacityReserved = true; ProtocolFits = true; Retirement = None }
+        let grant effect (selected: PortableSupplierEffectState) =
+            { GrantId = "exact-one-use"; Effect = effect; IntentDigest = selected.IntentDigest
+              ReservationDigest = selected.ReservationDigest; OperationId = selected.OperationId
+              NotBefore = start; NotAfter = at 80.; ConsumedOrUncertain = false }
+        let admit effect selected admission = PortableSupplierEffectPolicy.admit (at 10.) effect selected admission
+        Assert.Equal(HostEligible, admit CreateStoppedAllocation state (EvidenceKnown(grant CreateStoppedAllocation state)))
+        for changed in [ { state with Profile = LegacyInstalledProfile }; { state with DurableIntent = false }
+                         { state with ProtocolFits = false }; { state with CapacityReserved = false } ] do
+            Assert.NotEqual(HostEligible, admit CreateStoppedAllocation changed (EvidenceKnown(grant CreateStoppedAllocation changed)))
+        let prepared =
+            { state with ReservationDigest = Some "reservation"; OperationId = Some "operation"; DurableOriginals = true
+                         StoppedAndIdentityUnchanged = true; DurableAuthenticatedReceiverAcceptance = true }
+        Assert.NotEqual(HostEligible, admit StartOriginalAllocation prepared (EvidenceMissing "ACK is not effect admission"))
+        Assert.Equal(HostEligible, admit StartOriginalAllocation prepared (EvidenceKnown(grant StartOriginalAllocation prepared)))
+        for changed in [ { prepared with DurableAuthenticatedReceiverAcceptance = false }; { prepared with SourcesUnchanged = false }
+                         { prepared with LaunchIntentOrStartAlreadyRecorded = true }; { prepared with OriginalWorkAndReservesFit = false } ] do
+            Assert.NotEqual(HostEligible, admit StartOriginalAllocation changed (EvidenceKnown(grant StartOriginalAllocation changed)))
+        let retiring = { prepared with Retirement = Some(PortableHostAllocation.retirement (at 70.) reservation pendingOuter) }
+        Assert.Equal(HostEligible, admit RetireOriginalAllocation retiring (EvidenceKnown(grant RetireOriginalAllocation retiring)))
+        for changedGrant in [ grant StartOriginalAllocation retiring
+                              { grant RetireOriginalAllocation retiring with ConsumedOrUncertain = true }
+                              { grant RetireOriginalAllocation retiring with OperationId = Some "other" }
+                              { grant RetireOriginalAllocation retiring with NotAfter = at 10. } ] do
+            Assert.NotEqual(HostEligible, admit RetireOriginalAllocation retiring (EvidenceKnown changedGrant))
+        Assert.NotEqual(HostEligible, admit RetireOriginalAllocation prepared (EvidenceKnown(grant RetireOriginalAllocation prepared)))
+        Assert.True(PortableSupplierEffectPolicy.settle SignedHoldV1Profile |> Result.isOk)
+        Assert.True(PortableSupplierEffectPolicy.settle LegacyInstalledProfile |> Result.isError)
+
+    [<Fact>]
+    member _.``supplier ingress authenticates bytes before admitting exact original pins``() =
+        let bytes = Encoding.UTF8.GetBytes "controlled authenticated host readback"
+        let identity = { Issuer = "controlled-host"; ContainerId = "controlled-cid"; AllocationDevice = 5UL; AllocationInode = 17UL }
+        let evidence =
+            { Identity = identity; Reservation = reservation; CollectedAt = at 10.
+              ReceiptDigest = Convert.ToHexString(SHA256.HashData bytes).ToLowerInvariant()
+              Lifecycle = PortableHostAllocation.emptyLifecycle }
+        let verifier = { new IPortableHostSupplierVerifier with member _.Authenticate _ = Ok evidence }
+        let admit selected pins input now =
+            PortableHostSupplierIngress.authenticate selected pins reservation now (TimeSpan.FromSeconds 5.) input
+        let verified = admit verifier identity bytes (at 12.)
+        Assert.True(Result.isOk verified)
+        match verified with
+        | Ok value ->
+            Assert.Equal(evidence, value.Evidence)
+            Assert.True(value.IsCurrent(at 15.))
+            Assert.False(value.IsCurrent(at 16.))
+            Assert.False(value.IsCurrent(at 11.))
+        | Error reason -> failwith reason
+        let rejecting = { new IPortableHostSupplierVerifier with member _.Authenticate _ = Error "unsealed status" }
+        let throwing = { new IPortableHostSupplierVerifier with member _.Authenticate _ = failwith "transport lost" }
+        for selected in [ rejecting; throwing ] do
+            Assert.True(admit selected identity bytes (at 12.) |> Result.isError)
+        for pins in
+            [ { identity with Issuer = "other" }; { identity with ContainerId = "other" }
+              { identity with AllocationDevice = 6UL }; { identity with AllocationInode = 18UL } ] do
+            Assert.True(admit verifier pins bytes (at 12.) |> Result.isError)
+        for input in [ Array.empty; Array.create 65537 0uy; Encoding.UTF8.GetBytes "changed" ] do
+            Assert.True(admit verifier identity input (at 12.) |> Result.isError)
+        for now in [ at 9.; at 16. ] do
+            Assert.True(admit verifier identity bytes now |> Result.isError)
+        for changed in
+            [ { evidence with Reservation = { reservation with HostLeaseExpiresAt = at 100. } }
+              { evidence with Lifecycle = { evidence.Lifecycle with Termination = EvidenceKnown(observation 11. ()) } }
+              { evidence with Lifecycle = { evidence.Lifecycle with Termination = EvidenceKnown { observation 9. () with Binding = { binding with WorkerId = "other" } } } } ] do
+            let substituted = { new IPortableHostSupplierVerifier with member _.Authenticate _ = Ok changed }
+            Assert.True(admit substituted identity bytes (at 12.) |> Result.isError)
+
+    [<Fact>]
+    member _.``supplier verifier cannot mutate caller bytes to change the authenticated digest``() =
+        let bytes = Encoding.UTF8.GetBytes "original"
+        let original = Array.copy bytes
+        let identity = { Issuer = "controlled-host"; ContainerId = "controlled-cid"; AllocationDevice = 5UL; AllocationInode = 17UL }
+        let verifier =
+            { new IPortableHostSupplierVerifier with
+                member _.Authenticate input =
+                    input[0] <- 0uy
+                    Ok { Identity = identity; Reservation = reservation; CollectedAt = at 1.
+                         ReceiptDigest = Convert.ToHexString(SHA256.HashData input).ToLowerInvariant()
+                         Lifecycle = PortableHostAllocation.emptyLifecycle } }
+        Assert.True(PortableHostSupplierIngress.authenticate verifier identity reservation (at 1.) (TimeSpan.FromSeconds 5.) bytes |> Result.isError)
+        Assert.True((bytes = original))
+
     [<Fact>]
     member _.``execution retains both original bounds and reserves export and cleanup``() =
         Assert.Equal(Ok (at 70.), PortableHostAllocation.executionDeadline start reservation reservation)
