@@ -14,6 +14,9 @@ dotnet build FS.GG.Coordination.sln --configuration Release --no-restore --warna
 host_tests_started_ns="$(date +%s%N)"
 dotnet test tests/FS.GG.Coordination.Orchestration.Execution.Tests/FS.GG.Coordination.Orchestration.Execution.Tests.fsproj --configuration Release --no-build --no-restore --filter FullyQualifiedName~PortableHostAllocationTests --logger "trx;LogFileName=portable-host-allocation.trx" --results-directory "$RUNNER_TEMP/compiler-and-tests-portable-host-allocation"
 python eng/validate-test-census.py "$RUNNER_TEMP/compiler-and-tests-portable-host-allocation/portable-host-allocation.trx" "portable-host-allocation" "$host_tests_started_ns"
+finite_custody_tests_started_ns="$(date +%s%N)"
+dotnet test tests/FS.GG.Coordination.Orchestration.Execution.Tests/FS.GG.Coordination.Orchestration.Execution.Tests.fsproj --configuration Release --no-build --no-restore --filter FullyQualifiedName~FiniteCustodyWindowTests --logger "trx;LogFileName=finite-custody-inert.trx" --results-directory "$RUNNER_TEMP/compiler-and-tests-finite-custody-inert"
+python eng/validate-test-census.py "$RUNNER_TEMP/compiler-and-tests-finite-custody-inert/finite-custody-inert.trx" "finite-custody-inert" "$finite_custody_tests_started_ns"
 dotnet test tests/FS.GG.Coordination.UnitTests/FS.GG.Coordination.UnitTests.fsproj --configuration Release --no-build --no-restore
 process_started_ns="$(date +%s%N)"
 dotnet test tests/FS.GG.Execution.Processes.Tests/FS.GG.Execution.Processes.Tests.fsproj --configuration Release --no-build --no-restore --logger "trx;LogFileName=process-sessions.trx" --results-directory "$RUNNER_TEMP/compiler-and-tests-process-sessions"

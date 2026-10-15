@@ -50,11 +50,13 @@ scripts contain no linked or loaded copy of the composition.
 
 The selected maintained CI seam is a separate focused execution of
 `FullyQualifiedName~FiniteCustodyWindowTests` through `compiler-and-tests.sh`, with
-its own fresh `finite-custody-inert.trx` census. Production project inclusion,
-compiler-gate wiring and shell-budget assertions are pending the shared PR985
-reservation and parent integration. Merely compiling host allocation tests, or
-running their TRX census, does not execute or qualify this cohort. These source
-drafts have not been compiled or run; no composed acceptance is claimed.
+its own fresh `finite-custody-inert.trx` census. The production project includes the module after its phase-protocol dependency,
+and the compiler gate gives this focused cohort its own timestamp, results
+directory and fresh TRX census. The host-allocation cohort and its census remain
+separate. The shell budget adds the measured three total and distinct lines
+(858 to 861 total; 643 to 646 distinct), preserving the existing one-line total
+headroom. These source changes have not been compiled or run;
+no composed acceptance is claimed.
 
 The composition keeps ingress separate from potentially blocked validation and
 persistence. It accounts for start/ACK writers, readers, parsers, persistence and
