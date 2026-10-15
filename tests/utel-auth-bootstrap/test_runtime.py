@@ -145,30 +145,30 @@ class HostedRuntime(unittest.TestCase):
     manifest: dict
     output: pathlib.Path
     head: str
-    run: int
+    run_id: int
     attempt: int
 
     def test_manifest_and_mutants(self) -> None:
-        check_manifest(self.manifest, self.output, self.head, self.run, self.attempt)
+        check_manifest(self.manifest, self.output, self.head, self.run_id, self.attempt)
         for field in FIELDS:
             mutant = copy.deepcopy(self.manifest)
             mutant["capabilities"][field] = True
             with self.subTest(field=field), self.assertRaises(AssertionError):
-                check_manifest(mutant, self.output, self.head, self.run, self.attempt)
+                check_manifest(mutant, self.output, self.head, self.run_id, self.attempt)
         for edit in (
             lambda m: m["entrypoints"].append("--run"),
             lambda m: m["binary"].update(sha256="0" * 64),
             lambda m: m["inputs"].update({INPUTS[0]: "0" * 64}),
             lambda m: m.update(unexpected=True),
             lambda m: m.pop("elf"),
-            lambda m: m["source"].update(runId=self.run + 1),
+            lambda m: m["source"].update(runId=self.run_id + 1),
             lambda m: m["source"].update(attempt=True),
             lambda m: m["capabilities"].update(authorized=0),
         ):
             mutant = copy.deepcopy(self.manifest)
             edit(mutant)
             with self.assertRaises(AssertionError):
-                check_manifest(mutant, self.output, self.head, self.run, self.attempt)
+                check_manifest(mutant, self.output, self.head, self.run_id, self.attempt)
 
     def test_describe_and_unsupported_mode(self) -> None:
         result = subprocess.run([str(self.binary), "--describe"], capture_output=True, timeout=3)
@@ -314,7 +314,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     HostedRuntime.output = args.output
     HostedRuntime.head = args.head
-    HostedRuntime.run = args.run
+    HostedRuntime.run_id = args.run
     HostedRuntime.attempt = args.attempt
     HostedRuntime.manifest = json.loads((args.output / "manifest.json").read_text())
     HostedRuntime.binary = args.output / "utel-auth-bootstrap.linux-x64.bin"

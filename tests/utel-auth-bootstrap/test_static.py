@@ -49,6 +49,18 @@ def check_workflow(text: str) -> None:
         assert value in text, value
 
 
+def check_runtime_testcase_assignments(text: str) -> None:
+    protected = {name for name in dir(unittest.TestCase)
+                 if callable(getattr(unittest.TestCase, name))}
+    for node in ast.walk(ast.parse(text)):
+        if isinstance(node, (ast.Assign, ast.AnnAssign)):
+            targets = node.targets if isinstance(node, ast.Assign) else (node.target,)
+            for target in targets:
+                if (isinstance(target, ast.Attribute) and isinstance(target.value, ast.Name)
+                        and target.value.id == 'HostedRuntime' and target.attr in protected):
+                    raise AssertionError(f'unittest method shadowed: {target.attr}')
+
+
 class StaticControls(unittest.TestCase):
     def test_c_closed_inert_source(self) -> None:
         check_c(SOURCE.read_text())
@@ -66,6 +78,20 @@ class StaticControls(unittest.TestCase):
     def test_python_source_parses(self) -> None:
         for path in (BUILDER, ROOT / 'tests/utel-auth-bootstrap/test_runtime.py'):
             ast.parse(path.read_text(), filename=str(path))
+
+    def test_runtime_does_not_shadow_unittest_run_method(self) -> None:
+        import importlib.util
+        runtime = ROOT / 'tests/utel-auth-bootstrap/test_runtime.py'
+        spec = importlib.util.spec_from_file_location('utel_auth_runtime', runtime)
+        assert spec and spec.loader
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        self.assertIs(module.HostedRuntime.run, unittest.TestCase.run)
+        self.assertNotIn('run', module.HostedRuntime.__dict__)
+        check_runtime_testcase_assignments(runtime.read_text())
+        with self.assertRaises(AssertionError):
+            check_runtime_testcase_assignments(runtime.read_text().replace(
+                'HostedRuntime.run_id = args.run', 'HostedRuntime.run = args.run', 1))
 
     def test_workflow_read_only(self) -> None:
         check_workflow(WORKFLOW.read_text())
