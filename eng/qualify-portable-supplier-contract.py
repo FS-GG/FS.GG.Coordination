@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Pure size-vector qualification; never authenticates, provisions or invokes native tools."""
+"""Pure supplier size/wire fixture qualification; never authenticates or invokes native tools."""
 import argparse
 import base64
 import hashlib
@@ -281,12 +281,122 @@ def wire_payload(raw, family, schema):
     return value
 
 
-def wire_envelope(raw, family, schema):
+def wire_context(raw, family, schema, context):
+    """Check synthetic original-byte claims; context is never authenticated state."""
+    allowed = {'originalIntent', 'creationChallenge', 'creationReceipt', 'originalReservation', 'retainedEvents', 'responseChallenge', 'simulatedNativeImages'}
+    if not isinstance(context, dict) or set(context) - allowed:
+        raise WireRefused('context-shape')
+    digest = lambda kind, data: hashlib.sha256(('fsgg.v3.' + kind + '/1').encode() + b'\0' + data).hexdigest()
+    def document(key, member, envelope=False):
+        try:
+            data = strict_b64(context[key])
+        except KeyError as error:
+            raise WireRefused('missing-original-context') from error
+        facts = wire_envelope(data, member, schema)['facts'] if envelope else wire_payload(data, member, schema)
+        return data, facts
+    ib, intent = document('originalIntent', 'receiver-intent')
+    cb, challenge = document('creationChallenge', 'creation-challenge')
+    ec, creation = document('creationReceipt', 'creation-core', True)
+    rb, reservation = document('originalReservation', 'reservation')
+    intent_digest, receipt_digest = digest('intent', ib), digest('creation-receipt', ec)
+    if any(value != intent_digest for value in [challenge['intent_digest'], creation['intent_digest'], reservation['intent_digest']]):
+        raise WireRefused('original-intent-domain')
+    if creation['challenge_digest'] != digest('challenge', cb) or reservation['creation_receipt_digest'] != receipt_digest:
+        raise WireRefused('original-receipt-challenge-domain')
+    if any(value['correlation_id'] != intent['correlation_id'] for value in [challenge, creation, reservation]):
+        raise WireRefused('original-correlation')
+    if intent['command_digest'] != digest('command', wire_c1(reservation['command'])) or intent['command_deadline'] != reservation['original_deadline']:
+        raise WireRefused('original-command-domain')
+    if any(intent[a] != reservation[b] for a, b in [('qualified_inner_image', 'qualified_inner_image'), ('selection', 'selection'), ('requested_maximum_runtime_ticks', 'maximum_runtime_ticks'), ('requested_export_reserve_ticks', 'export_reserve_ticks'), ('requested_cleanup_reserve_ticks', 'cleanup_reserve_ticks')]):
+        raise WireRefused('original-request-terms')
+    if creation['profile'] != intent['requested_profile'] or creation['supplier_source_revision'] != intent['requested_source_revision']:
+        raise WireRefused('original-source-profile')
+    if not challenge['issued_at'] <= creation['created_at'] <= challenge['not_after'] or creation['host_lease_expires_at'] > intent['requested_host_lease_not_after']:
+        raise WireRefused('original-challenge-window')
+    reservation_digest = digest('reservation', rb)
+    head, sequence, previous_lease, lease_expiry = None, None, None, creation['host_lease_expires_at']
+    seen_start = False
+    retained = context.get('retainedEvents')
+    if not isinstance(retained, list) or len(retained) > 1024:
+        raise WireRefused('missing-retained-history')
+    def advance(envelope):
+        nonlocal head, sequence, previous_lease, lease_expiry, seen_start
+        framing = wire_decode(envelope)
+        wire_schema(framing, schema['$defs']['signed-envelope'], schema)
+        payload = strict_b64(framing['payload'])
+        member = 'genesis' if head is None else 'supplier-event'
+        event = wire_envelope(envelope, member, schema)['facts']
+        if member == 'genesis':
+            if wire_c1(event['creation_core']) != wire_c1(creation) or wire_c1(event['reservation']) != rb:
+                raise WireRefused('original-genesis-bytes')
+            sequence = 0
+        else:
+            if event['operation_id'] != creation['operation_id'] or event['reservation_digest'] != reservation_digest or event['predecessor_head'] != head or int(event['sequence']) != sequence + 1:
+                raise WireRefused('original-event-chain')
+            body = event['body']
+            if event['kind'] in {'launch-intent', 'start-invoked'} and any(body[a] != creation[b] for a, b in [('original_cid', 'cid'), ('original_image_id', 'image_id'), ('original_inode', 'allocation_inode')]):
+                raise WireRefused('original-launch-identity')
+            if event['kind'] == 'unit-activation-observed':
+                if not seen_start or any(body[key] != creation[key] for key in ['unit_name', 'boot_id', 'cid']):
+                    raise WireRefused('original-activation-identity-or-order')
+            if event['kind'] == 'start-invoked':
+                seen_start = True
+            if event['kind'] == 'zero-selection-census':
+                if reservation['selection']['kind'] != 'none' or body['selection_digest'] != digest('selection', wire_c1(reservation['selection'])):
+                    raise WireRefused('original-zero-selection')
+            if event['kind'] == 'lease-amendment':
+                expected_kind = 'creation-receipt' if previous_lease is None else 'lease-amendment'
+                expected_digest = receipt_digest if previous_lease is None else digest('lease-amendment', previous_lease)
+                if body['previous_lease_kind'] != expected_kind or body['previous_lease_digest'] != expected_digest or body['old_expiry'] != lease_expiry or body['new_expiry'] <= lease_expiry:
+                    raise WireRefused('original-lease-history')
+                previous_lease, lease_expiry = payload, body['new_expiry']
+            sequence = int(event['sequence'])
+        head = digest('signed-envelope', envelope)
+    retained_bytes = [strict_b64(item) for item in retained]
+    for envelope in retained_bytes:
+        advance(envelope)
+    value = wire_envelope(raw, family, schema)['facts']
+    if family == 'supplier-response':
+        challenge_bytes, request = document('responseChallenge', 'response-challenge')
+        if value['challenge_digest'] != digest('challenge', challenge_bytes) or request['known_head'] != head or value['from_head'] != head or request['purpose'] != value['purpose']:
+            raise WireRefused('original-response-head-challenge')
+        if request['reservation_digest'] != reservation_digest or value['reservation_digest'] != reservation_digest or request['operation_id'] != creation['operation_id'] or value['operation_id'] != creation['operation_id']:
+            raise WireRefused('original-response-identity')
+        if not request['issued_at'] <= value['collected_at'] <= request['not_after']:
+            raise WireRefused('response-challenge-window')
+        nested = [strict_b64(item) for item in value['events']]
+        if value['mode'] == 'unchanged':
+            if not retained_bytes or nested != retained_bytes[-1:]:
+                raise WireRefused('changed-retained-envelope')
+        else:
+            if (value['mode'] == 'genesis') != (head is None):
+                raise WireRefused('original-response-mode')
+            for envelope in nested:
+                advance(envelope)
+    elif family in {'genesis', 'supplier-event'}:
+        advance(raw)
+    else:
+        raise WireRefused('unsupported-context-family')
+    images = context.get('simulatedNativeImages')
+    if images is not None:
+        if not isinstance(images, dict) or set(images) != {'container.Image', 'imageInspect.ID'} or any(value != creation['image_id'] for value in images.values()):
+            raise WireRefused('simulated-native-image-identity')
+    return {'authority': 'untrusted', 'capabilities': {'authentication': False, 'grantConsumption': False, 'durableReplay': False, 'native': False}}
+
+
+def wire_framing(raw, family, schema):
+    # Opaque payload bytes in framing fixtures do not establish schema-valid messages.
     value = wire_decode(raw)
     wire_schema(value, schema['$defs']['signed-envelope'], schema)
     payload, signature = strict_b64(value['payload']), strict_b64(value['signature'])
-    if not 0 < len(signature) <= SIGNATURE or not 0 < len(payload) <= PAYLOAD:
+    limit = 6000 if family in {'creation-core', 'reservation'} else GENESIS if family == 'genesis' else EVENT if family == 'supplier-event' else PAYLOAD
+    if not 0 < len(signature) <= SIGNATURE or not 0 < len(payload) <= limit:
         raise WireRefused('envelope-size')
+    return payload
+
+
+def wire_envelope(raw, family, schema):
+    payload = wire_framing(raw, family, schema)
     parsed = wire_payload(payload, family, schema)
     return {'facts': parsed, 'authority': 'untrusted', 'capabilities': {'authentication': False, 'grantConsumption': False, 'durableReplay': False, 'native': False}, 'futureHeld': ['original-context-and-domain-joins', 'retained-head-sequence-lease-state', 'issuer-pin-signature-request-grant', 'durable-admission', 'native']}
 
@@ -296,11 +406,18 @@ def qualify_wire(corpus, schema):
         raw = strict_b64(row['bytesBase64url'])
         assert hashlib.sha256(raw).hexdigest() == row['sha256'], row['name']
         assert int(row['byteCount']) == len(raw), row['name']
+        for encoded_member in row.get('individuallyBoundedNestedFrames', []):
+            wire_framing(strict_b64(encoded_member), 'supplier-event', schema)
         assert set(row['domainDigests']) == set(schema['x-domains']), row['name']
         for kind, expected in row['domainDigests'].items():
             assert hashlib.sha256(('fsgg.v3.' + kind + '/1').encode() + b'\0' + raw).hexdigest() == expected, row['name']
         try:
-            if row['encoding'] == 'envelope':
+            if row['encoding'] == 'framing-only':
+                wire_framing(raw, row['family'], schema)
+            elif 'context' in row:
+                result = wire_context(raw, row['family'], schema, row['context'])
+                assert not any(result['capabilities'].values())
+            elif row['encoding'] == 'envelope':
                 result = wire_envelope(raw, row['family'], schema)
                 assert not any(result['capabilities'].values())
             else:
@@ -325,8 +442,9 @@ def main():
     if args.wire_vectors:
         if not args.wire_schema:
             parser.error('--wire-vectors requires --wire-schema')
-        count = qualify_wire(json.loads(args.wire_vectors.read_text()), json.loads(args.wire_schema.read_text()))
-        print(json.dumps({'outcome': 'passed', 'wireVectors': count, 'authentication': False, 'nativeAcceptance': False}))
+        corpus = json.loads(args.wire_vectors.read_text())
+        count = qualify_wire(corpus, json.loads(args.wire_schema.read_text()))
+        print(json.dumps({'outcome': 'passed', 'wireVectors': count, 'framingOnlyCases': sum(row['encoding'] == 'framing-only' for row in corpus['cases']), 'contextCases': sum('context' in row for row in corpus['cases']), 'authentication': False, 'nativeAcceptance': False}))
         return 0
     count = qualify(json.loads(args.vectors.read_text()))
     print(json.dumps({'outcome': 'passed', 'sizingVectors': count, 'nativeAcceptance': False, 'authentication': False}))
