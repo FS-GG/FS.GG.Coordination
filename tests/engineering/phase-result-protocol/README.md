@@ -55,8 +55,8 @@ and the compiler gate gives this focused cohort its own timestamp, results
 directory and fresh TRX census. The host-allocation cohort and its census remain
 separate. The shell budget adds the measured three total and distinct lines
 (858 to 861 total; 643 to 646 distinct), preserving the existing one-line total
-headroom. These source changes have not been compiled or run;
-no composed acceptance is claimed.
+headroom. Inert source qualification requires a passing fresh census from the
+exact final candidate. It does not establish native or paired domain acceptance.
 
 The composition keeps ingress separate from potentially blocked validation and
 persistence. It accounts for start/ACK writers, readers, parsers, persistence and
