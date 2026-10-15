@@ -1,0 +1,68 @@
+name: UTEL inactive auth bootstrap qualification
+
+on:
+  pull_request:
+    paths:
+      - src/FS.GG.Coordination.Orchestration.Execution/Custody/utel-auth-bootstrap.c
+      - src/FS.GG.Coordination.Orchestration.Execution/Custody/build-utel-auth.py
+      - tests/utel-auth-bootstrap/**
+      - .github/workflows/utel-auth-bootstrap-qualification.yml
+  push:
+    branches: [main]
+    paths:
+      - src/FS.GG.Coordination.Orchestration.Execution/Custody/utel-auth-bootstrap.c
+      - src/FS.GG.Coordination.Orchestration.Execution/Custody/build-utel-auth.py
+      - tests/utel-auth-bootstrap/**
+      - .github/workflows/utel-auth-bootstrap-qualification.yml
+
+permissions:
+  contents: read
+
+jobs:
+  utel-auth-bootstrap-inert-source:
+    name: utel-auth-bootstrap-inert-source
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Bind checked-out head and run static controls
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test -z "$(git status --porcelain)"
+          PYTHONDONTWRITEBYTECODE=1 python3 tests/utel-auth-bootstrap/test_static.py
+
+      - name: Build and test only the inert fixture
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          OUTPUT: ${{ runner.temp }}/utel-auth-bootstrap-candidate
+        run: |
+          set -euo pipefail
+          PYTHONDONTWRITEBYTECODE=1 python3 src/FS.GG.Coordination.Orchestration.Execution/Custody/build-utel-auth.py \
+            --output "$OUTPUT" --head "$SOURCE_SHA" --run-id "$GITHUB_RUN_ID" \
+            --attempt "$GITHUB_RUN_ATTEMPT"
+          PYTHONDONTWRITEBYTECODE=1 python3 tests/utel-auth-bootstrap/test_runtime.py \
+            "$OUTPUT" "$SOURCE_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"
+
+      - name: Retain exact inert source artifact and manifest
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: utel-auth-bootstrap-inert-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/utel-auth-bootstrap-candidate/utel-auth-bootstrap.linux-x64.bin
+            ${{ runner.temp }}/utel-auth-bootstrap-candidate/manifest.json
+            ${{ runner.temp }}/utel-auth-bootstrap-candidate/test-receipt.json
+          if-no-files-found: warn
+          retention-days: 14
+          compression-level: 0
