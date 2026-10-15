@@ -39,28 +39,46 @@ codec/reducer behavior only; native supervision, durable result replacement,
 child-directed credential custody and installed consumer acceptance remain separate.
 
 
-`controls.fsx` also loads the exact internal `FiniteCustodyComposition.fs` source
-against the compiled protocol and window. This keeps the composition internal
-without granting assembly-wide test access. Its separate ingress and parser tasks
-keep early child bytes observable while a validator or durable writer is blocked.
-The supervisor samples only the original clock, cached protocol/task state and
-last-thread observation; channel I/O, domain callbacks and retirement requests run
-on retained tasks. Full write counts and exact durable readback precede ACK
-confirmation. A fake child advances only after the internal confirmed-ACK ordinal
-is observed. This controlled timing is not native channel qualification.
+The internal `FiniteCustodyComposition` source is intended to compile in the
+production Execution project and is tested directly by independent xUnit Facts in
+its existing `FiniteCustodyWindowTests` module. The production source grants
+internal access only to `FS.GG.Coordination.Orchestration.Execution.Tests`, following
+the repository's named friend assembly convention. This deliberate testability
+boundary also exposes the assembly's other internal members to that one test
+assembly. No public constructor or native profile is enabled. The supplemental
+scripts contain no linked or loaded copy of the composition.
 
-The closed descriptor binds the independently expected original operation,
-generation, invocation, source/runtime/runner identities, workflow, App/install,
-channel roles and result destination. Its wire binding also joins source, workflow,
-App/install, process and the original finite clock cutoffs. The runtime closure,
-channel roles and destination are independently supplied descriptor expectations;
-the current domain wire schema does not carry them. Reusing the same admission
-owner refuses a consumed invocation. The caller must retain that owner through the
-original operation window; constructing a new owner does not authorize replay.
+The selected maintained CI seam is a separate focused execution of
+`FullyQualifiedName~FiniteCustodyWindowTests` through `compiler-and-tests.sh`, with
+its own fresh `finite-custody-inert.trx` census. Production project inclusion,
+compiler-gate wiring and shell-budget assertions are pending the shared PR985
+reservation and parent integration. Merely compiling host allocation tests, or
+running their TRX census, does not execute or qualify this cohort. These source
+drafts have not been compiled or run; no composed acceptance is claimed.
 
-Composed controls cover source/native/runner refusal before channel work, repeated
-admission, full lifecycle, outstanding retention at the original work/total cutoffs,
-late successful readback and partial ACK writes. They exercise fake ports only.
-`JoinCleanup` retains the supplied custody owner whenever last-thread termination
-or any local task remains unresolved and preserves pre-existing unknown task facts.
-These controls are source drafts until executed under an admitted CLR profile.
+The composition keeps ingress separate from potentially blocked validation and
+persistence. It accounts for start/ACK writers, readers, parsers, persistence and
+retirement tasks through cleanup. Full confirmed writes and exact durable readback
+precede ACK confirmation. Fake children advance only after the internal confirmed
+ACK observation; native channel timing remains unqualified. Fake clock ticks keep
+the original start and cutoffs; fixture wall-clock watchdogs only detect a stuck
+test. Fixture disposal releases each blocking port and awaits retained tasks even
+when an assertion fails.
+
+The closed descriptor compares independently expected operation, generation,
+invocation, source/runtime/runner identities, workflow, App/install, channel roles
+and result destination. Its closed wire schema additionally joins source,
+workflow, App/install, process and the original finite clock cutoffs. Runtime
+closure, channel roles and destination remain independent descriptor expectations;
+the domain wire schema does not carry those fields. Admission retains consumed
+invocations for the original operation window. Recreating admission does not grant
+permission to replay an operation.
+
+The source scenarios cover native/source/runner/binding refusal, repeated admission,
+a six-phase inert lifecycle, partial ACKs, blocked retention, early ingress, blocked
+validation, cancellation, read/retirement failure and late callback refusal.
+`JoinCleanup` retains the supplied owner before supervision is sealed and whenever
+termination or local tasks remain unresolved. Existing unknown cleanup facts remain
+unknown. Domain callbacks returning `Ok` are inert stand-ins, so UTEL payload-domain
+validation, paired real consumer integration and installed acceptance remain I2/I3
+obligations. Production availability stays false and all native/R1 holds remain.

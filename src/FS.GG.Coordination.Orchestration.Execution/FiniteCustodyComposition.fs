@@ -8,6 +8,10 @@ open System.Threading.Channels
 open System.Threading.Tasks
 open FS.GG.Execution.Contracts
 
+// Deliberate testability boundary: only the maintained execution test assembly.
+[<assembly: System.Runtime.CompilerServices.InternalsVisibleTo("FS.GG.Coordination.Orchestration.Execution.Tests")>]
+do ()
+
 /// Source-only composition. Construction has no native launcher or credential port.
 module internal FiniteCustodyComposition =
     type Descriptor =
@@ -52,9 +56,9 @@ module internal FiniteCustodyComposition =
 
     let private hex size (value: string) =
         not (isNull value) && value.Length = size
-        && value |> Seq.forall (fun c -> (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'))
+        && (value |> Seq.forall (fun c -> (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')))
 
-    let private valid descriptor =
+    let private valid (descriptor: Descriptor) =
         descriptor.Mode = "inert"
         && descriptor.Identity.ProfileId = FiniteCustodyWindow.profileId
         && descriptor.Identity.InvocationId <> Guid.Empty
@@ -63,8 +67,12 @@ module internal FiniteCustodyComposition =
             | None -> true
             | Some execution -> execution.Generation = descriptor.OriginalGeneration
                                 && execution.AssignmentId <> Guid.Empty && execution.AttemptId <> Guid.Empty)
+        && descriptor.Process.Platform = "inert"
         && descriptor.Process.Pid > 0
-        && not (String.IsNullOrWhiteSpace descriptor.Process.BirthToken)
+        && not (String.IsNullOrWhiteSpace descriptor.Process.ScopeId)
+        && not (isNull descriptor.Process.BirthToken)
+        && descriptor.Process.BirthToken.Length >= 1 && descriptor.Process.BirthToken.Length <= 64
+        && hex descriptor.Process.BirthToken.Length descriptor.Process.BirthToken
         && not (String.IsNullOrWhiteSpace descriptor.OriginalOperation)
         && not (String.IsNullOrWhiteSpace descriptor.DomainProfile)
         && hex 64 descriptor.Identity.SourceDigest && hex 64 descriptor.Identity.ProfileDigest
@@ -79,13 +87,16 @@ module internal FiniteCustodyComposition =
 
     /// Binding bytes come independently from the domain owner; never infer a current
     /// identity, clock or native authority from a child echo.
-    let private joins descriptor window (binding: ReadOnlyMemory<byte>) =
+    let private joins (descriptor: Descriptor) window (binding: ReadOnlyMemory<byte>) =
         try
             match PhaseResultProtocol.bindingDigest binding with
             | Error _ -> false
             | Ok _ ->
                 use document = JsonDocument.Parse binding
                 let root = document.RootElement
+                let keys names (value: JsonElement) =
+                    value.ValueKind = JsonValueKind.Object
+                    && (value.EnumerateObject() |> Seq.map _.Name |> Set.ofSeq) = Set.ofList names
                 let field (value: JsonElement) (name: string) = value.GetProperty name
                 let text value name = (field value name).GetString()
                 let process = field root "process"
@@ -95,7 +106,13 @@ module internal FiniteCustodyComposition =
                 let clock = field root "clock"
                 let budget = window |> FiniteCustodyWindow.originalBudget |> Budget.describe
                 let number name expected = text clock name = string expected
-                text root "mode" = "inert" && text root "profile" = descriptor.DomainProfile
+                keys ["mode"; "profile"; "operation"; "originalGeneration"; "invocation"; "process"; "source"; "workflow"; "clock"; "app"] root
+                && keys ["pid"; "birth"] process
+                && keys ["childRevision"; "childClosure"; "runnerRevision"; "runnerClosure"; "contract"] source
+                && keys ["repositoryId"; "path"; "revision"; "run"; "attempt"] workflow
+                && keys ["domain"; "frequency"; "start"; "normal"; "work"; "total"] clock
+                && keys ["id"; "installation"] app
+                && text root "mode" = "inert" && text root "profile" = descriptor.DomainProfile
                 && text root "operation" = descriptor.OriginalOperation
                 && (field root "originalGeneration").GetInt64() = descriptor.OriginalGeneration
                 && text root "invocation" = string descriptor.Identity.InvocationId
@@ -131,6 +148,9 @@ module internal FiniteCustodyComposition =
 
     type Session private (clock: IMonotonicClock, window, binding, ports: Ports, token: CancellationToken) =
         let protocol = PhaseResultProtocol.Session binding
+        // Construct and bound the codec's real start frame during admission, before
+        // any callback. It will be written at most once by the retained writer.
+        let startFrame = protocol.StartFrame()
         let gate = obj()
         let tasks = ResizeArray<Task>()
         let mutable starting = 0
@@ -139,10 +159,14 @@ module internal FiniteCustodyComposition =
         let mutable inputComplete = false
         let mutable confirmedAckOrdinal = 0
         let mutable stopReason = None
+        let mutable supervisionFinished = false
         let mutable lastTick = (window |> FiniteCustodyWindow.originalBudget |> Budget.describe).StartedAt
         let mutable retirement: Task<bool> option = None
         let queue = Channel.CreateBounded<PhaseResultSnapshot>(BoundedChannelOptions(6, SingleWriter = true, SingleReader = true))
-        let refuse () = lock gate (fun () -> refusal <- true)
+        let requestStop reason = lock gate (fun () ->
+            if stopReason.IsNone then stopReason <- Some reason
+            refusal <- true)
+        let refuse () = requestStop SinkFailure
         let launch (work: unit -> Task) =
             lock gate (fun () -> starting <- starting + 1)
             try
@@ -162,6 +186,7 @@ module internal FiniteCustodyComposition =
         let admitted () =
             match sample () with
             | Ok(now, _) -> not token.IsCancellationRequested && not (lock gate (fun () -> refusal))
+                            && not ports.Termination.IsCompleted
                             && FiniteCustodyWindow.normalWorkAllowed now window
             | _ -> false
         let terminated () =
@@ -184,7 +209,24 @@ module internal FiniteCustodyComposition =
                     else
                         let mutable snapshot = Unchecked.defaultof<PhaseResultSnapshot>
                         while queue.Reader.TryRead(&snapshot) do
-                            match protocol.AcceptChild(snapshot, ports.Validate) with
+                            let mayReduce () =
+                                if snapshot.Kind = "terminal" then true
+                                elif token.IsCancellationRequested then requestStop CallerCancellation; false
+                                elif lock gate (fun () -> refusal) then false
+                                else
+                                    match sample () with
+                                    | Error _ -> requestStop OwnerLost; false
+                                    | Ok(_, view) when view.WorkExpired -> requestStop WorkDeadline; false
+                                    | _ -> true
+                            let validate value =
+                                let result = ports.Validate value
+                                // A blocked validator returning later must not restore
+                                // admission or start a new persistence callback.
+                                if mayReduce () then result else Error "finite-composition-stopped"
+                            let accepted =
+                                if mayReduce () then protocol.AcceptChild(snapshot, validate)
+                                else Error "finite-composition-stopped"
+                            match accepted with
                             | Error _ -> refuse ()
                             | Ok false ->
                                 // Non-ACK phases, including terminal failure, still
@@ -236,16 +278,18 @@ module internal FiniteCustodyComposition =
             with _ -> refuse ()
             queue.Writer.TryComplete() |> ignore }
 
-        member _.Protocol = protocol
+        member _.Accepted = protocol.Accepted
+        member _.RetentionTasks = protocol.RetentionTasks
         /// Inert harness observation; it grants no native channel authority.
         member _.ConfirmedAckOrdinal = lock gate (fun () -> confirmedAckOrdinal)
-        member _.LocalTasks = localTasks ()
+        member _.LocalTasks =
+            if lock gate (fun () -> supervisionFinished) then localTasks () else Outstanding
         member _.RetainedTasks = lock gate (fun () -> tasks.ToArray())
 
         /// Preserve all existing cleanup facts; outstanding local work or unknown
         /// termination always retains the caller's existing custody owner.
         member _.JoinCleanup(existing: CleanupResult, stamp: ObservationStamp, owner: OwnerReference) =
-            let state = localTasks ()
+            let state = if lock gate (fun () -> supervisionFinished) then localTasks () else Outstanding
             let joined =
                 match state, existing.LocalTasks with
                 | Outstanding, _ -> Known(Outstanding, stamp)
@@ -264,16 +308,30 @@ module internal FiniteCustodyComposition =
                     started <- true
                     true)
             if not first then return Error "finite-composition-reuse-refused"
-            elif not (admitted ()) then return Error "finite-composition-expired"
             else
-                launch (fun () -> task {
-                    try
-                        let! complete = write (protocol.StartFrame())
-                        if complete && admitted () then
-                            launch (fun () -> parse () :> Task) |> ignore
-                            launch (fun () -> read () :> Task) |> ignore
-                        else refuse ()
-                    with _ -> refuse () } :> Task) |> ignore
+                if admitted () then
+                    launch (fun () -> task {
+                        try
+                            // Scheduling never renews a grant checked by the caller.
+                            if admitted () then
+                                let! complete = write startFrame
+                                if complete && admitted () then
+                                    launch (fun () -> parse () :> Task) |> ignore
+                                    launch (fun () -> read () :> Task) |> ignore
+                                else refuse ()
+                            else
+                                match sample () with
+                                | Error _ -> requestStop OwnerLost
+                                | _ when token.IsCancellationRequested -> requestStop CallerCancellation
+                                | _ when ports.Termination.IsCompleted -> requestStop OwnerLost
+                                | _ -> requestStop WorkDeadline
+                        with _ -> refuse () } :> Task) |> ignore
+                else
+                    match sample () with
+                    | Error _ -> requestStop OwnerLost
+                    | _ when token.IsCancellationRequested -> requestStop CallerCancellation
+                    | _ when ports.Termination.IsCompleted -> requestStop OwnerLost
+                    | _ -> requestStop WorkDeadline
                 let mutable waiting = true
                 while waiting do
                     let current = sample ()
@@ -287,9 +345,7 @@ module internal FiniteCustodyComposition =
                         | _ -> None
                     match reason with
                     | Some value ->
-                        lock gate (fun () ->
-                            if stopReason.IsNone then stopReason <- Some value
-                            refusal <- true)
+                        requestStop value
                         if retirement.IsNone && not (terminated ()) then
                             let completion = TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously)
                             retirement <- Some completion.Task
@@ -305,8 +361,9 @@ module internal FiniteCustodyComposition =
                     | _ when terminated () && localTasks () = Settled -> waiting <- false
                     | _ -> do! Task.Delay 1
                 let within = match sample () with Ok(_,view) -> not view.TotalExpired | Error _ -> false
+                lock gate (fun () -> supervisionFinished <- true)
                 return Ok
-                    { StopReason = stopReason
+                    { StopReason = lock gate (fun () -> stopReason)
                       SignalRequested = retirement.IsSome
                       SignalAccepted = retirement |> Option.exists (fun signal -> signal.IsCompletedSuccessfully && signal.Result)
                       LastThreadTerminated = terminated ()
@@ -314,16 +371,20 @@ module internal FiniteCustodyComposition =
                       ProtocolComplete = lock gate (fun () -> inputComplete && not refusal) }
         }
 
-        static member Prepare(admission: Admission, expected, actual, clock: IMonotonicClock, original, binding, ports, token) =
+        static member Prepare(admission: Admission, expected, actual, clock: IMonotonicClock, original, binding: ReadOnlyMemory<byte>, ports, token) =
             // Reject native descriptors and unsupported runners before clock callbacks,
             // descriptor consumption, channel construction, launch or acquisition.
             if not (valid actual) || actual <> expected then Error "finite-composition-descriptor-refused"
+            elif binding.Length > PhaseResultProtocol.maximumFrameBytes - 4 then Error "finite-composition-binding-refused"
             else
                 try
+                    // Own canonical bytes before invoking any caller port. A mutable
+                    // backing array cannot change the admitted identity afterward.
+                    let ownedBinding = ReadOnlyMemory<byte>(binding.ToArray())
                     match FiniteCustodyWindow.prepare (clock.Now()) original with
                     | Error _ -> Error "finite-composition-window-refused"
                     | Ok window ->
-                        match admission.Take(actual, expected, window, binding) with
+                        match admission.Take(actual, expected, window, ownedBinding) with
                         | Error reason -> Error reason
-                        | Ok () -> Ok(Session(clock, window, binding, ports, token))
+                        | Ok () -> Ok(Session(clock, window, ownedBinding, ports, token))
                 with _ -> Error "finite-composition-prepare-refused"
