@@ -313,3 +313,131 @@ module PortableHostSupplierIngress =
                         refusal
                     else Ok(AuthenticatedHostEvidence(evidence, now, maximumAge))
             with _ -> refusal
+
+/// Inactive shared sizing contract. These checks do not parse C1, verify signatures or admit effects.
+[<RequireQualifiedAccess>]
+module PortableSupplierProtocol =
+    [<Literal>]
+    let MaximumEnvelopeBytes = 65536
+    [<Literal>]
+    let MaximumPayloadBytes = 45000
+    [<Literal>]
+    let MaximumSignatureBytes = 2048
+    [<Literal>]
+    let MaximumCreationBytes = 6000
+    [<Literal>]
+    let MaximumReservationBytes = 6000
+    [<Literal>]
+    let MaximumGenesisBytes = 18000
+    [<Literal>]
+    let MaximumEventBytes = 12000
+    [<Literal>]
+    let MaximumResponseMetadataBytes = 6000
+    [<Literal>]
+    let MaximumEvents = 16
+
+    let base64UrlBytes length =
+        if length < 0 || length > MaximumEnvelopeBytes then Error "supplier-size-refused"
+        else Ok(length / 3 * 4 + (match length % 3 with 0 -> 0 | 1 -> 2 | _ -> 3))
+
+    /// Exact C1 {payload,signature} syntax, including its terminal LF, adds 30 ASCII bytes.
+    let envelopeBytes payload signature =
+        if payload <= 0 || payload > MaximumPayloadBytes || signature <= 0 || signature > MaximumSignatureBytes then
+            Error "supplier-size-refused"
+        else
+            match base64UrlBytes payload, base64UrlBytes signature with
+            | Ok left, Ok right when left + right + 30 <= MaximumEnvelopeBytes -> Ok(left + right + 30)
+            | _ -> Error "supplier-size-refused"
+
+    /// overhead is the exact genesis bytes excluding the embedded C/R bytes, never an estimate.
+    let genesisBytes creation reservation overhead =
+        if creation <= 0 || creation > MaximumCreationBytes || reservation <= 0 || reservation > MaximumReservationBytes
+           || overhead <= 0 || overhead > MaximumResponseMetadataBytes then Error "supplier-size-refused"
+        else
+            let total = creation + reservation + overhead
+            if total > MaximumGenesisBytes then Error "supplier-size-refused" else Ok total
+
+    /// Metadata is the exact nonempty C1 response object without its events member, including LF.
+    /// events contains base64url strings of exact signed envelopes. The inserted member adds
+    /// 12 bytes plus quotes, commas and base64url bytes; all nested bytes count again in the outer envelope.
+    let responseBytes genesis metadata (events: int list) =
+        if metadata < 4 || metadata > MaximumResponseMetadataBytes || events.IsEmpty || events.Length > MaximumEvents
+           || (genesis && events.Length <> 1) then Error "supplier-size-refused"
+        else
+            let eventMaximum = if genesis then MaximumGenesisBytes else MaximumEventBytes
+            let envelopeMaximum = envelopeBytes eventMaximum MaximumSignatureBytes
+            let encoded = events |> List.map (fun length ->
+                match envelopeMaximum with
+                | Ok maximum when length > 0 && length <= maximum -> base64UrlBytes length
+                | _ -> Error "supplier-size-refused")
+            if encoded |> List.exists Result.isError then Error "supplier-size-refused"
+            else
+                let total = metadata + 12 + (events.Length - 1) + (encoded |> List.sumBy (function Ok size -> size + 2 | _ -> 0))
+                if total > MaximumPayloadBytes then Error "supplier-size-refused" else Ok total
+
+type PortableSupplierProfile = LegacyInstalledProfile | SignedHoldV1Profile
+type PortableSupplierEffect = CreateStoppedAllocation | StartOriginalAllocation | RetireOriginalAllocation
+
+/// An inert projection of independently verified operation admission, not an authentication token.
+type PortableSupplierEffectGrant =
+    { GrantId: string
+      Effect: PortableSupplierEffect
+      IntentDigest: string
+      ReservationDigest: string option
+      OperationId: string option
+      NotBefore: DateTimeOffset
+      NotAfter: DateTimeOffset
+      ConsumedOrUncertain: bool }
+
+type PortableSupplierEffectState =
+    { Profile: PortableSupplierProfile
+      IntentDigest: string
+      ReservationDigest: string option
+      OperationId: string option
+      OriginalDeadline: DateTimeOffset
+      DurableIntent: bool
+      DurableOriginals: bool
+      StoppedAndIdentityUnchanged: bool
+      SourcesUnchanged: bool
+      DurableAuthenticatedReceiverAcceptance: bool
+      LaunchIntentOrStartAlreadyRecorded: bool
+      OriginalWorkAndReservesFit: bool
+      CapacityReserved: bool
+      ProtocolFits: bool
+      Retirement: PortableHostRetirementDecision option }
+
+[<RequireQualifiedAccess>]
+module PortableSupplierEffectPolicy =
+    /// Pure predicates only. Production must authenticate/consume the exact grant and persist intent
+    /// under the existing operation lock immediately before its effect. No installed caller exists.
+    let admit now effect (state: PortableSupplierEffectState) (admission: PortableEvidence<PortableSupplierEffectGrant>) =
+        let present value = not (String.IsNullOrWhiteSpace value)
+        let boundIdentity =
+            (state.ReservationDigest |> Option.exists present)
+            && (state.OperationId |> Option.exists present)
+        let matches (grant: PortableSupplierEffectGrant) =
+            present grant.GrantId && present state.IntentDigest
+            && grant.Effect = effect && grant.IntentDigest = state.IntentDigest
+            && grant.ReservationDigest = state.ReservationDigest && grant.OperationId = state.OperationId
+            && not grant.ConsumedOrUncertain && now >= grant.NotBefore && now < grant.NotAfter
+            && now < state.OriginalDeadline
+        match state.Profile, admission with
+        | SignedHoldV1Profile, EvidenceKnown grant when matches grant && state.ProtocolFits && state.CapacityReserved && state.DurableIntent ->
+            match effect with
+            | CreateStoppedAllocation when state.ReservationDigest.IsNone && state.OperationId.IsNone
+                                           && state.SourcesUnchanged && state.OriginalWorkAndReservesFit -> HostEligible
+            | StartOriginalAllocation when boundIdentity && state.DurableOriginals && state.StoppedAndIdentityUnchanged
+                                           && state.SourcesUnchanged && state.DurableAuthenticatedReceiverAcceptance
+                                           && not state.LaunchIntentOrStartAlreadyRecorded && state.OriginalWorkAndReservesFit -> HostEligible
+            | RetireOriginalAllocation when boundIdentity && state.DurableOriginals && state.StoppedAndIdentityUnchanged
+                                            && state.SourcesUnchanged
+                                            && (state.Retirement |> Option.exists (fun decision -> decision.OuterCleanup = HostEligible)) -> HostEligible
+            | _ -> HostHeld "supplier effect prerequisites unresolved"
+        | _ -> HostHeld "exact fresh one-use effect admission and isolated signed profile required"
+
+    /// Stop/settlement preserves data, regardless of start failure, loss, expiry or reconciliation.
+    /// Deletion always requires a separate RetireOriginalAllocation decision and effect admission.
+    let settle profile =
+        match profile with
+        | SignedHoldV1Profile -> Ok "stop and observe only; retain allocation and selected data"
+        | LegacyInstalledProfile -> Error "legacy profile excluded; preserve its installed source and behavior"

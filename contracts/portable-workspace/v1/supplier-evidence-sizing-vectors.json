@@ -1,0 +1,247 @@
+{
+  "schema": "fsgg.v3.supplier-sizing-vectors/1",
+  "scope": "pure length arithmetic and exact ASCII transport bytes; no signatures or authentication",
+  "cases": [
+    {
+      "name": "base64-0",
+      "kind": "base64",
+      "expected": 0,
+      "raw": 0
+    },
+    {
+      "name": "base64-1",
+      "kind": "base64",
+      "expected": 2,
+      "raw": 1
+    },
+    {
+      "name": "base64-2",
+      "kind": "base64",
+      "expected": 3,
+      "raw": 2
+    },
+    {
+      "name": "base64-3",
+      "kind": "base64",
+      "expected": 4,
+      "raw": 3
+    },
+    {
+      "name": "base64-2048",
+      "kind": "base64",
+      "expected": 2731,
+      "raw": 2048
+    },
+    {
+      "name": "base64-45000",
+      "kind": "base64",
+      "expected": 60000,
+      "raw": 45000
+    },
+    {
+      "name": "base64-45001",
+      "kind": "base64",
+      "expected": 60002,
+      "raw": 45001
+    },
+    {
+      "name": "base64-60000",
+      "kind": "base64",
+      "expected": 80000,
+      "raw": 60000
+    },
+    {
+      "name": "base64-65536",
+      "kind": "base64",
+      "expected": 87382,
+      "raw": 65536
+    },
+    {
+      "name": "base64-65537",
+      "kind": "base64",
+      "expected": null,
+      "raw": 65537
+    },
+    {
+      "name": "envelope-44999-2048",
+      "kind": "envelope",
+      "expected": 62760,
+      "payload": 44999,
+      "signature": 2048,
+      "wireSha256": "f7ed818d45a9113feb105dea100fc9374e272aec5752e9a6fbc9416c031af291"
+    },
+    {
+      "name": "envelope-45000-2047",
+      "kind": "envelope",
+      "expected": 62760,
+      "payload": 45000,
+      "signature": 2047,
+      "wireSha256": "75da235e62e0f1b6fc786f4388c0a0ef90fe37da431b9355928da1adf66abc9a"
+    },
+    {
+      "name": "envelope-45000-2048",
+      "kind": "envelope",
+      "expected": 62761,
+      "payload": 45000,
+      "signature": 2048,
+      "wireSha256": "9218904cee7517211753223a978f4e3755927dfb22166ce1691984272f6b922a"
+    },
+    {
+      "name": "envelope-45001-2048",
+      "kind": "envelope",
+      "expected": null,
+      "payload": 45001,
+      "signature": 2048
+    },
+    {
+      "name": "envelope-60000-2048",
+      "kind": "envelope",
+      "expected": null,
+      "payload": 60000,
+      "signature": 2048
+    },
+    {
+      "name": "envelope-45000-2049",
+      "kind": "envelope",
+      "expected": null,
+      "payload": 45000,
+      "signature": 2049
+    },
+    {
+      "name": "envelope-0-1",
+      "kind": "envelope",
+      "expected": null,
+      "payload": 0,
+      "signature": 1
+    },
+    {
+      "name": "genesis-6000-6000-6000",
+      "kind": "genesis",
+      "expected": 18000,
+      "creation": 6000,
+      "reservation": 6000,
+      "overhead": 6000
+    },
+    {
+      "name": "genesis-6001-6000-5999",
+      "kind": "genesis",
+      "expected": null,
+      "creation": 6001,
+      "reservation": 6000,
+      "overhead": 5999
+    },
+    {
+      "name": "genesis-6000-6001-5999",
+      "kind": "genesis",
+      "expected": null,
+      "creation": 6000,
+      "reservation": 6001,
+      "overhead": 5999
+    },
+    {
+      "name": "genesis-6000-6000-6001",
+      "kind": "genesis",
+      "expected": null,
+      "creation": 6000,
+      "reservation": 6000,
+      "overhead": 6001
+    },
+    {
+      "name": "genesis-max",
+      "kind": "response",
+      "expected": 41696,
+      "genesis": true,
+      "metadata": 6000,
+      "events": [
+        26761
+      ]
+    },
+    {
+      "name": "genesis-envelope-over",
+      "kind": "response",
+      "expected": null,
+      "genesis": true,
+      "metadata": 6000,
+      "events": [
+        26762
+      ]
+    },
+    {
+      "name": "genesis-count-over",
+      "kind": "response",
+      "expected": null,
+      "genesis": true,
+      "metadata": 6000,
+      "events": [
+        1,
+        1
+      ]
+    },
+    {
+      "name": "response-exact-payload",
+      "kind": "response",
+      "expected": 45000,
+      "genesis": false,
+      "metadata": 6000,
+      "events": [
+        10476,
+        18761
+      ]
+    },
+    {
+      "name": "response-one-over-payload",
+      "kind": "response",
+      "expected": null,
+      "genesis": false,
+      "metadata": 6000,
+      "events": [
+        10477,
+        18760
+      ]
+    },
+    {
+      "name": "events-count-over",
+      "kind": "response",
+      "expected": null,
+      "genesis": false,
+      "metadata": 6000,
+      "events": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ]
+    },
+    {
+      "name": "metadata-over",
+      "kind": "response",
+      "expected": null,
+      "genesis": false,
+      "metadata": 6001,
+      "events": [
+        1
+      ]
+    },
+    {
+      "name": "no-events",
+      "kind": "response",
+      "expected": null,
+      "genesis": false,
+      "metadata": 6000,
+      "events": []
+    }
+  ]
+}
