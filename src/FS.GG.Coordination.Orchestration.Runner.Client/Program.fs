@@ -247,6 +247,10 @@ let main arguments =
         match FiniteCustodyInertAdapter.unavailable () with
         | Error reason -> eprintfn "%s" reason; 3
         | Ok () -> 0
+    elif Array.tryHead arguments = Some "finite-custody-native-inert" then
+        match FiniteCustodyInertAdapter.nativeUnavailable () with
+        | Error reason -> eprintfn "%s" reason; 3
+        | Ok () -> 0
     elif Array.tryHead arguments = Some "diagnostic-stdio" then
         match pairs arguments[1..] with
         | Error reason ->

@@ -712,3 +712,135 @@ module FiniteCustodyWindowTests =
         require "failed-local-operation-closes-terminal-validator" (lock validated (fun () -> List.ofSeq validated=["ready"]))
         require "failed-local-operation-closes-terminal-sink" (lock persisted (fun () -> List.ofSeq persisted=["ready"]))
         require "queued-terminal-never-restores-failed-local-session" (session.Accepted.Length=1 && session.ConfirmedAckOrdinal=0 && outcome.StopReason=Some SinkFailure && not outcome.ProtocolComplete)
+
+    let private nativePlan () : FiniteCustodyNativeInertPlan =
+        { Schema = FiniteCustodyNativeInertPlan.schema
+          Mode = "native-inert-source"
+          Abi = FiniteCustodyNativeInertPlan.abi
+          Binding = descriptor
+          OriginalWindow = FiniteCustodyWindow.prepare (at 1000L) original |> accepted
+          ChildFds = FiniteCustodyNativeInertPlan.childFds
+          CredentialSourceKind = "inert-fixed-sentinel/1"
+          CapabilityId = Guid.Parse "afbc9c2c-7e49-4732-b610-c536a4c5aec5"
+          ProviderSourceClosure = None
+          MaximumCredentialBodyBytes = 128
+          ExecutableRecipe = "assembly-static-inert-child/1"
+          ExecutableSha256 = None
+          FilterSha256 = None
+          MaximumProtocolFrameBytes = PhaseResultProtocol.maximumFrameBytes
+          MaximumDiagnosticBytes = 1024
+          ProductionAvailable = false }
+
+    let private nativeReason owner expected actual =
+        match FiniteCustodySessionAdapter.PrepareNativeInert(owner, expected, actual) with
+        | Error reason -> reason
+        | Ok _ -> failwith "native preparation must remain unavailable"
+
+    [<Fact>]
+    let ``native inert plan accepts only matching data without claiming native readiness`` () =
+        let plan = nativePlan ()
+        Assert.Equal(Ok (), FiniteCustodyNativeInertPlan.validate plan plan)
+        Assert.False FiniteCustodyNativeInertPlan.productionAvailable
+        Assert.Equal("finite-custody-native-inert-unavailable", nativeReason (FiniteCustodyNativeInertAdmission()) plan plan)
+
+    [<Fact>]
+    let ``native inert plan rejects malformed fixed descriptor roles even when expected repeats them`` () =
+        let plan = nativePlan ()
+        let first = List.head plan.ChildFds
+        let rest = List.tail plan.ChildFds
+        let mutations =
+            [ List.rev plan.ChildFds
+              { first with Number = 4 } :: rest
+              { first with Number = 1 } :: rest
+              { first with Role = "owner-response" } :: rest
+              { first with Direction = "write" } :: rest
+              { first with Kind = "pathname" } :: rest
+              plan.ChildFds @ [ { first with Number = 4 } ]
+              rest ]
+        for fds in mutations do
+            let bad = { plan with ChildFds = fds }
+            Assert.True(Result.isError (FiniteCustodyNativeInertPlan.validate bad bad))
+
+    [<Fact>]
+    let ``native inert plan rejects credential and executable escape discriminators`` () =
+        let plan = nativePlan ()
+        let mutations =
+            [ { plan with Schema = "other" }
+              { plan with Mode = "production" }
+              { plan with Abi = "other" }
+              { plan with CredentialSourceKind = "app-key" }
+              { plan with ExecutableRecipe = "/arbitrary/program" }
+              { plan with MaximumCredentialBodyBytes = 129 }
+              { plan with MaximumProtocolFrameBytes = PhaseResultProtocol.maximumFrameBytes + 1 }
+              { plan with MaximumDiagnosticBytes = 0 }
+              { plan with MaximumDiagnosticBytes = PhaseResultProtocol.maximumFrameBytes + 1 }
+              { plan with CapabilityId = Guid.Empty }
+              { plan with ProductionAvailable = true } ]
+        for bad in mutations do
+            Assert.True(Result.isError (FiniteCustodyNativeInertPlan.validate bad bad))
+
+    [<Fact>]
+    let ``native inert plan preserves synthetic workflow and existing inert process rules`` () =
+        let plan = nativePlan ()
+        let mutations =
+            [ { descriptor with WorkflowRun = 1UL }
+              { descriptor with WorkflowAttempt = 1u }
+              { descriptor with Process = { descriptor.Process with Platform = "linux" } }
+              { descriptor with OriginalGeneration = 0L }
+              { descriptor with Identity = { descriptor.Identity with ProfileId = "other" } } ]
+        for binding in mutations do
+            let bad = { plan with Binding = binding }
+            Assert.True(Result.isError (FiniteCustodyNativeInertPlan.validate bad bad))
+
+    [<Fact>]
+    let ``native inert plan requires independent source and original clock joins`` () =
+        let plan = nativePlan ()
+        let resetOriginal = Budget.create (at 2000L) (TimeSpan.FromSeconds 300.) (TimeSpan.FromSeconds 15.) |> accepted
+        let resetWindow = FiniteCustodyWindow.prepare (at 2000L) resetOriginal |> accepted
+        let mutations =
+            [ { plan with OriginalWindow = resetWindow }
+              { plan with Binding = { descriptor with ChildRevision = String.replicate 40 "2" } }
+              { plan with Binding = { descriptor with RuntimeClosure = String.replicate 64 "3" } }
+              { plan with Binding = { descriptor with ResultDestination = "other-slot" } }
+              { plan with CapabilityId = Guid.NewGuid() } ]
+        for bad in mutations do
+            Assert.True(Result.isError (FiniteCustodyNativeInertPlan.validate plan bad))
+
+    [<Fact>]
+    let ``native inert draft pins and populated pins cannot construct a native session`` () =
+        let plan = nativePlan ()
+        let pinned = { plan with ProviderSourceClosure = Some(String.replicate 64 "a")
+                                 ExecutableSha256 = Some(String.replicate 64 "b")
+                                 FilterSha256 = Some(String.replicate 64 "c") }
+        Assert.Equal(Ok (), FiniteCustodyNativeInertPlan.validate pinned pinned)
+        Assert.Equal("finite-custody-native-inert-unavailable", nativeReason (FiniteCustodyNativeInertAdmission()) pinned pinned)
+        for bad in [ { plan with ProviderSourceClosure = Some "bad" }
+                     { plan with ExecutableSha256 = Some "bad" }
+                     { plan with FilterSha256 = Some "bad" } ] do
+            Assert.True(Result.isError (FiniteCustodyNativeInertPlan.validate bad bad))
+
+    [<Fact>]
+    let ``native inert admission retains invocation and capability reservation after refusal`` () =
+        let plan = nativePlan ()
+        let owner = FiniteCustodyNativeInertAdmission()
+        Assert.Equal("finite-custody-native-inert-unavailable", nativeReason owner plan plan)
+        Assert.Equal("finite-custody-native-inert-admission-consumed", nativeReason owner plan plan)
+        let anotherInvocation = { plan with Binding = { descriptor with Identity = { descriptor.Identity with InvocationId = Guid.NewGuid() } } }
+        Assert.Equal("finite-custody-native-inert-admission-consumed", nativeReason owner anotherInvocation anotherInvocation)
+        let anotherCapability = { plan with CapabilityId = Guid.NewGuid() }
+        Assert.Equal("finite-custody-native-inert-admission-consumed", nativeReason owner anotherCapability anotherCapability)
+
+    [<Fact>]
+    let ``native inert malformed plan cannot consume the valid original capability`` () =
+        let plan = nativePlan ()
+        let owner = FiniteCustodyNativeInertAdmission()
+        let malformed = { plan with ChildFds = [] }
+        Assert.Equal("finite-custody-native-inert-plan-refused", nativeReason owner malformed malformed)
+        Assert.Equal("finite-custody-native-inert-unavailable", nativeReason owner plan plan)
+
+    [<Fact>]
+    let ``native inert missing owner or window refuses without constructing ports`` () =
+        let plan = nativePlan ()
+        Assert.Equal("finite-custody-native-inert-unavailable", nativeReason (Unchecked.defaultof<FiniteCustodyNativeInertAdmission>) plan plan)
+        let missingWindow = { plan with OriginalWindow = Unchecked.defaultof<FiniteCustodyWindow> }
+        Assert.True(Result.isError (FiniteCustodyNativeInertPlan.validate missingWindow missingWindow))

@@ -130,6 +130,16 @@ type FiniteCustodyInertAdmission() =
 /// Narrow callable facade over the maintained inert composition. Native mode
 /// refuses before clocks, channels, retirement or any caller callback is invoked.
 type FiniteCustodySessionAdapter private (session: FiniteCustodyComposition.Session, bridge: FiniteCustodyCallbackBridge.Endpoint) =
+    /// S4-A has no native constructor or provider port. Matching plan data cannot
+    /// produce a session, including when all proposed closure hashes are populated.
+    static member PrepareNativeInert(admission: FiniteCustodyNativeInertAdmission,
+                                     expected: FiniteCustodyNativeInertPlan, actual: FiniteCustodyNativeInertPlan): Result<FiniteCustodySessionAdapter,string> =
+        try
+            match admission.Take(expected, actual) with
+            | Error reason -> Error reason
+            | Ok () -> Error "finite-custody-native-inert-unavailable"
+        with _ -> Error "finite-custody-native-inert-unavailable"
+
     /// Source fixture observation only; never a native grant.
     member internal _.ConfirmedAckOrdinal = session.ConfirmedAckOrdinal
     member _.RetainedTasks = Array.append session.RetainedTasks bridge.Tasks
