@@ -12,29 +12,32 @@ open FS.GG.Execution.Contracts
 [<assembly: System.Runtime.CompilerServices.InternalsVisibleTo("FS.GG.Coordination.Orchestration.Execution.Tests")>]
 do ()
 
+/// Independently held descriptor for the source-only inert adapter.
+type FiniteCustodyInertDescriptor =
+    { Mode: string
+      Identity: OperationIdentity
+      OriginalOperation: string
+      OriginalGeneration: int64
+      DomainProfile: string
+      Process: ProcessGeneration
+      ChildRevision: string
+      RunnerRevision: string
+      RunnerClosure: string
+      ContractDigest: string
+      RuntimeClosure: string
+      WorkflowRepository: uint64
+      WorkflowPath: string
+      WorkflowRevision: string
+      WorkflowRun: uint64
+      WorkflowAttempt: uint32
+      App: uint64
+      Installation: uint64
+      ChannelRoles: string list
+      ResultDestination: string }
+
 /// Source-only composition. Construction has no native launcher or credential port.
 module internal FiniteCustodyComposition =
-    type Descriptor =
-        { Mode: string
-          Identity: OperationIdentity
-          OriginalOperation: string
-          OriginalGeneration: int64
-          DomainProfile: string
-          Process: ProcessGeneration
-          ChildRevision: string
-          RunnerRevision: string
-          RunnerClosure: string
-          ContractDigest: string
-          RuntimeClosure: string
-          WorkflowRepository: uint64
-          WorkflowPath: string
-          WorkflowRevision: string
-          WorkflowRun: uint64
-          WorkflowAttempt: uint32
-          App: uint64
-          Installation: uint64
-          ChannelRoles: string list
-          ResultDestination: string }
+    type Descriptor = FiniteCustodyInertDescriptor
 
     /// All callbacks are explicitly inert and run on retained tasks outside supervision.
     /// Termination is an observation of last-thread termination, not signal acceptance.
@@ -58,7 +61,7 @@ module internal FiniteCustodyComposition =
         not (isNull value) && value.Length = size
         && (value |> Seq.forall (fun c -> (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')))
 
-    let private valid (descriptor: Descriptor) =
+    let valid (descriptor: Descriptor) =
         descriptor.Mode = "inert"
         && descriptor.Identity.ProfileId = FiniteCustodyWindow.profileId
         && descriptor.Identity.InvocationId <> Guid.Empty
@@ -146,7 +149,7 @@ module internal FiniteCustodyComposition =
                    || not (consumed.Add actual.Identity.InvocationId) then Error "finite-composition-admission-refused"
                 else Ok ())
 
-    type Session private (clock: IMonotonicClock, window, binding, ports: Ports, token: CancellationToken) =
+    type Session private (clock: IMonotonicClock, window, binding, ports: Ports, token: CancellationToken, channelFailure: unit -> bool) =
         let protocol = PhaseResultProtocol.Session binding
         // Construct and bound the codec's real start frame during admission, before
         // any callback. It will be written at most once by the retained writer.
@@ -196,6 +199,7 @@ module internal FiniteCustodyComposition =
                 requestStop WorkDeadline
                 None
             | Ok _ when requireRunning && ports.Termination.IsCompleted -> requestStop OwnerLost; None
+            | Ok _ when channelFailure () -> requestStop SinkFailure; None
             | Ok _ when lock gate (fun () -> refusal) -> None
             | Ok(now, _) -> Some now
         let callbackCheckpoint (snapshot: PhaseResultSnapshot) =
@@ -206,6 +210,7 @@ module internal FiniteCustodyComposition =
                 | Error _ -> requestStop OwnerLost; None
                 | Ok _ when token.IsCancellationRequested -> requestStop CallerCancellation; None
                 | Ok(_, view) when view.WorkExpired -> requestStop WorkDeadline; None
+                | Ok _ when channelFailure () -> requestStop SinkFailure; None
                 | Ok _ when lock gate (fun () -> refusal) -> None
                 | Ok(now, _) -> Some now
             else
@@ -384,7 +389,7 @@ module internal FiniteCustodyComposition =
                         | Error _ -> Some OwnerLost
                         | Ok _ when token.IsCancellationRequested -> Some CallerCancellation
                         | Ok(_,view) when view.WorkExpired -> Some WorkDeadline
-                        | _ when protocol.Refused || lock gate (fun () -> refusal) -> Some SinkFailure
+                        | _ when channelFailure () || protocol.Refused || lock gate (fun () -> refusal) -> Some SinkFailure
                         | _ when ports.Termination.IsCompleted && not (terminated ()) -> Some OwnerLost
                         | _ -> None
                     match reason with
@@ -419,7 +424,7 @@ module internal FiniteCustodyComposition =
                       ProtocolComplete = lock gate (fun () -> inputComplete && not refusal) }
         }
 
-        static member Prepare(admission: Admission, expected, actual, clock: IMonotonicClock, original, binding: ReadOnlyMemory<byte>, ports, token) =
+        static member Prepare(admission: Admission, expected, actual, clock: IMonotonicClock, original, binding: ReadOnlyMemory<byte>, ports, token, ?channelFailure: unit -> bool) =
             // Reject native descriptors and unsupported runners before clock callbacks,
             // descriptor consumption, channel construction, launch or acquisition.
             if not (valid actual) || actual <> expected then Error "finite-composition-descriptor-refused"
@@ -434,5 +439,5 @@ module internal FiniteCustodyComposition =
                     | Ok window ->
                         match admission.Take(actual, expected, window, ownedBinding) with
                         | Error reason -> Error reason
-                        | Ok () -> Ok(Session(clock, window, ownedBinding, ports, token))
+                        | Ok () -> Ok(Session(clock, window, ownedBinding, ports, token, defaultArg channelFailure (fun () -> false)))
                 with _ -> Error "finite-composition-prepare-refused"

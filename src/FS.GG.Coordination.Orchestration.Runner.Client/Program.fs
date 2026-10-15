@@ -243,6 +243,10 @@ let main arguments =
         || RuntimeInformation.ProcessArchitecture <> Architecture.X64
     then
         usage ()
+    elif Array.tryHead arguments = Some "finite-custody-inert" then
+        match FiniteCustodyInertAdapter.unavailable () with
+        | Error reason -> eprintfn "%s" reason; 3
+        | Ok () -> 0
     elif Array.tryHead arguments = Some "diagnostic-stdio" then
         match pairs arguments[1..] with
         | Error reason ->
