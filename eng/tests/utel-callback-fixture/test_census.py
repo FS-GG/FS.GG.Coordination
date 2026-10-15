@@ -14,6 +14,7 @@ from unittest.mock import patch
 
 ROOT = pathlib.Path(__file__).resolve().parents[3]
 helper = runpy.run_path(str(ROOT / 'eng/utel-callback-fixture.py'), run_name='callback_census_test')
+cut = runpy.run_path(str(ROOT / 'eng/tests/utel-callback-fixture/terminal_cut_owner.py'), run_name='terminal_cut_test')
 EXPECTED = json.loads((ROOT / 'eng/utel-callback-cases.json').read_bytes())['cases']
 
 
@@ -39,6 +40,29 @@ class CensusControls(unittest.TestCase):
                                 (EXPECTED, ['Failed'] + ['Passed'] * (len(EXPECTED) - 1))]:
             with self.subTest(names=len(names), outcomes=outcomes):
                 with self.assertRaises(RuntimeError): self.check(names, outcomes)
+
+
+class TerminalCutControls(unittest.TestCase):
+    def test_closed_release_requires_current_execution_and_exact_cut(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = pathlib.Path(temporary) / 'release.json'
+            expected = {'nonce': 'a' * 32, 'binding': 'b' * 64, 'request': 'c' * 64,
+                        'ordinal': 6, 'stage': 'readback'}
+            path.write_text(json.dumps(expected))
+            cut['closed_release'](path, expected['nonce'], expected['binding'], expected['request'])
+            for changed in [dict(expected, nonce='d' * 32), dict(expected, ordinal=5),
+                            dict(expected, request='d' * 64), dict(expected, stage='replace'),
+                            dict(expected, extra=True)]:
+                path.write_text(json.dumps(changed))
+                with self.subTest(changed=changed):
+                    with self.assertRaises(ValueError):
+                        cut['closed_release'](path, expected['nonce'], expected['binding'], expected['request'])
+
+    def test_digesting_input_hashes_bytes_actually_read(self):
+        stream = cut['DigestingInput'](io.BytesIO(b'one-two'))
+        self.assertEqual(b'one', stream.read(3))
+        self.assertEqual(b'-two', stream.read(4))
+        self.assertEqual(hashlib.sha256(b'one-two').hexdigest(), stream.digest.hexdigest())
 
 
 class PairControls(unittest.TestCase):
