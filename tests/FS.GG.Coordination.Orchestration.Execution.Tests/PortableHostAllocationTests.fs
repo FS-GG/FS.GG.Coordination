@@ -186,7 +186,7 @@ type PortableHostAllocationTests() =
                          ReceiptDigest = Convert.ToHexString(SHA256.HashData input).ToLowerInvariant()
                          Lifecycle = PortableHostAllocation.emptyLifecycle } }
         Assert.True(PortableHostSupplierIngress.authenticate verifier identity reservation (at 1.) (TimeSpan.FromSeconds 5.) bytes |> Result.isError)
-        Assert.True(bytes = original)
+        Assert.True((bytes = original))
 
     [<Fact>]
     member _.``execution retains both original bounds and reserves export and cleanup``() =
