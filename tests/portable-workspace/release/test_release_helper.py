@@ -88,13 +88,17 @@ def main() -> None:
                 add_tar_file(archive, f"blobs/sha256/{image_digest}", image_manifest)
         write_archive(index)
 
-        reference = f"localhost/test@sha256:{image_digest}"
+        image_name = "localhost/fsgg-portable-workspace:python-3.14.0-node-24.8.0-ts-5.9.2"
+        reference = f"{image_name}@sha256:{image_digest}"
         image_id = f"sha256:{config_digest}"
         qualified_manifest = work / "image-manifest.json"
         write_json(qualified_manifest, {
             "schema": "fsgg.portable-workspace-local-image/1",
-            "source": {"revision": source, "tree": tree},
+            "source": {"revision": source, "tree": tree,
+                       "containerfileSha256": "41f2ae90901851254556d87a85e17011b816e4f4847103376f213f651ef537b4",
+                       "inputsSha256": "c5ef4bb365b37c9213015166758e0fd62bd9230d2bde51c2f2d265ae21f66065"},
             "image": {
+                "name": image_name,
                 "reference": reference,
                 "id": image_id,
                 "digest": f"sha256:{image_digest}",
@@ -177,6 +181,46 @@ def main() -> None:
         assert wrong_manifest.returncode == 2
         assert "qualified image manifest digest changed" in wrong_manifest.stderr
         write_json(qualification, original_qualification)
+
+        # These synthetic receipts test profile correspondence, never authenticity.
+        original_manifest = json.loads(qualified_manifest.read_text())
+        import copy
+        variants = []
+        for value in ("common-arch", "unknown", None, True):
+            variants.append({**copy.deepcopy(original_manifest), "profile": value})
+        for profile in (None, "portable-python"):
+            unpinned = copy.deepcopy(original_manifest)
+            unpinned['source']['containerfileSha256'] = '0'*64
+            if profile is not None:
+                unpinned['profile'] = profile
+            variants.append(unpinned)
+        wrong_image = copy.deepcopy(original_manifest)
+        wrong_image['image']['name'] = 'localhost/fsgg-provisioned-common:arch-20261012'
+        variants.append(wrong_image)
+        sentinel_directory = work/'sentinel-tools';sentinel_directory.mkdir()
+        marker=work/'unexpected-git'
+        sentinel=sentinel_directory/'git'
+        sentinel.write_text("#!/bin/sh\nprintf unexpected > '"+str(marker)+"'\nexit 88\n")
+        sentinel.chmod(0o700)
+        import os
+        environment={**os.environ,'PATH':str(sentinel_directory)+os.pathsep+os.environ.get('PATH','')}
+        for index,value in enumerate(variants):
+            write_json(qualified_manifest,value)
+            write_json(qualification,{**original_qualification,'manifestSha256':digest(qualified_manifest.read_bytes())})
+            rejected_output=work/f'profile-refused-{index}'
+            rejected=subprocess.run([*arguments,'--output',str(rejected_output)],cwd=ROOT,text=True,capture_output=True,env=environment)
+            assert rejected.returncode==2,rejected.stderr
+            assert 'portable-python' in rejected.stderr,rejected.stderr
+            assert not rejected_output.exists() and not marker.exists()
+        write_json(qualified_manifest,{**original_manifest,'profile':'portable-python'})
+        write_json(qualification,{**original_qualification,'manifestSha256':digest(qualified_manifest.read_bytes())})
+        write_json(evidence,{**passing,'manifestSha256':digest(qualified_manifest.read_bytes())})
+        explicit_output=work/'explicit-python-release'
+        subprocess.run([*arguments,'--output',str(explicit_output)],cwd=ROOT,check=True)
+        assert {item.name for item in explicit_output.iterdir()}==expected
+        write_json(qualified_manifest,original_manifest)
+        write_json(qualification,original_qualification)
+        write_json(evidence,passing)
 
         original_archive = image_archive.read_bytes()
         image_archive.write_bytes(original_archive + b"mutated")

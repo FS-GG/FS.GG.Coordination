@@ -26,6 +26,8 @@ PACKAGE_ID = "FS.GG.Coordination.Cli"
 CLI_DLL = "FS.GG.Coordination.Cli.dll"
 TOOL_PREFIX = PurePosixPath("tools/net10.0/any")
 IMAGE_NAME = "localhost/fsgg-portable-workspace:python-3.14.0-node-24.8.0-ts-5.9.2"
+PYTHON_CONTAINERFILE_SHA256 = "41f2ae90901851254556d87a85e17011b816e4f4847103376f213f651ef537b4"
+PYTHON_INPUTS_SHA256 = "c5ef4bb365b37c9213015166758e0fd62bd9230d2bde51c2f2d265ae21f66065"
 GRANT_PATH = Path("/etc/fsgg/portable-workspaces/python-hello-v1.json")
 MAX_PACKAGE_ENTRIES = 4096
 MAX_PACKAGE_BYTES = 128 * 1024 * 1024
@@ -211,6 +213,26 @@ def archive_identity(path: Path) -> dict[str, str]:
         }
 
 
+def require_python_image_profile(manifest: dict) -> None:
+    """Finite recipe identity preserves authentic legacy receipts without profile guessing."""
+    if not isinstance(manifest, dict) or manifest.get('schema') != 'fsgg.portable-workspace-local-image/1':
+        raise ValueError('image manifest receipt schema changed')
+    if 'profile' in manifest and manifest['profile'] != 'portable-python':
+        raise ValueError('image manifest is outside the portable-python profile')
+    source = manifest.get('source', {})
+    image = manifest.get('image', {})
+    if (not isinstance(source, dict) or not isinstance(image, dict)
+            or source.get('containerfileSha256') != PYTHON_CONTAINERFILE_SHA256
+            or source.get('inputsSha256') != PYTHON_INPUTS_SHA256
+            or image.get('name') != IMAGE_NAME):
+        raise ValueError('image manifest lacks the pinned portable-python recipe identity')
+    reference = image.get('reference')
+    prefix = IMAGE_NAME + '@sha256:'
+    if not isinstance(reference, str) or not reference.startswith(prefix):
+        raise ValueError('image manifest lacks the pinned portable-python image reference')
+    exact_sha(reference[len(prefix):])
+
+
 def prepare(args: argparse.Namespace) -> None:
     package = args.package.resolve()
     archive = args.image_archive.resolve()
@@ -227,6 +249,8 @@ def prepare(args: argparse.Namespace) -> None:
         raise ValueError("image archive digest changed")
     if sha256_file(manifest_path) != manifest_sha:
         raise ValueError("image manifest receipt digest changed")
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    require_python_image_profile(manifest)
     package_id, package_version = package_identity(package, args.expected_version)
     package_entries = extract_package(package, args.install_root.resolve())
     tool_root = args.install_root.resolve() / TOOL_PREFIX
@@ -239,7 +263,6 @@ def prepare(args: argparse.Namespace) -> None:
         raise ValueError("package lacks the complete installed CLI launcher closure")
     closure_sha, closure = payload_digest(tool_root)
     oci = archive_identity(archive)
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     image = manifest.get("image", {})
     source = manifest.get("source", {})
     if manifest.get("schema") != "fsgg.portable-workspace-local-image/1":

@@ -63,6 +63,24 @@ let readJson path =
     require (File.Exists path) $"input is missing: {path}"
     JsonDocument.Parse(File.ReadAllBytes path)
 
+// Preserve legacy profile absence only for the pinned Python recipe/image identity.
+let requirePythonImageProfile (manifestRoot: JsonElement) =
+    require (stringProperty "schema" manifestRoot = "fsgg.portable-workspace-local-image/1") "image manifest schema changed"
+    let mutable profile = Unchecked.defaultof<JsonElement>
+    if manifestRoot.TryGetProperty("profile", &profile) then
+        require (profile.ValueKind = JsonValueKind.String && profile.GetString() = "portable-python") "image manifest is outside the portable-python profile"
+    let source = property "source" manifestRoot
+    let image = property "image" manifestRoot
+    let imageName = "localhost/fsgg-portable-workspace:python-3.14.0-node-24.8.0-ts-5.9.2"
+    require (stringProperty "containerfileSha256" source = "41f2ae90901851254556d87a85e17011b816e4f4847103376f213f651ef537b4"
+             && stringProperty "inputsSha256" source = "c5ef4bb365b37c9213015166758e0fd62bd9230d2bde51c2f2d265ae21f66065"
+             && stringProperty "name" image = imageName) "image manifest lacks the pinned portable-python recipe identity"
+    let reference = stringProperty "reference" image
+    let prefix = imageName + "@sha256:"
+    require (reference.StartsWith(prefix, StringComparison.Ordinal)) "image manifest lacks the pinned portable-python image reference"
+    let digest = reference.Substring(prefix.Length)
+    require (digest.Length = 64 && digest |> Seq.forall (fun character -> "0123456789abcdef".Contains character)) "image manifest lacks a lowercase SHA-256 image reference"
+
 let canonicalJson (node: JsonNode) =
     utf8.GetBytes(node.ToJsonString(JsonSerializerOptions(WriteIndented = false)) + "\n")
 
@@ -172,6 +190,9 @@ let retainedImagePath = Path.Combine(output, imageName)
 let releaseManifestPath = Path.Combine(output, manifestName)
 
 let validateInputs () =
+    use imageManifest = readJson imageManifestPath
+    let imageRoot = imageManifest.RootElement
+    requirePythonImageProfile imageRoot
     require (version = "0.2.0" || version = "0.2.1") "only reviewed portable release versions 0.2.0 and 0.2.1 may be prepared"
     require (source.Length = 40 && source |> Seq.forall Uri.IsHexDigit) "source must be an exact 40-character Git SHA"
     require (Path.GetFileName packagePath = packageName) "package filename changed"
@@ -196,9 +217,6 @@ let validateInputs () =
     let imageReference = stringProperty "imageReference" qualificationRoot
     let imageId = stringProperty "imageId" qualificationRoot
     require (imageId.StartsWith("sha256:", StringComparison.Ordinal) && exactSha (imageId.Substring(7))) "qualified image ID is invalid"
-    use imageManifest = readJson imageManifestPath
-    let imageRoot = imageManifest.RootElement
-    require (stringProperty "schema" imageRoot = "fsgg.portable-workspace-local-image/1") "image manifest schema changed"
     let imageSource = property "source" imageRoot
     require (stringProperty "revision" imageSource = source && stringProperty "tree" imageSource = tree) "image source identity changed"
     let image = property "image" imageRoot

@@ -14,6 +14,7 @@ import tarfile
 import tempfile
 from types import SimpleNamespace
 import zipfile
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -83,7 +84,7 @@ def package(path: Path, *, extra: tuple[str, bytes] | None = None) -> None:
             archive.writestr(name, value)
 
 
-def prepare(root: Path) -> tuple[Path, Path]:
+def prepare(root: Path, manifest_update: dict | None = None, refusal: str | None = None) -> tuple[Path, Path]:
     candidate = root / "candidate.nupkg"
     archive = root / "candidate.oci.tar"
     manifest_path = root / "image-manifest.json"
@@ -91,15 +92,21 @@ def prepare(root: Path) -> tuple[Path, Path]:
     receipt = root / "candidate-receipt.json"
     package(candidate)
     manifest_digest, config_digest = image_archive(archive)
-    manifest_path.write_bytes(canonical({
+    manifest_value = {
         "schema": "fsgg.portable-workspace-local-image/1",
-        "source": {"revision": "a" * 40, "tree": "b" * 40},
+        "source": {"revision": "a" * 40, "tree": "b" * 40,
+                   "containerfileSha256": HELPER.PYTHON_CONTAINERFILE_SHA256,
+                   "inputsSha256": HELPER.PYTHON_INPUTS_SHA256},
         "image": {
+            "name": HELPER.IMAGE_NAME,
             "reference": f"{HELPER.IMAGE_NAME}@sha256:{manifest_digest}",
             "archiveConfigDigest": f"sha256:{config_digest}",
             "id": f"sha256:{config_digest}",
         },
-    }))
+    }
+    if manifest_update:
+        manifest_value.update(manifest_update)
+    manifest_path.write_bytes(canonical(manifest_value))
     args = SimpleNamespace(
         package=candidate,
         expected_package_sha256=HELPER.sha256_file(candidate),
@@ -113,11 +120,41 @@ def prepare(root: Path) -> tuple[Path, Path]:
         expected_image_manifest_sha256=HELPER.sha256_file(manifest_path),
         receipt=receipt,
     )
-    HELPER.prepare(args)
+    if refusal is None:
+        HELPER.prepare(args)
+    else:
+        with patch.object(HELPER, "extract_package", side_effect=AssertionError("extraction before profile guard")), \
+             patch.object(HELPER, "archive_identity", side_effect=AssertionError("archive before profile guard")), \
+             patch.object(HELPER, "package_identity", side_effect=AssertionError("package before profile guard")), \
+             patch.object(HELPER.subprocess, "Popen", side_effect=AssertionError("process before profile guard")):
+            try:
+                HELPER.prepare(args)
+                raise AssertionError("incompatible profile was accepted")
+            except ValueError as error:
+                assert refusal in str(error), str(error)
+        assert not install.exists() and not receipt.exists()
     return install, receipt
 
 
+def profile_controls() -> None:
+    # Synthetic receipt identity exercises correspondence, never image authenticity.
+    for value in ("common-arch", "unknown", None, True, 42):
+        with tempfile.TemporaryDirectory(prefix="installed-profile-refusal-") as temporary:
+            prepare(Path(temporary), {"profile": value}, "outside the portable-python profile")
+    for update in (
+        {"source": {"revision": "a"*40, "tree": "b"*40}},
+        {"profile": "portable-python", "source": {"revision": "a"*40, "tree": "b"*40}},
+        {"image": {"name": "localhost/fsgg-provisioned-common:arch-20261012", "reference": HELPER.IMAGE_NAME+"@sha256:"+"a"*64}},
+    ):
+        with tempfile.TemporaryDirectory(prefix="installed-profile-unpinned-") as temporary:
+            prepare(Path(temporary), update, "pinned portable-python recipe identity")
+    with tempfile.TemporaryDirectory(prefix="installed-profile-explicit-python-") as temporary:
+        _, receipt = prepare(Path(temporary), {"profile": "portable-python"})
+        assert receipt.exists()
+
+
 def main() -> None:
+    profile_controls()
     with tempfile.TemporaryDirectory(prefix="installed-python-qualification-") as temporary:
         root = Path(temporary)
         install, receipt_path = prepare(root)
