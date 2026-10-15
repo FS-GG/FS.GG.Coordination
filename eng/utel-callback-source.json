@@ -1,7 +1,7 @@
 {
   "schema": "fsgg.utel-callback-source/1",
   "repository": "FS-GG/.github",
-  "revision": "84462e36b54588d04c025aace86731b685f7e85b",
-  "manifestSha256": "464fb0d9b5bcb7f82be308f6fe1c70665b59346d413189df7900963d053cb601",
-  "qualification": "source-only callback pair; native auth-child custody and credentials excluded"
+  "revision": "71855c82c5dcb37394e364bbb40a5383eb5ad508",
+  "manifestSha256": "320b4b5846ac55443c472b74b905b6b97dbb8e850528640e2eca6e17eabc438c",
+  "qualification": "source-only S4-A plan/refusal and callback pairing; native auth-child/FD proof and credentials excluded"
 }

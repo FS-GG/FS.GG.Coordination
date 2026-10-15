@@ -35,6 +35,35 @@ type FiniteCustodyInertDescriptor =
       ChannelRoles: string list
       ResultDestination: string }
 
+/// A declared child endpoint, not an observation that a native descriptor exists.
+type FiniteCustodyNativeInertFd =
+    { Number: int
+      Role: string
+      Direction: string
+      Kind: string }
+
+/// Closed nonsecret data for the separately selected inert native source recipe.
+/// The existing inert binding remains synthetic. Native process, pipe ownership,
+/// filtering and sentinel consumption require independent observations later.
+/// There is no descriptor loader, executable path, argv, environment or secret port.
+type FiniteCustodyNativeInertPlan =
+    { Schema: string
+      Mode: string
+      Abi: string
+      Binding: FiniteCustodyInertDescriptor
+      OriginalWindow: FiniteCustodyWindow
+      ChildFds: FiniteCustodyNativeInertFd list
+      CredentialSourceKind: string
+      CapabilityId: Guid
+      ProviderSourceClosure: string option
+      MaximumCredentialBodyBytes: int
+      ExecutableRecipe: string
+      ExecutableSha256: string option
+      FilterSha256: string option
+      MaximumProtocolFrameBytes: int
+      MaximumDiagnosticBytes: int
+      ProductionAvailable: bool }
+
 /// Source-only composition. Construction has no native launcher or credential port.
 module internal FiniteCustodyComposition =
     type Descriptor = FiniteCustodyInertDescriptor
@@ -442,3 +471,68 @@ module internal FiniteCustodyComposition =
                         | Error reason -> Error reason
                         | Ok () -> Ok(Session(clock, window, ownedBinding, ports, token, defaultArg channelStop (fun () -> None)))
                 with _ -> Error "finite-composition-prepare-refused"
+
+/// Pure source-plan inspection. Success establishes matching data only, never a
+/// held process, an exclusive pipe endpoint, native readiness or credential custody.
+[<RequireQualifiedAccess>]
+module FiniteCustodyNativeInertPlan =
+    let schema = "fsgg.finite-custody-native-inert-plan/1"
+    let abi = "linux-x64-finite-inert-fd/1"
+    let productionAvailable = false
+    let childFds: FiniteCustodyNativeInertFd list =
+        [ { Number = 0; Role = "bootstrap-and-parent-control"; Direction = "read"; Kind = "anonymous-pipe" }
+          { Number = 1; Role = "bootstrap-and-phase-result"; Direction = "write"; Kind = "anonymous-pipe" }
+          { Number = 2; Role = "sanitized-diagnostics"; Direction = "write"; Kind = "anonymous-pipe" }
+          { Number = 3; Role = "inert-credential-input"; Direction = "read"; Kind = "anonymous-pipe" } ]
+
+    let private digest (value: string) =
+        not (isNull value) && value.Length = 64
+        && (value |> Seq.forall (fun c -> (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')))
+
+    /// Unresolved draft pins are data, not a successful native preparation.
+    /// The preparation API remains unavailable even when every draft pin is filled.
+    let validate (expected: FiniteCustodyNativeInertPlan) (actual: FiniteCustodyNativeInertPlan) =
+        try
+            let clock = actual.OriginalWindow |> FiniteCustodyWindow.originalBudget |> Budget.describe
+            let normal = FiniteCustodyWindow.normalWorkExpiresAt actual.OriginalWindow
+            if actual.Schema <> schema || actual.Mode <> "native-inert-source" || actual.Abi <> abi
+               || not (FiniteCustodyComposition.valid actual.Binding)
+               || actual.ChildFds <> childFds
+               || actual.CredentialSourceKind <> "inert-fixed-sentinel/1"
+               || actual.CapabilityId = Guid.Empty
+               || not (Option.forall digest actual.ProviderSourceClosure)
+               || actual.MaximumCredentialBodyBytes <> 128
+               || actual.ExecutableRecipe <> "assembly-static-inert-child/1"
+               || not (Option.forall digest actual.ExecutableSha256)
+               || not (Option.forall digest actual.FilterSha256)
+               || actual.MaximumProtocolFrameBytes <> PhaseResultProtocol.maximumFrameBytes
+               || actual.MaximumDiagnosticBytes <= 0
+               || actual.MaximumDiagnosticBytes > PhaseResultProtocol.maximumFrameBytes
+               || actual.ProductionAvailable
+               || clock.Domain.Id = Guid.Empty || clock.Domain.Frequency <= 0L
+               || normal <= clock.StartedAt || normal >= clock.WorkExpiresAt
+               || clock.WorkExpiresAt >= clock.TotalExpiresAt
+               || actual <> expected then
+                Error "finite-custody-native-inert-plan-refused"
+            else Ok ()
+        with _ -> Error "finite-custody-native-inert-plan-refused"
+
+/// Retain this owner across attempted native preparations. Reconstructing it is
+/// not permission to reuse an original invocation or sentinel capability reservation.
+/// Reserving an attempt is not an observation of a sentinel write or child consumption.
+type FiniteCustodyNativeInertAdmission() =
+    let gate = obj()
+    let invocations = HashSet<Guid>()
+    let capabilities = HashSet<Guid>()
+    member internal _.Take(expected, actual: FiniteCustodyNativeInertPlan): Result<unit,string> =
+        match FiniteCustodyNativeInertPlan.validate expected actual with
+        | Error reason -> Error reason
+        | Ok () ->
+            lock gate (fun () ->
+                if invocations.Contains actual.Binding.Identity.InvocationId || capabilities.Contains actual.CapabilityId then
+                    Error "finite-custody-native-inert-admission-consumed"
+                else
+                    invocations.Add actual.Binding.Identity.InvocationId |> ignore
+                    capabilities.Add actual.CapabilityId |> ignore
+                    // No native launcher, provisioner, clock callback or I/O port exists.
+                    Error "finite-custody-native-inert-unavailable")

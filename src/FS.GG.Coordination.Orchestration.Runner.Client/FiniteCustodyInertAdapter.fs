@@ -10,3 +10,6 @@ module FiniteCustodyInertAdapter =
 
     /// The CLI has no independently supplied fixture context. Refuse before I/O.
     let unavailable () = Error "finite-custody-inert-source-context-unavailable"
+
+    /// No descriptor loader, native launch or sentinel provider is selected here.
+    let nativeUnavailable () = Error "finite-custody-native-inert-unavailable"
