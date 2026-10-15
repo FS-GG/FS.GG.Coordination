@@ -67,7 +67,7 @@ type PortableHostAllocationTests() =
     [<Fact>]
     member _.``supplier sizing matches shared cross-language exact-byte boundary vectors``() =
         // These are source qualification fixtures, not installed/native acceptance evidence.
-        let path = Path.Combine(__SOURCE_DIRECTORY__, "..", "..", "contracts", "portable-workspace", "v1", "supplier-evidence-sizing-vectors.json")
+        let path = Path.Combine(AppContext.BaseDirectory, "Contracts", "supplier-evidence-sizing-vectors.json")
         use document = JsonDocument.Parse(File.ReadAllBytes path)
         let b64 size byteValue =
             Convert.ToBase64String(Array.create size byteValue).TrimEnd('=').Replace('+', '-').Replace('/', '_')
