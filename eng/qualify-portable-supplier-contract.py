@@ -38,7 +38,7 @@ def genesis(creation, reservation, overhead):
 
 
 def response(is_genesis, metadata, events):
-    if not 4 <= metadata <= 6000 or not 0 < len(events) <= 16 or (is_genesis and len(events) != 1):
+    if not 9 <= metadata <= 6000 or not 0 < len(events) <= 16 or (is_genesis and len(events) != 1):
         raise ValueError('supplier-size-refused')
     maximum = envelope(GENESIS if is_genesis else EVENT, SIGNATURE)
     if any(not 0 < length <= maximum for length in events):

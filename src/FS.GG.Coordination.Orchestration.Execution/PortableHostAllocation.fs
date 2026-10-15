@@ -361,7 +361,7 @@ module PortableSupplierProtocol =
     /// events contains base64url strings of exact signed envelopes. The inserted member adds
     /// 12 bytes plus quotes, commas and base64url bytes; all nested bytes count again in the outer envelope.
     let responseBytes genesis metadata (events: int list) =
-        if metadata < 4 || metadata > MaximumResponseMetadataBytes || events.IsEmpty || events.Length > MaximumEvents
+        if metadata < 9 || metadata > MaximumResponseMetadataBytes || events.IsEmpty || events.Length > MaximumEvents
            || (genesis && events.Length <> 1) then Error "supplier-size-refused"
         else
             let eventMaximum = if genesis then MaximumGenesisBytes else MaximumEventBytes

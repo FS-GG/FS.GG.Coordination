@@ -242,6 +242,26 @@
       "genesis": false,
       "metadata": 6000,
       "events": []
+    },
+    {
+      "name": "metadata-below-minimum",
+      "kind": "response",
+      "genesis": false,
+      "metadata": 8,
+      "events": [
+        1
+      ],
+      "expected": null
+    },
+    {
+      "name": "metadata-at-minimum",
+      "kind": "response",
+      "genesis": false,
+      "metadata": 9,
+      "events": [
+        1
+      ],
+      "expected": 25
     }
   ]
 }
