@@ -9,12 +9,10 @@ if [[ -n "$(git status --porcelain --untracked-files=all)" ]]; then
   exit 3
 fi
 export FSGG_UTEL_CALLBACK_SOURCE="$RUNNER_TEMP/utel-callback-source"
-export FSGG_UTEL_SLOT_CALLBACK_SOURCE="$RUNNER_TEMP/utel-slot-callback-source"
 export FSGG_UTEL_CALLBACK_EVIDENCE="$RUNNER_TEMP/compiler-and-tests/callback-pair"
 trap 'python3 eng/utel-callback-fixture.py retain "$?"' EXIT
 python3 -I -S -B eng/tests/utel-callback-fixture/test_census.py
 python3 eng/utel-callback-fixture.py prepare
-python3 eng/utel-callback-fixture.py prepare-slot
 dotnet restore FS.GG.Coordination.sln --locked-mode
 PYTHONDONTWRITEBYTECODE=1 python3 eng/tests/choreo-c2-tlc-retry/test_diagnostics.py DiagnosticControls.test_bootstrap_base_retains_command_cause_before_fixture_scratch_cleanup CommandInterfaceControls
 dotnet build FS.GG.Coordination.sln --configuration Release --no-restore --warnaserror

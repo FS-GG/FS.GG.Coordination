@@ -115,7 +115,7 @@ def prepare(slot=False):
     pin = json.loads((ROOT / ('eng/utel-slot-callback-source.json' if slot else 'eng/utel-callback-source.json')).read_bytes())
     validate_pin(pin)
     require((pin['schema'] == 'fsgg.utel-callback-source/3') == slot, 'callback operation profile differs')
-    destination = pathlib.Path(os.environ['FSGG_UTEL_SLOT_CALLBACK_SOURCE' if slot else 'FSGG_UTEL_CALLBACK_SOURCE'])
+    destination = pathlib.Path(os.environ['FSGG_UTEL_CALLBACK_SOURCE'] + ('-slots' if slot else ''))
     require(destination.is_absolute() and not destination.exists(), 'fresh callback source directory required')
     destination.mkdir(mode=0o700, parents=True)
     def git(*arguments):
@@ -168,6 +168,7 @@ if __name__ == '__main__':
     try:
         if operation == 'prepare' and len(sys.argv) == 2:
             prepare()
+            prepare(slot=True)
         elif operation == 'prepare-slot' and len(sys.argv) == 2:
             prepare(slot=True)
         elif operation == 'census' and len(sys.argv) == 3:

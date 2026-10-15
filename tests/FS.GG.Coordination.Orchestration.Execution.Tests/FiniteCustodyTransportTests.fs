@@ -400,8 +400,9 @@ module FiniteCustodyTransportTests =
         // The gate supplies an immutable pinned owner checkout. This fixture has
         // two processes: this test supervisor and a callback-only Python owner.
         // No authentication child, FD provisioner or native custody is exercised.
-        let source = Environment.GetEnvironmentVariable (if slot then "FSGG_UTEL_SLOT_CALLBACK_SOURCE" else "FSGG_UTEL_CALLBACK_SOURCE")
+        let source = Environment.GetEnvironmentVariable "FSGG_UTEL_CALLBACK_SOURCE"
         Assert.True(not (String.IsNullOrWhiteSpace source) && System.IO.Path.IsPathFullyQualified source, "pinned callback source required")
+        let source = if slot then source + "-slots" else source
         use vectors = System.Text.Json.JsonDocument.Parse(ReadOnlyMemory<byte>(System.IO.File.ReadAllBytes(System.IO.Path.Combine(source, "tests/release-successor-authentication/" + (if slot then "slot-callback-pair-vectors.json" else "callback-pair-vectors.json")))))
         let exchanges = vectors.RootElement.GetProperty("exchanges").EnumerateArray() |> Seq.toArray
         let trustedBind = PhaseCallbackProtocol.decode (Convert.FromHexString(exchanges[0].GetProperty("request").GetString()))
