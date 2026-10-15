@@ -178,6 +178,7 @@ type private PortableJournalEntry =
     | PortableRunning of commandId: Guid * bindingDigest: string * containerName: string
     | PortableSettled of bindingDigest: string * receipt: PortableExecutionReceipt
     | PortableHost of PortableHostJournalEntry
+    | PortableSupplierAdmissionDraft of PortableSupplierAdmissionState
 
 type private PortableLaunchDisposition =
     | UsePortableOutcome of PortableExecutionOutcome
@@ -499,6 +500,160 @@ module PortableWorkspaceExecutor =
                                   Export = exported; OuterRetirement = outer; FirstFailure = failure
                                   ReconciliationConflicts = conflicts } } }
 
+    // This v2 record is an inert source draft. It cannot become authenticated host execution.
+    let private writeSupplier (writer: BinaryWriter) (state: PortableSupplierAdmissionState) =
+        PortableSupplierAdmission.validate state |> Result.defaultWith invalidOp |> ignore
+        let text maximum (value: string) =
+            if isNull value then invalidOp "supplier-journal-null"
+            let bytes = Encoding.UTF8.GetBytes value
+            if bytes.Length > maximum then invalidOp "supplier-journal-field-size"
+            writer.Write bytes.Length
+            writer.Write bytes
+        let optional write value = writer.Write(Option.isSome value); value |> Option.iter write
+        let phase = function
+            | SupplierIntentStored -> 0uy | SupplierCreationPinned -> 1uy | SupplierAwaitingGenesis -> 2uy
+            | SupplierGenesisAccepted -> 3uy | SupplierAckPrepared -> 4uy | SupplierAwaitingActivation -> 5uy | SupplierHostExecution -> 6uy
+        let reservation value =
+            use memory = new MemoryStream()
+            use nested = new BinaryWriter(memory, Encoding.UTF8, true)
+            writeHost nested { BindingDigest = "supplier-source-only"; HostContainerName = "source-only"
+                               State = { Reservation = value; Lifecycle = PortableHostAllocation.emptyLifecycle; Receipt = None } }
+            nested.Flush()
+            if memory.Length > 524288L then invalidOp "supplier-host-section-size"
+            writer.Write(int memory.Length)
+            writer.Write(memory.ToArray())
+        let observation (value: PortableSupplierTranscriptObservation) =
+            writer.Write(match value.Kind with SupplierCreation -> 0uy | SupplierGenesis -> 1uy | SupplierAppend -> 2uy | SupplierUnchanged -> 3uy)
+            for value in [value.IntentDigest; value.TrustPolicyDigest; value.ChallengeDigest] do text 64 value
+            reservation value.OriginalReservation
+            text 4096 value.Identity.Issuer; text 4096 value.Identity.ContainerId
+            writer.Write value.Identity.AllocationDevice; writer.Write value.Identity.AllocationInode
+            text 64 value.OuterImageId; text 4096 value.SupplierSourceRevision
+            for value in [value.CreationBase64; value.CreationReceiptBase64; value.ReservationBase64; value.ResponseBase64] do text 87384 value
+            writer.Write value.EventsBase64.Length
+            value.EventsBase64 |> List.iter (text 35684)
+            optional (text 64) value.FromHead; optional (text 64) value.ToHead
+            writer.Write value.Sequence; writeDate writer value.CollectedAt
+        text 64 "source-only-unqualified-authentication-and-durability"
+        writer.Write state.Revision; writer.Write(phase state.Phase)
+        let command = PortableWorkspaceContract.commandBytes state.Original.Command |> Result.defaultWith invalidOp
+        text 349528 (Convert.ToBase64String command)
+        text 4096 state.Original.QualifiedImage; text 60000 state.Original.IntentBase64
+        text 64 state.Original.IntentDigest; text 64 state.Original.TrustPolicyDigest
+        text 4096 state.Original.SupplierSourceRevision; text 36 (state.Original.ReceiverEpoch.ToString("D"))
+        optional (fun (challenge: PortableSupplierAdmissionChallenge) ->
+            text 36 (challenge.ChallengeId.ToString("D")); text 64 challenge.Digest; text 60000 challenge.BytesBase64
+            text 64 challenge.Purpose; text 36 (challenge.ReceiverEpoch.ToString("D"))
+            writeDate writer challenge.IssuedAt; writeDate writer challenge.NotAfter
+            writer.Write challenge.IssuedMonotonic; writer.Write challenge.DeadlineMonotonic
+            optional (text 64) challenge.ExpectedHead) state.Challenge
+        writer.Write state.ChallengeLedger.Length
+        for id, digest, disposition in state.ChallengeLedger do text 36 (id.ToString("D")); text 64 digest; text 16 disposition
+        optional observation state.Pinned
+        optional (text 64) state.Head; writer.Write state.Sequence
+        for values in [state.EventsBase64; state.ResponsesBase64] do
+            writer.Write values.Length
+            values |> List.iter (text 87384)
+        optional (text 524288) state.CheckpointBase64; optional (text 60000) state.AckDraftBase64
+        optional (text 4096) state.FirstFailure
+        writer.Write state.Conflicts.Count
+        state.Conflicts |> Seq.iter (text 4096)
+
+    let private readSupplier (reader: BinaryReader) =
+        let text maximum =
+            let length = reader.ReadInt32()
+            if length < 0 || length > maximum || int64 length > reader.BaseStream.Length - reader.BaseStream.Position then
+                invalidOp "supplier-journal-field-size"
+            let bytes = reader.ReadBytes length
+            let value = UTF8Encoding(false, true).GetString bytes
+            if Encoding.UTF8.GetBytes(value) <> bytes then invalidOp "supplier-journal-text"
+            value
+        let optional read = if reader.ReadBoolean() then Some(read()) else None
+        let count maximum =
+            let n = reader.ReadInt32()
+            if n < 0 || n > maximum then invalidOp "supplier-journal-count"
+            n
+        let texts maximum fieldMaximum = [ for _ in 1 .. count maximum -> text fieldMaximum ]
+        let reservation () =
+            let length = reader.ReadInt32()
+            if length <= 0 || length > 524288 || int64 length > reader.BaseStream.Length - reader.BaseStream.Position then
+                invalidOp "supplier-host-section-size"
+            use memory = new MemoryStream(reader.ReadBytes length, false)
+            use nested = new BinaryReader(memory, Encoding.UTF8, false)
+            let value = readHost nested
+            if memory.Position <> memory.Length then invalidOp "supplier-host-trailing-bytes"
+            value.State.Reservation
+        let observation () : PortableSupplierTranscriptObservation =
+            let kind = match reader.ReadByte() with 0uy -> SupplierCreation | 1uy -> SupplierGenesis | 2uy -> SupplierAppend | 3uy -> SupplierUnchanged | _ -> invalidOp "supplier-transcript-kind"
+            let intent = text 64
+            let policy = text 64
+            let challenge = text 64
+            let original = reservation ()
+            let issuer = text 4096
+            let cid = text 4096
+            let device = reader.ReadUInt64()
+            let inode = reader.ReadUInt64()
+            let image = text 64
+            let source = text 4096
+            let creation = text 87384
+            let receipt = text 87384
+            let reserved = text 87384
+            let response = text 87384
+            let events = texts 16 35684
+            let previous = optional (fun () -> text 64)
+            let head = optional (fun () -> text 64)
+            let sequence = reader.ReadUInt64()
+            let collected = readDate reader
+            { Kind = kind; IntentDigest = intent; TrustPolicyDigest = policy; ChallengeDigest = challenge
+              OriginalReservation = original; Identity = { Issuer = issuer; ContainerId = cid; AllocationDevice = device; AllocationInode = inode }
+              OuterImageId = image; SupplierSourceRevision = source; CreationBase64 = creation; CreationReceiptBase64 = receipt
+              ReservationBase64 = reserved; ResponseBase64 = response; EventsBase64 = events; FromHead = previous
+              ToHead = head; Sequence = sequence; CollectedAt = collected }
+        if text 64 <> "source-only-unqualified-authentication-and-durability" then invalidOp "supplier-journal-provenance"
+        let revision = reader.ReadUInt64()
+        let phase = match reader.ReadByte() with 0uy -> SupplierIntentStored | 1uy -> SupplierCreationPinned | 2uy -> SupplierAwaitingGenesis | 3uy -> SupplierGenesisAccepted | 4uy -> SupplierAckPrepared | 5uy -> SupplierAwaitingActivation | 6uy -> SupplierHostExecution | _ -> invalidOp "supplier-phase"
+        let command = text 349528 |> Convert.FromBase64String |> PortableWorkspaceContract.parseCommand |> Result.defaultWith invalidOp
+        let image = text 4096
+        let intent = text 60000
+        let intentDigest = text 64
+        let policy = text 64
+        let source = text 4096
+        let epoch = Guid.ParseExact(text 36, "D")
+        let challenge = optional (fun () ->
+            let id = Guid.ParseExact(text 36, "D")
+            let digest = text 64
+            let bytes = text 60000
+            let purpose = text 64
+            let epoch = Guid.ParseExact(text 36, "D")
+            let issued = readDate reader
+            let deadline = readDate reader
+            let monotonic = reader.ReadInt64()
+            let bound = reader.ReadInt64()
+            let head = optional (fun () -> text 64)
+            { ChallengeId = id; Digest = digest; BytesBase64 = bytes; Purpose = purpose; ReceiverEpoch = epoch
+              IssuedAt = issued; NotAfter = deadline; IssuedMonotonic = monotonic; DeadlineMonotonic = bound; ExpectedHead = head })
+        let ledger = [ for _ in 1 .. count 128 do
+                           let id = Guid.ParseExact(text 36, "D")
+                           let digest = text 64
+                           let disposition = text 16
+                           if disposition <> "consumed" && disposition <> "abandoned" then invalidOp "supplier-challenge-disposition"
+                           yield id, digest, disposition ]
+        let pinned = optional observation
+        let head = optional (fun () -> text 64)
+        let sequence = reader.ReadUInt64()
+        let events = texts 1024 87384
+        let responses = texts 128 87384
+        let checkpoint = optional (fun () -> text 524288)
+        let ack = optional (fun () -> text 60000)
+        let failure = optional (fun () -> text 4096)
+        let conflicts = texts 1024 4096 |> Set.ofList
+        { Revision = revision; Original = { Command = command; QualifiedImage = image; IntentBase64 = intent
+                                           IntentDigest = intentDigest; TrustPolicyDigest = policy; SupplierSourceRevision = source; ReceiverEpoch = epoch }
+          Phase = phase; Challenge = challenge; ChallengeLedger = ledger; Pinned = pinned; Head = head
+          Sequence = sequence; EventsBase64 = events; ResponsesBase64 = responses; CheckpointBase64 = checkpoint
+          AckDraftBase64 = ack; FirstFailure = failure; Conflicts = conflicts }
+        |> PortableSupplierAdmission.validate |> Result.defaultWith invalidOp
+
     type private DurableJournal(stateRoot: string) =
         let journalRoot = Path.Combine(stateRoot, "journal-v1")
 
@@ -536,6 +691,9 @@ module PortableWorkspaceExecutor =
                 let schema = reader.ReadString()
                 let entry =
                     match schema with
+                    | "fsgg.portable-execution-supplier-journal/2" ->
+                        if info.Length > int64 PortableSupplierAdmission.MaximumSupplierBytes then invalidOp "supplier-journal-size"
+                        PortableSupplierAdmissionDraft(readSupplier reader)
                     | "fsgg.portable-execution-host-journal/1" -> PortableHost(readHost reader)
                     | "fsgg.portable-execution-journal/1" ->
                       match reader.ReadByte() with
@@ -563,6 +721,9 @@ module PortableWorkspaceExecutor =
 
                 use writer = new BinaryWriter(stream, Encoding.UTF8, true)
                 match entry with
+                | PortableSupplierAdmissionDraft state ->
+                    writer.Write "fsgg.portable-execution-supplier-journal/2"
+                    writeSupplier writer state
                 | PortableHost host ->
                     writer.Write "fsgg.portable-execution-host-journal/1"
                     writeHost writer host
@@ -578,12 +739,16 @@ module PortableWorkspaceExecutor =
                       writer.Write 2uy
                       writer.Write binding
                       writeReceipt writer receipt
-                  | PortableHost _ -> invalidOp "portable-journal-state-refused"
+                  | PortableHost _ | PortableSupplierAdmissionDraft _ -> invalidOp "portable-journal-state-refused"
 
                 writer.Flush()
                 stream.Flush true
                 if stream.Length > int64 PortableWorkspaceContract.maximumDocumentBytes * 4L then
                     invalidOp "portable-journal-size-refused"
+                match entry with
+                | PortableSupplierAdmissionDraft _ when stream.Length > int64 PortableSupplierAdmission.MaximumSupplierBytes ->
+                    invalidOp "supplier-journal-size"
+                | _ -> ()
                 File.Move(temporary, path, true)
             finally
                 if File.Exists temporary then
@@ -608,6 +773,36 @@ module PortableWorkspaceExecutor =
 
         member _.Read(workspaceScope, idempotencyId) =
             locked workspaceScope idempotencyId read
+
+        member _.StageSupplier(state: PortableSupplierAdmissionState, expectedRevision: uint64 option) =
+            locked state.Original.Command.WorkspaceScope state.Original.Command.IdempotencyId (fun path ->
+                let eligible =
+                    match read path, expectedRevision with
+                    | None, None -> state.Revision = 1UL
+                    | Some(PortableSupplierAdmissionDraft previous), Some expected ->
+                        previous.Revision = expected && expected <> UInt64.MaxValue && state.Revision = expected + 1UL
+                        && { previous.Original with ReceiverEpoch = state.Original.ReceiverEpoch } = state.Original
+                        && (previous.FirstFailure |> Option.forall (fun failure -> state.FirstFailure = Some failure))
+                        && Set.isSubset previous.Conflicts state.Conflicts
+                        && (previous.ChallengeLedger |> List.forall (fun entry -> List.contains entry state.ChallengeLedger))
+                        && (state.EventsBase64 |> List.truncate previous.EventsBase64.Length) = previous.EventsBase64
+                        && (state.ResponsesBase64 |> List.truncate previous.ResponsesBase64.Length) = previous.ResponsesBase64
+                        && (previous.Pinned |> Option.forall (fun pinned ->
+                            state.Pinned |> Option.exists (fun current ->
+                                current.Identity = pinned.Identity && current.OuterImageId = pinned.OuterImageId
+                                && current.SupplierSourceRevision = pinned.SupplierSourceRevision
+                                && current.OriginalReservation = pinned.OriginalReservation
+                                && current.CreationBase64 = pinned.CreationBase64
+                                && current.CreationReceiptBase64 = pinned.CreationReceiptBase64
+                                && current.ReservationBase64 = pinned.ReservationBase64)))
+                    | _ -> false
+                if not eligible then invalidOp "supplier-journal-original-or-revision-conflict"
+                match state.Phase with
+                | SupplierIntentStored | SupplierCreationPinned | SupplierAwaitingGenesis | SupplierGenesisAccepted -> ()
+                | _ -> invalidOp "supplier-journal-effect-phase-unavailable"
+                write path (PortableSupplierAdmissionDraft state)
+                // Flush+rename is NOT a qualified directory-durable commit. No ACK/runner receipt.
+                "supplier-admission-commit-unknown: directory durability is unavailable")
 
         member _.Reserve(workspaceScope, idempotencyId, commandId, binding, containerName) =
             locked workspaceScope idempotencyId (fun path ->
@@ -653,6 +848,20 @@ module PortableWorkspaceExecutor =
                     write path (PortableSettled(binding, receipt))
                     true
                 | _ -> false)
+
+    /// Inactive source journal only: shares the existing key/lock, never a runner or transport.
+    /// Every successful write is still durability-Unknown; no production ACK/handoff API exists.
+    type SupplierAdmissionJournal(stateRoot: string) =
+        let journal = DurableJournal(stateRoot)
+        member _.Read(command: PortableWorkspaceCommand) : Result<PortableSupplierAdmissionState * PortableEvidence<unit>, string> =
+            journal.Read(command.WorkspaceScope, command.IdempotencyId)
+            |> Result.bind (function
+                | Some(PortableSupplierAdmissionDraft state) -> Ok(state, EvidenceUnknown "supplier directory durability unqualified")
+                | None -> Error "supplier-admission-journal-missing"
+                | _ -> Error "supplier-admission-journal-conflict")
+        member _.Stage(state: PortableSupplierAdmissionState, expectedRevision: uint64 option) =
+            PortableSupplierAdmission.validate state
+            |> Result.bind (fun validated -> journal.StageSupplier(validated, expectedRevision))
 
     let private error code message retryable details =
         Some

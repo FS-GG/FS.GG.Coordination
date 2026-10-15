@@ -585,3 +585,109 @@ type PortableHostExecutorTests() =
         let duplicate = recover fixture (fixture.Executor()) |> receipt
         Assert.False(duplicate.CleanupCompleted)
         Assert.Equal(1, fixture.Runner.Cleans)
+
+// New source-journal cases never invoke any process, authenticator executable or host effect.
+type SupplierAdmissionJournalTests() =
+    [<Fact>]
+    member _.``source draft shares existing key and survives restart only as durability unknown``() =
+        use fixture = new HostExecutorFixture()
+        let original = SupplierAdmissionFixtures.originalFor fixture.Command fixture.Profile.QualifiedImage
+        let state = PortableSupplierAdmission.beginIntent original |> SupplierAdmissionFixtures.ok
+        let journal = PortableWorkspaceExecutor.SupplierAdmissionJournal(fixture.Policy.Runtime.StateRoot)
+        let status = journal.Stage(state, None) |> SupplierAdmissionFixtures.ok
+        Assert.Contains("commit-unknown", status)
+        let read, durability = PortableWorkspaceExecutor.SupplierAdmissionJournal(fixture.Policy.Runtime.StateRoot).Read fixture.Command |> SupplierAdmissionFixtures.ok
+        Assert.Equal(state, read)
+        match durability with EvidenceUnknown _ -> () | other -> failwithf "Expected Unknown, got %A" other
+        fixture.Executor().ExecuteAsync(fixture.Authority, fixture.Profile, fixture.Command, CancellationToken.None)
+        |> HostExecutorAssertions.wait |> HostExecutorAssertions.refused
+        Assert.Equal(0, fixture.Runner.Runs)
+        Assert.Equal(0, fixture.Runner.Cleans)
+        Assert.Equal(0, fixture.Runner.Recoveries)
+
+    [<Fact>]
+    member _.``source revision conflict and unavailable effect phases preserve journal bytes``() =
+        use fixture = new HostExecutorFixture()
+        let state = SupplierAdmissionFixtures.originalFor fixture.Command fixture.Profile.QualifiedImage |> PortableSupplierAdmission.beginIntent |> SupplierAdmissionFixtures.ok
+        let journal = PortableWorkspaceExecutor.SupplierAdmissionJournal(fixture.Policy.Runtime.StateRoot)
+        journal.Stage(state, None) |> SupplierAdmissionFixtures.ok |> ignore
+        let original = File.ReadAllBytes fixture.Journal
+        Assert.True(journal.Stage({ state with Revision = 2UL }, Some 999UL) |> Result.isError)
+        Assert.True(journal.Stage({ state with Revision = 2UL; Phase = SupplierAckPrepared }, Some 1UL) |> Result.isError)
+        Assert.True(journal.Stage({ state with Revision = 2UL; Phase = SupplierHostExecution }, Some 1UL) |> Result.isError)
+        Assert.True((File.ReadAllBytes fixture.Journal = original))
+        Assert.Equal(0, fixture.Runner.Runs)
+        Assert.Equal(0, fixture.Runner.Cleans)
+
+    [<Fact>]
+    member _.``v2 pending challenge roundtrip is exact and restart abandons it without authority``() =
+        use fixture = new HostExecutorFixture()
+        let state = SupplierAdmissionFixtures.originalFor fixture.Command fixture.Profile.QualifiedImage |> PortableSupplierAdmission.beginIntent |> SupplierAdmissionFixtures.ok
+        let journal = PortableWorkspaceExecutor.SupplierAdmissionJournal(fixture.Policy.Runtime.StateRoot)
+        journal.Stage(state, None) |> SupplierAdmissionFixtures.ok |> ignore
+        let challenged = SupplierAdmissionFixtures.pending state
+        journal.Stage(challenged, Some state.Revision) |> SupplierAdmissionFixtures.ok |> ignore
+        let read, _ = journal.Read fixture.Command |> SupplierAdmissionFixtures.ok
+        Assert.Equal(challenged, read)
+        let abandoned = PortableSupplierAdmission.abandonChallenge (Guid.NewGuid()) read |> SupplierAdmissionFixtures.ok
+        journal.Stage(abandoned, Some read.Revision) |> SupplierAdmissionFixtures.ok |> ignore
+        let restored, _ = journal.Read fixture.Command |> SupplierAdmissionFixtures.ok
+        Assert.Equal("abandoned", restored.ChallengeLedger.Head |> fun (_, _, value) -> value)
+        Assert.True(PortableSupplierAdmission.prepareAck restored |> Result.isError)
+        Assert.True(PortableSupplierAdmission.reserveHost restored |> Result.isError)
+        Assert.Equal(0, fixture.Runner.Runs)
+        Assert.Equal(0, fixture.Runner.Cleans)
+
+    [<Theory>]
+    [<InlineData(false)>]
+    [<InlineData(true)>]
+    member _.``truncated or oversized supplier record refuses and preserves original bytes``(oversized: bool) =
+        use fixture = new HostExecutorFixture()
+        let state = SupplierAdmissionFixtures.originalFor fixture.Command fixture.Profile.QualifiedImage |> PortableSupplierAdmission.beginIntent |> SupplierAdmissionFixtures.ok
+        let journal = PortableWorkspaceExecutor.SupplierAdmissionJournal(fixture.Policy.Runtime.StateRoot)
+        journal.Stage(state, None) |> SupplierAdmissionFixtures.ok |> ignore
+        let original = File.ReadAllBytes fixture.Journal
+        let damaged = if oversized then Array.zeroCreate<byte> (PortableSupplierAdmission.MaximumSupplierBytes + 1) else original[..original.Length - 2]
+        File.WriteAllBytes(fixture.Journal, damaged)
+        Assert.True(journal.Read fixture.Command |> Result.isError)
+        Assert.True(journal.Stage(state, None) |> Result.isError)
+        Assert.True((File.ReadAllBytes fixture.Journal = damaged))
+        Assert.Equal(0, fixture.Runner.Runs)
+        Assert.Equal(0, fixture.Runner.Cleans)
+
+    [<Fact>]
+    member _.``old v1 journal remains byte exact and cannot be migrated from present supplier claims``() =
+        use fixture = new HostExecutorFixture()
+        let state = SupplierAdmissionFixtures.originalFor fixture.Command fixture.Profile.QualifiedImage |> PortableSupplierAdmission.beginIntent |> SupplierAdmissionFixtures.ok
+        let journal = PortableWorkspaceExecutor.SupplierAdmissionJournal(fixture.Policy.Runtime.StateRoot)
+        journal.Stage(state, None) |> SupplierAdmissionFixtures.ok |> ignore
+        let path = fixture.Journal
+        use memory = new MemoryStream()
+        use writer = new BinaryWriter(memory, Encoding.UTF8, true)
+        writer.Write "fsgg.portable-execution-journal/1"
+        writer.Write 1uy
+        writer.Write(fixture.Command.CommandId.ToString("D"))
+        writer.Write "original-v1-binding"
+        writer.Write "original-v1-container"
+        writer.Flush()
+        let old = memory.ToArray()
+        File.WriteAllBytes(path, old)
+        Assert.True(journal.Read fixture.Command |> Result.isError)
+        Assert.True(journal.Stage(state, None) |> Result.isError)
+        Assert.True((File.ReadAllBytes path = old))
+        Assert.Equal(0, fixture.Runner.Runs)
+        Assert.Equal(0, fixture.Runner.Cleans)
+
+    [<Fact>]
+    member _.``exclusive existing key lock refuses source rewrite without losing original pending state``() =
+        use fixture = new HostExecutorFixture()
+        let state = SupplierAdmissionFixtures.originalFor fixture.Command fixture.Profile.QualifiedImage |> PortableSupplierAdmission.beginIntent |> SupplierAdmissionFixtures.ok
+        let journal = PortableWorkspaceExecutor.SupplierAdmissionJournal(fixture.Policy.Runtime.StateRoot)
+        journal.Stage(state, None) |> SupplierAdmissionFixtures.ok |> ignore
+        let old = File.ReadAllBytes fixture.Journal
+        let challenged = SupplierAdmissionFixtures.pending state
+        use held = new FileStream(Path.ChangeExtension(fixture.Journal, ".lock"), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None)
+        Assert.True(journal.Stage(challenged, Some 1UL) |> Result.isError)
+        Assert.True((File.ReadAllBytes fixture.Journal = old))
+        Assert.Equal(0, fixture.Runner.Runs)
+        Assert.Equal(0, fixture.Runner.Cleans)

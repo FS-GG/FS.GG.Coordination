@@ -398,3 +398,151 @@ type PortableHostAllocationTests() =
             Assert.NotEqual(HostEligible, deletion.OutputDeletion)
             Assert.NotEqual(HostEligible, outer.OuterCleanup)
             Assert.NotEqual(EvidenceKnown (), outer.ReservationRelease)
+
+// Synthetic trusted adapter is confined to this test assembly. No signer, process or host exists.
+module SupplierAdmissionFixtures =
+    let ok = function Ok value -> value | Error reason -> failwith reason
+    let at = HostFixtures.at
+    let b64 (value: string) = Encoding.ASCII.GetBytes value |> Convert.ToBase64String
+    let domain kind (value: string) =
+        Array.append (Encoding.ASCII.GetBytes("fsgg.v3." + kind + "/1\000")) (Encoding.ASCII.GetBytes value)
+        |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
+    let originalFor command image : PortableSupplierAdmissionOriginal =
+        { Command = command; QualifiedImage = image; IntentBase64 = b64 "synthetic-original-intent"
+          IntentDigest = domain "intent" "synthetic-original-intent"; TrustPolicyDigest = String.replicate 64 "a"
+          SupplierSourceRevision = String.replicate 40 "b"; ReceiverEpoch = Guid.NewGuid() }
+    let original () = originalFor HostFixtures.binding.Command HostFixtures.binding.QualifiedImage
+    let initial () = original () |> PortableSupplierAdmission.beginIntent |> ok
+    let challenge (state: PortableSupplierAdmissionState) =
+        let bytes = "synthetic-challenge-" + Guid.NewGuid().ToString("D")
+        { ChallengeId = Guid.NewGuid(); Digest = domain "challenge" bytes; BytesBase64 = b64 bytes
+          Purpose = if state.Phase = SupplierIntentStored then "creation" elif state.Head.IsNone then "genesis-readback" else "state-readback"
+          ReceiverEpoch = state.Original.ReceiverEpoch; IssuedAt = at 1.; NotAfter = at 30.
+          IssuedMonotonic = 100L; DeadlineMonotonic = 1000L; ExpectedHead = state.Head }
+    let pending state = PortableSupplierAdmission.issueChallenge (challenge state) state |> ok
+    let observation kind (state: PortableSupplierAdmissionState) : PortableSupplierTranscriptObservation =
+        let challenge = state.Challenge.Value
+        let event = "synthetic-event-" + Guid.NewGuid().ToString("D")
+        { Kind = kind; IntentDigest = state.Original.IntentDigest; TrustPolicyDigest = state.Original.TrustPolicyDigest
+          ChallengeDigest = challenge.Digest
+          OriginalReservation = { HostFixtures.reservation with Binding = { HostFixtures.binding with Command = state.Original.Command; QualifiedImage = state.Original.QualifiedImage } }
+          Identity = { Issuer = "controlled-fake-only"; ContainerId = "synthetic-original-cid"; AllocationDevice = 2UL; AllocationInode = 3UL }
+          OuterImageId = String.replicate 64 "c"; SupplierSourceRevision = state.Original.SupplierSourceRevision
+          CreationBase64 = b64 "synthetic-core"; CreationReceiptBase64 = b64 "synthetic-creation-receipt"
+          ReservationBase64 = b64 "synthetic-reservation"
+          ResponseBase64 = b64 ("synthetic-response-" + challenge.ChallengeId.ToString("D"))
+          EventsBase64 = if kind = SupplierCreation then [] elif kind = SupplierUnchanged then [List.last state.EventsBase64] else [b64 event]
+          FromHead = state.Head
+          ToHead = if kind = SupplierCreation then None elif kind = SupplierUnchanged then state.Head else Some(domain "signed-envelope" event)
+          Sequence = if kind = SupplierAppend then state.Sequence + 1UL else state.Sequence
+          CollectedAt = at 2. }
+    let verify value state =
+        let adapter = { new IPortableSupplierTranscriptAuthenticator with member _.Authenticate _ = Ok value }
+        let raw = Convert.FromBase64String(if value.Kind = SupplierCreation then value.CreationReceiptBase64 else value.ResponseBase64)
+        PortableSupplierAdmission.verify adapter (at 3.) 200L state raw |> ok
+    let accept kind state =
+        let pending = pending state
+        PortableSupplierAdmission.accept (verify (observation kind pending) pending) pending |> ok
+    let genesis () = initial () |> accept SupplierCreation |> accept SupplierGenesis
+
+type SupplierAdmissionBoundaryTests() =
+    [<Fact>]
+    member _.``creation and genesis source transitions preserve independent originals without effects``() =
+        let original = SupplierAdmissionFixtures.initial ()
+        let created = SupplierAdmissionFixtures.accept SupplierCreation original
+        let genesis = SupplierAdmissionFixtures.accept SupplierGenesis created
+        Assert.Equal(original.Original, genesis.Original)
+        Assert.Equal(SupplierGenesisAccepted, genesis.Phase)
+        Assert.Equal(2, genesis.ChallengeLedger.Length)
+        Assert.Equal(1, genesis.EventsBase64.Length)
+        Assert.True(PortableSupplierAdmission.prepareAck genesis |> Result.isError)
+        Assert.True(PortableSupplierAdmission.reserveHost genesis |> Result.isError)
+
+    [<Fact>]
+    member _.``fresh outer unchanged response consumes new challenge and preserves exact nested event``() =
+        let original = SupplierAdmissionFixtures.genesis ()
+        let fresh = SupplierAdmissionFixtures.accept SupplierUnchanged original
+        Assert.Equal(original.Head, fresh.Head)
+        Assert.Equal<string list>(original.EventsBase64, fresh.EventsBase64)
+        Assert.NotEqual(List.last original.ResponsesBase64, List.last fresh.ResponsesBase64)
+        Assert.Equal(original.ChallengeLedger.Length + 1, fresh.ChallengeLedger.Length)
+        let pending = SupplierAdmissionFixtures.pending fresh
+        let altered = { SupplierAdmissionFixtures.observation SupplierUnchanged pending with EventsBase64 = [SupplierAdmissionFixtures.b64 "different-signature"] }
+        let held = PortableSupplierAdmission.accept (SupplierAdmissionFixtures.verify altered pending) pending |> SupplierAdmissionFixtures.ok
+        Assert.True(held.FirstFailure.IsSome)
+        Assert.Equal(fresh.Head, held.Head)
+        Assert.Equal<string list>(fresh.EventsBase64, held.EventsBase64)
+
+    [<Fact>]
+    member _.``verified result cannot commit after revision challenge or original pins change``() =
+        let pending = SupplierAdmissionFixtures.initial () |> SupplierAdmissionFixtures.pending
+        let value = SupplierAdmissionFixtures.observation SupplierCreation pending
+        let verified = SupplierAdmissionFixtures.verify value pending
+        Assert.True(PortableSupplierAdmission.accept verified { pending with Revision = pending.Revision + 1UL } |> Result.isError)
+        let next = PortableSupplierAdmission.accept verified pending |> SupplierAdmissionFixtures.ok
+        Assert.True(PortableSupplierAdmission.accept verified next |> Result.isError)
+        let after = SupplierAdmissionFixtures.pending next
+        let changed = { SupplierAdmissionFixtures.observation SupplierGenesis after with Identity = { value.Identity with AllocationInode = 99UL } }
+        let held = PortableSupplierAdmission.accept (SupplierAdmissionFixtures.verify changed after) after |> SupplierAdmissionFixtures.ok
+        Assert.True(held.FirstFailure.IsSome)
+        Assert.True(held.Conflicts.Count > 0)
+        Assert.Equal(next.Pinned.Value.Identity, held.Pinned.Value.Identity)
+
+    [<Fact>]
+    member _.``trusted adapter buffer changes exceptions and wrong original projection refuse``() =
+        let pending = SupplierAdmissionFixtures.initial () |> SupplierAdmissionFixtures.pending
+        let value = SupplierAdmissionFixtures.observation SupplierCreation pending
+        let original = Convert.FromBase64String value.CreationReceiptBase64
+        let expected = Array.copy original
+        let adapter = { new IPortableSupplierTranscriptAuthenticator with member _.Authenticate bytes = bytes[0] <- 0uy; Ok value }
+        Assert.True(PortableSupplierAdmission.verify adapter (SupplierAdmissionFixtures.at 3.) 200L pending original |> Result.isOk)
+        Assert.True((original = expected))
+        let throws = { new IPortableSupplierTranscriptAuthenticator with member _.Authenticate _ = failwith "controlled fake failure" }
+        Assert.True(PortableSupplierAdmission.verify throws (SupplierAdmissionFixtures.at 3.) 200L pending original |> Result.isError)
+        for changed in [ { value with OuterImageId = "sha256:" + value.OuterImageId }
+                         { value with TrustPolicyDigest = String.replicate 64 "d" }
+                         { value with IntentDigest = String.replicate 64 "d" }
+                         { value with OriginalReservation = { value.OriginalReservation with Binding = { value.OriginalReservation.Binding with Command = { pending.Original.Command with FenceGeneration = 999UL } } } } ] do
+            let fake = { new IPortableSupplierTranscriptAuthenticator with member _.Authenticate _ = Ok changed }
+            Assert.True(PortableSupplierAdmission.verify fake (SupplierAdmissionFixtures.at 3.) 200L pending original |> Result.isError)
+
+    [<Fact>]
+    member _.``restart abandons original monotonic challenge and does not rewrite original intent bytes``() =
+        let state = SupplierAdmissionFixtures.initial () |> SupplierAdmissionFixtures.pending
+        let verified = SupplierAdmissionFixtures.verify (SupplierAdmissionFixtures.observation SupplierCreation state) state
+        let restarted = PortableSupplierAdmission.abandonChallenge (Guid.NewGuid()) state |> SupplierAdmissionFixtures.ok
+        Assert.Equal(state.Original.IntentBase64, restarted.Original.IntentBase64)
+        Assert.Equal(state.Original.Command, restarted.Original.Command)
+        Assert.Equal("abandoned", restarted.ChallengeLedger.Head |> fun (_, _, value) -> value)
+        Assert.True(PortableSupplierAdmission.accept verified restarted |> Result.isError)
+        let fresh = SupplierAdmissionFixtures.pending restarted
+        let fake = { new IPortableSupplierTranscriptAuthenticator with member _.Authenticate _ = Ok(SupplierAdmissionFixtures.observation SupplierCreation fresh) }
+        let bytes = Convert.FromBase64String (SupplierAdmissionFixtures.observation SupplierCreation fresh).CreationReceiptBase64
+        Assert.True(PortableSupplierAdmission.verify fake (SupplierAdmissionFixtures.at 3.) 1000L fresh bytes |> Result.isError)
+
+    [<Fact>]
+    member _.``capacity overflow and gap retain first failure and original head``() =
+        let original = SupplierAdmissionFixtures.genesis ()
+        let pending = SupplierAdmissionFixtures.pending original
+        let fork = { SupplierAdmissionFixtures.observation SupplierAppend pending with FromHead = Some(String.replicate 64 "e") }
+        let held = PortableSupplierAdmission.accept (SupplierAdmissionFixtures.verify fork pending) pending |> SupplierAdmissionFixtures.ok
+        Assert.Equal(original.Head, held.Head)
+        Assert.True(held.FirstFailure.IsSome)
+        Assert.True(PortableSupplierAdmission.issueChallenge (SupplierAdmissionFixtures.challenge held) held |> Result.isError)
+        Assert.True(PortableSupplierAdmission.validate { original with EventsBase64 = List.replicate 1025 (SupplierAdmissionFixtures.b64 "x") } |> Result.isError)
+        Assert.True(PortableSupplierAdmission.validate { original with ChallengeLedger = List.replicate 129 (Guid.NewGuid(), String.replicate 64 "a", "consumed") } |> Result.isError)
+        Assert.True(PortableSupplierAdmission.issueChallenge (SupplierAdmissionFixtures.challenge original) { original with Revision = UInt64.MaxValue } |> Result.isError)
+
+    [<Fact>]
+    member _.``retained transcript byte boundary refuses one extra byte without truncating originals``() =
+        let original = SupplierAdmissionFixtures.initial ()
+        let intentLength = Convert.FromBase64String(original.Original.IntentBase64).Length
+        let remaining = PortableSupplierAdmission.MaximumTranscriptBytes - intentLength
+        let bytes n = Array.create<byte> n 120uy |> Convert.ToBase64String
+        let full, remainder = remaining / 65536, remaining % 65536
+        let responses = List.replicate full (bytes 65536) @ [bytes remainder]
+        let boundary = { original with ResponsesBase64 = responses }
+        Assert.True(PortableSupplierAdmission.validate boundary |> Result.isOk)
+        let overflow = { boundary with ResponsesBase64 = List.take full responses @ [bytes (remainder + 1)] }
+        Assert.True(PortableSupplierAdmission.validate overflow |> Result.isError)
+        Assert.Equal(original.Original, overflow.Original)
