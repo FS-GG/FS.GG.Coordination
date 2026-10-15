@@ -93,3 +93,41 @@ termination or local tasks remain unresolved. Existing unknown cleanup facts rem
 unknown. Domain callbacks returning `Ok` are inert stand-ins, so UTEL payload-domain
 validation, paired real consumer integration and installed acceptance remain I2/I3
 obligations. Production availability stays false and all native/R1 holds remain.
+
+
+## Managed ownership source inventory v1
+
+`fsgg.finite-custody-managed-ownership/1` is an opt-in inert source inventory.
+`requireClosedPhysicalCopyProfile` refuses: no selected endpoint has proved its
+capture/release behavior. Legacy `Prepare` remains callable and carries no fit
+assertion. Production availability is false. This inventory does not establish
+65,536-byte joined fit, an interface freeze, or managed heap reclamation.
+
+| Representation | Source owner / aliases | Retirement and physical-copy limitation |
+| --- | --- | --- |
+| Up to six decoded exact phase frames, each at most 2,048 bytes | Snapshot owns one array; payload view, decoded/retaining sets, queue, accepted list, pending ACK and gates alias it | Retained with session/gates; terminal, expiry and task settlement do not prove GC or release of caller references |
+| Canonical payload | Offset/length view into that exact immutable frame; no separate retained payload array | Lifetime is the frame lifetime; canonicalization still allocates bounded synchronous temporaries |
+| Public `Frame` and `Payload` | Each accessor creates an independent caller-owned copy | Arbitrary repeated calls and caller retention are unbounded; excluded from any closed fit assertion |
+| Callback correlation | Pending metadata preserves kind, invocation, binding, sequence, ordinal, digest and encoded length; no base64 data | Preserved after close/refusal; no retry or reservation reuse; reply acceptance still requires complete write |
+| Base64 and callback encoding | Synchronous encoder owns transient base64 string, stream/body/frame buffers; internal base64 reads the owned frame directly | Scope ending does not prove physical reclamation; no temporary is counted as an alias of the frame |
+| Encoded async callback request, at most 4,096 bytes per request | Exchange task and supplied writer may retain the same array or make copies | Outstanding writes stay in retained tasks; response/cancellation/timeout do not prove release by an arbitrary stream or completed task |
+| Phase parser input 2,048 bytes; callback parser input 512 bytes | Protocol session owns each fixed array | Retained session lifetime; parser documents, slices and canonical buffers are distinct temporary allocations |
+| Child read buffer 2,048 bytes; callback reader buffer 1 byte | Retained read tasks and supplied streams | Each child read currently allocates anew; stream captures and completed-task results require endpoint proof |
+| Binding and start/control frames | Adapter, composition, result session and callback session own independent binding arrays; start frame and generated ACK arrays are separate | No cross-owner deduplication assumed; task/channel capture and terminal/uncertain writes remain obligations |
+| Restart | Admission retains used invocation identity; unresolved session/tasks retain their original bytes | A new object or restart is not release evidence or replay authority; no replacement allocation may be claimed to reuse an unresolved physical slot |
+
+The exact canonical BE-u32 start, phase, ACK and callback schema/encoding remain
+unchanged. Payload offsets rely on the already validated canonical closed root
+order `b,k,n,p,v` and its fixed `v` suffix. Existing blocked validation/retention,
+partial-write, deadline/cancellation, pre-ACK terminal and malformed/seventh input
+controls remain required. New controls check frame-backed payload immutability,
+base64-free correlation across close, blocked validation and one-use refusal.
+The paired callback corpus and actual Python callback journey must qualify the
+changed source on the hosted route. Pure static checks cannot replace compilation.
+
+The source ceiling of six times 2,048 bytes describes retained snapshot arrays
+only. It excludes binding/start/ACK, encoding/parser temporaries, async requests,
+caller copies, owner/backend/peer storage and object overhead. The complete
+physical population remains unproved and must refuse admission. No sink,
+filesystem, signer, credential, native constructor or original-operation effect
+is introduced by this source profile.

@@ -4,12 +4,30 @@ import hashlib
 import json
 import os
 import pathlib
+import re
 import shutil
 import subprocess
 import sys
 import xml.etree.ElementTree as ET
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
+MANIFEST_PATH = 'tests/release-successor-authentication/callback-pair-manifest.json'
+VECTORS_PATH = 'tests/release-successor-authentication/callback-pair-vectors.json'
+PAIR_ROLES = {
+    'FS-GG/.github': {
+        'scripts/release-successor-publish.py',
+        'scripts/release_successor_auth_consumer.py',
+        'scripts/release_successor_provider.py',
+        'tests/release-successor-authentication/callback-contract.json',
+        'tests/release-successor-authentication/callback-fixture.py',
+        'tests/release-successor-authentication/wire-contract.json'},
+    'FS-GG/FS.GG.Coordination': {
+        'src/FS.GG.Coordination.Orchestration.Execution/FiniteCustodyComposition.fs',
+        'src/FS.GG.Coordination.Orchestration.Execution/FiniteCustodySessionAdapter.fs',
+        'src/FS.GG.Coordination.Orchestration.Execution/PhaseCallbackProtocol.fs',
+        'src/FS.GG.Coordination.Orchestration.Execution/PhaseResultProtocol.fs',
+        'src/FS.GG.Coordination.Orchestration.Runner.Client/FiniteCustodyInertAdapter.fs',
+        'src/FS.GG.Coordination.Orchestration.Runner.Client/Program.fs'}}
 
 
 def require(condition, reason):
@@ -21,8 +39,51 @@ def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def validate_pin(pin):
+    require(set(pin) == {'schema', 'repository', 'revision', 'manifestSha256',
+                         'vectorsSha256', 'bundleDigest', 'qualification'}, 'callback pin fields differ')
+    require(pin['schema'] == 'fsgg.utel-callback-source/2'
+            and pin['repository'] == 'FS-GG/.github', 'callback pin profile differs')
+    require(isinstance(pin['revision'], str) and re.fullmatch('[0-9a-f]{40}', pin['revision']),
+            'callback pin revision differs')
+    for key in ['manifestSha256', 'vectorsSha256', 'bundleDigest']:
+        require(isinstance(pin[key], str) and re.fullmatch('[0-9a-f]{64}', pin[key]),
+                'callback pin digest differs')
+
+
+def validate_pair(pin, destination):
+    validate_pin(pin)
+    manifest_path = destination / MANIFEST_PATH
+    vectors_path = destination / VECTORS_PATH
+    for path, key in [(manifest_path, 'manifestSha256'), (vectors_path, 'vectorsSha256')]:
+        require(path.is_file() and not path.is_symlink() and digest(path) == pin[key],
+                'callback pair artifact differs')
+    manifest = json.loads(manifest_path.read_bytes())
+    require(manifest['schema'] == 'fsgg.authentication-callable-source-bundle/1',
+            'callback pair manifest schema differs')
+    rows = sorted(manifest['files'], key=lambda row: (row['repository'] + '/' + row['path']).encode('ascii'))
+    roles = [(row['repository'], row['path']) for row in rows]
+    expected = {(repo, path) for repo, paths in PAIR_ROLES.items() for path in paths}
+    require(rows == manifest['files'] and len(roles) == len(expected) and set(roles) == expected,
+            'callback pair role inventory differs')
+    for row in rows:
+        source = destination if row['repository'] == 'FS-GG/.github' else ROOT
+        path = source / row['path']
+        require(path.is_file() and not path.is_symlink() and digest(path) == row['sha256'],
+                'callback source closure differs')
+    canonical = ''.join(row['sha256'] + '  ' + row['repository'] + '/' + row['path'] + '\n' for row in rows).encode('ascii')
+    require(hashlib.sha256(canonical).hexdigest() == manifest['bundleDigest'] == pin['bundleDigest'],
+            'callback bundle digest differs')
+    vectors = json.loads(vectors_path.read_bytes())
+    require(vectors['schema'] == 'fsgg.authentication-callback-vectors/1'
+            and vectors['binding']['source']['contract'] == manifest['bundleDigest'],
+            'callback vectors bundle differs')
+    return manifest
+
+
 def prepare():
     pin = json.loads((ROOT / 'eng/utel-callback-source.json').read_bytes())
+    validate_pin(pin)
     destination = pathlib.Path(os.environ['FSGG_UTEL_CALLBACK_SOURCE'])
     require(destination.is_absolute() and not destination.exists(), 'fresh callback source directory required')
     destination.mkdir(mode=0o700, parents=True)
@@ -32,22 +93,14 @@ def prepare():
     git('-c', 'credential.helper=', 'fetch', '--quiet', '--depth=1', 'https://github.com/FS-GG/.github.git', pin['revision'])
     git('checkout', '--quiet', '--detach', 'FETCH_HEAD')
     require(git('rev-parse', 'HEAD') == pin['revision'], 'callback source revision differs')
-    manifest_path = destination / 'tests/release-successor-authentication/callable-source-manifest.json'
-    require(digest(manifest_path) == pin['manifestSha256'], 'callback source manifest differs')
-    manifest = json.loads(manifest_path.read_bytes())
-    rows = sorted(manifest['files'], key=lambda row: (row['repository'] + '/' + row['path']).encode('ascii'))
-    require(rows == manifest['files'], 'callback manifest order differs')
-    for row in rows:
-        source = destination if row['repository'] == 'FS-GG/.github' else ROOT
-        path = source / row['path']
-        require(path.is_file() and not path.is_symlink() and digest(path) == row['sha256'], 'callback source closure differs')
-    canonical = ''.join(row['sha256'] + '  ' + row['repository'] + '/' + row['path'] + '\n' for row in rows).encode('ascii')
-    require(hashlib.sha256(canonical).hexdigest() == manifest['bundleDigest'], 'callback bundle digest differs')
+    manifest = validate_pair(pin, destination)
     evidence = pathlib.Path(os.environ['RUNNER_TEMP']) / 'compiler-and-tests'
     evidence.mkdir(parents=True, exist_ok=True)
     (evidence / 'callback-source.json').write_text(json.dumps({
         'repository': pin['repository'], 'revision': pin['revision'],
-        'manifestSha256': pin['manifestSha256'], 'bundleDigest': manifest['bundleDigest'],
+        'manifestPath': MANIFEST_PATH, 'manifestSha256': pin['manifestSha256'],
+        'vectorsPath': VECTORS_PATH, 'vectorsSha256': pin['vectorsSha256'],
+        'bundleDigest': manifest['bundleDigest'],
         'profile': 'in-memory managed child phase/control; separate Python callback process',
         'nativeAuthChild': False, 'credentialEffects': False}, sort_keys=True) + '\n')
     print('Pinned source-only callback fixture prepared')

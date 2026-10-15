@@ -105,6 +105,8 @@ module internal PhaseCallbackProtocol =
         let mutable bound = false
         let mutable terminal = false
         let mutable validated: PhaseResultSnapshot option = None
+        // Correlation retains no base64 witness or encoded request. The async writer
+        // owns its separate request until its own obligation settles.
         let mutable pending: (Message * int) option = None
         let mutable writeComplete = false
         let mutable response: Message option = None
@@ -118,7 +120,7 @@ module internal PhaseCallbackProtocol =
                 match kind, snapshot with
                 | "bind", None when not bound && sequence = 0 -> 0, binding, Some(Convert.ToBase64String owned), false
                 | "validate", Some value when bound && validated.IsNone && value.Ordinal = ordinal + 1 && value.Binding = binding ->
-                    value.Ordinal, value.Digest, Some(Convert.ToBase64String(value.Frame.ToArray())), value.Kind = "terminal"
+                    value.Ordinal, value.Digest, Some(value.OwnedFrameBase64()), value.Kind = "terminal"
                 | "retain", Some value when bound && (validated |> Option.exists (fun held -> obj.ReferenceEquals(held, value))) ->
                     value.Ordinal, value.Digest, None, value.Kind = "terminal"
                 | _ -> fail ()
@@ -129,7 +131,7 @@ module internal PhaseCallbackProtocol =
             // The pending response reservation is charged once, before write.
             if not (canAdmit (maximumAggregateBytes - charged) bytes.Length isTerminal (kind = "retain")) then fail ()
             charged <- charged + bytes.Length + 512
-            pending <- Some(request, bytes.Length)
+            pending <- Some({ request with Data = None }, bytes.Length)
             writeComplete <- false
             response <- None
             count <- 0
@@ -140,6 +142,8 @@ module internal PhaseCallbackProtocol =
             terminal || (match pending, response, validated with
                          | Some(request, _), Some(reply), Some(snapshot) -> request.Kind = "retain" && reply.Kind = "retained" && snapshot.Kind = "terminal"
                          | _ -> false))
+        member internal _.PendingDataCharacters = lock gate (fun () ->
+            pending |> Option.bind (fun (request, _) -> request.Data) |> Option.map _.Length |> Option.defaultValue 0)
         member _.Binding = binding
         member _.ChargedBytes = lock gate (fun () -> charged)
         member _.ObservedIncomingBytes = lock gate (fun () -> observed)
