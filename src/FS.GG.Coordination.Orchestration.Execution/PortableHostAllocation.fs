@@ -4222,6 +4222,7 @@ module PortableSupplierAdmission =
         policy,verified
 
     let private controlledBundle selection controller (required: (string * PortableSupplierSignatureRole * byte array * string) list) =
+        if required.IsEmpty || required.Length > (if controller then 4 else 18) then PortableSupplierC1.fail ()
         let binary,profile = controlledVerifierIdentity ()
         let q = PortableSupplierC1.quoted
         let date (value: DateTimeOffset) = q (value.ToString("yyyy-MM-dd'T'HH:mm:ss.ffffff'Z'",Globalization.CultureInfo.InvariantCulture))
@@ -4304,8 +4305,11 @@ module PortableSupplierAdmission =
         let kind =
             if creation then SupplierCreation
             elif exchange.Challenge.Purpose = "genesis-readback" then SupplierGenesis
-            elif events.IsEmpty then SupplierUnchanged
-            else SupplierAppend
+            else
+                match response.GetProperty("mode").GetString() with
+                | "unchanged" -> SupplierUnchanged
+                | "append" -> SupplierAppend
+                | _ -> PortableSupplierC1.fail ()
         let policy = controlledRole selection SupplierCreationSignature
         { Kind = kind; IntentDigest = state.Original.IntentDigest; TrustPolicyDigest = state.Original.TrustPolicyDigest
           ChallengeDigest = exchange.Challenge.Digest; Purpose = exchange.Challenge.Purpose; OriginalReservation = originalReservation
@@ -4324,13 +4328,16 @@ module PortableSupplierAdmission =
         let receipt = raw 18761 state.Pinned.Value.CreationReceiptBase64 |> Result.defaultWith invalidOp
         let response = raw 65536 exchange.EvidenceBase64 |> Result.defaultWith invalidOp
         let _,row = PortableSupplierC1.payload 65536 45000 response
+        PortableSupplierWireShape.check_supplier_response row
         let events = row.GetProperty("events").EnumerateArray() |> Seq.map (PortableSupplierC1.b64url 26761) |> Seq.toList
         let genesis,newEvents =
             if exchange.Challenge.Purpose = "genesis-readback" then
                 match events with [one] -> one,[] | _ -> PortableSupplierC1.fail ()
             else
                 let genesis = state.EventsBase64 |> List.tryHead |> Option.defaultWith PortableSupplierC1.fail
-                raw 26761 genesis |> Result.defaultWith invalidOp,events
+                let exactGenesis = raw 26761 genesis |> Result.defaultWith invalidOp
+                exactGenesis,(events |> List.filter (fun bytes -> bytes <> exactGenesis))
+        if newEvents.Length > 15 then PortableSupplierC1.fail ()
         ["creation",SupplierCreationSignature,receipt,"creation"; "genesis",SupplierGenesisSignature,genesis,"genesis"]
         @ (newEvents |> List.map (fun bytes -> "supplier-event",SupplierEventSignature,bytes,"event"))
         @ ["supplier-response",SupplierResponseSignature,response,"response"]

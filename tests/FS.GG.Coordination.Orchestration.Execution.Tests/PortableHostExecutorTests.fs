@@ -1372,7 +1372,7 @@ type PortableHostExecutorTests_ControlledAuthenticatedSource() =
         Assert.False(root.GetProperty("nativeAcceptance").GetBoolean())
         Assert.Equal(2,root.GetProperty("outputJourneys").GetArrayLength())
         Assert.Equal(2,root.GetProperty("controlledSelections").GetArrayLength())
-        Assert.Equal(32,root.GetProperty("signatures").GetArrayLength())
+        Assert.Equal(44,root.GetProperty("signatures").GetArrayLength())
         let names = root.GetProperty("outputJourneys").EnumerateArray() |> Seq.map (fun row -> row.GetProperty("name").GetString()) |> Set.ofSeq
         Assert.Equal<Set<string>>(Set.ofList ["zero";"selected-sixteen"],names)
         let roles =
@@ -1455,15 +1455,35 @@ type PortableHostExecutorTests_ControlledAuthenticatedSource() =
                 let reopened,_ = journal.Read transition.State.Original.Command |> SupplierCheckpointFixtures.ok
                 Assert.Equal(transition.State,reopened)
                 reopened
-            let append = SupplierCheckpointFixtures.exchangeFrom row "append" state
-            let pending = PortableSupplierAdmission.issueChallenge append.Challenge state |> SupplierCheckpointFixtures.ok
-            match journal.StageV4(pending,Some state.Revision,Some state.CheckpointCustody.Value.StoreFence) with
-            | SupplierSourceReadback _ -> () | other -> failwithf "%A" other
             let exact name key = row.GetProperty(name: string).GetProperty(key: string).GetString() |> SupplierCheckpointFixtures.urlBytes
-            let appendInput = ControlledOutputWireExchange(exact "append" "request",[exact "append" "result";exact "append" "evidence"])
-            let appendSelection = selection (expected.GetProperty("warmVerificationTimes").GetProperty("append").GetString()) false
-            state <- PortableSupplierAdmission.verifyAndAcceptControlledV4 appendSelection pending.Original pending.Revision pending.CheckpointCustody.Value.StoreFence pending appendInput
-                     |> SupplierCheckpointFixtures.ok |> stageTransition
+            for name in ["unchanged-genesis";"append";"unchanged-proof"] do
+                let before = state
+                let pair = SupplierCheckpointFixtures.exchangeFrom row name state
+                let pending = PortableSupplierAdmission.issueChallenge pair.Challenge state |> SupplierCheckpointFixtures.ok
+                match journal.StageV4(pending,Some state.Revision,Some state.CheckpointCustody.Value.StoreFence) with
+                | SupplierSourceReadback _ -> () | other -> failwithf "%A" other
+                let input = ControlledOutputWireExchange(exact name "request",[exact name "result";exact name "evidence"])
+                let current = selection (expected.GetProperty("warmVerificationTimes").GetProperty(name).GetString()) false
+                if name = "append" then
+                    // Seventeen event rows exceed the closed response cap before inner signatures.
+                    use envelope = System.Text.Json.JsonDocument.Parse(ReadOnlyMemory<byte>(exact name "evidence"))
+                    let responseBytes = envelope.RootElement.GetProperty("payload").GetString() |> SupplierCheckpointFixtures.urlBytes
+                    use response = System.Text.Json.JsonDocument.Parse(ReadOnlyMemory<byte>(responseBytes))
+                    let events = response.RootElement.GetProperty("events")
+                    let tooMany = "[" + String.concat "," (List.replicate 17 (events[0].GetRawText())) + "]"
+                    let changed = (Encoding.ASCII.GetString responseBytes).Replace(events.GetRawText(),tooMany) |> Encoding.ASCII.GetBytes
+                    let url (bytes: byte array) = Convert.ToBase64String(bytes).TrimEnd('=').Replace('+','-').Replace('/','_')
+                    let invalid = Encoding.ASCII.GetBytes("{\"payload\":\"" + url changed + "\",\"signature\":\"" + envelope.RootElement.GetProperty("signature").GetString() + "\"}\n")
+                    let excessive = ControlledOutputWireExchange(exact name "request",[exact name "result";invalid])
+                    match PortableSupplierAdmission.verifyAndAcceptControlledV4 current pending.Original pending.Revision pending.CheckpointCustody.Value.StoreFence pending excessive |> SupplierCheckpointFixtures.ok with
+                    | HeldControlledSource held -> Assert.True(held.FirstFailure.IsSome)
+                    | _ -> failwith "oversized event census authenticated"
+                state <- PortableSupplierAdmission.verifyAndAcceptControlledV4 current pending.Original pending.Revision pending.CheckpointCustody.Value.StoreFence pending input
+                         |> SupplierCheckpointFixtures.ok |> stageTransition
+                if name <> "append" then
+                    Assert.Equal<string list>(before.EventsBase64,state.EventsBase64)
+                    Assert.Equal(before.Head,state.Head)
+                    Assert.Equal(before.Sequence,state.Sequence)
             let pending = SupplierCheckpointFixtures.issueNativeFrom row state
             match journal.StageV4(pending,Some state.Revision,Some state.CheckpointCustody.Value.StoreFence) with
             | SupplierSourceReadback _ -> () | other -> failwithf "%A" other
