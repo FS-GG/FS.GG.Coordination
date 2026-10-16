@@ -1414,10 +1414,17 @@ module private ControlledGenesisSourceExport =
         | [row] -> row
         | _ -> refuse "unique-zero-input"
     let private writeNew (path: string) (bytes: byte array) =
-        use stream = new FileStream(path,FileMode.CreateNew,FileAccess.Write,FileShare.None)
-        File.SetUnixFileMode(path,UnixFileMode.UserRead ||| UnixFileMode.UserWrite)
-        stream.Write(bytes,0,bytes.Length)
-        stream.Flush(true)
+        let stream = new FileStream(path,FileMode.CreateNew,FileAccess.Write,FileShare.None)
+        let mutable first: Runtime.ExceptionServices.ExceptionDispatchInfo option = None
+        try
+            File.SetUnixFileMode(path,UnixFileMode.UserRead ||| UnixFileMode.UserWrite)
+            stream.Write(bytes,0,bytes.Length)
+            stream.Flush(true)
+        with error -> first <- Some(Runtime.ExceptionServices.ExceptionDispatchInfo.Capture error)
+        // Closing a partially written stream must not replace the retained Write/Flush cause.
+        try stream.Dispose() with error ->
+            if first.IsNone then first <- Some(Runtime.ExceptionServices.ExceptionDispatchInfo.Capture error)
+        match first with Some error -> error.Throw() | None -> ()
     let private requireExactFile (path: string) (expected: byte array) =
         use stream = new FileStream(path,FileMode.Open,FileAccess.Read,FileShare.Read)
         if stream.Length <> int64 expected.Length then refuse "output-length-readback"
