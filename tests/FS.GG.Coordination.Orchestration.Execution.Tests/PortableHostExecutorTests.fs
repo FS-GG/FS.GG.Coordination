@@ -1730,7 +1730,7 @@ module private ControlledGenesisSourceExport =
             File.WriteAllBytes(oversized,Array.zeroCreate<byte> (PortableSupplierAdmission.MaximumRecordBytes + 1))
             refuseCase "oversized" oversized inputHash draftedAt "freeze-input" "InvalidOperationException" "genesis-source-export-input-byte-bound"
             for variant,stage,errorType,cause in
-                [ "missing-bound","creation-challenge","KeyNotFoundException","KeyNotFoundException"
+                [ "missing-bound","creation-challenge","InvalidOperationException","genesis-source-export-missing-issuedMonotonic"
                   "noncanonical-bound","genesis-challenge","InvalidOperationException","genesis-source-export-signed"
                   "expired-monotonic","creation-real-verification","InvalidOperationException","genesis-source-export-held-source"
                   "foreign-operation","creation-real-verification","InvalidOperationException","genesis-source-export-held-source" ] do
