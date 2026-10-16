@@ -62,8 +62,8 @@ replacement before fresh readback, or before cold reopen. A failed Stage returns
 commit uncertainty, without a source readback or ACK. Earlier cuts retain the
 prior record; later cuts can leave the exact proposed record. A later explicit
 fresh read and current signature/policy verification can authenticate those
-persisted source bytes, while directory durability remains Unknown. These
-controls do not require predecessor-format compatibility or a second store.
+persisted source bytes, while directory durability remains Unknown. The
+controls operate on current `/4` source records.
 
 The SDK-generated `packages.lock.json` files retain NuGet package-content hashes.
 For signed packages that identity can differ from a raw archive SHA512: NuGet's

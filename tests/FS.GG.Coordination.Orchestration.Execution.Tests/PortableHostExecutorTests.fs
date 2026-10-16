@@ -1450,9 +1450,12 @@ type PortableHostExecutorTests_ControlledAuthenticatedSource() =
                     else
                         Assert.Equal<byte array>(before,File.ReadAllBytes failedPath)
                         Assert.True(PortableSupplierAdmission.reverifyControlledSourceV4 current retained |> Result.isError)
+                    Assert.True(PortableSupplierAdmission.prepareAck retained |> Result.isError)
+                    Assert.True(PortableSupplierAdmission.reserveHost retained |> Result.isError)
                     Assert.Empty(Directory.GetFiles(failedDirectory,"*.tmp"))
                     Assert.Equal(0,failedFixture.Runner.Runs)
                     Assert.Equal(0,failedFixture.Runner.Cleans)
+                    Assert.Equal(0,failedFixture.Runner.Recoveries)
             match journal.StageV4(initial,None,None) with SupplierSourceReadback _ -> () | other -> failwithf "%A" other
             let mutable state = initial
             for name in ["creation";"genesis"] do
