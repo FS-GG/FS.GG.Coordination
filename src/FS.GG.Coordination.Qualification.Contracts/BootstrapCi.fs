@@ -624,9 +624,26 @@ let private sourcePreflightViolations bootstrap (workflow: string) =
                 yield violation "source-preflight-route-order" "route selection must precede compile"
             for name in [ "canonical-quint-prepare"; "canonical-quint-semantic"; "canonical-quint-performance"; "deterministic-build"; "compiler-and-tests"; "dependency-and-security"; "package-install-smoke"; "orchestration-postgresql"; "orchestration-observer-postgresql"; "orchestration-pilot-postgresql"; "bootstrap-recovery" ] do
                 let dependencies = header (job name)
-                if not (dependencies.Contains("reuse-decision")) || dependencies.Contains("always()") || dependencies.Contains("continue-on-error:") then
+                let needs = System.Text.RegularExpressions.Regex.Match(dependencies, "(?m)^    needs: \\[([^\\]\\r\\n]*)\\]$")
+                let allowedConditions =
+                    set [ "    if: ${{ needs.reuse-decision.outputs.route == 'execute' }}"
+                          "    if: ${{ needs.reuse-decision.outputs.route == 'execute' && needs.reuse-decision.outputs.formal-route == 'execute' }}"
+                          "    if: ${{ needs.canonical-quint-prepare.result == 'success' }}" ]
+                let conditions = dependencies.Split('\n') |> Array.filter (fun line -> line.StartsWith("    if:", StringComparison.Ordinal))
+                if not needs.Success
+                   || not (needs.Groups[1].Value.Split(',') |> Array.map _.Trim() |> Array.contains "reuse-decision")
+                   || conditions.Length <> 1 || not (Set.contains conditions[0] allowedConditions)
+                   || dependencies.Contains("continue-on-error:") then
                     yield violation "source-preflight-fanout-dominance" name
         else
+            let shared = header preflightJob
+            if not (shared.Contains("    needs: [prepare, classify-reuse]\n")) || shared.Contains("    if:") then
+                yield violation "source-preflight-build-dominance" "shared build requires successful preparation and classification"
+            let execution = header (job "run-partition")
+            if not (execution.Contains("    needs: [prepare, classify-reuse, shared-build, formal-prepare]\n"))
+               || not (execution.Contains("    if: ${{ always() && needs.shared-build.result == 'success' && needs.formal-prepare.result == 'success' }}\n"))
+               || execution.Contains("continue-on-error:") then
+                yield violation "source-preflight-execution-dominance" "coherent executions require successful build and formal preparation"
             let formal = header (job "formal-prepare")
             if not (formal.Contains("    needs: [prepare, classify-reuse, shared-build]\n"))
                || formal.Contains("    if:") || formal.Contains("continue-on-error:") then

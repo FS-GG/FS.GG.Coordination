@@ -175,7 +175,8 @@ let publication = buildSteps |> Array.filter (fun step -> step.Contains("name: s
 if preflight.Length <> 1
    || preflight[0] <> "name: Run early source compile and focused tests\n        env:\n          FSGG_CANDIDATE_SHA: ${{ needs.prepare.outputs.candidate }}\n        run: bash eng/bootstrap-gates/source-preflight.sh\n"
    || not (sharedHeader.Contains("    timeout-minutes: 10\n"))
-   || sharedHeader.Contains("continue-on-error:")
+   || sharedHeader.Contains("continue-on-error:") || sharedHeader.Contains("    if:")
+   || not (sharedHeader.Contains("    needs: [prepare, classify-reuse]\n"))
    || not (formalHeader.Contains("    needs: [prepare, classify-reuse, shared-build]\n"))
    || formalHeader.Contains("    if:") || formalHeader.Contains("continue-on-error:")
    || publication.Length <> 1 || publication[0].Contains("        if:") || publication[0].Contains("continue-on-error:")
