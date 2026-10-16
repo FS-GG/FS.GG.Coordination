@@ -26,16 +26,27 @@ failure collection rules and cannot turn missing qualification into success.
 
 The script requires an exact candidate HEAD and clean tracked files, restores the
 solution in locked mode, and compiles the full Release solution with warnings as
-errors. It then runs the existing allocation, executor, inert custody and transport
-cohorts against those binaries. Each cohort needs a fresh nonzero passing TRX census;
+errors. It then runs two focused CI contract cohorts and the existing allocation,
+executor, inert custody and transport cohorts against those binaries. Each cohort
+needs a fresh nonzero passing TRX census;
 transport additionally needs the existing exact callback-case census and pinned
 source-only callback fixtures. Compilation precedes fixture preparation. Failed or
 invalid cohort outcomes block later launches because healthy test-host completion
 and cleanup are then unknown. The attempt preserves its first cause separately from
 retention failures. Each attempt has fresh evidence, an eight-minute process-group
-deadline and a ten-minute
-job budget. There is no retry. Diagnostics upload separately from successful build
+deadline and a ten-minute job budget. There is no retry. Diagnostics upload separately from successful build
 artifacts; stage transitions retain unexecuted and prerequisite-blocked coverage.
+
+The CI cohorts select the authored Bootstrap and coherent launch-order mutations,
+healthy projection/contract witnesses, workflow recovery and identity-path checks,
+and the inert orchestration controls. They select fixed methods in the two existing
+built test assemblies, excluding their FSI, shell and formal fixtures. A hosted
+attempt passed the original 193-test runtime preflight but later failed six unit
+cases because mutation fixtures omitted the validator's initial Bootstrap contract
+and an existing assertion expected an obsolete comment. The repaired fixtures prove
+an unmutated positive witness before each mutation, and these selected CI contracts
+now run before runtime cohorts or callback source preparation. No full suite is
+added to the early gate.
 
 The coherent build artifact remains candidate-named and limited to the current run.
 The preflight script and callback/census inputs participate in qualification-plan
@@ -55,8 +66,12 @@ model: the change adds literal ordering, with no new scheduler or reuse semantic
 Observed baseline feedback was about 3–4 minutes for compile plus these cohorts,
 versus about 15 minutes for the full compiler gate on one prior candidate. Bootstrap
 adds that early build cost on successful execute routes. Coherent reuses its existing
-build but serializes formal preparation after it. Successful overhead, cold/warm
-variance, failure frequency and billed savings remain unmeasured. Existing run
+build but serializes formal preparation after it. The added CI selection reuses
+compiled assemblies; the inert control portion measured about five seconds locally,
+while its two hosted test-host startups and complete added latency remain unmeasured.
+The existing eight-minute script and ten-minute job bounds remain unchanged.
+Successful overhead, cold/warm variance, failure frequency and billed savings remain
+unmeasured. Existing run
 timings should measure first diagnosis, added successful latency and prevented job
 launches; no positive aggregate savings are claimed.
 

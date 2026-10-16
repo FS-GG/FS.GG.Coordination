@@ -60,12 +60,17 @@ class SourcePreflight(unittest.TestCase):
         self.repo.mkdir()
         for relative in ['eng/bootstrap-gates/source-preflight.sh', 'eng/validate-test-census.py',
                          'eng/utel-callback-fixture.py', 'eng/utel-callback-source.json',
-                         'eng/utel-slot-callback-source.json', 'eng/utel-closed-callback-source.json', 'eng/utel-callback-cases.json']:
+                         'eng/utel-slot-callback-source.json', 'eng/utel-closed-callback-source.json', 'eng/utel-callback-cases.json',
+                         'eng/tests/source-preflight/test_source_preflight.py']:
             dest = self.repo / relative
             dest.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(ROOT / relative, dest)
         for relative in ['FS.GG.Coordination.sln', 'global.json',
-                         'tests/FS.GG.Coordination.Orchestration.Execution.Tests/FS.GG.Coordination.Orchestration.Execution.Tests.fsproj']:
+                         'tests/FS.GG.Coordination.Orchestration.Execution.Tests/FS.GG.Coordination.Orchestration.Execution.Tests.fsproj',
+                         'tests/FS.GG.Coordination.UnitTests/FS.GG.Coordination.UnitTests.fsproj',
+                         'tests/FS.GG.Coordination.ArchitectureTests/FS.GG.Coordination.ArchitectureTests.fsproj',
+                         'tests/FS.GG.Coordination.UnitTests/QualificationReuseSelectionTests.fs',
+                         'tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs']:
             dest = self.repo / relative
             dest.parent.mkdir(parents=True, exist_ok=True)
             dest.write_text('{}')
@@ -101,7 +106,7 @@ class SourcePreflight(unittest.TestCase):
     def test_success_compiles_before_four_fresh_censuses_and_fixture(self):
         result = self.run_gate()
         self.assertEqual(0, result.returncode, result.stderr)
-        self.assertEqual(['restore', 'build', 'portable-host-allocation', 'portable-host-executor',
+        self.assertEqual(['restore', 'build', 'ci-reuse-contracts', 'ci-bootstrap-contracts', 'portable-host-allocation', 'portable-host-executor',
                           'finite-custody-inert', 'fixture', 'finite-custody-transport'], self.launched())
         self.assertFalse((self.runner / 'source-preflight/first-cause.txt').exists())
         self.assertTrue((self.runner / 'source-preflight/fixtures/compiler-and-tests/callback-case-census.json').is_file())
@@ -124,17 +129,33 @@ class SourcePreflight(unittest.TestCase):
                 self.assertNotEqual(0, result.returncode, mode)
                 self.assertIn('finite-custody-transport exit=', self.cause())
 
+    def test_changed_ci_contract_failure_blocks_runtime_cohorts_and_fixture(self):
+        for stage in ['ci-reuse-contracts', 'ci-bootstrap-contracts']:
+            with self.subTest(stage=stage):
+                if (self.runner / 'source-preflight').exists(): shutil.rmtree(self.runner / 'source-preflight')
+                if self.log.exists(): self.log.unlink()
+                result = self.run_gate(FAIL_STAGE=stage)
+                self.assertEqual(17, result.returncode)
+                self.assertNotIn('portable-host-allocation', self.launched())
+                self.assertNotIn('fixture', self.launched())
+                self.assertIn(stage + ' exit=17', self.cause())
+
+    def test_zero_changed_ci_contract_census_blocks_runtime_cohorts(self):
+        result = self.run_gate(CENSUS_MODE='zero', BAD_COHORT='ci-reuse-contracts')
+        self.assertNotEqual(0, result.returncode)
+        self.assertEqual(['restore', 'build', 'ci-reuse-contracts'], self.launched())
+
     def test_failed_test_process_blocks_later_launches(self):
         result = self.run_gate(FAIL_STAGE='portable-host-allocation')
         self.assertEqual(17, result.returncode)
-        self.assertEqual(['restore', 'build', 'portable-host-allocation'], self.launched())
+        self.assertEqual(['restore', 'build', 'ci-reuse-contracts', 'ci-bootstrap-contracts', 'portable-host-allocation'], self.launched())
         self.assertIn('portable-host-allocation exit=17', self.cause())
         self.assertIn('prerequisite-blocked failed-or-unknown-test-outcome', (self.runner / 'source-preflight/stages.txt').read_text())
 
     def test_unknown_census_blocks_later_launches(self):
         result = self.run_gate(CENSUS_MODE='missing', BAD_COHORT='portable-host-allocation')
         self.assertNotEqual(0, result.returncode)
-        self.assertEqual(['restore', 'build', 'portable-host-allocation'], self.launched())
+        self.assertEqual(['restore', 'build', 'ci-reuse-contracts', 'ci-bootstrap-contracts', 'portable-host-allocation'], self.launched())
         self.assertIn('portable-host-allocation exit=', self.cause())
 
     def test_fixture_failure_blocks_transport(self):

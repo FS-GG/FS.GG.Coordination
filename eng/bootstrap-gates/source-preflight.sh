@@ -6,7 +6,7 @@ if [[ "${1:-}" != --bounded-source-preflight ]]; then
   : "${RUNNER_TEMP:?source-preflight requires RUNNER_TEMP}"
   evidence="$RUNNER_TEMP/source-preflight"
   mkdir "$evidence" # Fresh job-owned evidence; never accept a previous attempt.
-  printf '%s\n' 'restore not-run' 'compile not-run' 'portable-host-allocation not-run' \
+  printf '%s\n' 'restore not-run' 'compile not-run' 'ci-reuse-contracts not-run' 'ci-bootstrap-contracts not-run' 'portable-host-allocation not-run' \
     'portable-host-executor not-run' 'finite-custody-inert not-run' \
     'callback-fixture not-run' 'finite-custody-transport not-run' > "$evidence/stages.txt"
   export FSGG_SOURCE_PREFLIGHT_EVIDENCE="$evidence"
@@ -65,6 +65,11 @@ for tool in git dotnet python3 date; do
 done
 for path in FS.GG.Coordination.sln global.json \
   tests/FS.GG.Coordination.Orchestration.Execution.Tests/FS.GG.Coordination.Orchestration.Execution.Tests.fsproj \
+  tests/FS.GG.Coordination.UnitTests/FS.GG.Coordination.UnitTests.fsproj \
+  tests/FS.GG.Coordination.ArchitectureTests/FS.GG.Coordination.ArchitectureTests.fsproj \
+  tests/FS.GG.Coordination.UnitTests/QualificationReuseSelectionTests.fs \
+  tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs \
+  eng/tests/source-preflight/test_source_preflight.py \
   eng/validate-test-census.py eng/utel-callback-fixture.py eng/utel-callback-source.json \
   eng/utel-slot-callback-source.json eng/utel-closed-callback-source.json eng/utel-callback-cases.json; do
   if [[ ! -f "$path" ]]; then
@@ -100,11 +105,12 @@ run_required compile dotnet build FS.GG.Coordination.sln --configuration Release
 
 cohort() {
   local name="$1" filter="$2" directory="$RUNNER_TEMP/$1" started result=0
+  local project="${3:-tests/FS.GG.Coordination.Orchestration.Execution.Tests/FS.GG.Coordination.Orchestration.Execution.Tests.fsproj}"
   stage="$name"
   mkdir "$directory"
   started="$(date +%s%N)"
-  dotnet test tests/FS.GG.Coordination.Orchestration.Execution.Tests/FS.GG.Coordination.Orchestration.Execution.Tests.fsproj \
-    --configuration Release --no-build --no-restore --filter "FullyQualifiedName~$filter" \
+  dotnet test "$project" \
+    --configuration Release --no-build --no-restore --filter "$filter" \
     --logger "trx;LogFileName=$name.trx" --results-directory "$directory" || result=$?
   if (( result != 0 )); then
     record_failure "$result"
@@ -126,11 +132,17 @@ block_remaining() {
   printf '%s\n' 'remaining-cohorts prerequisite-blocked failed-or-unknown-test-outcome' >> "$evidence/stages.txt"
   exit "$first"
 }
-cohort portable-host-allocation PortableHostAllocationTests || block_remaining
-cohort portable-host-executor PortableHostExecutorTests || block_remaining
-cohort finite-custody-inert FiniteCustodyWindowTests || block_remaining
+# Only the changed CI contracts and their healthy witnesses are selected. The
+# remaining class methods include FSI/shell/formal fixtures and stay in full CI.
+cohort ci-reuse-contracts 'FullyQualifiedName~QualificationReuseSelectionTests&(FullyQualifiedName~coherent source prerequisite|FullyQualifiedName~workflow recovery|FullyQualifiedName~optimistic workflow projection|FullyQualifiedName~hosted partition scripts|FullyQualifiedName~source preflight inert)' \
+  tests/FS.GG.Coordination.UnitTests/FS.GG.Coordination.UnitTests.fsproj || block_remaining
+cohort ci-bootstrap-contracts 'FullyQualifiedName~BootstrapCiTests&(FullyQualifiedName~early source qualification|FullyQualifiedName~bootstrap workflow satisfies|FullyQualifiedName~workflow generator reproduces)' \
+  tests/FS.GG.Coordination.ArchitectureTests/FS.GG.Coordination.ArchitectureTests.fsproj || block_remaining
+cohort portable-host-allocation 'FullyQualifiedName~PortableHostAllocationTests' || block_remaining
+cohort portable-host-executor 'FullyQualifiedName~PortableHostExecutorTests' || block_remaining
+cohort finite-custody-inert 'FullyQualifiedName~FiniteCustodyWindowTests' || block_remaining
 if run_required callback-fixture python3 eng/utel-callback-fixture.py prepare; then
-  cohort finite-custody-transport FiniteCustodyTransportTests || block_remaining
+  cohort finite-custody-transport 'FullyQualifiedName~FiniteCustodyTransportTests' || block_remaining
 else
   printf '%s\n' 'finite-custody-transport prerequisite-blocked callback-fixture' >> "$evidence/stages.txt"
 fi
