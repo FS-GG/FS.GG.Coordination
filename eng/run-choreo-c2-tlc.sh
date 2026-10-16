@@ -51,6 +51,12 @@ if grep -Fq 'PASS #0: SanyParser' "$result_log" \
   fi
 fi
 
+if [[ -z "$retry_class" && "$first_status" -eq 124 ]]; then
+  # Only the original first attempt can consume the one shared retry slot.
+  # Structured custody, cleanup and fresh pin checks precede any second launch.
+  retry_class="$(python3 -I -S -B "$adapter" startup-retry "$budget_seconds" "$result_log.attempt-1" "$endpoint_base" -- "$@")" || retry_class=""
+fi
+
 if [[ -z "$retry_class" ]]; then
   exit "$first_status"
 fi

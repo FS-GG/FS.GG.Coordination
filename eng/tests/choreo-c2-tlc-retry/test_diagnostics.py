@@ -1310,6 +1310,116 @@ class ParityDiagnosticControls(unittest.TestCase):
 
 
 class CommandInterfaceControls(unittest.TestCase):
+    def startup_retry_fixture(self):
+        """Synthetic complete current receipt, not reconstructed historical evidence."""
+        leader={'pid':101,'start':20,'pgid':101,'state':'R'}
+        server={'pid':102,'start':21,'pgid':101,'state':'S'}
+        inodes={'values':['123'],'omitted':0}
+        proof={'event':'poll','attempt':1,'disposition':'proved','failure':None,
+               'beforeInodes':inodes,'afterInodes':inodes,'matchedInodes':inodes,
+               'beforeMembers':{'members':[leader,server],'omittedMembers':0},
+               'afterMembers':{'members':[leader,server],'omittedMembers':0},
+               'fdScans':[{'disposition':'scanned','missingReadlinks':0,'afterMismatchObserved':False,
+                           'afterMismatchBirth':None,'before':server,'socketInodes':inodes}]}
+        spec=self.spec();spec['argv']+=['--tlc-config=/scope/lane.attempt-1.tlc.json','--server-endpoint','localhost:19822']
+        owner={'argv':spec['argv'],'ownedPopenPid':101,'leader':leader,'exit':-15,
+               'firstCause':'TimeoutError: original canonical work deadline','additionalFailures':[],
+               'cleanup':'observed-empty-group','custody':'observed-owned-group','birthIdentityUnavailable':False,
+               'residual':[],'escapedResidual':[],'escapedDescendants':[],'exitObservation':None}
+        value={'schema':module.RESULT_SCHEMA,'commandExit':-15,'commandAccepted':False,
+               'firstCause':{'type':'TimeoutError','message':'original canonical work deadline'},
+               'additionalFailures':[],'ownerReceipt':owner,'input':spec,'cleanupObservedAt':251,
+               'originalServerBirths':[{'pid':102,'start':21}],'originalServerStopRequests':[],
+               'fdDenialObservations':{'entries':[],'omitted':0},
+               'endpointObservations':{'entries':[proof],'omitted':0},'exitMembers':None,'modelCheckingRequired':True}
+        log='Starting checker server on port 19822...\nThe Apalache server is running on port 19822.\n'
+        return value,log
+
+    def test_preparser_retry_complete_positive_and_closed_refusals(self):
+        value,log=self.startup_retry_fixture()
+        eligible=lambda v,l=log,now=252:module.preparser_startup_retry_eligible(v,l,150,19822,['/quint','verify','/model'],now=now)
+        self.assertTrue(eligible(value));self.assertFalse(eligible(value,now=280))
+        mutations=[lambda v:v.pop('input'),lambda v:v.update(input=[]),lambda v:v.update(ownerReceipt=[]),
+                   lambda v:v['endpointObservations'].update(entries=[None]), lambda v:v.update(cleanupObservedAt=249),
+                   lambda v:v.update(commandAccepted=True),lambda v:v.update(commandExit=0),
+                   lambda v:v['firstCause'].update(message='different deadline'),
+                   lambda v:v['additionalFailures'].append({'type':'Error','message':'report failed'}),
+                   lambda v:v['ownerReceipt'].update(cleanup='unknown'),
+                   lambda v:v['ownerReceipt'].update(custody='unknown'),
+                   lambda v:v['ownerReceipt'].update(birthIdentityUnavailable=True),
+                   lambda v:v['ownerReceipt'].update(ownedPopenPid=999),
+                   lambda v:v['ownerReceipt'].update(residual=[{}]),
+                   lambda v:v['ownerReceipt'].update(escapedResidual=[{}]),
+                   lambda v:v['ownerReceipt'].update(escapedDescendants=[{}]),
+                   lambda v:v['ownerReceipt'].update(argv=['foreign']),
+                   lambda v:v.update(originalServerBirths=[]),
+                   lambda v:v['fdDenialObservations'].update(omitted=1),
+                   lambda v:v['endpointObservations']['entries'][-1].update(disposition='refused'),
+                   lambda v:v['endpointObservations']['entries'][-1]['fdScans'][0].update(missingReadlinks=1),
+                   lambda v:v['endpointObservations']['entries'][-1]['afterMembers'].update(members=[]),
+                   lambda v:v['input'].update(workSeconds=149),lambda v:v['input'].update(endpoint=19823),
+                   lambda v:v['input'].update(rssBytes=1)]
+        for number,mutate in enumerate(mutations):
+            with self.subTest(mutation=number):
+                changed=copy.deepcopy(value);mutate(changed);self.assertFalse(eligible(changed))
+        for marker in ('SanyParser','PASS #0','Parsing file','TLC2 Version','[TLC] Computing','states generated',
+                       'distinct states','initial states','violation found','Invariant violated','[error]','ERROR','Exception'):
+            with self.subTest(marker=marker):self.assertFalse(eligible(value,log+marker))
+        self.assertFalse(eligible(value,''))  # plain pre-parser sleep cannot qualify
+        self.assertEqual({'type':'TimeoutError','message':'original canonical work deadline'},value['firstCause'])
+
+    def test_preparser_retry_missing_malformed_oversized_and_second_attempt_refuse(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);previous=Path.cwd()
+            try:
+                os.chdir(root)
+                for suffix,body in [('attempt-1',b'{}'),('attempt-1',b'{"a":1,"a":2}'),
+                                    ('attempt-1',b'x'*(module.MAX_OUTPUT+1)),('attempt-2',b'{}')]:
+                    path=root/('lane.'+suffix);path.write_text('inert')
+                    Path(str(path)+'.command.json').write_bytes(body)
+                    self.assertEqual('',module.classify_preparser_startup_retry('150',str(path),'19822',['/quint','verify','/model']))
+                self.assertEqual('',module.classify_preparser_startup_retry('150',str(root/'missing.attempt-1'),'19822',[]))
+            finally:os.chdir(previous)
+
+    def test_preparser_retry_fresh_files_counterparts_pins_and_aliases(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);previous=Path.cwd();path=root/'lane.attempt-1'
+            java=root/'java/bin/java';jar=root/'quint/apalache-dist-0.56.1/apalache/lib/apalache.jar'
+            adapter=root/'adapter.py';owner=root/'shared_process_owner.py';model=root/'model.qnt'
+            binary=root/'quint-bin';alias=root/'quint-link';config=Path(str(path)+'.tlc.json')
+            files=[binary,model,java,jar,owner,adapter,config]
+            for item in files:item.parent.mkdir(parents=True,exist_ok=True);item.write_text('inert fixture')
+            alias.symlink_to(binary)
+            value,log=self.startup_retry_fixture();spec=value['input']
+            argv=[str(alias),'verify',str(model)]
+            spec.update(argv=argv+['--tlc-config='+str(config),'--server-endpoint','localhost:19822'],
+                        pins=[module.pin_file(item) for item in files],archiveSha256=None,
+                        aliases=[{'path':str(alias),'target':str(binary)}])
+            scope=spec['mutableScope'];scope.update(cwd=str(root),tmpdir=str(root/'tmp'),
+                javaToolOptions='-Djava.io.tmpdir='+str(root/'tmp'),denoDir=str(root/'cache/deno'),xdgCacheHome=str(root/'cache'))
+            value['ownerReceipt']['argv']=spec['argv'];path.write_text(log)
+            def persist():
+                for suffix,body in [('.command.json',value),('.input.json',spec),('.result.json',value['ownerReceipt'])]:
+                    Path(str(path)+suffix).write_text(json.dumps(body))
+            try:
+                os.chdir(root)
+                with patch.object(module,'__file__',str(adapter)),patch.object(module.time,'monotonic',return_value=252),patch.dict(os.environ,{'JAVA_HOME':str(root/'java'),'QUINT_HOME':str(root/'quint')},clear=True):
+                    classify=lambda:module.classify_preparser_startup_retry('150',str(path),'19822',argv)
+                    persist();self.assertEqual('owned-startup-timeout-before-parser',classify())
+                    for item in files:
+                        with self.subTest(pin=item.name):
+                            item.write_text('changed');self.assertEqual('',classify());item.write_text('inert fixture')
+                    alias.unlink();alias.symlink_to(model);self.assertEqual('',classify())
+                    alias.unlink();alias.symlink_to(binary)
+                    for suffix in ('.input.json','.result.json'):
+                        Path(str(path)+suffix).write_text('{}');self.assertEqual('',classify());persist()
+                    with patch.object(module.time,'monotonic',side_effect=[252,280]):self.assertEqual('',classify())
+                    path.write_text(log+'SanyParser');self.assertEqual('',classify());path.write_text(log)
+                    # Neither another class nor a prior failed second attempt gets a third slot.
+                    second=root/'lane.attempt-2';second.write_text(log)
+                    self.assertEqual('',module.classify_preparser_startup_retry('150',str(second),'19823',argv))
+            finally:os.chdir(previous)
+
     def test_current_endpoint_proof_prioritizes_server_without_reading_irrelevant_denied_leader(self):
         from unittest.mock import Mock, patch
         leader={'pid':101,'start':20,'pgid':101,'state':'R'}

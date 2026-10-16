@@ -1457,6 +1457,67 @@ type PortableHostExecutorTests_ControlledAuthenticatedSource() =
                     Assert.Equal(0,failedFixture.Runner.Runs)
                     Assert.Equal(0,failedFixture.Runner.Cleans)
                     Assert.Equal(0,failedFixture.Runner.Recoveries)
+            let assertInertAckDrafts (readback: PortableSupplierAuthenticatedSourceReadback) =
+                let retained = readback.State
+                let custody = retained.CheckpointCustody.Value
+                let draftedAt = DateTimeOffset.Parse(expected.GetProperty("coldVerificationTime").GetString(),Globalization.CultureInfo.InvariantCulture)
+                let drafts = PortableSupplierAdmission.draftControlledAckPayloadsV4 readback draftedAt |> SupplierCheckpointFixtures.ok
+                let genesisBytes = custody.GenesisCheckpointBase64.Value |> Convert.FromBase64String
+                let genesis = PortableSupplierCheckpoint.parseGenesis genesisBytes |> SupplierCheckpointFixtures.ok
+                let common = PortableSupplierCheckpoint.genesisCommon genesis
+                let payload = drafts.GenesisPayload
+                use document = System.Text.Json.JsonDocument.Parse(ReadOnlyMemory<byte>(payload))
+                let root = document.RootElement
+                use intent = System.Text.Json.JsonDocument.Parse(ReadOnlyMemory<byte>(Convert.FromBase64String retained.Original.IntentBase64))
+                Assert.Equal(9,root.EnumerateObject() |> Seq.length)
+                Assert.Equal("fsgg.v3.receiver-acceptance/1",root.GetProperty("schema").GetString())
+                Assert.Equal("original-genesis-accepted",root.GetProperty("kind").GetString())
+                Assert.Equal(intent.RootElement.GetProperty("correlation_id").GetString(),root.GetProperty("correlation_id").GetString())
+                Assert.Equal(common.ObservedHead,root.GetProperty("genesis_head").GetString())
+                Assert.Equal(common.IntentDigest,root.GetProperty("intent_digest").GetString())
+                Assert.Equal(common.OperationId.ToString("D"),root.GetProperty("operation_id").GetString())
+                Assert.Equal(common.ReservationDigest,root.GetProperty("reservation_digest").GetString())
+                Assert.Equal(SupplierCheckpointFixtures.hash genesisBytes,root.GetProperty("receiver_journal_digest").GetString())
+                Assert.Equal(draftedAt.ToString("yyyy-MM-dd'T'HH:mm:ss.ffffff'Z'",Globalization.CultureInfo.InvariantCulture),root.GetProperty("accepted_at").GetString())
+                Assert.Equal(10uy,payload[payload.Length - 1])
+                payload[0] <- 0uy
+                Assert.Equal(123uy,drafts.GenesisPayload[0])
+                match custody.OutputCheckpointBase64,drafts.OutputPayload with
+                | None,None -> ()
+                | Some encoded,Some outputBytes ->
+                    let checkpointBytes = Convert.FromBase64String encoded
+                    let checkpoint = PortableSupplierCheckpoint.parseOutput checkpointBytes |> SupplierCheckpointFixtures.ok
+                    let common = PortableSupplierCheckpoint.outputCommon checkpoint
+                    let output = PortableSupplierCheckpoint.output checkpoint
+                    use document = System.Text.Json.JsonDocument.Parse(ReadOnlyMemory<byte>(outputBytes))
+                    let root = document.RootElement
+                    Assert.Equal(11,root.EnumerateObject() |> Seq.length)
+                    Assert.Equal("fsgg.v3.export-readback/1",root.GetProperty("schema").GetString())
+                    Assert.Equal(common.ObservedHead,root.GetProperty("observed_head").GetString())
+                    Assert.Equal(common.OperationId.ToString("D"),root.GetProperty("operation_id").GetString())
+                    Assert.Equal(common.ReservationDigest,root.GetProperty("reservation_digest").GetString())
+                    Assert.Equal(common.SelectionDigest,root.GetProperty("selection_digest").GetString())
+                    Assert.Equal(SupplierCheckpointFixtures.hash checkpointBytes,root.GetProperty("receiver_journal_digest").GetString())
+                    Assert.NotEqual(root.GetProperty("receiver_journal_digest").GetString(),SupplierCheckpointFixtures.hash genesisBytes)
+                    Assert.Equal(draftedAt.ToString("yyyy-MM-dd'T'HH:mm:ss.ffffff'Z'",Globalization.CultureInfo.InvariantCulture),root.GetProperty("readback_at").GetString())
+                    match output.Selection with
+                    | CheckpointNone ->
+                        Assert.Equal("zero-selection-census-accepted",root.GetProperty("kind").GetString())
+                        for key in ["manifest_digest";"member_count";"total_bytes"] do Assert.Equal(System.Text.Json.JsonValueKind.Null,root.GetProperty(key).ValueKind)
+                    | CheckpointSelected(_,manifest) ->
+                        Assert.Equal("durable-output-readback",root.GetProperty("kind").GetString())
+                        Assert.Equal(manifest.Digest,root.GetProperty("manifest_digest").GetString())
+                        Assert.Equal(string manifest.MemberCount,root.GetProperty("member_count").GetString())
+                        Assert.Equal(string manifest.TotalBytes,root.GetProperty("total_bytes").GetString())
+                    Assert.Equal(10uy,outputBytes[outputBytes.Length - 1])
+                    outputBytes[0] <- 0uy
+                    Assert.Equal(123uy,drafts.OutputPayload.Value[0])
+                | _ -> failwith "draft presence must match retained checkpoint custody"
+                for invalid in [draftedAt.AddTicks 1L; draftedAt.ToOffset(TimeSpan.FromHours 1.)] do
+                    Assert.True(PortableSupplierAdmission.draftControlledAckPayloadsV4 readback invalid |> Result.isError)
+                Assert.Equal(retained,readback.State)
+                Assert.True(PortableSupplierAdmission.prepareAck retained |> Result.isError)
+                Assert.True(PortableSupplierAdmission.reserveHost retained |> Result.isError)
             match journal.StageV4(initial,None,None) with SupplierSourceReadback _ -> () | other -> failwithf "%A" other
             let mutable state = initial
             for name in ["creation";"genesis"] do
@@ -1493,6 +1554,9 @@ type PortableHostExecutorTests_ControlledAuthenticatedSource() =
                 match journal.StageControlledV4 transition with SupplierSourceReadback _ -> () | other -> failwithf "%A" other
                 Assert.Equal(SupplierSourceConflict,journal.StageControlledV4 transition)
                 state <- transition.State
+                if name = "genesis" then
+                    PortableSupplierAdmission.reverifyControlledSourceV4 (selection at false) state
+                    |> SupplierCheckpointFixtures.ok |> assertInertAckDrafts
             // Continue the same real signed DAG through output wire and native acquisition.
             let stageTransition current outcome =
                 let transition = match outcome with AuthenticatedControlledSource value -> value | HeldControlledSource held -> failwithf "signed output source held: %A" held.FirstFailure
@@ -1567,6 +1631,7 @@ type PortableHostExecutorTests_ControlledAuthenticatedSource() =
             let fence = cold.CheckpointCustody.Value.StoreFence
             let readback,authenticatedDurability = journal.ReadControlledV4(current,cold.Original,cold.Revision,fence) |> SupplierCheckpointFixtures.ok
             Assert.Equal(cold,readback.State)
+            assertInertAckDrafts readback
             match authenticatedDurability with EvidenceUnknown _ -> () | _ -> failwith "locked cold authentication cannot qualify durability"
             let foreignOriginal = { cold.Original with ReceiverEpoch = Guid.Empty }
             Assert.True(journal.ReadControlledV4(current,foreignOriginal,cold.Revision,fence) |> Result.isError)

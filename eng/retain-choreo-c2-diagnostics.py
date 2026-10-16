@@ -2910,6 +2910,147 @@ def observe_endpoint_ownership(owner, child, leader, servers, handles, known, ch
             raise
 
 
+def preparser_startup_observation(summary, log, endpoint):
+    """Observed startup class only; complete current input/retirement checks are separate."""
+    try:
+        if (summary['schema'] != RESULT_SCHEMA or summary['commandAccepted'] is not False
+                or summary['commandExit'] != -signal.SIGTERM
+                or summary['firstCause'] != {'type':'TimeoutError','message':'original canonical work deadline'}
+                or summary['additionalFailures'] != []): return False
+        owner = summary['owner']; life = summary['lifecycle']
+        if (owner['firstCause'] != 'TimeoutError: original canonical work deadline'
+                or owner['additionalFailures'] != [] or owner['exit'] != -signal.SIGTERM
+                or owner['cleanup'] != 'observed-empty-group' or owner['custody'] != 'observed-owned-group'
+                or owner['birthIdentityUnavailable'] is not False): return False
+        if (f'Starting checker server on port {endpoint}...' not in log
+                or f'The Apalache server is running on port {endpoint}.' not in log
+                or any(marker in log for marker in ('SanyParser','PASS #','Parsing file','TLC2 Version','[TLC]',
+                                                     'states generated','distinct states','initial states','violation found',
+                                                     'Invariant','[error]','ERROR','Error:','error:','Exception'))): return False
+        births = life['serverBirths']
+        if births['omittedMembers'] != 0 or len(births['members']) != 1: return False
+        server = births['members'][0]; leader = life['ownerLeader']
+        if (any(type(row[k]) is not int or row[k] <= 0 for row in (server,leader) for k in ('pid','start'))
+                or type(leader['pgid']) is not int or leader['pgid'] != leader['pid']
+                or server['pid'] == leader['pid']): return False
+        if life['fdDenials'] != {'entries':[],'omitted':0}: return False
+        observations = life['endpointObservations']
+        if not observations['entries'] or type(observations['omitted']) is not int or observations['omitted'] < 0: return False
+        proof = observations['entries'][-1]
+        if proof['event'] != 'poll' or proof['disposition'] != 'proved' or proof['failure'] is not None: return False
+        inodes = proof['matchedInodes']
+        if (inodes['omitted'] != 0 or not inodes['values']
+                or proof['beforeInodes'] != inodes or proof['afterInodes'] != inodes
+                or any(type(x) is not str or not x.isascii() or not x.isdigit() or len(x)>20 for x in inodes['values'])): return False
+        for name in ('beforeMembers','afterMembers'):
+            rows = proof[name]
+            if rows['omittedMembers'] != 0 or not any(
+                row['pid'] == server['pid'] and row['start'] == server['start']
+                and row['pgid'] == leader['pgid'] and row['state'] not in ('Z','X') for row in rows['members']): return False
+        scans = proof['fdScans']
+        if not any(scan['disposition'] == 'scanned' and scan['missingReadlinks'] == 0
+                   and scan['afterMismatchObserved'] is False and scan['afterMismatchBirth'] is None
+                   and scan['before']['pid'] == server['pid'] and scan['before']['start'] == server['start']
+                   and scan['before']['pgid'] == leader['pgid'] and scan['before']['state'] not in ('Z','X')
+                   and scan['socketInodes']['omitted'] == 0
+                   and set(inodes['values']) <= set(scan['socketInodes']['values']) for scan in scans): return False
+        return True
+    except (KeyError,TypeError,ValueError,IndexError,AttributeError): return False
+
+
+def preparser_startup_retry_eligible(value, log, seconds, endpoint, argv, *, now):
+    """Full current receipt joins, never an inference from a retained diagnostic projection."""
+    try:
+        spec = value['input']; owner = value['ownerReceipt']
+        command_preflight(spec, now=spec['started'])
+        if (spec['workSeconds'] != seconds or spec['endpoint'] != endpoint
+                or not spec['workDeadline'] <= value['cleanupObservedAt'] <= now < spec['totalDeadline']
+                or spec['argv'][:-3] != list(argv) or spec['argv'][-2:] != ['--server-endpoint',f'localhost:{endpoint}']
+                or not spec['argv'][-3].startswith('--tlc-config=')
+                or owner['argv'] != spec['argv'] or type(owner['ownedPopenPid']) is not int
+                or owner['ownedPopenPid'] != owner['leader']['pid']
+                or owner['leader']['pid'] != owner['leader']['pgid']
+                or owner['residual'] != [] or owner['escapedResidual'] != [] or owner['escapedDescendants'] != []
+                or value['originalServerStopRequests'] != [] or value['exitMembers'] is not None
+                or value['modelCheckingRequired'] is not True): return False
+        summary = {key:value[key] for key in ('schema','commandExit','commandAccepted','firstCause','additionalFailures')}
+        summary['owner'] = {key:owner[key] for key in ('firstCause','additionalFailures','cleanup','custody','exit','birthIdentityUnavailable')}
+        summary['lifecycle'] = lifecycle_summary(value)
+        return preparser_startup_observation(summary,log,endpoint)
+    except (KeyError,TypeError,ValueError,IndexError,AttributeError): return False
+
+
+def classify_preparser_startup_retry(seconds, log_path, endpoint, argv):
+    """One closed preflight before a retry; missing/stale/malformed evidence refuses."""
+    def read(path, cap):
+        fd = os.open(path,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK)
+        try:
+            before = os.fstat(fd)
+            if not stat.S_ISREG(before.st_mode) or not 0 < before.st_size <= cap: raise ValueError('retry evidence bound')
+            body = bytearray()
+            while len(body) <= cap:
+                block = os.read(fd,min(65536,cap+1-len(body)))
+                if not block: break
+                body.extend(block)
+            after = os.fstat(fd)
+            stable = lambda row:(row.st_dev,row.st_ino,row.st_size,row.st_mtime_ns,row.st_ctime_ns,row.st_mode,row.st_uid,row.st_gid)
+            if stable(before) != stable(after) or len(body) != before.st_size: raise ValueError('retry evidence changed')
+            return bytes(body)
+        finally: os.close(fd)
+    def unique(pairs):
+        result = {}
+        for key,val in pairs:
+            if key in result: raise ValueError('duplicate retry receipt key')
+            result[key] = val
+        return result
+    try:
+        seconds,endpoint = int(seconds),int(endpoint)
+        path = Path(log_path).absolute()
+        if path.parent != Path.cwd() or not path.name.endswith('.attempt-1'): return ''
+        value = json.loads(read(str(path)+'.command.json',MAX_OUTPUT),object_pairs_hook=unique)
+        log = read(path,8*1024**2).decode('utf-8',errors='strict')
+        if not preparser_startup_retry_eligible(value,log,seconds,endpoint,argv,now=time.monotonic()): return ''
+        spec = value['input']
+        def fresh_pin(path):
+            canonical = Path(path).resolve(strict=True)
+            fd = os.open(canonical,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK)
+            try:
+                before = os.fstat(fd)
+                if not stat.S_ISREG(before.st_mode): raise ValueError('retry pin type')
+                digest=hashlib.sha256();size=0
+                while True:
+                    if time.monotonic() >= spec['totalDeadline']: raise ValueError('retry pin deadline')
+                    block=os.read(fd,65536)
+                    if not block:break
+                    size+=len(block);digest.update(block)
+                    if size>before.st_size:raise ValueError('retry pin growth')
+                after=os.fstat(fd)
+                if (before.st_dev,before.st_ino,before.st_size,before.st_mtime_ns,before.st_ctime_ns)!=(after.st_dev,after.st_ino,after.st_size,after.st_mtime_ns,after.st_ctime_ns) or size!=before.st_size:
+                    raise ValueError('retry pin changed')
+                return {'path':str(canonical),'bytes':size,'sha256':digest.hexdigest()}
+            finally:os.close(fd)
+        if (json.loads(read(str(path)+'.input.json',64*1024),object_pairs_hook=unique) != spec
+                or json.loads(read(str(path)+'.result.json',MAX_OUTPUT),object_pairs_hook=unique) != value['ownerReceipt']): return ''
+        expected = [Path(argv[0]),Path(argv[2]),Path(os.environ['JAVA_HOME'])/'bin/java',
+                    Path(os.environ['QUINT_HOME'])/'apalache-dist-0.56.1/apalache/lib/apalache.jar',
+                    Path(__file__).with_name('shared_process_owner.py'),Path(__file__),Path(str(path)+'.tlc.json')]
+        if (spec['argv'][-3] != '--tlc-config='+str(path)+'.tlc.json'
+                or spec['mutableScope']['cwd'] != str(path.parent)
+                or {row['path'] for row in spec['pins']} != {str(p.resolve(strict=True)) for p in expected}
+                or len(spec['pins']) != len(expected)): return ''
+        # The timeout path exits before execute_command's normal post-command checks.
+        # Repeat every original pin/alias check within that original cleanup/reporting deadline.
+        for row in spec['pins']:
+            if time.monotonic() >= spec['totalDeadline'] or fresh_pin(row['path']) != row: return ''
+        for row in spec['aliases']:
+            if time.monotonic() >= spec['totalDeadline'] or os.readlink(row['path']) != row['target']: return ''
+        archive = os.environ.get('FSGG_QUINT_TOOLCHAIN_ARCHIVE')
+        if (fresh_pin(archive)['sha256'] if archive else None) != spec['archiveSha256']: return ''
+        if time.monotonic() >= spec['totalDeadline']: return ''
+        return 'owned-startup-timeout-before-parser'
+    except (OSError,ValueError,TypeError,KeyError,IndexError,AttributeError,RecursionError): return ''
+
+
 def execute_command(seconds, log_path, endpoint, argv):
     """Existing canonical adapter with one exact shared owner; no nested supervisor."""
     started = time.monotonic(); first = None; additional = []; receipt = None; returned = None
@@ -3103,6 +3244,11 @@ if __name__ == '__main__' and len(sys.argv) > 1 and sys.argv[1] == 'command':
         sys.exit(execute_proc_command(sys.argv[3],sys.argv[4],sys.argv[5]))
     if len(sys.argv) < 9 or sys.argv[5] != '--': sys.exit(64)
     sys.exit(execute_command(sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[6:]))
+elif __name__ == '__main__' and len(sys.argv) > 1 and sys.argv[1] == 'startup-retry':
+    if len(sys.argv) < 9 or sys.argv[5] != '--': sys.exit(64)
+    selected = classify_preparser_startup_retry(sys.argv[2],sys.argv[3],sys.argv[4],sys.argv[6:])
+    if selected: print(selected)
+    sys.exit(0 if selected else 1)
 elif __name__ == '__main__':
     try:
         capture(sys.argv[1], sys.argv[2], int(sys.argv[3]),
