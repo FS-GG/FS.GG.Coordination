@@ -228,7 +228,8 @@ that call settles. Inspection references remain local and output contains
 only scalar call ordinals, capacities and assertion results. Releasing the
 hold continues the existing terminal readback correlation, eleven-array
 census, six exact slots, three ACKs, terminal confirmation and settled-task
-checks. Failure closes admission, releases the ACK hold and joins cleanup.
+checks. On test failure, the fixture releases the ACK hold and joins cleanup;
+closed-profile admission remains refused.
 
 This earlier cut does not establish that either object remains live or has
 been reclaimed at the terminal cut. Earlier ACK arrays, the one-byte callback
