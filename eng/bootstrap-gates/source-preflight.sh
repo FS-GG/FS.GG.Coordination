@@ -66,7 +66,7 @@ done
 for path in FS.GG.Coordination.sln global.json \
   tests/FS.GG.Coordination.Orchestration.Execution.Tests/FS.GG.Coordination.Orchestration.Execution.Tests.fsproj \
   eng/validate-test-census.py eng/utel-callback-fixture.py eng/utel-callback-source.json \
-  eng/utel-slot-callback-source.json eng/utel-callback-cases.json; do
+  eng/utel-slot-callback-source.json eng/utel-closed-callback-source.json eng/utel-callback-cases.json; do
   if [[ ! -f "$path" ]]; then
     printf 'source-preflight: missing input %s\n' "$path" >&2
     record_failure 2

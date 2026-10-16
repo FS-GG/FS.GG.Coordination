@@ -60,7 +60,7 @@ class SourcePreflight(unittest.TestCase):
         self.repo.mkdir()
         for relative in ['eng/bootstrap-gates/source-preflight.sh', 'eng/validate-test-census.py',
                          'eng/utel-callback-fixture.py', 'eng/utel-callback-source.json',
-                         'eng/utel-slot-callback-source.json', 'eng/utel-callback-cases.json']:
+                         'eng/utel-slot-callback-source.json', 'eng/utel-closed-callback-source.json', 'eng/utel-callback-cases.json']:
             dest = self.repo / relative
             dest.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(ROOT / relative, dest)
@@ -172,6 +172,13 @@ class SourcePreflight(unittest.TestCase):
         result = self.run_gate()
         self.assertNotEqual(0, result.returncode)
         self.assertEqual([], self.launched())
+
+    def test_missing_integrated_closed_pin_blocks_effects(self):
+        (self.repo / 'eng/utel-closed-callback-source.json').unlink()
+        result = self.run_gate()
+        self.assertNotEqual(0, result.returncode)
+        self.assertEqual([], self.launched())
+        self.assertIn('missing input eng/utel-closed-callback-source.json', result.stderr)
 
     def test_unavailable_dotnet_blocks_effects(self):
         (self.bin / 'dotnet').unlink()
