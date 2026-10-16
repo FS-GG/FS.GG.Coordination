@@ -1128,6 +1128,80 @@ type PortableHostExecutorTests_SupplierJournalV4() =
             Assert.Equal(0,fixture.Runner.Recoveries)
 
     [<Fact>]
+    member _.``native pending anchors cannot be swapped and first rejected frames survive abandonment and cold reopen``() =
+        use corpus = SupplierCheckpointFixtures.journey ()
+        for row in corpus.RootElement.GetProperty("outputJourneys").EnumerateArray() do
+            use fixture = new HostExecutorFixture()
+            let journal = PortableWorkspaceExecutor.SupplierAdmissionJournal fixture.Policy.Runtime.StateRoot
+            let stage (state: PortableSupplierAdmissionState) =
+                let expected = if state.Revision = 1UL then None else Some(state.Revision - 1UL)
+                match journal.StageV4(state,expected,expected) with
+                | SupplierSourceReadback actual -> Assert.Equal(state,actual)
+                | other -> failwithf "%A" other
+                let cold,durability = journal.Read state.Original.Command |> SupplierCheckpointFixtures.ok
+                Assert.Equal(state,cold)
+                match durability with EvidenceUnknown _ -> () | _ -> failwith "source read cannot qualify durability"
+                cold
+            let initial = SupplierCheckpointFixtures.initialFrom row |> stage
+            let creationPair = SupplierCheckpointFixtures.exchangeFrom row "creation" initial
+            PortableSupplierAdmission.issueChallenge creationPair.Challenge initial |> SupplierCheckpointFixtures.ok |> stage |> ignore
+            let creation = SupplierCheckpointFixtures.pinCreationFrom row initial |> stage
+            let genesisPair = SupplierCheckpointFixtures.exchangeFrom row "genesis" creation
+            PortableSupplierAdmission.issueChallenge genesisPair.Challenge creation |> SupplierCheckpointFixtures.ok |> stage |> ignore
+            let genesis = SupplierCheckpointFixtures.acceptGenesisFrom row creation |> stage
+            let appendPair = SupplierCheckpointFixtures.exchangeFrom row "append" genesis
+            PortableSupplierAdmission.issueChallenge appendPair.Challenge genesis |> SupplierCheckpointFixtures.ok |> stage |> ignore
+            let appended = SupplierCheckpointFixtures.acceptAppendFrom row genesis |> stage
+            let issued = SupplierCheckpointFixtures.issueNativeFrom row appended
+            let configuration = issued.CheckpointCustody.Value.NativeConfiguration
+            let scope = PortableSupplierOriginalNativeConfiguration.scopeBytes configuration
+            let clock = PortableSupplierOriginalNativeConfiguration.clockBytes configuration
+            let destination = PortableSupplierOriginalNativeConfiguration.destinationBytes configuration |> Option.map (fun bytes -> bytes, SupplierCheckpointFixtures.hash bytes)
+            let replacement = PortableSupplierOriginalNativeConfiguration.create issued.Original 2UL
+                                    scope (SupplierCheckpointFixtures.hash scope) clock (SupplierCheckpointFixtures.hash clock) destination
+                              |> SupplierCheckpointFixtures.ok
+            let rebound = { issued with CheckpointCustody = Some { issued.CheckpointCustody.Value with NativeConfiguration = replacement } }
+            // Self-consistent source data still cannot replace the independently retained original selection.
+            Assert.True(PortableSupplierAdmission.validate rebound |> Result.isOk)
+            Assert.Equal(SupplierSourceConflict,journal.StageV4(rebound,Some appended.Revision,Some appended.CheckpointCustody.Value.StoreFence))
+            let unchanged,_ = journal.Read appended.Original.Command |> SupplierCheckpointFixtures.ok
+            Assert.Equal(appended,unchanged)
+            let pending = issued |> stage
+            let custody = pending.CheckpointCustody.Value
+            let anchor = custody.PendingNativeAnchor.Value
+            for changed in
+                [ { anchor with ChallengeKind = SupplierWireV1 }
+                  { anchor with ChallengeId = Guid.NewGuid() }
+                  { anchor with ChallengeDigest = String.replicate 64 "f" }
+                  { anchor with Head = genesis.Head.Value }
+                  { anchor with Sequence = 0UL } ] do
+                Assert.True(PortableSupplierAdmission.validate { pending with CheckpointCustody = Some { custody with PendingNativeAnchor = Some changed } } |> Result.isError)
+            Assert.True(PortableSupplierAdmission.validate { pending with CheckpointCustody = Some { custody with PendingNativeAnchor = None } } |> Result.isError)
+            let exchange = SupplierCheckpointFixtures.nativeFrom row pending
+            let held =
+                match PortableSupplierAdmission.quarantineExchangeV4 pending.Original pending.Revision custody.StoreFence
+                        "supplier-exchange-unknown" exchange.RequestBase64 [exchange.ResultBase64;exchange.ProofEnvelopeBase64]
+                        None (Some exchange.ControllerBundleBase64) pending |> SupplierCheckpointFixtures.ok with
+                | SupplierCheckpointHeld value -> stage value
+                | _ -> failwith "uncertain native exchange must remain held"
+            Assert.Equal(pending.Challenge,held.Challenge)
+            Assert.Equal(custody.PendingNativeAnchor,held.CheckpointCustody.Value.PendingNativeAnchor)
+            let first = held.CheckpointCustody.Value.RejectedExchanges |> List.exactlyOne
+            Assert.Equal("supplier-exchange-unknown",first.Reason)
+            Assert.Equal<string list>([exchange.ResultBase64;exchange.ProofEnvelopeBase64],first.FramesBase64)
+            let abandoned = PortableSupplierAdmission.abandonChallenge (Guid.NewGuid()) held |> SupplierCheckpointFixtures.ok |> stage
+            Assert.True(abandoned.Challenge.IsNone)
+            Assert.True(abandoned.CheckpointCustody.Value.PendingNativeAnchor.IsNone)
+            Assert.Equal(held.FirstFailure,abandoned.FirstFailure)
+            Assert.Equal<Set<string>>(held.Conflicts,abandoned.Conflicts)
+            Assert.Equal<PortableSupplierRejectedExchange list>(held.CheckpointCustody.Value.RejectedExchanges,abandoned.CheckpointCustody.Value.RejectedExchanges)
+            Assert.True(PortableSupplierAdmission.prepareAck abandoned |> Result.isError)
+            Assert.True(PortableSupplierAdmission.reserveHost abandoned |> Result.isError)
+            Assert.Equal(0,fixture.Runner.Runs)
+            Assert.Equal(0,fixture.Runner.Cleans)
+            Assert.Equal(0,fixture.Runner.Recoveries)
+
+    [<Fact>]
     member _.``v4 sticky held transition persists original pending and first cause through reopen and explicit abandonment``() =
         use fixture = new HostExecutorFixture()
         let journal = PortableWorkspaceExecutor.SupplierAdmissionJournal fixture.Policy.Runtime.StateRoot

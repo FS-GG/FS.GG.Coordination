@@ -1185,3 +1185,42 @@ type PortableHostAllocationTests_SupplierSshsig() =
             let exported = PortableSupplierSshsig.envelope verified
             exported.[0] <- 0uy
             Assert.True((exact = PortableSupplierSshsig.envelope verified))
+
+/// Original snapshots remain copied bounded historical data; they cannot construct current native policy.
+type PortableHostAllocationTests_ReceiverCheckpointOriginalConfiguration() =
+    [<Fact>]
+    member _.``original config refuses hash selection schema path and size substitutions and snapshots every input``() =
+        use corpus = SupplierCheckpointFixtures.journey ()
+        for row in corpus.RootElement.GetProperty("outputJourneys").EnumerateArray() do
+            let state = SupplierCheckpointFixtures.initialFrom row
+            let config = state.CheckpointCustody.Value.NativeConfiguration
+            let scope = PortableSupplierOriginalNativeConfiguration.scopeBytes config
+            let clock = PortableSupplierOriginalNativeConfiguration.clockBytes config
+            let destination = PortableSupplierOriginalNativeConfiguration.destinationBytes config |> Option.map (fun raw -> raw,SupplierCheckpointFixtures.hash raw)
+            let create scopeBytes scopeHash clockBytes clockHash destinationBytes =
+                PortableSupplierOriginalNativeConfiguration.create state.Original 1UL scopeBytes scopeHash clockBytes clockHash destinationBytes
+            let copied = create scope (SupplierCheckpointFixtures.hash scope) clock (SupplierCheckpointFixtures.hash clock) destination |> SupplierCheckpointFixtures.ok
+            scope.[0] <- 0uy
+            clock.[0] <- 0uy
+            destination |> Option.iter (fun (raw,_) -> raw.[0] <- 0uy)
+            Assert.Equal(config,copied)
+            let scope = PortableSupplierOriginalNativeConfiguration.scopeBytes config
+            let clock = PortableSupplierOriginalNativeConfiguration.clockBytes config
+            let destination = PortableSupplierOriginalNativeConfiguration.destinationBytes config |> Option.map (fun raw -> raw,SupplierCheckpointFixtures.hash raw)
+            Assert.True(create scope (String.replicate 64 "0") clock (SupplierCheckpointFixtures.hash clock) destination |> Result.isError)
+            Assert.True(create scope (SupplierCheckpointFixtures.hash scope) clock (String.replicate 64 "0") destination |> Result.isError)
+            for source in
+                [ Encoding.ASCII.GetString(scope).Replace("creation-allocation","from-receipt") |> Encoding.ASCII.GetBytes
+                  Encoding.ASCII.GetString(scope).Replace("\"entire-source-root\"","\"claimed-subset\"") |> Encoding.ASCII.GetBytes
+                  Encoding.ASCII.GetString(scope).Replace("[]","[{\"disposition\":\"discard-after-original-settlement\",\"path\":\"../unsafe\"}]") |> Encoding.ASCII.GetBytes
+                  Encoding.ASCII.GetString(scope).Replace("[]","[{\"disposition\":\"retain\",\"path\":\"engine\"}]") |> Encoding.ASCII.GetBytes
+                  Array.zeroCreate<byte> 8193 ] do
+                Assert.True(create source (SupplierCheckpointFixtures.hash source) clock (SupplierCheckpointFixtures.hash clock) destination |> Result.isError)
+            let wrongClock = Encoding.ASCII.GetString(clock).Replace("\"monotonic_frequency\":\"10000000\"","\"monotonic_frequency\":\"0\"") |> Encoding.ASCII.GetBytes
+            Assert.True(create scope (SupplierCheckpointFixtures.hash scope) wrongClock (SupplierCheckpointFixtures.hash wrongClock) destination |> Result.isError)
+            if destination.IsSome then
+                Assert.True(create scope (SupplierCheckpointFixtures.hash scope) clock (SupplierCheckpointFixtures.hash clock) None |> Result.isError)
+            else
+                let selectedRow = corpus.RootElement.GetProperty("outputJourneys").EnumerateArray() |> Seq.find (fun e -> e.GetProperty("name").GetString() = "selected-sixteen")
+                let raw = selectedRow.GetProperty("configuration").GetProperty("destination").GetString() |> SupplierCheckpointFixtures.urlBytes
+                Assert.True(create scope (SupplierCheckpointFixtures.hash scope) clock (SupplierCheckpointFixtures.hash clock) (Some(raw,SupplierCheckpointFixtures.hash raw)) |> Result.isError)
