@@ -116,8 +116,8 @@ jobs:
           if-no-files-found: error
 
   shared-build:
-    # Cheap reuse classification is the admission boundary. Once accepted,
-    # this coherent lane and native delivery may proceed independently.
+    timeout-minutes: 10
+    # Exact-candidate compile and focused tests dominate expensive coherent work.
     needs: [prepare, classify-reuse]
     runs-on: ubuntu-latest
     steps:
@@ -125,8 +125,18 @@ jobs:
         with: { ref: '${{ needs.prepare.outputs.candidate }}', fetch-depth: 1 }
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with: { dotnet-version: 10.0.400 }
-      - run: dotnet restore FS.GG.Coordination.sln --locked-mode
-      - run: dotnet build FS.GG.Coordination.sln -c Release --no-restore --nologo
+      - name: Run early source compile and focused tests
+        env:
+          FSGG_CANDIDATE_SHA: ${{ needs.prepare.outputs.candidate }}
+        run: bash eng/bootstrap-gates/source-preflight.sh
+      - name: Retain early source diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: coherent-source-preflight-${{ needs.prepare.outputs.candidate }}
+          path: ${{ runner.temp }}/source-preflight
+          if-no-files-found: ignore
+          retention-days: 7
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: shared-build-${{ needs.prepare.outputs.candidate }}
@@ -138,7 +148,7 @@ jobs:
           if-no-files-found: error
 
   formal-prepare:
-    needs: [prepare, classify-reuse]
+    needs: [prepare, classify-reuse, shared-build]
     runs-on: ubuntu-latest
     env:
       FSGG_QUINT_TOOLCHAIN_OUTPUT: /tmp/fsgg-${{ github.run_id }}-formal-toolchain/toolchain.tar.gz

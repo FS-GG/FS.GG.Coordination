@@ -22,7 +22,7 @@ jobs:
     name: reuse-decision
     if: ${{ github.event_name != 'schedule' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     outputs:
       route: ${{ steps.decide.outputs.route }}
       prior-run-id: ${{ steps.decide.outputs.prior-run-id }}
@@ -51,6 +51,17 @@ jobs:
       - name: Select the exact-head qualification route
         id: decide
         run: bash eng/bootstrap-gates/reuse-decision.sh
+      - name: Run early source compile and focused tests
+        if: ${{ steps.decide.outputs.route == 'execute' }}
+        run: bash eng/bootstrap-gates/source-preflight.sh
+      - name: Retain early source diagnostics
+        if: ${{ always() && steps.decide.outputs.route == 'execute' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: bootstrap-source-preflight-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ${{ runner.temp }}/source-preflight
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Upload the qualification route receipt
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
