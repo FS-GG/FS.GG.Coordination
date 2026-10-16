@@ -2863,6 +2863,8 @@ type PortableSupplierControlledSourceSelection =
 type PortableSupplierControlledSourceExchange =
     | ControlledCreationExchange of request: byte array * frames: byte array list * reservation: byte array
     | ControlledGenesisExchange of request: byte array * frames: byte array list
+    | ControlledOutputWireExchange of request: byte array * frames: byte array list
+    | ControlledNativeAcquisitionExchange of request: byte array * frames: byte array list
 
 /// Successful real signature/semantic verification against controlled TEST selection only.
 /// The immutable state is retained privately; this value cannot construct an ACK or runtime witness.
@@ -4298,8 +4300,12 @@ module PortableSupplierAdmission =
         let _,result = raw 4096 exchange.ResultBase64 |> Result.defaultWith invalidOp |> PortableSupplierC1.payload 4096 896
         let events = if creation then [] else response.GetProperty("events").EnumerateArray() |> Seq.map (PortableSupplierC1.b64url 26761) |> Seq.toList
         let head key = if creation then None else response.GetProperty(key: string) |> PortableSupplierC1.optional PortableSupplierC1.digest
-        let sequence = if creation then 0UL else events |> List.last |> PortableSupplierC1.payload 26761 18000 |> snd |> fun row -> row.GetProperty("sequence") |> PortableSupplierC1.u64
-        let kind = if creation then SupplierCreation else SupplierGenesis
+        let sequence = if creation then 0UL elif events.IsEmpty then state.Sequence else events |> List.last |> PortableSupplierC1.payload 26761 18000 |> snd |> fun row -> row.GetProperty("sequence") |> PortableSupplierC1.u64
+        let kind =
+            if creation then SupplierCreation
+            elif exchange.Challenge.Purpose = "genesis-readback" then SupplierGenesis
+            elif events.IsEmpty then SupplierUnchanged
+            else SupplierAppend
         let policy = controlledRole selection SupplierCreationSignature
         { Kind = kind; IntentDigest = state.Original.IntentDigest; TrustPolicyDigest = state.Original.TrustPolicyDigest
           ChallengeDigest = exchange.Challenge.Digest; Purpose = exchange.Challenge.Purpose; OriginalReservation = originalReservation
@@ -4311,6 +4317,23 @@ module PortableSupplierAdmission =
           ReservationBase64 = Convert.ToBase64String reservationBytes; ResponseBase64 = exchange.EvidenceBase64
           EventsBase64 = events |> List.map Convert.ToBase64String; FromHead = head "from_head"; ToHead = head "to_head"
           Sequence = sequence; CollectedAt = result.GetProperty("collected_at") |> PortableSupplierC1.utc }
+
+    // Enumerate the closed required graph from bytes and retained prefix, never from bundle rows.
+    // A receiver bundle with more than eighteen observations is refused by its existing codec.
+    let private controlledWireRequirements (state: PortableSupplierAdmissionState) (exchange: PortableSupplierRetainedWireExchange) =
+        let receipt = raw 18761 state.Pinned.Value.CreationReceiptBase64 |> Result.defaultWith invalidOp
+        let response = raw 65536 exchange.EvidenceBase64 |> Result.defaultWith invalidOp
+        let _,row = PortableSupplierC1.payload 65536 45000 response
+        let events = row.GetProperty("events").EnumerateArray() |> Seq.map (PortableSupplierC1.b64url 26761) |> Seq.toList
+        let genesis,newEvents =
+            if exchange.Challenge.Purpose = "genesis-readback" then
+                match events with [one] -> one,[] | _ -> PortableSupplierC1.fail ()
+            else
+                let genesis = state.EventsBase64 |> List.tryHead |> Option.defaultWith PortableSupplierC1.fail
+                raw 26761 genesis |> Result.defaultWith invalidOp,events
+        ["creation",SupplierCreationSignature,receipt,"creation"; "genesis",SupplierGenesisSignature,genesis,"genesis"]
+        @ (newEvents |> List.map (fun bytes -> "supplier-event",SupplierEventSignature,bytes,"event"))
+        @ ["supplier-response",SupplierResponseSignature,response,"response"]
 
     let private recheckControlledBundle selection controller encoded required collected notAfter =
         let root = bundleCoverage controller encoded (required |> List.map (fun (name,_,bytes,kind) -> name,bytes,kind))
@@ -4338,9 +4361,10 @@ module PortableSupplierAdmission =
         try
             controlledSelectionCurrent selection state
             let custody = state.CheckpointCustody.Value
-            if state.FirstFailure.IsSome || not state.Conflicts.IsEmpty
-               || not custody.NativeAcquisitions.IsEmpty || custody.OutputCheckpointBase64.IsSome
-               || custody.WireExchanges.Length > 1 then PortableSupplierC1.fail ()
+            if state.FirstFailure.IsSome || not state.Conflicts.IsEmpty then PortableSupplierC1.fail ()
+            custody.OutputCheckpointBase64 |> Option.iter (fun encoded ->
+                let checkpoint = raw 16384 encoded |> Result.defaultWith invalidOp |> PortableSupplierCheckpoint.parseOutput |> Result.defaultWith invalidOp
+                if (PortableSupplierCheckpoint.outputCommon checkpoint).Provenance <> "controlled-test" then PortableSupplierC1.fail ())
             custody.GenesisCheckpointBase64 |> Option.iter (fun encoded ->
                 let checkpoint = raw 16384 encoded |> Result.defaultWith invalidOp |> PortableSupplierCheckpoint.parseGenesis |> Result.defaultWith invalidOp
                 if (PortableSupplierCheckpoint.genesisCommon checkpoint).Provenance <> "controlled-test" then PortableSupplierC1.fail ())
@@ -4364,26 +4388,82 @@ module PortableSupplierAdmission =
                      "host-command-result",HostCommandResultSignature,rawResult exchange,"raw-sha256"] collected exchange.Challenge.NotAfter
                 let required =
                     if exchange = creation then ["creation",SupplierCreationSignature,receipt,"creation"]
-                    else
-                        let response = raw 65536 exchange.EvidenceBase64 |> Result.defaultWith invalidOp
-                        let _,row = PortableSupplierC1.payload 65536 45000 response
-                        let events = row.GetProperty("events").EnumerateArray() |> Seq.map (PortableSupplierC1.b64url 26761) |> Seq.toList
-                        match events with
-                        | [genesis] -> ["creation",SupplierCreationSignature,receipt,"creation"; "genesis",SupplierGenesisSignature,genesis,"genesis"; "supplier-response",SupplierResponseSignature,response,"response"]
-                        | _ -> PortableSupplierC1.fail ()
+                    else controlledWireRequirements state exchange
                 recheckControlledBundle selection false exchange.ReceiverBundleBase64 required collected exchange.Challenge.NotAfter
+            for exchange in custody.NativeAcquisitions do
+                sourceNativePair state exchange |> ignore
+                let request = raw 65536 exchange.RequestBase64 |> Result.defaultWith invalidOp
+                let result = raw 4096 exchange.ResultBase64 |> Result.defaultWith invalidOp
+                let proof = raw 65536 exchange.ProofEnvelopeBase64 |> Result.defaultWith invalidOp
+                let _,response = PortableSupplierC1.payload 4096 896 result
+                let collected = response.GetProperty("collected_at") |> PortableSupplierC1.utc
+                let notAfter =
+                    match exchange.Challenge with
+                    | NativeProofV1 challenge -> challenge.NotAfter
+                    | NativeSelectedProofV2 challenge -> challenge.NotAfter
+                    | WireV1 _ -> PortableSupplierC1.fail ()
+                recheckControlledBundle selection true exchange.ControllerBundleBase64
+                    ["receiver-command",ReceiverCommandSignature,request,"raw-sha256"
+                     "host-command-result",HostCommandResultSignature,result,"raw-sha256"
+                     "native-proof",NativeProofSignature,proof,"raw-sha256"] collected notAfter
             Ok ()
         with _ -> Error "supplier-controlled-cold-reverification-refused"
 
-    /// Real signatures and byte-derived observations under copied TEST selection; never calls the public transcript port.
-    let verifyAndAcceptControlledV4 selection original revision fence (state: PortableSupplierAdmissionState) exchange =
+    let private verifyAndAcceptControlledNativeV4 selection original revision fence (state: PortableSupplierAdmissionState) (requestInput: byte array) (frameInputs: byte array list) =
         if not (expectedV4 original revision fence state) then Error "supplier-v4-original-revision-fence-refused"
         elif state.FirstFailure.IsSome || not state.Conflicts.IsEmpty then Ok(HeldControlledSource state)
+        elif state.CheckpointCustody.Value.OutputCheckpointBase64.IsSome
+             || state.CheckpointCustody.Value.PendingNativeAnchor.IsNone
+             || (match state.Challenge with Some(NativeProofV1 _) | Some(NativeSelectedProofV2 _) -> false | _ -> true) then
+            Error "supplier-v4-native-pending-refused"
+        else
+            try
+                if isNull requestInput || requestInput.Length = 0 || requestInput.Length > 65536
+                   || frameInputs.Length > 2 || (frameInputs |> List.exists (fun bytes -> isNull bytes || bytes.Length > 65536)) then PortableSupplierC1.fail ()
+                let request = Array.copy requestInput
+                let frames = frameInputs |> List.map Array.copy
+                let quarantine reason =
+                    quarantineExchangeV4 original revision fence reason (Convert.ToBase64String request)
+                        (frames |> List.map Convert.ToBase64String) None None state
+                    |> Result.map (function SupplierCheckpointHeld held -> HeldControlledSource held | _ -> PortableSupplierC1.fail ())
+                try
+                    reverifyControlledHistory selection state |> Result.defaultWith invalidOp |> ignore
+                    let result,proof = match frames with [result;proof] when result.Length > 0 && result.Length <= 4096 && proof.Length > 0 -> result,proof | _ -> PortableSupplierC1.fail ()
+                    let receipt,_ = PortableSupplierC1.payload 65536 32768 proof
+                    let controller = controlledBundle selection true
+                                         ["receiver-command",ReceiverCommandSignature,request,"raw-sha256"
+                                          "host-command-result",HostCommandResultSignature,result,"raw-sha256"
+                                          "native-proof",NativeProofSignature,proof,"raw-sha256"]
+                    let pair: PortableSupplierRetainedNativeAcquisition =
+                        { AcceptedRevision = 0UL; AcceptedStoreFence = 0UL; Challenge = state.Challenge.Value
+                          IssuanceAnchor = state.CheckpointCustody.Value.PendingNativeAnchor.Value
+                          RequestBase64 = Convert.ToBase64String request; ResultBase64 = Convert.ToBase64String result
+                          ProofEnvelopeBase64 = Convert.ToBase64String proof; ReceiptBase64 = Convert.ToBase64String receipt
+                          ControllerBundleBase64 = controller }
+                    match acceptNativeV4 original revision fence selection.Current.VerifiedAt selection.Current.ReceiverMonotonic pair state with
+                    | Ok(SupplierCheckpointData proposed) ->
+                        validate proposed |> Result.defaultWith invalidOp |> ignore
+                        Ok(AuthenticatedControlledSource(ControlledSourceTransition(original,revision,fence,proposed)))
+                    | Ok(SupplierCheckpointHeld held) -> Ok(HeldControlledSource held)
+                    | Error _ -> quarantine "supplier-context-refused"
+                with _ -> quarantine "supplier-authentication-refused"
+            with _ -> Error "supplier-controlled-source-input-refused"
+
+    /// Real signatures and byte-derived observations under copied TEST selection; never calls the public transcript port.
+    let private verifyAndAcceptControlledWireV4 selection original revision fence (state: PortableSupplierAdmissionState) exchange =
+        if not (expectedV4 original revision fence state) then Error "supplier-v4-original-revision-fence-refused"
+        elif state.FirstFailure.IsSome || not state.Conflicts.IsEmpty then Ok(HeldControlledSource state)
+        elif (match exchange,state.Challenge with
+              | ControlledCreationExchange _,Some(WireV1 c) -> c.Purpose <> "creation"
+              | ControlledGenesisExchange _,Some(WireV1 c) -> c.Purpose <> "genesis-readback"
+              | ControlledOutputWireExchange _,Some(WireV1 c) -> not (List.contains c.Purpose ["state-readback";"retirement-readback"])
+              | _ -> true) then Error "supplier-v4-exchange-challenge-refused"
         else
             let creation,requestInput,frameInputs,reservationInput =
                 match exchange with
                 | ControlledCreationExchange(request,frames,reservation) -> true,request,frames,Some reservation
-                | ControlledGenesisExchange(request,frames) -> false,request,frames,None
+                | ControlledGenesisExchange(request,frames) | ControlledOutputWireExchange(request,frames) -> false,request,frames,None
+                | ControlledNativeAcquisitionExchange _ -> PortableSupplierC1.fail ()
             try
                 if isNull requestInput || requestInput.Length = 0 || requestInput.Length > 65536
                    || (reservationInput |> Option.exists (fun bytes -> isNull bytes || bytes.Length = 0 || bytes.Length > 6000))
@@ -4410,11 +4490,10 @@ module PortableSupplierAdmission =
                     let required =
                         if creation then ["creation",SupplierCreationSignature,receipt,"creation"]
                         else
-                            let _,response = PortableSupplierC1.payload 65536 45000 evidence
-                            let events = response.GetProperty("events").EnumerateArray() |> Seq.map (PortableSupplierC1.b64url 26761) |> Seq.toList
-                            match events with
-                            | [genesis] -> ["creation",SupplierCreationSignature,receipt,"creation"; "genesis",SupplierGenesisSignature,genesis,"genesis"; "supplier-response",SupplierResponseSignature,evidence,"response"]
-                            | _ -> PortableSupplierC1.fail ()
+                            let pair = { AcceptedRevision = 0UL; AcceptedStoreFence = 0UL; Challenge = challenge
+                                         RequestBase64 = Convert.ToBase64String request; ResultBase64 = Convert.ToBase64String result
+                                         EvidenceBase64 = Convert.ToBase64String evidence; ReceiverBundleBase64 = ""; ControllerBundleBase64 = "" }
+                            controlledWireRequirements state pair
                     let receiver = controlledBundle selection false required
                     let pair = { AcceptedRevision = 0UL; AcceptedStoreFence = 0UL; Challenge = challenge
                                  RequestBase64 = Convert.ToBase64String request; ResultBase64 = Convert.ToBase64String result; EvidenceBase64 = Convert.ToBase64String evidence
@@ -4439,6 +4518,14 @@ module PortableSupplierAdmission =
                 with _ -> quarantine "supplier-authentication-refused"
             with _ -> Error "supplier-controlled-source-input-refused"
 
+
+    /// One closed factory verifies creation, genesis, output wire and native acquisition under controlled TEST data.
+    /// Native receipt bytes are derived from the verified proof envelope, never a caller-supplied receipt claim.
+    let verifyAndAcceptControlledV4 selection original revision fence state exchange =
+        match exchange with
+        | ControlledNativeAcquisitionExchange(request,frames) ->
+            verifyAndAcceptControlledNativeV4 selection original revision fence state request frames
+        | _ -> verifyAndAcceptControlledWireV4 selection original revision fence state exchange
 
     /// A cold parse never supplies authentication; current selection and every retained signature are checked again.
     let reverifyControlledSourceV4 selection (state: PortableSupplierAdmissionState) =

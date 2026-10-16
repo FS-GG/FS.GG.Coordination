@@ -1361,7 +1361,7 @@ type PortableHostExecutorTests_SupplierJournalV4() =
 /// Every selected policy/clock/root remains explicitly controlled TEST data.
 type PortableHostExecutorTests_ControlledAuthenticatedSource() =
     [<Fact>]
-    member _.``real signed creation and genesis use controlled independent selection and cold reverify without an arbitrary authenticator``() =
+    member _.``real signed zero and selected output journeys use controlled independent selection and cold reverify without an arbitrary authenticator``() =
         let rec find (directory: DirectoryInfo) =
             if isNull directory then failwith "joined signed source fixture inputs missing"
             let path = Path.Combine(directory.FullName,"contracts","portable-workspace","v1","receiver-checkpoint-v2-signed-source-journeys.json")
@@ -1447,6 +1447,51 @@ type PortableHostExecutorTests_ControlledAuthenticatedSource() =
                 match journal.StageControlledV4 transition with SupplierSourceReadback _ -> () | other -> failwithf "%A" other
                 Assert.Equal(SupplierSourceConflict,journal.StageControlledV4 transition)
                 state <- transition.State
+            // Continue the same real signed DAG through output wire and native acquisition.
+            let stageTransition outcome =
+                let transition = match outcome with AuthenticatedControlledSource value -> value | HeldControlledSource held -> failwithf "signed output source held: %A" held.FirstFailure
+                match journal.StageControlledV4 transition with SupplierSourceReadback _ -> () | other -> failwithf "%A" other
+                Assert.Equal(SupplierSourceConflict,journal.StageControlledV4 transition)
+                let reopened,_ = journal.Read transition.State.Original.Command |> SupplierCheckpointFixtures.ok
+                Assert.Equal(transition.State,reopened)
+                reopened
+            let append = SupplierCheckpointFixtures.exchangeFrom row "append" state
+            let pending = PortableSupplierAdmission.issueChallenge append.Challenge state |> SupplierCheckpointFixtures.ok
+            match journal.StageV4(pending,Some state.Revision,Some state.CheckpointCustody.Value.StoreFence) with
+            | SupplierSourceReadback _ -> () | other -> failwithf "%A" other
+            let exact name key = row.GetProperty(name: string).GetProperty(key: string).GetString() |> SupplierCheckpointFixtures.urlBytes
+            let appendInput = ControlledOutputWireExchange(exact "append" "request",[exact "append" "result";exact "append" "evidence"])
+            let appendSelection = selection (expected.GetProperty("warmVerificationTimes").GetProperty("append").GetString()) false
+            state <- PortableSupplierAdmission.verifyAndAcceptControlledV4 appendSelection pending.Original pending.Revision pending.CheckpointCustody.Value.StoreFence pending appendInput
+                     |> SupplierCheckpointFixtures.ok |> stageTransition
+            let pending = SupplierCheckpointFixtures.issueNativeFrom row state
+            match journal.StageV4(pending,Some state.Revision,Some state.CheckpointCustody.Value.StoreFence) with
+            | SupplierSourceReadback _ -> () | other -> failwithf "%A" other
+            match pending.Challenge.Value with
+            | NativeSelectedProofV2 challenge ->
+                // Sixteen selected members do not imply sixteen events or a pre-acquisition receipt hash.
+                match pending.Pinned.Value.OriginalReservation.Selection with
+                | SelectedOutputs selected -> Assert.Equal(16UL,selected.MemberCount)
+                | _ -> failwith "selected native issuance lost manifest selection"
+                Assert.DoesNotContain("native_receipt_sha256",Convert.FromBase64String challenge.BytesBase64 |> Encoding.ASCII.GetString)
+            | NativeProofV1 challenge -> Assert.Equal(SupplierCheckpointFixtures.hash (exact "native" "receipt"),challenge.Context.NativeReceiptSha256)
+            | _ -> failwith "native challenge kind"
+            let nativeSelection = selection (expected.GetProperty("warmVerificationTimes").GetProperty("native").GetString()) false
+            let nativeInput = ControlledNativeAcquisitionExchange(exact "native" "request",[exact "native" "result";exact "native" "proof"])
+            let mismatched = ControlledNativeAcquisitionExchange(exact "native" "request",[exact "append" "result";exact "native" "proof"])
+            let denied = PortableSupplierAdmission.verifyAndAcceptControlledV4 nativeSelection pending.Original pending.Revision pending.CheckpointCustody.Value.StoreFence pending mismatched |> SupplierCheckpointFixtures.ok
+            match denied with
+            | HeldControlledSource held ->
+                Assert.True(held.FirstFailure.IsSome)
+                let rejected = held.CheckpointCustody.Value.RejectedExchanges |> List.exactlyOne
+                Assert.Equal<string list>([Convert.ToBase64String(exact "append" "result");Convert.ToBase64String(exact "native" "proof")],rejected.FramesBase64)
+                let again = PortableSupplierAdmission.verifyAndAcceptControlledV4 nativeSelection held.Original held.Revision held.CheckpointCustody.Value.StoreFence held nativeInput |> SupplierCheckpointFixtures.ok
+                match again with HeldControlledSource sticky -> Assert.Equal(held,sticky) | _ -> failwith "held input acquired a success wrapper"
+            | _ -> failwith "mismatched signed native pair authenticated"
+            state <- PortableSupplierAdmission.verifyAndAcceptControlledV4 nativeSelection pending.Original pending.Revision pending.CheckpointCustody.Value.StoreFence pending nativeInput
+                     |> SupplierCheckpointFixtures.ok |> stageTransition
+            Assert.True(state.CheckpointCustody.Value.OutputCheckpointBase64.IsSome)
+            Assert.Single(state.CheckpointCustody.Value.NativeAcquisitions) |> ignore
             let cold,durability = journal.Read state.Original.Command |> SupplierCheckpointFixtures.ok
             Assert.Equal(state,cold)
             match durability with EvidenceUnknown _ -> () | _ -> failwith "controlled authentication cannot qualify durability"
@@ -1454,9 +1499,9 @@ type PortableHostExecutorTests_ControlledAuthenticatedSource() =
             let readback = PortableSupplierAdmission.reverifyControlledSourceV4 (selection at false) cold |> SupplierCheckpointFixtures.ok
             Assert.Equal(cold,readback.State)
             let custody = cold.CheckpointCustody.Value
-            let checkpoint = custody.GenesisCheckpointBase64.Value |> Convert.FromBase64String |> Encoding.ASCII.GetString
+            let checkpoint = custody.OutputCheckpointBase64.Value |> Convert.FromBase64String |> Encoding.ASCII.GetString
             let relabelled = checkpoint.Replace("\"controlled-test\"","\"qualified-production\"") |> Encoding.ASCII.GetBytes |> Convert.ToBase64String
-            let structuralRelabel = { cold with CheckpointCustody = Some { custody with GenesisCheckpointBase64 = Some relabelled } }
+            let structuralRelabel = { cold with CheckpointCustody = Some { custody with OutputCheckpointBase64 = Some relabelled } }
             Assert.True(PortableSupplierAdmission.validate structuralRelabel |> Result.isOk)
             Assert.True(PortableSupplierAdmission.reverifyControlledSourceV4 (selection at false) structuralRelabel |> Result.isError)
             let pinned = cold.Pinned.Value
