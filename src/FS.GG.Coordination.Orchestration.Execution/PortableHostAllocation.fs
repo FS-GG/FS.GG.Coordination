@@ -631,6 +631,1391 @@ module private PortableSupplierC1 =
     let number (value: uint64) = quoted (value.ToString(Globalization.CultureInfo.InvariantCulture))
     let option encode = function None -> "null" | Some v -> encode v
 
+    let b64url maximum (value: System.Text.Json.JsonElement) =
+        let encoded = text (((maximum + 2) / 3) * 4) value
+        if encoded |> Seq.exists (fun c -> not (Char.IsAsciiLetterOrDigit c || c = '-' || c = '_')) then fail ()
+        let decoded = Convert.FromBase64String(encoded.Replace('-', '+').Replace('_', '/') + String.replicate ((4 - encoded.Length % 4) % 4) "=")
+        if decoded.Length = 0 || decoded.Length > maximum
+           || Convert.ToBase64String(decoded).TrimEnd('=').Replace('+','-').Replace('/','_') <> encoded then fail ()
+        decoded
+    let document maximum raw = parse maximum raw (fun root -> root.Clone()) |> Result.defaultWith invalidOp
+    let payload maximumEnvelope maximumPayload raw =
+        parse maximumEnvelope raw (fun root ->
+            fields ["payload"; "signature"] root
+            let bytes = root.GetProperty("payload") |> b64url maximumPayload
+            root.GetProperty("signature") |> b64url 2048 |> ignore
+            bytes, document maximumPayload bytes) |> Result.defaultWith invalidOp
+    let nestedBytes (root: System.Text.Json.JsonElement) =
+        System.Text.Encoding.ASCII.GetBytes(canonical root + "\n")
+
+/// Fixed guards for the unchanged wire-v1 families; no caller-selected schema or authority.
+module private PortableSupplierWireShape =
+    open System.Text.Json
+    open PortableSupplierC1
+    let private accepts action = try action (); true with _ -> false
+    let rec check_body_effect_unknown (row: JsonElement) =
+        fields ["effect"; "first_failure_digest"; "observed_at"; "original_attempt_digest"] row
+        do
+            let child = row.GetProperty("effect")
+            if child.ValueKind <> JsonValueKind.String || not (List.contains (child.GetString()) ["create-stopped"; "start-original"; "retire-original"]) then fail ()
+        do
+            let child = row.GetProperty("first_failure_digest")
+            check_digest child
+        do
+            let child = row.GetProperty("observed_at")
+            check_utc child
+        do
+            let child = row.GetProperty("original_attempt_digest")
+            check_digest child
+    and check_body_export_manifest (row: JsonElement) =
+        fields ["manifest_digest"; "member_count"; "observed_at"; "total_bytes"] row
+        do
+            let child = row.GetProperty("manifest_digest")
+            check_digest child
+        do
+            let child = row.GetProperty("member_count")
+            check_positive_u64 child
+        do
+            let child = row.GetProperty("observed_at")
+            check_utc child
+        do
+            let child = row.GetProperty("total_bytes")
+            check_u64 child
+    and check_body_failure (row: JsonElement) =
+        fields ["code"; "first_failure_digest"; "observed_at"; "original_attempt_digest"] row
+        do
+            let child = row.GetProperty("code")
+            check_id128 child
+        do
+            let child = row.GetProperty("first_failure_digest")
+            check_digest child
+        do
+            let child = row.GetProperty("observed_at")
+            check_utc child
+        do
+            let child = row.GetProperty("original_attempt_digest")
+            check_digest child
+    and check_body_inner_cleanup_intent (row: JsonElement) =
+        fields ["cid"; "observed_at"; "receipt_digest"] row
+        do
+            let child = row.GetProperty("cid")
+            check_outer_cid child
+        do
+            let child = row.GetProperty("observed_at")
+            check_utc child
+        do
+            let child = row.GetProperty("receipt_digest")
+            check_digest child
+    and check_body_inner_cleanup_observed (row: JsonElement) =
+        fields ["cid"; "observed_at"; "receipt_digest"] row
+        do
+            let child = row.GetProperty("cid")
+            check_outer_cid child
+        do
+            let child = row.GetProperty("observed_at")
+            check_utc child
+        do
+            let child = row.GetProperty("receipt_digest")
+            check_digest child
+    and check_body_launch_intent (row: JsonElement) =
+        fields ["grant_digest"; "original_cid"; "original_image_id"; "original_inode"; "recorded_at"] row
+        do
+            let child = row.GetProperty("grant_digest")
+            check_digest child
+        do
+            let child = row.GetProperty("original_cid")
+            check_outer_cid child
+        do
+            let child = row.GetProperty("original_image_id")
+            check_outer_image_id child
+        do
+            let child = row.GetProperty("original_inode")
+            check_positive_u64 child
+        do
+            let child = row.GetProperty("recorded_at")
+            check_utc child
+    and check_body_lease_amendment (row: JsonElement) =
+        fields ["amendment_id"; "authority_ref"; "effective_at"; "new_expiry"; "old_expiry"; "previous_lease_digest"; "previous_lease_kind"] row
+        do
+            let child = row.GetProperty("amendment_id")
+            check_uuid child
+        do
+            let child = row.GetProperty("authority_ref")
+            check_host_ref child
+        do
+            let child = row.GetProperty("effective_at")
+            check_utc child
+        do
+            let child = row.GetProperty("new_expiry")
+            check_utc child
+        do
+            let child = row.GetProperty("old_expiry")
+            check_utc child
+        do
+            let child = row.GetProperty("previous_lease_digest")
+            check_digest child
+        do
+            let child = row.GetProperty("previous_lease_kind")
+            if child.ValueKind <> JsonValueKind.String || not (List.contains (child.GetString()) ["creation-receipt"; "lease-amendment"]) then fail ()
+    and check_body_outer_retire_intent (row: JsonElement) =
+        fields ["cid"; "grant_digest"; "observed_at"; "receipt_digest"] row
+        do
+            let child = row.GetProperty("cid")
+            check_outer_cid child
+        do
+            let child = row.GetProperty("grant_digest")
+            check_digest child
+        do
+            let child = row.GetProperty("observed_at")
+            check_utc child
+        do
+            let child = row.GetProperty("receipt_digest")
+            check_digest child
+    and check_body_outer_retire_observed (row: JsonElement) =
+        fields ["cid"; "grant_digest"; "observed_at"; "receipt_digest"] row
+        do
+            let child = row.GetProperty("cid")
+            check_outer_cid child
+        do
+            let child = row.GetProperty("grant_digest")
+            check_digest child
+        do
+            let child = row.GetProperty("observed_at")
+            check_utc child
+        do
+            let child = row.GetProperty("receipt_digest")
+            check_digest child
+    and check_body_start_invoked (row: JsonElement) =
+        fields ["grant_digest"; "original_cid"; "original_image_id"; "original_inode"; "recorded_at"] row
+        do
+            let child = row.GetProperty("grant_digest")
+            check_digest child
+        do
+            let child = row.GetProperty("original_cid")
+            check_outer_cid child
+        do
+            let child = row.GetProperty("original_image_id")
+            check_outer_image_id child
+        do
+            let child = row.GetProperty("original_inode")
+            check_positive_u64 child
+        do
+            let child = row.GetProperty("recorded_at")
+            check_utc child
+    and check_body_termination (row: JsonElement) =
+        fields ["cid"; "observed_at"; "receipt_digest"] row
+        do
+            let child = row.GetProperty("cid")
+            check_outer_cid child
+        do
+            let child = row.GetProperty("observed_at")
+            check_utc child
+        do
+            let child = row.GetProperty("receipt_digest")
+            check_digest child
+    and check_body_unit_activation_observed (row: JsonElement) =
+        fields ["activation_at"; "boot_id"; "cid"; "receipt_digest"; "unit_invocation_id"; "unit_name"] row
+        do
+            let child = row.GetProperty("activation_at")
+            check_utc child
+        do
+            let child = row.GetProperty("boot_id")
+            check_uuid child
+        do
+            let child = row.GetProperty("cid")
+            check_outer_cid child
+        do
+            let child = row.GetProperty("receipt_digest")
+            check_digest child
+        do
+            let child = row.GetProperty("unit_invocation_id")
+            check_unit_invocation_id child
+        do
+            let child = row.GetProperty("unit_name")
+            check_unit_name child
+    and check_body_workload_exit (row: JsonElement) =
+        fields ["command_id"; "exit_code"; "observed_at"; "receipt_digest"] row
+        do
+            let child = row.GetProperty("command_id")
+            check_uuid child
+        do
+            let child = row.GetProperty("exit_code")
+            check_exit_i32 child
+        do
+            let child = row.GetProperty("observed_at")
+            check_utc child
+        do
+            let child = row.GetProperty("receipt_digest")
+            check_digest child
+    and check_body_zero_selection_census (row: JsonElement) =
+        fields ["observed_at"; "receipt_digest"; "selection_digest"] row
+        do
+            let child = row.GetProperty("observed_at")
+            check_utc child
+        do
+            let child = row.GetProperty("receipt_digest")
+            check_digest child
+        do
+            let child = row.GetProperty("selection_digest")
+            check_digest child
+    and check_command (row: JsonElement) =
+        fields ["causation_id"; "command_id"; "component_id"; "deadline"; "expected_workflow_revision"; "fence_generation"; "idempotency_id"; "operation"; "profile_id"; "profile_revision"; "source_revision"; "workspace_scope"] row
+        do
+            let child = row.GetProperty("causation_id")
+            let matches =
+                [
+                  (fun () ->
+                      check_id128 child
+                  )
+                  (fun () ->
+                      if child.ValueKind <> JsonValueKind.Null then fail ()
+                  )
+                ] |> List.filter accepts |> List.length
+            if matches <> 1 then fail ()
+        do
+            let child = row.GetProperty("command_id")
+            check_uuid child
+        do
+            let child = row.GetProperty("component_id")
+            let matches =
+                [
+                  (fun () ->
+                      check_id128 child
+                  )
+                  (fun () ->
+                      if child.ValueKind <> JsonValueKind.Null then fail ()
+                  )
+                ] |> List.filter accepts |> List.length
+            if matches <> 1 then fail ()
+        do
+            let child = row.GetProperty("deadline")
+            check_utc child
+        do
+            let child = row.GetProperty("expected_workflow_revision")
+            check_u64 child
+        do
+            let child = row.GetProperty("fence_generation")
+            check_u64 child
+        do
+            let child = row.GetProperty("idempotency_id")
+            check_id128 child
+        do
+            let child = row.GetProperty("operation")
+            check_id128 child
+        do
+            let child = row.GetProperty("profile_id")
+            check_id128 child
+        do
+            let child = row.GetProperty("profile_revision")
+            check_u64 child
+        do
+            let child = row.GetProperty("source_revision")
+            check_source128 child
+        do
+            let child = row.GetProperty("workspace_scope")
+            check_id128 child
+    and check_creation_challenge (row: JsonElement) =
+        fields ["challenge_id"; "challenge_nonce"; "correlation_id"; "intent_digest"; "issued_at"; "not_after"; "schema"] row
+        do
+            let child = row.GetProperty("challenge_id")
+            check_uuid child
+        do
+            let child = row.GetProperty("challenge_nonce")
+            check_nonce256 child
+        do
+            let child = row.GetProperty("correlation_id")
+            check_uuid child
+        do
+            let child = row.GetProperty("intent_digest")
+            check_digest child
+        do
+            let child = row.GetProperty("issued_at")
+            check_utc child
+        do
+            let child = row.GetProperty("not_after")
+            check_utc child
+        do
+            let child = row.GetProperty("schema")
+            if child.ValueKind <> JsonValueKind.String || child.GetString() <> "fsgg.v3.creation-challenge/1" then fail ()
+    and check_creation_core (row: JsonElement) =
+        fields ["allocation_device"; "allocation_fs_uuid"; "allocation_inode"; "boot_id"; "challenge_digest"; "cid"; "correlation_id"; "created_at"; "host_lease_authority_ref"; "host_lease_expires_at"; "host_lease_origin_at"; "host_maximum_runtime_cap_ticks"; "host_min_cleanup_reserve_ticks"; "host_min_export_reserve_ticks"; "image_id"; "intent_digest"; "operation_id"; "pool_id"; "profile"; "schema"; "stopped_at"; "supplier_source_digest"; "supplier_source_revision"; "unit_config_digest"; "unit_file_digest"; "unit_name"] row
+        do
+            let child = row.GetProperty("allocation_device")
+            check_u64 child
+        do
+            let child = row.GetProperty("allocation_fs_uuid")
+            check_uuid child
+        do
+            let child = row.GetProperty("allocation_inode")
+            check_positive_u64 child
+        do
+            let child = row.GetProperty("boot_id")
+            check_uuid child
+        do
+            let child = row.GetProperty("challenge_digest")
+            check_digest child
+        do
+            let child = row.GetProperty("cid")
+            check_outer_cid child
+        do
+            let child = row.GetProperty("correlation_id")
+            check_uuid child
+        do
+            let child = row.GetProperty("created_at")
+            check_utc child
+        do
+            let child = row.GetProperty("host_lease_authority_ref")
+            check_host_ref child
+        do
+            let child = row.GetProperty("host_lease_expires_at")
+            check_utc child
+        do
+            let child = row.GetProperty("host_lease_origin_at")
+            check_utc child
+        do
+            let child = row.GetProperty("host_maximum_runtime_cap_ticks")
+            check_ticks child
+        do
+            let child = row.GetProperty("host_min_cleanup_reserve_ticks")
+            check_ticks child
+        do
+            let child = row.GetProperty("host_min_export_reserve_ticks")
+            check_ticks child
+        do
+            let child = row.GetProperty("image_id")
+            check_outer_image_id child
+        do
+            let child = row.GetProperty("intent_digest")
+            check_digest child
+        do
+            let child = row.GetProperty("operation_id")
+            check_uuid child
+        do
+            let child = row.GetProperty("pool_id")
+            check_id128 child
+        do
+            let child = row.GetProperty("profile")
+            if child.ValueKind <> JsonValueKind.String || child.GetString() <> "signed-hold-v1" then fail ()
+        do
+            let child = row.GetProperty("schema")
+            if child.ValueKind <> JsonValueKind.String || child.GetString() <> "fsgg.v3.creation-core/1" then fail ()
+        do
+            let child = row.GetProperty("stopped_at")
+            check_utc child
+        do
+            let child = row.GetProperty("supplier_source_digest")
+            check_digest child
+        do
+            let child = row.GetProperty("supplier_source_revision")
+            check_source128 child
+        do
+            let child = row.GetProperty("unit_config_digest")
+            check_digest child
+        do
+            let child = row.GetProperty("unit_file_digest")
+            check_digest child
+        do
+            let child = row.GetProperty("unit_name")
+            check_unit_name child
+    and check_digest (row: JsonElement) =
+        let value = text 64 row
+        if not (System.Text.RegularExpressions.Regex.IsMatch(value, "^[0-9a-f]{64}$")) then fail ()
+    and check_effect_admission (row: JsonElement) =
+        let matches =
+            [
+              (fun () ->
+                  fields ["effect"; "expected_head"; "grant_id"; "intent_digest"; "issued_at"; "not_after"; "not_before"; "operation_id"; "reservation_digest"; "schema"; "scope_digest"; "source_revision"] row
+                  do
+                      let child = row.GetProperty("effect")
+                      if child.ValueKind <> JsonValueKind.String || child.GetString() <> "create-stopped" then fail ()
+                  do
+                      let child = row.GetProperty("expected_head")
+                      check_null child
+                  do
+                      let child = row.GetProperty("grant_id")
+                      check_uuid child
+                  do
+                      let child = row.GetProperty("intent_digest")
+                      check_digest child
+                  do
+                      let child = row.GetProperty("issued_at")
+                      check_utc child
+                  do
+                      let child = row.GetProperty("not_after")
+                      check_utc child
+                  do
+                      let child = row.GetProperty("not_before")
+                      check_utc child
+                  do
+                      let child = row.GetProperty("operation_id")
+                      check_null child
+                  do
+                      let child = row.GetProperty("reservation_digest")
+                      check_null child
+                  do
+                      let child = row.GetProperty("schema")
+                      if child.ValueKind <> JsonValueKind.String || child.GetString() <> "fsgg.v3.effect-admission/1" then fail ()
+                  do
+                      let child = row.GetProperty("scope_digest")
+                      check_digest child
+                  do
+                      let child = row.GetProperty("source_revision")
+                      check_source128 child
+              )
+              (fun () ->
+                  fields ["effect"; "expected_head"; "grant_id"; "intent_digest"; "issued_at"; "not_after"; "not_before"; "operation_id"; "reservation_digest"; "schema"; "scope_digest"; "source_revision"] row
+                  do
+                      let child = row.GetProperty("effect")
+                      if child.ValueKind <> JsonValueKind.String || child.GetString() <> "start-original" then fail ()
+                  do
+                      let child = row.GetProperty("expected_head")
+                      check_digest child
+                  do
+                      let child = row.GetProperty("grant_id")
+                      check_uuid child
+                  do
+                      let child = row.GetProperty("intent_digest")
+                      check_digest child
+                  do
+                      let child = row.GetProperty("issued_at")
+                      check_utc child
+                  do
+                      let child = row.GetProperty("not_after")
+                      check_utc child
+                  do
+                      let child = row.GetProperty("not_before")
+                      check_utc child
+                  do
+                      let child = row.GetProperty("operation_id")
+                      check_uuid child
+                  do
+                      let child = row.GetProperty("reservation_digest")
+                      check_digest child
+                  do
+                      let child = row.GetProperty("schema")
+                      if child.ValueKind <> JsonValueKind.String || child.GetString() <> "fsgg.v3.effect-admission/1" then fail ()
+                  do
+                      let child = row.GetProperty("scope_digest")
+                      check_digest child
+                  do
+                      let child = row.GetProperty("source_revision")
+                      check_source128 child
+              )
+              (fun () ->
+                  fields ["effect"; "expected_head"; "grant_id"; "intent_digest"; "issued_at"; "not_after"; "not_before"; "operation_id"; "reservation_digest"; "schema"; "scope_digest"; "source_revision"] row
+                  do
+                      let child = row.GetProperty("effect")
+                      if child.ValueKind <> JsonValueKind.String || child.GetString() <> "retire-original" then fail ()
+                  do
+                      let child = row.GetProperty("expected_head")
+                      check_digest child
+                  do
+                      let child = row.GetProperty("grant_id")
+                      check_uuid child
+                  do
+                      let child = row.GetProperty("intent_digest")
+                      check_digest child
+                  do
+                      let child = row.GetProperty("issued_at")
+                      check_utc child
+                  do
+                      let child = row.GetProperty("not_after")
+                      check_utc child
+                  do
+                      let child = row.GetProperty("not_before")
+                      check_utc child
+                  do
+                      let child = row.GetProperty("operation_id")
+                      check_uuid child
+                  do
+                      let child = row.GetProperty("reservation_digest")
+                      check_digest child
+                  do
+                      let child = row.GetProperty("schema")
+                      if child.ValueKind <> JsonValueKind.String || child.GetString() <> "fsgg.v3.effect-admission/1" then fail ()
+                  do
+                      let child = row.GetProperty("scope_digest")
+                      check_digest child
+                  do
+                      let child = row.GetProperty("source_revision")
+                      check_source128 child
+              )
+            ] |> List.filter accepts |> List.length
+        if matches <> 1 then fail ()
+    and check_exit_i32 (row: JsonElement) =
+        let value = text 11 row
+        if not (System.Text.RegularExpressions.Regex.IsMatch(value, "^(?:0|[1-9][0-9]{0,8}|1[0-9]{9}|20[0-9]{8}|21[0-3][0-9]{7}|214[0-6][0-9]{6}|2147[0-3][0-9]{5}|21474[0-7][0-9]{4}|214748[0-2][0-9]{3}|2147483[0-5][0-9]{2}|21474836[0-3][0-9]|214748364[0-7]|-(?:[1-9][0-9]{0,8}|1[0-9]{9}|20[0-9]{8}|21[0-3][0-9]{7}|214[0-6][0-9]{6}|2147[0-3][0-9]{5}|21474[0-7][0-9]{4}|214748[0-2][0-9]{3}|2147483[0-5][0-9]{2}|21474836[0-3][0-9]|214748364[0-8]))$")) then fail ()
+    and check_export_readback (row: JsonElement) =
+        let matches =
+            [
+              (fun () ->
+                  fields ["kind"; "manifest_digest"; "member_count"; "observed_head"; "operation_id"; "readback_at"; "receiver_journal_digest"; "reservation_digest"; "schema"; "selection_digest"; "total_bytes"] row
+                  do
+                      let child = row.GetProperty("kind")
+                      if child.ValueKind <> JsonValueKind.String || child.GetString() <> "durable-output-readback" then fail ()
+                  do
+                      let child = row.GetProperty("manifest_digest")
+                      check_digest child
+                  do
+                      let child = row.GetProperty("member_count")
+                      check_positive_u64 child
+                  do
+                      let child = row.GetProperty("observed_head")
+                      check_digest child
+                  do
+                      let child = row.GetProperty("operation_id")
+                      check_uuid child
+                  do
+                      let child = row.GetProperty("readback_at")
+                      check_utc child
+                  do
+                      let child = row.GetProperty("receiver_journal_digest")
+                      check_digest child
+                  do
+                      let child = row.GetProperty("reservation_digest")
+                      check_digest child
+                  do
+                      let child = row.GetProperty("schema")
+                      if child.ValueKind <> JsonValueKind.String || child.GetString() <> "fsgg.v3.export-readback/1" then fail ()
+                  do
+                      let child = row.GetProperty("selection_digest")
+                      check_digest child
+                  do
+                      let child = row.GetProperty("total_bytes")
+                      check_u64 child
+              )
+              (fun () ->
+                  fields ["kind"; "manifest_digest"; "member_count"; "observed_head"; "operation_id"; "readback_at"; "receiver_journal_digest"; "reservation_digest"; "schema"; "selection_digest"; "total_bytes"] row
+                  do
+                      let child = row.GetProperty("kind")
+                      if child.ValueKind <> JsonValueKind.String || child.GetString() <> "zero-selection-census-accepted" then fail ()
+                  do
+                      let child = row.GetProperty("manifest_digest")
+                      check_null child
+                  do
+                      let child = row.GetProperty("member_count")
+                      check_null child
+                  do
+                      let child = row.GetProperty("observed_head")
+                      check_digest child
+                  do
+                      let child = row.GetProperty("operation_id")
+                      check_uuid child
+                  do
+                      let child = row.GetProperty("readback_at")
+                      check_utc child
+                  do
+                      let child = row.GetProperty("receiver_journal_digest")
+                      check_digest child
+                  do
+                      let child = row.GetProperty("reservation_digest")
+                      check_digest child
+                  do
+                      let child = row.GetProperty("schema")
+                      if child.ValueKind <> JsonValueKind.String || child.GetString() <> "fsgg.v3.export-readback/1" then fail ()
+                  do
+                      let child = row.GetProperty("selection_digest")
+                      check_digest child
+                  do
+                      let child = row.GetProperty("total_bytes")
+                      check_null child
+              )
+            ] |> List.filter accepts |> List.length
+        if matches <> 1 then fail ()
+    and check_genesis (row: JsonElement) =
+        fields ["creation_core"; "creation_core_digest"; "creation_receipt_digest"; "observed_at"; "predecessor_head"; "reservation"; "reservation_digest"; "schema"; "sequence"] row
+        do
+            let child = row.GetProperty("creation_core")
+            check_creation_core child
+        do
+            let child = row.GetProperty("creation_core_digest")
+            check_digest child
+        do
+            let child = row.GetProperty("creation_receipt_digest")
+            check_digest child
+        do
+            let child = row.GetProperty("observed_at")
+            check_utc child
+        do
+            let child = row.GetProperty("predecessor_head")
+            if child.ValueKind <> JsonValueKind.Null then fail ()
+        do
+            let child = row.GetProperty("reservation")
+            check_reservation child
+        do
+            let child = row.GetProperty("reservation_digest")
+            check_digest child
+        do
+            let child = row.GetProperty("schema")
+            if child.ValueKind <> JsonValueKind.String || child.GetString() <> "fsgg.v3.genesis/1" then fail ()
+        do
+            let child = row.GetProperty("sequence")
+            if child.ValueKind <> JsonValueKind.String || child.GetString() <> "0" then fail ()
+    and check_host_ref (row: JsonElement) =
+        let value = text 4096 row
+        if value.Length < 1 then fail ()
+        if not (System.Text.RegularExpressions.Regex.IsMatch(value, "^[ -~]+$")) then fail ()
+    and check_id128 (row: JsonElement) =
+        let value = text 128 row
+        if not (System.Text.RegularExpressions.Regex.IsMatch(value, "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$")) then fail ()
+    and check_nonce256 (row: JsonElement) =
+        let value = text 43 row
+        if not (System.Text.RegularExpressions.Regex.IsMatch(value, "^[A-Za-z0-9_-]{43}$")) then fail ()
+        let decoded = b64url 65536 row
+        if decoded.Length <> 32 then fail ()
+    and check_null (row: JsonElement) =
+        if row.ValueKind <> JsonValueKind.Null then fail ()
+    and check_outer_cid (row: JsonElement) =
+        let value = text 64 row
+        if not (System.Text.RegularExpressions.Regex.IsMatch(value, "^[0-9a-f]{64}$")) then fail ()
+    and check_outer_image_id (row: JsonElement) =
+        let value = text 64 row
+        if not (System.Text.RegularExpressions.Regex.IsMatch(value, "^[0-9a-f]{64}$")) then fail ()
+    and check_positive_u64 (row: JsonElement) =
+        let value = text 20 row
+        if not (System.Text.RegularExpressions.Regex.IsMatch(value, "^(?:[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|18446744073709550[0-9]{3}|18446744073709551[0-5][0-9]{2}|1844674407370955160[0-9]{1}|1844674407370955161[0-4][0-9]{0}|18446744073709551615)$")) then fail ()
+        let count = u64 row
+        if count = 0UL then fail ()
+    and check_qualified_inner_image (row: JsonElement) =
+        let value = text 256 row
+        if value.Length < 72 then fail ()
+        if not (System.Text.RegularExpressions.Regex.IsMatch(value, "^[^ ].*@sha256:[0-9a-f]{64}$")) then fail ()
+    and check_receiver_acceptance (row: JsonElement) =
+        fields ["accepted_at"; "correlation_id"; "genesis_head"; "intent_digest"; "kind"; "operation_id"; "receiver_journal_digest"; "reservation_digest"; "schema"] row
+        do
+            let child = row.GetProperty("accepted_at")
+            check_utc child
+        do
+            let child = row.GetProperty("correlation_id")
+            check_uuid child
+        do
+            let child = row.GetProperty("genesis_head")
+            check_digest child
+        do
+            let child = row.GetProperty("intent_digest")
+            check_digest child
+        do
+            let child = row.GetProperty("kind")
+            if child.ValueKind <> JsonValueKind.String || child.GetString() <> "original-genesis-accepted" then fail ()
+        do
+            let child = row.GetProperty("operation_id")
+            check_uuid child
+        do
+            let child = row.GetProperty("receiver_journal_digest")
+            check_digest child
+        do
+            let child = row.GetProperty("reservation_digest")
+            check_digest child
+        do
+            let child = row.GetProperty("schema")
+            if child.ValueKind <> JsonValueKind.String || child.GetString() <> "fsgg.v3.receiver-acceptance/1" then fail ()
+    and check_receiver_intent (row: JsonElement) =
+        fields ["command_deadline"; "command_digest"; "correlation_id"; "created_at"; "intent_id"; "qualified_inner_image"; "requested_cleanup_reserve_ticks"; "requested_export_reserve_ticks"; "requested_host_lease_not_after"; "requested_maximum_runtime_ticks"; "requested_profile"; "requested_source_revision"; "schema"; "selection"] row
+        do
+            let child = row.GetProperty("command_deadline")
+            check_utc child
+        do
+            let child = row.GetProperty("command_digest")
+            check_digest child
+        do
+            let child = row.GetProperty("correlation_id")
+            check_uuid child
+        do
+            let child = row.GetProperty("created_at")
+            check_utc child
+        do
+            let child = row.GetProperty("intent_id")
+            check_uuid child
+        do
+            let child = row.GetProperty("qualified_inner_image")
+            check_qualified_inner_image child
+        do
+            let child = row.GetProperty("requested_cleanup_reserve_ticks")
+            check_ticks child
+        do
+            let child = row.GetProperty("requested_export_reserve_ticks")
+            check_ticks child
+        do
+            let child = row.GetProperty("requested_host_lease_not_after")
+            check_utc child
+        do
+            let child = row.GetProperty("requested_maximum_runtime_ticks")
+            check_ticks child
+        do
+            let child = row.GetProperty("requested_profile")
+            if child.ValueKind <> JsonValueKind.String || child.GetString() <> "signed-hold-v1" then fail ()
+        do
+            let child = row.GetProperty("requested_source_revision")
+            check_source128 child
+        do
+            let child = row.GetProperty("schema")
+            if child.ValueKind <> JsonValueKind.String || child.GetString() <> "fsgg.v3.receiver-intent/1" then fail ()
+        do
+            let child = row.GetProperty("selection")
+            check_selection child
+    and check_reservation (row: JsonElement) =
+        fields ["admitted_at"; "cleanup_reserve_ticks"; "command"; "correlation_id"; "creation_receipt_digest"; "export_reserve_ticks"; "host_lease_expires_at"; "intent_digest"; "maximum_runtime_ticks"; "operation_id"; "original_deadline"; "qualified_inner_image"; "receiver_source_revision"; "schema"; "selection"; "worker_id"] row
+        do
+            let child = row.GetProperty("admitted_at")
+            check_utc child
+        do
+            let child = row.GetProperty("cleanup_reserve_ticks")
+            check_ticks child
+        do
+            let child = row.GetProperty("command")
+            check_command child
+        do
+            let child = row.GetProperty("correlation_id")
+            check_uuid child
+        do
+            let child = row.GetProperty("creation_receipt_digest")
+            check_digest child
+        do
+            let child = row.GetProperty("export_reserve_ticks")
+            check_ticks child
+        do
+            let child = row.GetProperty("host_lease_expires_at")
+            check_utc child
+        do
+            let child = row.GetProperty("intent_digest")
+            check_digest child
+        do
+            let child = row.GetProperty("maximum_runtime_ticks")
+            check_ticks child
+        do
+            let child = row.GetProperty("operation_id")
+            check_uuid child
+        do
+            let child = row.GetProperty("original_deadline")
+            check_utc child
+        do
+            let child = row.GetProperty("qualified_inner_image")
+            check_qualified_inner_image child
+        do
+            let child = row.GetProperty("receiver_source_revision")
+            check_source128 child
+        do
+            let child = row.GetProperty("schema")
+            if child.ValueKind <> JsonValueKind.String || child.GetString() <> "fsgg.v3.reservation/1" then fail ()
+        do
+            let child = row.GetProperty("selection")
+            check_selection child
+        do
+            let child = row.GetProperty("worker_id")
+            check_id128 child
+    and check_response_challenge (row: JsonElement) =
+        fields ["challenge_id"; "challenge_nonce"; "issued_at"; "known_head"; "not_after"; "operation_id"; "purpose"; "reservation_digest"; "schema"] row
+        do
+            let child = row.GetProperty("challenge_id")
+            check_uuid child
+        do
+            let child = row.GetProperty("challenge_nonce")
+            check_nonce256 child
+        do
+            let child = row.GetProperty("issued_at")
+            check_utc child
+        do
+            let child = row.GetProperty("known_head")
+            let matches =
+                [
+                  (fun () ->
+                      check_digest child
+                  )
+                  (fun () ->
+                      if child.ValueKind <> JsonValueKind.Null then fail ()
+                  )
+                ] |> List.filter accepts |> List.length
+            if matches <> 1 then fail ()
+        do
+            let child = row.GetProperty("not_after")
+            check_utc child
+        do
+            let child = row.GetProperty("operation_id")
+            check_uuid child
+        do
+            let child = row.GetProperty("purpose")
+            if child.ValueKind <> JsonValueKind.String || not (List.contains (child.GetString()) ["genesis-readback"; "state-readback"; "retirement-readback"]) then fail ()
+        do
+            let child = row.GetProperty("reservation_digest")
+            check_digest child
+        do
+            let child = row.GetProperty("schema")
+            if child.ValueKind <> JsonValueKind.String || child.GetString() <> "fsgg.v3.response-challenge/1" then fail ()
+    and check_selection (row: JsonElement) =
+        let matches =
+            [
+              (fun () ->
+                  fields ["kind"] row
+                  do
+                      let child = row.GetProperty("kind")
+                      if child.ValueKind <> JsonValueKind.String || child.GetString() <> "none" then fail ()
+              )
+              (fun () ->
+                  fields ["digest"; "kind"; "member_count"; "total_bytes"] row
+                  do
+                      let child = row.GetProperty("digest")
+                      check_digest child
+                  do
+                      let child = row.GetProperty("kind")
+                      if child.ValueKind <> JsonValueKind.String || child.GetString() <> "selected" then fail ()
+                  do
+                      let child = row.GetProperty("member_count")
+                      check_positive_u64 child
+                  do
+                      let child = row.GetProperty("total_bytes")
+                      check_u64 child
+              )
+            ] |> List.filter accepts |> List.length
+        if matches <> 1 then fail ()
+    and check_signed_envelope (row: JsonElement) =
+        fields ["payload"; "signature"] row
+        do
+            let child = row.GetProperty("payload")
+            let value = text 60000 child
+            if not (System.Text.RegularExpressions.Regex.IsMatch(value, "^[A-Za-z0-9_-]+$")) then fail ()
+            let decoded = b64url 65536 child
+            if decoded.Length = 0 then fail ()
+        do
+            let child = row.GetProperty("signature")
+            let value = text 2731 child
+            if not (System.Text.RegularExpressions.Regex.IsMatch(value, "^[A-Za-z0-9_-]+$")) then fail ()
+            let decoded = b64url 65536 child
+            if decoded.Length = 0 then fail ()
+    and check_source128 (row: JsonElement) =
+        let value = text 128 row
+        if not (System.Text.RegularExpressions.Regex.IsMatch(value, "^[A-Za-z0-9_-]{1,128}$")) then fail ()
+    and check_supplier_event (row: JsonElement) =
+        let matches =
+            [
+              (fun () ->
+                  fields ["body"; "kind"; "occurred_at"; "operation_id"; "predecessor_head"; "reservation_digest"; "schema"; "sequence"] row
+                  do
+                      let child = row.GetProperty("body")
+                      check_body_lease_amendment child
+                  do
+                      let child = row.GetProperty("kind")
+                      if child.ValueKind <> JsonValueKind.String || child.GetString() <> "lease-amendment" then fail ()
+                  do
+                      let child = row.GetProperty("occurred_at")
+                      check_utc child
+                  do
+                      let child = row.GetProperty("operation_id")
+                      check_uuid child
+                  do
+                      let child = row.GetProperty("predecessor_head")
+                      check_digest child
+                  do
+                      let child = row.GetProperty("reservation_digest")
+                      check_digest child
+                  do
+                      let child = row.GetProperty("schema")
+                      if child.ValueKind <> JsonValueKind.String || child.GetString() <> "fsgg.v3.supplier-event/1" then fail ()
+                  do
+                      let child = row.GetProperty("sequence")
+                      check_positive_u64 child
+              )
+              (fun () ->
+                  fields ["body"; "kind"; "occurred_at"; "operation_id"; "predecessor_head"; "reservation_digest"; "schema"; "sequence"] row
+                  do
+                      let child = row.GetProperty("body")
+                      check_body_launch_intent child
+                  do
+                      let child = row.GetProperty("kind")
+                      if child.ValueKind <> JsonValueKind.String || child.GetString() <> "launch-intent" then fail ()
+                  do
+                      let child = row.GetProperty("occurred_at")
+                      check_utc child
+                  do
+                      let child = row.GetProperty("operation_id")
+                      check_uuid child
+                  do
+                      let child = row.GetProperty("predecessor_head")
+                      check_digest child
+                  do
+                      let child = row.GetProperty("reservation_digest")
+                      check_digest child
+                  do
+                      let child = row.GetProperty("schema")
+                      if child.ValueKind <> JsonValueKind.String || child.GetString() <> "fsgg.v3.supplier-event/1" then fail ()
+                  do
+                      let child = row.GetProperty("sequence")
+                      check_positive_u64 child
+              )
+              (fun () ->
+                  fields ["body"; "kind"; "occurred_at"; "operation_id"; "predecessor_head"; "reservation_digest"; "schema"; "sequence"] row
+                  do
+                      let child = row.GetProperty("body")
+                      check_body_start_invoked child
+                  do
+                      let child = row.GetProperty("kind")
+                      if child.ValueKind <> JsonValueKind.String || child.GetString() <> "start-invoked" then fail ()
+                  do
+                      let child = row.GetProperty("occurred_at")
+                      check_utc child
+                  do
+                      let child = row.GetProperty("operation_id")
+                      check_uuid child
+                  do
+                      let child = row.GetProperty("predecessor_head")
+                      check_digest child
+                  do
+                      let child = row.GetProperty("reservation_digest")
+                      check_digest child
+                  do
+                      let child = row.GetProperty("schema")
+                      if child.ValueKind <> JsonValueKind.String || child.GetString() <> "fsgg.v3.supplier-event/1" then fail ()
+                  do
+                      let child = row.GetProperty("sequence")
+                      check_positive_u64 child
+              )
+              (fun () ->
+                  fields ["body"; "kind"; "occurred_at"; "operation_id"; "predecessor_head"; "reservation_digest"; "schema"; "sequence"] row
+                  do
+                      let child = row.GetProperty("body")
+                      check_body_unit_activation_observed child
+                  do
+                      let child = row.GetProperty("kind")
+                      if child.ValueKind <> JsonValueKind.String || child.GetString() <> "unit-activation-observed" then fail ()
+                  do
+                      let child = row.GetProperty("occurred_at")
+                      check_utc child
+                  do
+                      let child = row.GetProperty("operation_id")
+                      check_uuid child
+                  do
+                      let child = row.GetProperty("predecessor_head")
+                      check_digest child
+                  do
+                      let child = row.GetProperty("reservation_digest")
+                      check_digest child
+                  do
+                      let child = row.GetProperty("schema")
+                      if child.ValueKind <> JsonValueKind.String || child.GetString() <> "fsgg.v3.supplier-event/1" then fail ()
+                  do
+                      let child = row.GetProperty("sequence")
+                      check_positive_u64 child
+              )
+              (fun () ->
+                  fields ["body"; "kind"; "occurred_at"; "operation_id"; "predecessor_head"; "reservation_digest"; "schema"; "sequence"] row
+                  do
+                      let child = row.GetProperty("body")
+                      check_body_workload_exit child
+                  do
+                      let child = row.GetProperty("kind")
+                      if child.ValueKind <> JsonValueKind.String || child.GetString() <> "workload-exit" then fail ()
+                  do
+                      let child = row.GetProperty("occurred_at")
+                      check_utc child
+                  do
+                      let child = row.GetProperty("operation_id")
+                      check_uuid child
+                  do
+                      let child = row.GetProperty("predecessor_head")
+                      check_digest child
+                  do
+                      let child = row.GetProperty("reservation_digest")
+                      check_digest child
+                  do
+                      let child = row.GetProperty("schema")
+                      if child.ValueKind <> JsonValueKind.String || child.GetString() <> "fsgg.v3.supplier-event/1" then fail ()
+                  do
+                      let child = row.GetProperty("sequence")
+                      check_positive_u64 child
+              )
+              (fun () ->
+                  fields ["body"; "kind"; "occurred_at"; "operation_id"; "predecessor_head"; "reservation_digest"; "schema"; "sequence"] row
+                  do
+                      let child = row.GetProperty("body")
+                      check_body_termination child
+                  do
+                      let child = row.GetProperty("kind")
+                      if child.ValueKind <> JsonValueKind.String || child.GetString() <> "termination" then fail ()
+                  do
+                      let child = row.GetProperty("occurred_at")
+                      check_utc child
+                  do
+                      let child = row.GetProperty("operation_id")
+                      check_uuid child
+                  do
+                      let child = row.GetProperty("predecessor_head")
+                      check_digest child
+                  do
+                      let child = row.GetProperty("reservation_digest")
+                      check_digest child
+                  do
+                      let child = row.GetProperty("schema")
+                      if child.ValueKind <> JsonValueKind.String || child.GetString() <> "fsgg.v3.supplier-event/1" then fail ()
+                  do
+                      let child = row.GetProperty("sequence")
+                      check_positive_u64 child
+              )
+              (fun () ->
+                  fields ["body"; "kind"; "occurred_at"; "operation_id"; "predecessor_head"; "reservation_digest"; "schema"; "sequence"] row
+                  do
+                      let child = row.GetProperty("body")
+                      check_body_inner_cleanup_intent child
+                  do
+                      let child = row.GetProperty("kind")
+                      if child.ValueKind <> JsonValueKind.String || child.GetString() <> "inner-cleanup-intent" then fail ()
+                  do
+                      let child = row.GetProperty("occurred_at")
+                      check_utc child
+                  do
+                      let child = row.GetProperty("operation_id")
+                      check_uuid child
+                  do
+                      let child = row.GetProperty("predecessor_head")
+                      check_digest child
+                  do
+                      let child = row.GetProperty("reservation_digest")
+                      check_digest child
+                  do
+                      let child = row.GetProperty("schema")
+                      if child.ValueKind <> JsonValueKind.String || child.GetString() <> "fsgg.v3.supplier-event/1" then fail ()
+                  do
+                      let child = row.GetProperty("sequence")
+                      check_positive_u64 child
+              )
+              (fun () ->
+                  fields ["body"; "kind"; "occurred_at"; "operation_id"; "predecessor_head"; "reservation_digest"; "schema"; "sequence"] row
+                  do
+                      let child = row.GetProperty("body")
+                      check_body_inner_cleanup_observed child
+                  do
+                      let child = row.GetProperty("kind")
+                      if child.ValueKind <> JsonValueKind.String || child.GetString() <> "inner-cleanup-observed" then fail ()
+                  do
+                      let child = row.GetProperty("occurred_at")
+                      check_utc child
+                  do
+                      let child = row.GetProperty("operation_id")
+                      check_uuid child
+                  do
+                      let child = row.GetProperty("predecessor_head")
+                      check_digest child
+                  do
+                      let child = row.GetProperty("reservation_digest")
+                      check_digest child
+                  do
+                      let child = row.GetProperty("schema")
+                      if child.ValueKind <> JsonValueKind.String || child.GetString() <> "fsgg.v3.supplier-event/1" then fail ()
+                  do
+                      let child = row.GetProperty("sequence")
+                      check_positive_u64 child
+              )
+              (fun () ->
+                  fields ["body"; "kind"; "occurred_at"; "operation_id"; "predecessor_head"; "reservation_digest"; "schema"; "sequence"] row
+                  do
+                      let child = row.GetProperty("body")
+                      check_body_export_manifest child
+                  do
+                      let child = row.GetProperty("kind")
+                      if child.ValueKind <> JsonValueKind.String || child.GetString() <> "export-manifest" then fail ()
+                  do
+                      let child = row.GetProperty("occurred_at")
+                      check_utc child
+                  do
+                      let child = row.GetProperty("operation_id")
+                      check_uuid child
+                  do
+                      let child = row.GetProperty("predecessor_head")
+                      check_digest child
+                  do
+                      let child = row.GetProperty("reservation_digest")
+                      check_digest child
+                  do
+                      let child = row.GetProperty("schema")
+                      if child.ValueKind <> JsonValueKind.String || child.GetString() <> "fsgg.v3.supplier-event/1" then fail ()
+                  do
+                      let child = row.GetProperty("sequence")
+                      check_positive_u64 child
+              )
+              (fun () ->
+                  fields ["body"; "kind"; "occurred_at"; "operation_id"; "predecessor_head"; "reservation_digest"; "schema"; "sequence"] row
+                  do
+                      let child = row.GetProperty("body")
+                      check_body_zero_selection_census child
+                  do
+                      let child = row.GetProperty("kind")
+                      if child.ValueKind <> JsonValueKind.String || child.GetString() <> "zero-selection-census" then fail ()
+                  do
+                      let child = row.GetProperty("occurred_at")
+                      check_utc child
+                  do
+                      let child = row.GetProperty("operation_id")
+                      check_uuid child
+                  do
+                      let child = row.GetProperty("predecessor_head")
+                      check_digest child
+                  do
+                      let child = row.GetProperty("reservation_digest")
+                      check_digest child
+                  do
+                      let child = row.GetProperty("schema")
+                      if child.ValueKind <> JsonValueKind.String || child.GetString() <> "fsgg.v3.supplier-event/1" then fail ()
+                  do
+                      let child = row.GetProperty("sequence")
+                      check_positive_u64 child
+              )
+              (fun () ->
+                  fields ["body"; "kind"; "occurred_at"; "operation_id"; "predecessor_head"; "reservation_digest"; "schema"; "sequence"] row
+                  do
+                      let child = row.GetProperty("body")
+                      check_body_outer_retire_intent child
+                  do
+                      let child = row.GetProperty("kind")
+                      if child.ValueKind <> JsonValueKind.String || child.GetString() <> "outer-retire-intent" then fail ()
+                  do
+                      let child = row.GetProperty("occurred_at")
+                      check_utc child
+                  do
+                      let child = row.GetProperty("operation_id")
+                      check_uuid child
+                  do
+                      let child = row.GetProperty("predecessor_head")
+                      check_digest child
+                  do
+                      let child = row.GetProperty("reservation_digest")
+                      check_digest child
+                  do
+                      let child = row.GetProperty("schema")
+                      if child.ValueKind <> JsonValueKind.String || child.GetString() <> "fsgg.v3.supplier-event/1" then fail ()
+                  do
+                      let child = row.GetProperty("sequence")
+                      check_positive_u64 child
+              )
+              (fun () ->
+                  fields ["body"; "kind"; "occurred_at"; "operation_id"; "predecessor_head"; "reservation_digest"; "schema"; "sequence"] row
+                  do
+                      let child = row.GetProperty("body")
+                      check_body_outer_retire_observed child
+                  do
+                      let child = row.GetProperty("kind")
+                      if child.ValueKind <> JsonValueKind.String || child.GetString() <> "outer-retire-observed" then fail ()
+                  do
+                      let child = row.GetProperty("occurred_at")
+                      check_utc child
+                  do
+                      let child = row.GetProperty("operation_id")
+                      check_uuid child
+                  do
+                      let child = row.GetProperty("predecessor_head")
+                      check_digest child
+                  do
+                      let child = row.GetProperty("reservation_digest")
+                      check_digest child
+                  do
+                      let child = row.GetProperty("schema")
+                      if child.ValueKind <> JsonValueKind.String || child.GetString() <> "fsgg.v3.supplier-event/1" then fail ()
+                  do
+                      let child = row.GetProperty("sequence")
+                      check_positive_u64 child
+              )
+              (fun () ->
+                  fields ["body"; "kind"; "occurred_at"; "operation_id"; "predecessor_head"; "reservation_digest"; "schema"; "sequence"] row
+                  do
+                      let child = row.GetProperty("body")
+                      check_body_effect_unknown child
+                  do
+                      let child = row.GetProperty("kind")
+                      if child.ValueKind <> JsonValueKind.String || child.GetString() <> "effect-unknown" then fail ()
+                  do
+                      let child = row.GetProperty("occurred_at")
+                      check_utc child
+                  do
+                      let child = row.GetProperty("operation_id")
+                      check_uuid child
+                  do
+                      let child = row.GetProperty("predecessor_head")
+                      check_digest child
+                  do
+                      let child = row.GetProperty("reservation_digest")
+                      check_digest child
+                  do
+                      let child = row.GetProperty("schema")
+                      if child.ValueKind <> JsonValueKind.String || child.GetString() <> "fsgg.v3.supplier-event/1" then fail ()
+                  do
+                      let child = row.GetProperty("sequence")
+                      check_positive_u64 child
+              )
+              (fun () ->
+                  fields ["body"; "kind"; "occurred_at"; "operation_id"; "predecessor_head"; "reservation_digest"; "schema"; "sequence"] row
+                  do
+                      let child = row.GetProperty("body")
+                      check_body_failure child
+                  do
+                      let child = row.GetProperty("kind")
+                      if child.ValueKind <> JsonValueKind.String || child.GetString() <> "failure" then fail ()
+                  do
+                      let child = row.GetProperty("occurred_at")
+                      check_utc child
+                  do
+                      let child = row.GetProperty("operation_id")
+                      check_uuid child
+                  do
+                      let child = row.GetProperty("predecessor_head")
+                      check_digest child
+                  do
+                      let child = row.GetProperty("reservation_digest")
+                      check_digest child
+                  do
+                      let child = row.GetProperty("schema")
+                      if child.ValueKind <> JsonValueKind.String || child.GetString() <> "fsgg.v3.supplier-event/1" then fail ()
+                  do
+                      let child = row.GetProperty("sequence")
+                      check_positive_u64 child
+              )
+            ] |> List.filter accepts |> List.length
+        if matches <> 1 then fail ()
+    and check_supplier_response (row: JsonElement) =
+        let matches =
+            [
+              (fun () ->
+                  fields ["challenge_digest"; "collected_at"; "events"; "from_head"; "mode"; "operation_id"; "purpose"; "reservation_digest"; "schema"; "to_head"] row
+                  do
+                      let child = row.GetProperty("challenge_digest")
+                      check_digest child
+                  do
+                      let child = row.GetProperty("collected_at")
+                      check_utc child
+                  do
+                      let child = row.GetProperty("events")
+                      if child.ValueKind <> JsonValueKind.Array then fail ()
+                      let items = child.EnumerateArray() |> Seq.toList
+                      if items.Length < 1 || items.Length > 1 then fail ()
+                      for item in items do
+                          let value = text 35682 item
+                          if not (System.Text.RegularExpressions.Regex.IsMatch(value, "^[A-Za-z0-9_-]+$")) then fail ()
+                          let decoded = b64url 65536 item
+                          if decoded.Length = 0 then fail ()
+                  do
+                      let child = row.GetProperty("from_head")
+                      check_null child
+                  do
+                      let child = row.GetProperty("mode")
+                      if child.ValueKind <> JsonValueKind.String || child.GetString() <> "genesis" then fail ()
+                  do
+                      let child = row.GetProperty("operation_id")
+                      check_uuid child
+                  do
+                      let child = row.GetProperty("purpose")
+                      if child.ValueKind <> JsonValueKind.String || not (List.contains (child.GetString()) ["genesis-readback"; "state-readback"; "retirement-readback"]) then fail ()
+                  do
+                      let child = row.GetProperty("reservation_digest")
+                      check_digest child
+                  do
+                      let child = row.GetProperty("schema")
+                      if child.ValueKind <> JsonValueKind.String || child.GetString() <> "fsgg.v3.supplier-response/1" then fail ()
+                  do
+                      let child = row.GetProperty("to_head")
+                      check_digest child
+              )
+              (fun () ->
+                  fields ["challenge_digest"; "collected_at"; "events"; "from_head"; "mode"; "operation_id"; "purpose"; "reservation_digest"; "schema"; "to_head"] row
+                  do
+                      let child = row.GetProperty("challenge_digest")
+                      check_digest child
+                  do
+                      let child = row.GetProperty("collected_at")
+                      check_utc child
+                  do
+                      let child = row.GetProperty("events")
+                      if child.ValueKind <> JsonValueKind.Array then fail ()
+                      let items = child.EnumerateArray() |> Seq.toList
+                      if items.Length < 1 || items.Length > 16 then fail ()
+                      for item in items do
+                          let value = text 25015 item
+                          if not (System.Text.RegularExpressions.Regex.IsMatch(value, "^[A-Za-z0-9_-]+$")) then fail ()
+                          let decoded = b64url 65536 item
+                          if decoded.Length = 0 then fail ()
+                  do
+                      let child = row.GetProperty("from_head")
+                      check_digest child
+                  do
+                      let child = row.GetProperty("mode")
+                      if child.ValueKind <> JsonValueKind.String || child.GetString() <> "append" then fail ()
+                  do
+                      let child = row.GetProperty("operation_id")
+                      check_uuid child
+                  do
+                      let child = row.GetProperty("purpose")
+                      if child.ValueKind <> JsonValueKind.String || not (List.contains (child.GetString()) ["genesis-readback"; "state-readback"; "retirement-readback"]) then fail ()
+                  do
+                      let child = row.GetProperty("reservation_digest")
+                      check_digest child
+                  do
+                      let child = row.GetProperty("schema")
+                      if child.ValueKind <> JsonValueKind.String || child.GetString() <> "fsgg.v3.supplier-response/1" then fail ()
+                  do
+                      let child = row.GetProperty("to_head")
+                      check_digest child
+              )
+              (fun () ->
+                  fields ["challenge_digest"; "collected_at"; "events"; "from_head"; "mode"; "operation_id"; "purpose"; "reservation_digest"; "schema"; "to_head"] row
+                  do
+                      let child = row.GetProperty("challenge_digest")
+                      check_digest child
+                  do
+                      let child = row.GetProperty("collected_at")
+                      check_utc child
+                  do
+                      let child = row.GetProperty("events")
+                      if child.ValueKind <> JsonValueKind.Array then fail ()
+                      let items = child.EnumerateArray() |> Seq.toList
+                      if items.Length < 1 || items.Length > 1 then fail ()
+                      for item in items do
+                          let value = text 35682 item
+                          if not (System.Text.RegularExpressions.Regex.IsMatch(value, "^[A-Za-z0-9_-]+$")) then fail ()
+                          let decoded = b64url 65536 item
+                          if decoded.Length = 0 then fail ()
+                  do
+                      let child = row.GetProperty("from_head")
+                      check_digest child
+                  do
+                      let child = row.GetProperty("mode")
+                      if child.ValueKind <> JsonValueKind.String || child.GetString() <> "unchanged" then fail ()
+                  do
+                      let child = row.GetProperty("operation_id")
+                      check_uuid child
+                  do
+                      let child = row.GetProperty("purpose")
+                      if child.ValueKind <> JsonValueKind.String || not (List.contains (child.GetString()) ["genesis-readback"; "state-readback"; "retirement-readback"]) then fail ()
+                  do
+                      let child = row.GetProperty("reservation_digest")
+                      check_digest child
+                  do
+                      let child = row.GetProperty("schema")
+                      if child.ValueKind <> JsonValueKind.String || child.GetString() <> "fsgg.v3.supplier-response/1" then fail ()
+                  do
+                      let child = row.GetProperty("to_head")
+                      check_digest child
+              )
+            ] |> List.filter accepts |> List.length
+        if matches <> 1 then fail ()
+    and check_ticks (row: JsonElement) =
+        let value = text 19 row
+        if not (System.Text.RegularExpressions.Regex.IsMatch(value, "^(?:[1-9][0-9]{0,17}|[1-8][0-9]{18}|9[0-1][0-9]{17}|92[0-1][0-9]{16}|922[0-2][0-9]{15}|9223[0-2][0-9]{14}|92233[0-6][0-9]{13}|922337[0-1][0-9]{12}|92233720[0-2][0-9]{10}|922337203[0-5][0-9]{9}|9223372036[0-7][0-9]{8}|92233720368[0-4][0-9]{7}|922337203685[0-3][0-9]{6}|9223372036854[0-6][0-9]{5}|92233720368547[0-6][0-9]{4}|922337203685477[0-4][0-9]{3}|9223372036854775[0-7][0-9]{2}|922337203685477580[0-6][0-9]{0}|9223372036854775807)$")) then fail ()
+    and check_u64 (row: JsonElement) =
+        let value = text 20 row
+        if not (System.Text.RegularExpressions.Regex.IsMatch(value, "^(?:0|[1-9][0-9]{0,18}|1[0-7][0-9]{18}|18[0-3][0-9]{17}|184[0-3][0-9]{16}|1844[0-5][0-9]{15}|18446[0-6][0-9]{14}|184467[0-3][0-9]{13}|1844674[0-3][0-9]{12}|184467440[0-6][0-9]{10}|1844674407[0-2][0-9]{9}|18446744073[0-6][0-9]{8}|1844674407370[0-8][0-9]{6}|18446744073709[0-4][0-9]{5}|184467440737095[0-4][0-9]{4}|18446744073709550[0-9]{3}|18446744073709551[0-5][0-9]{2}|1844674407370955160[0-9]{1}|1844674407370955161[0-4][0-9]{0}|18446744073709551615)$")) then fail ()
+        u64 row |> ignore
+    and check_unit_invocation_id (row: JsonElement) =
+        let value = text 32 row
+        if not (System.Text.RegularExpressions.Regex.IsMatch(value, "^[0-9a-f]{32}$")) then fail ()
+    and check_unit_name (row: JsonElement) =
+        let value = text 256 row
+        if value.Length < 1 then fail ()
+        if not (System.Text.RegularExpressions.Regex.IsMatch(value, "^[^/\\\\\\s]+$")) then fail ()
+    and check_utc (row: JsonElement) =
+        let value = text 27 row
+        if not (System.Text.RegularExpressions.Regex.IsMatch(value, "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{6}Z$")) then fail ()
+        utc row |> ignore
+    and check_uuid (row: JsonElement) =
+        let value = text 36 row
+        if not (System.Text.RegularExpressions.Regex.IsMatch(value, "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")) then fail ()
+        uuid row |> ignore
+        if row.ValueKind = JsonValueKind.String && row.GetString() = "00000000-0000-0000-0000-000000000000" then fail ()
+
 /// Immutable structural checkpoint fields, all recomputed by the retained-exchange caller.
 /// A parsed instance is neither an authenticated candidate nor a commit witness.
 type PortableSupplierCheckpointCommon =
@@ -918,8 +2303,8 @@ type PortableSupplierAdmissionChallenge =
       DeadlineMonotonic: int64
       ExpectedHead: string option }
 
-type PortableSupplierJournalVersion = SupplierJournalV2 | SupplierJournalV3
-type PortableSupplierChallengeKind = SupplierWireV1 | SupplierNativeProofV1
+type PortableSupplierJournalVersion = SupplierJournalV2 | SupplierJournalV3 | SupplierJournalV4
+type PortableSupplierChallengeKind = SupplierWireV1 | SupplierNativeProofV1 | SupplierSelectedNativeProofV2
 
 /// Inert expected joins supplied by a caller; no host identity is inferred from a workspace command.
 type PortableSupplierNativeProofContext =
@@ -942,13 +2327,35 @@ type PortableSupplierNativeProofChallenge =
       IssuedMonotonic: int64
       DeadlineMonotonic: int64 }
 
+/// Selected acquisition is anchored before the receiver knows the native receipt hash.
+type PortableSupplierSelectedNativeProofContext =
+    { Original: PortableSupplierAdmissionOriginal
+      OperationId: Guid
+      ReservationDigest: string
+      ProofEventHead: string
+      HostLeaseNotAfter: DateTimeOffset
+      ExpectedCurrentHead: string
+      ExpectedCurrentSequence: uint64 }
+
+type PortableSupplierSelectedNativeProofChallenge =
+    { Context: PortableSupplierSelectedNativeProofContext
+      ChallengeId: Guid
+      Digest: string
+      BytesBase64: string
+      ReceiverEpoch: Guid
+      IssuedAt: DateTimeOffset
+      NotAfter: DateTimeOffset
+      IssuedMonotonic: int64
+      DeadlineMonotonic: int64 }
+
 type PortableSupplierPendingChallenge =
     | WireV1 of PortableSupplierAdmissionChallenge
     | NativeProofV1 of PortableSupplierNativeProofChallenge
-    member this.Kind = match this with WireV1 _ -> SupplierWireV1 | NativeProofV1 _ -> SupplierNativeProofV1
-    member this.ChallengeId = match this with WireV1 c -> c.ChallengeId | NativeProofV1 c -> c.ChallengeId
-    member this.Digest = match this with WireV1 c -> c.Digest | NativeProofV1 c -> c.Digest
-    member this.BytesBase64 = match this with WireV1 c -> c.BytesBase64 | NativeProofV1 c -> c.BytesBase64
+    | NativeSelectedProofV2 of PortableSupplierSelectedNativeProofChallenge
+    member this.Kind = match this with WireV1 _ -> SupplierWireV1 | NativeProofV1 _ -> SupplierNativeProofV1 | NativeSelectedProofV2 _ -> SupplierSelectedNativeProofV2
+    member this.ChallengeId = match this with WireV1 c -> c.ChallengeId | NativeProofV1 c -> c.ChallengeId | NativeSelectedProofV2 c -> c.ChallengeId
+    member this.Digest = match this with WireV1 c -> c.Digest | NativeProofV1 c -> c.Digest | NativeSelectedProofV2 c -> c.Digest
+    member this.BytesBase64 = match this with WireV1 c -> c.BytesBase64 | NativeProofV1 c -> c.BytesBase64 | NativeSelectedProofV2 c -> c.BytesBase64
 
 type PortableSupplierTranscriptKind = SupplierCreation | SupplierGenesis | SupplierAppend | SupplierUnchanged
 
@@ -984,9 +2391,43 @@ type PortableSupplierVerifiedTranscript =
     member this.EnvelopeSha256 = let (SupplierVerifiedTranscript(_, digest, _)) = this in digest
     member this.Observation = let (SupplierVerifiedTranscript(_, _, value)) = this in value
 
+/// Exact accepted controller bytes retained in the existing supplier record, not a witness.
+type PortableSupplierRetainedWireExchange =
+    { AcceptedRevision: uint64
+      AcceptedStoreFence: uint64
+      Challenge: PortableSupplierAdmissionChallenge
+      RequestBase64: string
+      ResultBase64: string
+      EvidenceBase64: string
+      ReceiverBundleBase64: string
+      ControllerBundleBase64: string }
+
+type PortableSupplierRetainedNativeAcquisition =
+    { AcceptedRevision: uint64
+      AcceptedStoreFence: uint64
+      Challenge: PortableSupplierPendingChallenge
+      RequestBase64: string
+      ResultBase64: string
+      ProofEnvelopeBase64: string
+      ReceiptBase64: string
+      ControllerBundleBase64: string }
+
+/// Fresh-only /4 custody. Its fence is data and cannot establish durable ownership.
+type PortableSupplierCheckpointCustody =
+    { OriginalReceiverEpoch: Guid
+      StoreFence: uint64
+      OriginalIntentEnvelopeBase64: string
+      CreationExchange: PortableSupplierRetainedWireExchange option
+      WireExchanges: PortableSupplierRetainedWireExchange list
+      NativeAcquisitions: PortableSupplierRetainedNativeAcquisition list
+      AbandonedChallenges: PortableSupplierPendingChallenge list
+      GenesisCheckpointBase64: string option
+      OutputCheckpointBase64: string option }
+
 type PortableSupplierAdmissionState =
     { JournalVersion: PortableSupplierJournalVersion
       Revision: uint64
+      CheckpointCustody: PortableSupplierCheckpointCustody option
       Original: PortableSupplierAdmissionOriginal
       Phase: PortableSupplierAdmissionPhase
       Challenge: PortableSupplierPendingChallenge option
@@ -1000,6 +2441,17 @@ type PortableSupplierAdmissionState =
       AckDraftBase64: string option
       FirstFailure: string option
       Conflicts: Set<string> }
+
+/// Source data and a sticky hold remain distinct from later private authenticated candidates.
+type PortableSupplierStructuralTransition =
+    | SupplierCheckpointData of PortableSupplierAdmissionState
+    | SupplierCheckpointHeld of PortableSupplierAdmissionState
+
+/// Source readback only: none of these values can satisfy an ACK or host-effect gate.
+type PortableSupplierSourceStage =
+    | SupplierSourceReadback of PortableSupplierAdmissionState
+    | SupplierSourceConflict
+    | SupplierSourceCommitUnknown
 
 [<RequireQualifiedAccess>]
 module PortableSupplierAdmission =
@@ -1058,17 +2510,443 @@ module PortableSupplierAdmission =
         && (match raw 45000 challenge.BytesBase64 with
             | Ok bytes -> bytes = nativeBytes challenge && digestBytes bytes = challenge.Digest
             | _ -> false)
+    let private selectedNativeBytes (challenge: PortableSupplierSelectedNativeProofChallenge) =
+        let context = challenge.Context
+        let date (value: DateTimeOffset) = value.ToString("yyyy-MM-dd'T'HH:mm:ss.ffffff'Z'", Globalization.CultureInfo.InvariantCulture)
+        let q = PortableSupplierC1.quoted
+        PortableSupplierC1.objectBytes
+            [ "schema", q "fsgg.v3.native-proof-challenge/2"; "profile", q "signed-hold-v1"
+              "proof_kind", q "selected"; "operation_id", q (context.OperationId.ToString("D"))
+              "intent_digest", q context.Original.IntentDigest; "reservation_digest", q context.ReservationDigest
+              "proof_event_head", q context.ProofEventHead; "receiver_epoch", q (challenge.ReceiverEpoch.ToString("D"))
+              "challenge_id", q (challenge.ChallengeId.ToString("D")); "issued_at", q (date challenge.IssuedAt)
+              "not_after", q (date challenge.NotAfter) ]
+
+    let private validSelectedNative (original: PortableSupplierAdmissionOriginal)
+                                    (challenge: PortableSupplierSelectedNativeProofChallenge) =
+        let context = challenge.Context
+        context.Original = original && context.OperationId <> Guid.Empty
+        && digest context.ReservationDigest && digest context.ProofEventHead && digest context.ExpectedCurrentHead
+        && context.ExpectedCurrentSequence > 0UL && utcMicroseconds context.HostLeaseNotAfter
+        && challenge.ChallengeId <> Guid.Empty && challenge.ReceiverEpoch = original.ReceiverEpoch
+        && utcMicroseconds challenge.IssuedAt && utcMicroseconds challenge.NotAfter
+        && challenge.IssuedAt < challenge.NotAfter && challenge.NotAfter <= original.Command.Deadline
+        && challenge.NotAfter <= context.HostLeaseNotAfter
+        && challenge.IssuedMonotonic >= 0L && challenge.DeadlineMonotonic > challenge.IssuedMonotonic
+        && digest challenge.Digest
+        && (match raw 45000 challenge.BytesBase64 with
+            | Ok bytes -> bytes = selectedNativeBytes challenge && digestBytes bytes = challenge.Digest
+            | _ -> false)
+
     let private sameOriginal (original: PortableSupplierAdmissionOriginal) (value: PortableSupplierTranscriptObservation) =
         value.IntentDigest = original.IntentDigest && value.TrustPolicyDigest = original.TrustPolicyDigest
         && value.OriginalReservation.Binding.Command = original.Command
         && value.OriginalReservation.Binding.QualifiedImage = original.QualifiedImage
         && value.SupplierSourceRevision = original.SupplierSourceRevision
+    let private originalWireCommand (command: PortableWorkspaceCommand) =
+        let date = command.Deadline.ToString("yyyy-MM-dd'T'HH:mm:ss.ffffff'Z'", Globalization.CultureInfo.InvariantCulture)
+        PortableSupplierC1.objectBytes
+            ["command_id", PortableSupplierC1.quoted (command.CommandId.ToString("D"))
+             "idempotency_id", PortableSupplierC1.quoted command.IdempotencyId
+             "workspace_scope", PortableSupplierC1.quoted command.WorkspaceScope
+             "profile_id", PortableSupplierC1.quoted command.ProfileId
+             "profile_revision", PortableSupplierC1.number command.ProfileRevision
+             "source_revision", PortableSupplierC1.quoted command.SourceRevision
+             "expected_workflow_revision", PortableSupplierC1.number command.ExpectedWorkflowRevision
+             "fence_generation", PortableSupplierC1.number command.FenceGeneration
+             "causation_id", PortableSupplierC1.option PortableSupplierC1.quoted command.CausationId
+             "deadline", PortableSupplierC1.quoted date
+             "operation", PortableSupplierC1.quoted command.Operation
+             "component_id", PortableSupplierC1.option PortableSupplierC1.quoted command.ComponentId]
+
+    let private sourceOriginal (original: PortableSupplierAdmissionOriginal) encoded =
+        let signed = raw 65536 encoded |> Result.defaultWith invalidOp
+        let bytes, intent = PortableSupplierC1.payload 65536 6000 signed
+        let get (key: string) = intent.GetProperty key
+        PortableSupplierC1.fields
+            ["command_deadline"; "command_digest"; "correlation_id"; "created_at"; "intent_id"; "qualified_inner_image"
+             "requested_cleanup_reserve_ticks"; "requested_export_reserve_ticks"; "requested_host_lease_not_after"
+             "requested_maximum_runtime_ticks"; "requested_profile"; "requested_source_revision"; "schema"; "selection"] intent
+        PortableSupplierWireShape.check_receiver_intent intent
+        let originalBytes = raw 6000 original.IntentBase64 |> Result.defaultWith invalidOp
+        if bytes <> originalBytes || get("schema").GetString() <> "fsgg.v3.receiver-intent/1"
+           || get("requested_profile").GetString() <> "signed-hold-v1"
+           || (get "command_digest" |> PortableSupplierC1.digest) <> domain "command" (originalWireCommand original.Command)
+           || (get "command_deadline" |> PortableSupplierC1.utc) <> original.Command.Deadline
+           || get("qualified_inner_image").GetString() <> original.QualifiedImage
+           || get("requested_source_revision").GetString() <> original.SupplierSourceRevision then PortableSupplierC1.fail ()
+        for key in ["correlation_id"; "intent_id"] do get key |> PortableSupplierC1.uuid |> ignore
+        for key in ["created_at"; "requested_host_lease_not_after"] do get key |> PortableSupplierC1.utc |> ignore
+        for key in ["requested_maximum_runtime_ticks"; "requested_export_reserve_ticks"; "requested_cleanup_reserve_ticks"] do get key |> PortableSupplierC1.u64 |> ignore
+        intent
+
+    let private sourceWireChallenge (state: PortableSupplierAdmissionState) (challenge: PortableSupplierAdmissionChallenge) =
+        let bytes = raw 6000 challenge.BytesBase64 |> Result.defaultWith invalidOp
+        let row = PortableSupplierC1.document 6000 bytes
+        let get (key: string) = row.GetProperty key
+        let intent = raw 6000 state.Original.IntentBase64 |> Result.defaultWith invalidOp |> PortableSupplierC1.document 6000
+        if challenge.ChallengeId = Guid.Empty || challenge.ReceiverEpoch = Guid.Empty
+           || domain "challenge" bytes <> challenge.Digest
+           || (get "challenge_id" |> PortableSupplierC1.uuid) <> challenge.ChallengeId
+           || (get "issued_at" |> PortableSupplierC1.utc) <> challenge.IssuedAt
+           || (get "not_after" |> PortableSupplierC1.utc) <> challenge.NotAfter
+           || challenge.IssuedAt >= challenge.NotAfter || challenge.NotAfter > state.Original.Command.Deadline
+           || challenge.IssuedMonotonic < 0L || challenge.DeadlineMonotonic <= challenge.IssuedMonotonic
+           || (get "challenge_nonce" |> PortableSupplierC1.b64url 32).Length <> 32 then PortableSupplierC1.fail ()
+        if challenge.Purpose = "creation" then
+            PortableSupplierWireShape.check_creation_challenge row
+            PortableSupplierC1.fields ["challenge_id"; "challenge_nonce"; "correlation_id"; "intent_digest"; "issued_at"; "not_after"; "schema"] row
+            if get("schema").GetString() <> "fsgg.v3.creation-challenge/1"
+               || get("intent_digest").GetString() <> state.Original.IntentDigest
+               || get("correlation_id").GetString() <> intent.GetProperty("correlation_id").GetString()
+               || challenge.ExpectedHead.IsSome then PortableSupplierC1.fail ()
+        else
+            PortableSupplierWireShape.check_response_challenge row
+            PortableSupplierC1.fields ["challenge_id"; "challenge_nonce"; "issued_at"; "known_head"; "not_after"; "operation_id"; "purpose"; "reservation_digest"; "schema"] row
+            let pinned = state.Pinned |> Option.defaultWith PortableSupplierC1.fail
+            let creation = raw 6000 pinned.CreationBase64 |> Result.defaultWith invalidOp |> PortableSupplierC1.document 6000
+            let reservation = raw 6000 pinned.ReservationBase64 |> Result.defaultWith invalidOp
+            if get("schema").GetString() <> "fsgg.v3.response-challenge/1"
+               || get("purpose").GetString() <> challenge.Purpose
+               || not (List.contains challenge.Purpose ["genesis-readback"; "state-readback"; "retirement-readback"])
+               || (get "known_head" |> PortableSupplierC1.optional PortableSupplierC1.digest) <> challenge.ExpectedHead
+               || get("operation_id").GetString() <> creation.GetProperty("operation_id").GetString()
+               || get("reservation_digest").GetString() <> domain "reservation" reservation then PortableSupplierC1.fail ()
+        row
+
+    let private bundleCoverage controller (encoded: string) required =
+        let bytes = raw (if controller then 8192 else 32768) encoded |> Result.defaultWith invalidOp
+        if controller then PortableSupplierVerificationBundle.parseController bytes |> Result.defaultWith invalidOp |> ignore
+        else PortableSupplierVerificationBundle.parseReceiver bytes |> Result.defaultWith invalidOp |> ignore
+        let root = PortableSupplierC1.document (if controller then 8192 else 32768) bytes
+        let rows = root.GetProperty("observations").EnumerateArray() |> Seq.toList
+        if rows.Length <> List.length required then PortableSupplierC1.fail ()
+        let namespaces =
+            ["original-intent", "fsgg-v3-original-intent-v1"; "receiver-command", "fsgg-v3-host-command-v1"
+             "host-command-result", "fsgg-v3-host-command-result-v1"; "native-proof", "fsgg-v3-native-proof-v1"
+             "creation", "fsgg-v3-supplier-creation-v1"; "genesis", "fsgg-v3-supplier-genesis-v1"
+             "supplier-event", "fsgg-v3-supplier-event-v1"; "supplier-response", "fsgg-v3-supplier-response-v1"]
+            |> Map.ofList
+        for role, exact, payloadDomain in required do
+            let payload, _ = PortableSupplierC1.payload 65536 45000 exact
+            let expectedDigest = if payloadDomain = "raw-sha256" then digestBytes payload else domain payloadDomain payload
+            let matches = rows |> List.filter (fun row -> row.GetProperty("role").GetString() = role && row.GetProperty("envelope_sha256").GetString() = digestBytes exact)
+            match matches with
+            | [row] when row.GetProperty("payload_digest").GetString() = expectedDigest
+                         && row.GetProperty("namespace").GetString() = namespaces[role]
+                         && row.GetProperty("key_algorithm").GetString() = "ssh-ed25519"
+                         && row.GetProperty("message_hash_algorithm").GetString() = "sha512" -> ()
+            | _ -> PortableSupplierC1.fail ()
+        root
+
+    let private sourceWirePair (state: PortableSupplierAdmissionState) (e: PortableSupplierRetainedWireExchange) =
+        let custody = state.CheckpointCustody |> Option.defaultWith PortableSupplierC1.fail
+        let request = raw 65536 e.RequestBase64 |> Result.defaultWith invalidOp
+        let result = raw 4096 e.ResultBase64 |> Result.defaultWith invalidOp
+        let evidence = raw 65536 e.EvidenceBase64 |> Result.defaultWith invalidOp
+        let _, command = PortableSupplierC1.payload 65536 45000 request
+        let _, response = PortableSupplierC1.payload 4096 896 result
+        PortableSupplierC1.fields ["schema"; "profile"; "request_id"; "kind"; "receiver_policy_digest"; "receiver_epoch"; "body"] command
+        PortableSupplierC1.fields ["schema"; "request_digest"; "operation_id"; "result"; "reason"; "checkpoint_digest"; "evidence_kind"; "evidence_digest"; "challenge_digest"; "collected_at"] response
+        if command.GetProperty("schema").GetString() <> "fsgg.v3.host-command/1"
+           || command.GetProperty("profile").GetString() <> "signed-hold-v1"
+           || response.GetProperty("schema").GetString() <> "fsgg.v3.host-command-result/1"
+           || response.GetProperty("request_digest").GetString() <> digestBytes request
+           || response.GetProperty("evidence_digest").GetString() <> digestBytes evidence
+           || response.GetProperty("challenge_digest").GetString() <> e.Challenge.Digest
+           || response.GetProperty("reason").GetString() <> "ok"
+           || (command.GetProperty("receiver_epoch") |> PortableSupplierC1.uuid) <> e.Challenge.ReceiverEpoch then PortableSupplierC1.fail ()
+        command.GetProperty("request_id") |> PortableSupplierC1.uuid |> ignore
+        response.GetProperty("operation_id") |> PortableSupplierC1.uuid |> ignore
+        response.GetProperty("checkpoint_digest") |> PortableSupplierC1.digest |> ignore
+        let collected = response.GetProperty("collected_at") |> PortableSupplierC1.utc
+        if collected < e.Challenge.IssuedAt || collected >= e.Challenge.NotAfter then PortableSupplierC1.fail ()
+        let signedOriginal = raw 65536 custody.OriginalIntentEnvelopeBase64 |> Result.defaultWith invalidOp
+        let controller = bundleCoverage true e.ControllerBundleBase64 ["original-intent",signedOriginal,"raw-sha256"; "receiver-command",request,"raw-sha256"; "host-command-result",result,"raw-sha256"]
+        let requestObservation = controller.GetProperty("observations").EnumerateArray() |> Seq.find (fun o -> o.GetProperty("role").GetString() = "receiver-command")
+        if (command.GetProperty("receiver_policy_digest") |> PortableSupplierC1.digest) <> requestObservation.GetProperty("policy_digest").GetString() then PortableSupplierC1.fail ()
+        let body = command.GetProperty("body")
+        let kind = command.GetProperty("kind").GetString()
+        let challengeRow = sourceWireChallenge state e.Challenge
+        let challengeKey = if e.Challenge.Purpose = "creation" then "creation_challenge" else "response_challenge"
+        if (body.GetProperty(challengeKey) |> PortableSupplierC1.b64url 6000) <> (raw 6000 e.Challenge.BytesBase64 |> Result.defaultWith invalidOp) then PortableSupplierC1.fail ()
+        if e.Challenge.Purpose = "creation" then
+            PortableSupplierC1.fields ["intent"; "creation_challenge"; "create_grant"; "selection_manifest"] body
+            if kind <> "create-stopped" || response.GetProperty("result").GetString() <> "committed"
+               || response.GetProperty("evidence_kind").GetString() <> "creation"
+               || (body.GetProperty("intent") |> PortableSupplierC1.b64url 6000) <> (raw 6000 state.Original.IntentBase64 |> Result.defaultWith invalidOp) then PortableSupplierC1.fail ()
+            body.GetProperty("create_grant") |> PortableSupplierC1.b64url 10761 |> ignore
+        else
+            let expectedFields =
+                match kind with
+                | "bind-original" -> ["operation_id"; "intent_digest"; "creation_receipt_digest"; "reservation"; "response_challenge"]
+                | "collect" -> ["intent_digest"; "operation_id"; "reservation_digest"; "response_challenge"]
+                | "settle-observe" -> ["intent_digest"; "operation_id"; "reservation_digest"; "expected_head"; "response_challenge"]
+                | "start-original" -> ["intent_digest"; "operation_id"; "reservation_digest"; "expected_head"; "response_challenge"; "start_grant"; "receiver_acceptance"]
+                | "retire-original" -> ["intent_digest"; "operation_id"; "reservation_digest"; "expected_head"; "response_challenge"; "retire_grant"; "export_readback"]
+                | _ -> PortableSupplierC1.fail ()
+            PortableSupplierC1.fields expectedFields body
+            if not (List.contains (response.GetProperty("result").GetString()) ["observed"; "committed"])
+               || response.GetProperty("evidence_kind").GetString() <> "supplier-response"
+               || body.GetProperty("intent_digest").GetString() <> state.Original.IntentDigest
+               || body.GetProperty("operation_id").GetString() <> challengeRow.GetProperty("operation_id").GetString() then PortableSupplierC1.fail ()
+            if e.Challenge.Purpose = "genesis-readback" && kind <> "bind-original" && kind <> "collect" then PortableSupplierC1.fail ()
+        command, response
+
+    let private sourceSelection (row: System.Text.Json.JsonElement) =
+        PortableSupplierWireShape.check_selection row
+        match row.GetProperty("kind").GetString() with
+        | "none" -> NoSelectedOutputs
+        | "selected" ->
+            SelectedOutputs { Digest = row.GetProperty("digest") |> PortableSupplierC1.digest
+                              MemberCount = row.GetProperty("member_count") |> PortableSupplierC1.u64
+                              TotalBytes = row.GetProperty("total_bytes") |> PortableSupplierC1.u64 }
+        | _ -> PortableSupplierC1.fail ()
+
+    let private sourceOriginals (state: PortableSupplierAdmissionState) =
+        let custody = state.CheckpointCustody |> Option.defaultWith PortableSupplierC1.fail
+        let intent = sourceOriginal state.Original custody.OriginalIntentEnvelopeBase64
+        let pinned = state.Pinned |> Option.defaultWith PortableSupplierC1.fail
+        let coreBytes = raw 6000 pinned.CreationBase64 |> Result.defaultWith invalidOp
+        let receiptBytes = raw 18761 pinned.CreationReceiptBase64 |> Result.defaultWith invalidOp
+        let reservationBytes = raw 6000 pinned.ReservationBase64 |> Result.defaultWith invalidOp
+        let core = PortableSupplierC1.document 6000 coreBytes
+        let reservation = PortableSupplierC1.document 6000 reservationBytes
+        PortableSupplierWireShape.check_creation_core core
+        PortableSupplierWireShape.check_reservation reservation
+        let receiptPayload, _ = PortableSupplierC1.payload 18761 6000 receiptBytes
+        if receiptPayload <> coreBytes || core.GetProperty("intent_digest").GetString() <> state.Original.IntentDigest
+           || reservation.GetProperty("intent_digest").GetString() <> state.Original.IntentDigest
+           || reservation.GetProperty("creation_receipt_digest").GetString() <> domain "creation-receipt" receiptBytes
+           || PortableSupplierC1.nestedBytes (reservation.GetProperty("command")) <> originalWireCommand state.Original.Command
+           || core.GetProperty("operation_id").GetString() <> reservation.GetProperty("operation_id").GetString()
+           || core.GetProperty("correlation_id").GetString() <> intent.GetProperty("correlation_id").GetString()
+           || reservation.GetProperty("correlation_id").GetString() <> intent.GetProperty("correlation_id").GetString()
+           || core.GetProperty("supplier_source_revision").GetString() <> state.Original.SupplierSourceRevision
+           || reservation.GetProperty("receiver_source_revision").GetString() <> state.Original.Command.SourceRevision
+           || core.GetProperty("profile").GetString() <> "signed-hold-v1"
+           || reservation.GetProperty("qualified_inner_image").GetString() <> state.Original.QualifiedImage
+           || PortableSupplierC1.nestedBytes (intent.GetProperty("selection")) <> PortableSupplierC1.nestedBytes (reservation.GetProperty("selection")) then PortableSupplierC1.fail ()
+        for left,right in ["requested_maximum_runtime_ticks","maximum_runtime_ticks"; "requested_export_reserve_ticks","export_reserve_ticks"; "requested_cleanup_reserve_ticks","cleanup_reserve_ticks"] do
+            if intent.GetProperty(left).GetString() <> reservation.GetProperty(right).GetString() then PortableSupplierC1.fail ()
+        let date key = reservation.GetProperty(key: string) |> PortableSupplierC1.utc
+        let count key = reservation.GetProperty(key: string) |> PortableSupplierC1.u64
+        let original = pinned.OriginalReservation
+        if original.AdmittedAt <> date "admitted_at" || original.HostLeaseExpiresAt <> date "host_lease_expires_at"
+           || original.Selection <> sourceSelection (reservation.GetProperty("selection"))
+           || original.MaximumRuntime.Ticks < 0L || uint64 original.MaximumRuntime.Ticks <> count "maximum_runtime_ticks"
+           || original.ExportReserve.Ticks < 0L || uint64 original.ExportReserve.Ticks <> count "export_reserve_ticks"
+           || original.CleanupReserve.Ticks < 0L || uint64 original.CleanupReserve.Ticks <> count "cleanup_reserve_ticks"
+           || pinned.Identity.ContainerId <> core.GetProperty("cid").GetString()
+           || pinned.Identity.AllocationDevice <> (core.GetProperty("allocation_device") |> PortableSupplierC1.u64)
+           || pinned.Identity.AllocationInode <> (core.GetProperty("allocation_inode") |> PortableSupplierC1.u64)
+           || pinned.OuterImageId <> core.GetProperty("image_id").GetString()
+           || (PortableHostAllocation.executionDeadline original.AdmittedAt original original |> Result.isError) then PortableSupplierC1.fail ()
+        let creation = custody.CreationExchange |> Option.defaultWith PortableSupplierC1.fail
+        if creation.EvidenceBase64 <> pinned.CreationReceiptBase64
+           || core.GetProperty("challenge_digest").GetString() <> creation.Challenge.Digest
+           || core.GetProperty("created_at").GetString() > core.GetProperty("stopped_at").GetString()
+           || (core.GetProperty("created_at") |> PortableSupplierC1.utc) < creation.Challenge.IssuedAt
+           || (core.GetProperty("created_at") |> PortableSupplierC1.utc) > creation.Challenge.NotAfter
+           || (core.GetProperty("stopped_at") |> PortableSupplierC1.utc) > original.AdmittedAt
+           || (core.GetProperty("host_lease_origin_at") |> PortableSupplierC1.utc) > (core.GetProperty("created_at") |> PortableSupplierC1.utc)
+           || (core.GetProperty("host_lease_expires_at") |> PortableSupplierC1.utc) <> original.HostLeaseExpiresAt
+           || original.HostLeaseExpiresAt > (intent.GetProperty("requested_host_lease_not_after") |> PortableSupplierC1.utc)
+           || (core.GetProperty("stopped_at") |> PortableSupplierC1.utc) >= original.HostLeaseExpiresAt
+           || count "maximum_runtime_ticks" > (core.GetProperty("host_maximum_runtime_cap_ticks") |> PortableSupplierC1.u64)
+           || count "export_reserve_ticks" < (core.GetProperty("host_min_export_reserve_ticks") |> PortableSupplierC1.u64)
+           || count "cleanup_reserve_ticks" < (core.GetProperty("host_min_cleanup_reserve_ticks") |> PortableSupplierC1.u64) then PortableSupplierC1.fail ()
+        let request, result = sourceWirePair state creation
+        let manifest = request.GetProperty("body").GetProperty("selection_manifest") |> PortableSupplierC1.optional (PortableSupplierC1.b64url 6000)
+        PortableSupplierManifest.validateSelection original.Selection manifest |> Result.defaultWith invalidOp |> ignore
+        if result.GetProperty("operation_id").GetString() <> core.GetProperty("operation_id").GetString() then PortableSupplierC1.fail ()
+        bundleCoverage false creation.ReceiverBundleBase64 ["creation",receiptBytes,"creation"] |> ignore
+        intent, core, reservation, coreBytes, receiptBytes, reservationBytes
+
+    let private checkpointCommon (state: PortableSupplierAdmissionState) (exchange: PortableSupplierRetainedWireExchange)
+                                 revision fence predecessor provenance =
+        let _,core,reservation,coreBytes,receiptBytes,reservationBytes = sourceOriginals state
+        let custody = state.CheckpointCustody |> Option.defaultWith PortableSupplierC1.fail
+        let signedResponse = raw 65536 exchange.EvidenceBase64 |> Result.defaultWith invalidOp
+        let _, response = PortableSupplierC1.payload 65536 45000 signedResponse
+        let event = response.GetProperty("events").EnumerateArray() |> Seq.last |> PortableSupplierC1.b64url 26761
+        let _, last = PortableSupplierC1.payload 26761 18000 event
+        { Provenance = provenance
+          JournalKeySha256 = System.Text.Encoding.UTF8.GetBytes(state.Original.Command.WorkspaceScope + "\n" + state.Original.Command.IdempotencyId) |> digestBytes
+          OriginalReceiverEpoch = custody.OriginalReceiverEpoch; ReceiverEpoch = exchange.Challenge.ReceiverEpoch
+          OperationId = core.GetProperty("operation_id") |> PortableSupplierC1.uuid
+          IntentDigest = state.Original.IntentDigest; CommandDigest = domain "command" (originalWireCommand state.Original.Command)
+          OriginalIntentEnvelopeSha256 = raw 65536 custody.OriginalIntentEnvelopeBase64 |> Result.defaultWith invalidOp |> digestBytes
+          CreationCoreDigest = domain "creation" coreBytes; CreationReceiptDigest = domain "creation-receipt" receiptBytes
+          ReservationDigest = domain "reservation" reservationBytes
+          SelectionDigest = PortableSupplierC1.nestedBytes (reservation.GetProperty("selection")) |> domain "selection"
+          TrustPolicyDigest = state.Original.TrustPolicyDigest
+          ReceiverSourceRevision = reservation.GetProperty("receiver_source_revision").GetString()
+          SupplierSourceRevision = core.GetProperty("supplier_source_revision").GetString()
+          SupplierSourceDigest = core.GetProperty("supplier_source_digest") |> PortableSupplierC1.digest
+          CommandFenceGeneration = state.Original.Command.FenceGeneration
+          ExpectedJournalRevision = revision - 1UL; JournalRevision = revision; ExpectedStoreFence = fence - 1UL; StoreFence = fence
+          PredecessorCheckpointSha256 = predecessor; PreviousHead = exchange.Challenge.ExpectedHead
+          ObservedHead = response.GetProperty("to_head") |> PortableSupplierC1.digest
+          AcceptedSequence = last.GetProperty("sequence") |> PortableSupplierC1.u64
+          AcceptedRequestEnvelopeSha256 = raw 65536 exchange.RequestBase64 |> Result.defaultWith invalidOp |> digestBytes
+          AcceptedResultEnvelopeSha256 = raw 4096 exchange.ResultBase64 |> Result.defaultWith invalidOp |> digestBytes
+          AcceptedResponseEnvelopeSha256 = digestBytes signedResponse
+          AcceptedChallengeDigest = exchange.Challenge.Digest; AcceptedChallengeId = exchange.Challenge.ChallengeId
+          AcceptedChallengePurpose = exchange.Challenge.Purpose
+          VerificationBundleSha256 = raw 32768 exchange.ReceiverBundleBase64 |> Result.defaultWith invalidOp |> digestBytes
+          ControllerVerificationBundleSha256 = raw 8192 exchange.ControllerBundleBase64 |> Result.defaultWith invalidOp |> digestBytes }
+
+    let private selectedProofContext (state: PortableSupplierAdmissionState) =
+        let _,core,reservation,_,_,reservationBytes = sourceOriginals state
+        let selection = sourceSelection (reservation.GetProperty("selection"))
+        let manifest =
+            match selection with
+            | SelectedOutputs value -> value
+            | NoSelectedOutputs -> PortableSupplierC1.fail ()
+        let events =
+            state.EventsBase64 |> List.skip 1 |> List.choose (fun encoded ->
+                let exact = raw 26761 encoded |> Result.defaultWith invalidOp
+                let _,event = PortableSupplierC1.payload 26761 12000 exact
+                if event.GetProperty("kind").GetString() = "export-manifest" then Some(exact,event) else None)
+        let exact,event = match events with [one] -> one | _ -> PortableSupplierC1.fail ()
+        let body = event.GetProperty("body")
+        if body.GetProperty("manifest_digest").GetString() <> manifest.Digest
+           || (body.GetProperty("member_count") |> PortableSupplierC1.u64) <> manifest.MemberCount
+           || (body.GetProperty("total_bytes") |> PortableSupplierC1.u64) <> manifest.TotalBytes then PortableSupplierC1.fail ()
+        { Original = state.Original
+          OperationId = core.GetProperty("operation_id") |> PortableSupplierC1.uuid
+          ReservationDigest = domain "reservation" reservationBytes
+          ProofEventHead = domain "signed-envelope" exact
+          HostLeaseNotAfter = state.Pinned.Value.OriginalReservation.HostLeaseExpiresAt
+          ExpectedCurrentHead = state.Head |> Option.defaultWith PortableSupplierC1.fail
+          ExpectedCurrentSequence = state.Sequence }
+
+    let private validateCustodyReferences (state: PortableSupplierAdmissionState) (c: PortableSupplierCheckpointCustody) =
+        sourceOriginal state.Original c.OriginalIntentEnvelopeBase64 |> ignore
+        if state.CheckpointBase64.IsSome || state.AckDraftBase64.IsSome then PortableSupplierC1.fail ()
+        let wire = (c.CreationExchange |> Option.toList) @ c.WireExchanges
+        let committed =
+            (wire |> List.map (fun e -> SupplierWireV1,e.Challenge.ChallengeId,e.Challenge.Digest,e.AcceptedRevision,e.AcceptedStoreFence))
+            @ (c.NativeAcquisitions |> List.map (fun e -> e.Challenge.Kind,e.Challenge.ChallengeId,e.Challenge.Digest,e.AcceptedRevision,e.AcceptedStoreFence))
+        for kind,id,digest,revision,fence in committed do
+            if revision < 2UL || revision > state.Revision || fence <> revision
+               || not (List.contains (kind,id,digest,"consumed") state.ChallengeLedger) then PortableSupplierC1.fail ()
+        let revisions = committed |> List.map (fun (_,_,_,r,_) -> r)
+        if Set.count (Set.ofList revisions) <> revisions.Length then PortableSupplierC1.fail ()
+        for kind,id,digest,status in state.ChallengeLedger do
+            if status = "consumed" then
+                if not (committed |> List.exists (fun (k,i,d,_,_) -> (k,i,d) = (kind,id,digest))) then PortableSupplierC1.fail ()
+            elif not (c.AbandonedChallenges |> List.exists (fun p -> (p.Kind,p.ChallengeId,p.Digest) = (kind,id,digest))) then PortableSupplierC1.fail ()
+        for abandoned in c.AbandonedChallenges do
+            if not (List.contains (abandoned.Kind,abandoned.ChallengeId,abandoned.Digest,"abandoned") state.ChallengeLedger) then PortableSupplierC1.fail ()
+            match abandoned with
+            | WireV1 challenge -> sourceWireChallenge state challenge |> ignore
+            | NativeProofV1 challenge ->
+                if not (validNative { state.Original with ReceiverEpoch = challenge.ReceiverEpoch } challenge) then PortableSupplierC1.fail ()
+            | NativeSelectedProofV2 challenge ->
+                if not (validSelectedNative { state.Original with ReceiverEpoch = challenge.ReceiverEpoch } challenge) then PortableSupplierC1.fail ()
+        if state.Pinned.IsSome <> c.CreationExchange.IsSome then PortableSupplierC1.fail ()
+        match state.Challenge with
+        | Some(NativeSelectedProofV2 challenge) ->
+            if challenge.Context <> selectedProofContext state then PortableSupplierC1.fail ()
+        | Some(WireV1 challenge) -> sourceWireChallenge state challenge |> ignore
+        | _ -> ()
+        if state.Pinned.IsSome then
+            let _,core,reservation,_,receiptBytes,reservationBytes = sourceOriginals state
+            let mutable head = None
+            let mutable sequence = 0UL
+            let mutable retained = []
+            let mutable priorRevision = c.CreationExchange.Value.AcceptedRevision
+            for exchange in c.WireExchanges do
+                if exchange.AcceptedRevision <= priorRevision then PortableSupplierC1.fail ()
+                priorRevision <- exchange.AcceptedRevision
+                let command,result = sourceWirePair state exchange
+                let _, response = raw 65536 exchange.EvidenceBase64 |> Result.defaultWith invalidOp |> PortableSupplierC1.payload 65536 45000
+                PortableSupplierWireShape.check_supplier_response response
+                let get (key: string) = response.GetProperty key
+                let actual = get "events" |> fun array -> array.EnumerateArray() |> Seq.map (PortableSupplierC1.b64url 26761) |> Seq.toList
+                let mode = get("mode").GetString()
+                if (get "from_head" |> PortableSupplierC1.optional PortableSupplierC1.digest) <> head
+                   || exchange.Challenge.ExpectedHead <> head || get("challenge_digest").GetString() <> exchange.Challenge.Digest
+                   || get("purpose").GetString() <> exchange.Challenge.Purpose
+                   || get("operation_id").GetString() <> core.GetProperty("operation_id").GetString()
+                   || get("reservation_digest").GetString() <> domain "reservation" reservationBytes then PortableSupplierC1.fail ()
+                let collected = get "collected_at" |> PortableSupplierC1.utc
+                if collected < exchange.Challenge.IssuedAt || collected >= exchange.Challenge.NotAfter
+                   || collected > (result.GetProperty("collected_at") |> PortableSupplierC1.utc) then PortableSupplierC1.fail ()
+                let body = command.GetProperty("body")
+                if command.GetProperty("kind").GetString() = "bind-original" then
+                    if (body.GetProperty("reservation") |> PortableSupplierC1.b64url 6000) <> reservationBytes
+                       || body.GetProperty("creation_receipt_digest").GetString() <> domain "creation-receipt" receiptBytes then PortableSupplierC1.fail ()
+                else
+                    if body.GetProperty("reservation_digest").GetString() <> domain "reservation" reservationBytes then PortableSupplierC1.fail ()
+                    if command.GetProperty("kind").GetString() <> "collect" && (body.GetProperty("expected_head") |> PortableSupplierC1.digest |> Some) <> head then PortableSupplierC1.fail ()
+                let newEvents = if mode = "unchanged" then [] else actual
+                if mode = "unchanged" then
+                    if retained.IsEmpty || actual <> [List.last retained] then PortableSupplierC1.fail ()
+                for exact in newEvents do
+                    let bytes,event = PortableSupplierC1.payload 26761 18000 exact
+                    if head.IsNone then
+                        PortableSupplierWireShape.check_genesis event
+                        if mode <> "genesis" || actual.Length <> 1 || bytes.Length > 18000
+                           || PortableSupplierC1.nestedBytes (event.GetProperty("creation_core")) <> (raw 6000 state.Pinned.Value.CreationBase64 |> Result.defaultWith invalidOp)
+                           || PortableSupplierC1.nestedBytes (event.GetProperty("reservation")) <> reservationBytes
+                           || event.GetProperty("creation_core_digest").GetString() <> domain "creation" (PortableSupplierC1.nestedBytes (event.GetProperty("creation_core")))
+                           || event.GetProperty("creation_receipt_digest").GetString() <> domain "creation-receipt" receiptBytes
+                           || event.GetProperty("reservation_digest").GetString() <> domain "reservation" reservationBytes then PortableSupplierC1.fail ()
+                        sequence <- 0UL
+                    else
+                        PortableSupplierWireShape.check_supplier_event event
+                        if mode <> "append" || bytes.Length > 12000 || sequence = UInt64.MaxValue
+                           || event.GetProperty("predecessor_head").GetString() <> head.Value
+                           || (event.GetProperty("sequence") |> PortableSupplierC1.u64) <> sequence + 1UL
+                           || event.GetProperty("operation_id").GetString() <> core.GetProperty("operation_id").GetString()
+                           || event.GetProperty("reservation_digest").GetString() <> domain "reservation" reservationBytes then PortableSupplierC1.fail ()
+                        sequence <- sequence + 1UL
+                    head <- Some(domain "signed-envelope" exact)
+                    retained <- retained @ [exact]
+                if (get "to_head" |> PortableSupplierC1.digest |> Some) <> head then PortableSupplierC1.fail ()
+                let first = retained.Head
+                let requiredEvents = actual |> List.filter (fun exact -> exact <> first) |> List.map (fun exact -> "supplier-event",exact,"event")
+                bundleCoverage false exchange.ReceiverBundleBase64
+                    (["creation",receiptBytes,"creation"; "genesis",first,"genesis"; "supplier-response",(raw 65536 exchange.EvidenceBase64 |> Result.defaultWith invalidOp),"response"] @ requiredEvents) |> ignore
+            if retained <> (state.EventsBase64 |> List.map (fun text -> raw 26761 text |> Result.defaultWith invalidOp))
+               || head <> state.Head || sequence <> state.Sequence
+               || (c.WireExchanges |> List.map _.EvidenceBase64) <> state.ResponsesBase64 then PortableSupplierC1.fail ()
+            match c.GenesisCheckpointBase64, c.WireExchanges with
+            | None, [] ->
+                if state.Phase <> SupplierCreationPinned && state.Phase <> SupplierAwaitingGenesis then PortableSupplierC1.fail ()
+            | Some encoded, first::_ ->
+                let bytes = raw 16384 encoded |> Result.defaultWith invalidOp
+                let genesis = PortableSupplierCheckpoint.parseGenesis bytes |> Result.defaultWith invalidOp
+                let common = checkpointCommon state first first.AcceptedRevision first.AcceptedStoreFence None (PortableSupplierCheckpoint.genesisCommon genesis).Provenance
+                let eg = raw 26761 state.EventsBase64.Head |> Result.defaultWith invalidOp
+                let g,_ = PortableSupplierC1.payload 26761 18000 eg
+                let expected = PortableSupplierCheckpoint.createGenesis common (domain "signed-envelope" eg) (domain "genesis" g) |> Result.defaultWith invalidOp
+                if PortableSupplierCheckpoint.serializeGenesis expected <> bytes || state.Phase <> SupplierGenesisAccepted then PortableSupplierC1.fail ()
+            | _ -> PortableSupplierC1.fail ()
+        elif not c.WireExchanges.IsEmpty || c.GenesisCheckpointBase64.IsSome || state.Phase <> SupplierIntentStored then PortableSupplierC1.fail ()
+        // Native acceptance and its output checkpoint are validated by the next closed join.
+        if not c.NativeAcquisitions.IsEmpty || c.OutputCheckpointBase64.IsSome then PortableSupplierC1.fail ()
+
     let private transcriptBytes (state: PortableSupplierAdmissionState) =
         let pinned =
             state.Pinned
             |> Option.map (fun p -> [p.CreationBase64; p.CreationReceiptBase64; p.ReservationBase64; p.ResponseBase64] @ p.EventsBase64)
             |> Option.defaultValue []
-        [state.Original.IntentBase64] @ pinned @ (state.Challenge |> Option.map (fun p -> p.BytesBase64) |> Option.toList)
+        let custody =
+            state.CheckpointCustody |> Option.map (fun c ->
+                let exchange (e: PortableSupplierRetainedWireExchange) =
+                    [e.Challenge.BytesBase64; e.RequestBase64; e.ResultBase64; e.EvidenceBase64; e.ReceiverBundleBase64; e.ControllerBundleBase64]
+                [c.OriginalIntentEnvelopeBase64]
+                @ (c.CreationExchange |> Option.map exchange |> Option.defaultValue [])
+                @ (c.WireExchanges |> List.collect exchange)
+                @ (c.NativeAcquisitions |> List.collect (fun e -> [e.Challenge.BytesBase64; e.RequestBase64; e.ResultBase64; e.ProofEnvelopeBase64; e.ReceiptBase64; e.ControllerBundleBase64]))
+                @ (c.AbandonedChallenges |> List.map _.BytesBase64)
+                @ (c.GenesisCheckpointBase64 |> Option.toList) @ (c.OutputCheckpointBase64 |> Option.toList))
+            |> Option.defaultValue []
+        custody @ [state.Original.IntentBase64] @ pinned @ (state.Challenge |> Option.map (fun p -> p.BytesBase64) |> Option.toList)
         @ state.EventsBase64 @ state.ResponsesBase64
         @ (state.CheckpointBase64 |> Option.toList) @ (state.AckDraftBase64 |> Option.toList)
     /// Validate bounded immutable source data. It is never a durable/authentication/effect predicate.
@@ -1080,14 +2958,18 @@ module PortableSupplierAdmission =
                 let total = decoded |> List.sumBy (function Ok bytes -> int64 bytes.Length | Error _ -> int64 MaximumRecordBytes)
                 let validLedger =
                     state.ChallengeLedger |> List.forall (fun (kind, id, hash, status) ->
-                        (state.JournalVersion = SupplierJournalV3 || kind = SupplierWireV1)
+                        (match state.JournalVersion with SupplierJournalV2 -> kind = SupplierWireV1 | SupplierJournalV3 -> kind <> SupplierSelectedNativeProofV2 | SupplierJournalV4 -> true)
                         && id <> Guid.Empty && digest hash && (status = "consumed" || status = "abandoned"))
                 let uniqueIds = state.ChallengeLedger |> List.map (fun (_, id, _, _) -> id) |> Set.ofList
                 let validChallenge =
                     state.Challenge |> Option.forall (fun pending ->
                         let valid =
                             match pending with
-                            | NativeProofV1 challenge -> state.JournalVersion = SupplierJournalV3 && validNative state.Original challenge
+                            | NativeProofV1 challenge -> state.JournalVersion <> SupplierJournalV2 && validNative state.Original challenge
+                            | NativeSelectedProofV2 challenge ->
+                                state.JournalVersion = SupplierJournalV4 && validSelectedNative state.Original challenge
+                                && Some challenge.Context.ExpectedCurrentHead = state.Head
+                                && challenge.Context.ExpectedCurrentSequence = state.Sequence
                             | WireV1 challenge ->
                                 challenge.ChallengeId <> Guid.Empty && digest challenge.Digest
                                 && challenge.ReceiverEpoch = state.Original.ReceiverEpoch && challenge.ExpectedHead = state.Head
@@ -1095,7 +2977,22 @@ module PortableSupplierAdmission =
                                 && challenge.IssuedMonotonic >= 0L && challenge.DeadlineMonotonic > challenge.IssuedMonotonic
                                 && (match raw 45000 challenge.BytesBase64 with Ok bytes -> domain "challenge" bytes = challenge.Digest | _ -> false)
                         valid && not (uniqueIds.Contains pending.ChallengeId))
-                if state.Revision = 0UL
+                let validCustody =
+                    match state.JournalVersion, state.CheckpointCustody with
+                    | (SupplierJournalV2 | SupplierJournalV3), None -> true
+                    | SupplierJournalV4, Some c ->
+                        validateCustodyReferences state c
+                        c.OriginalReceiverEpoch <> Guid.Empty && c.StoreFence = state.Revision
+                        && validRaw 65536 c.OriginalIntentEnvelopeBase64
+                        && c.WireExchanges.Length + c.NativeAcquisitions.Length + (if c.CreationExchange.IsSome then 1 else 0) <= 128
+                        && c.AbandonedChallenges.Length <= 128
+                        && (c.GenesisCheckpointBase64 |> Option.forall (fun value ->
+                            match raw 16384 value with Ok bytes -> PortableSupplierCheckpoint.parseGenesis bytes |> Result.isOk | _ -> false))
+                        && (c.OutputCheckpointBase64 |> Option.forall (fun value ->
+                            match raw 16384 value with Ok bytes -> PortableSupplierCheckpoint.parseOutput bytes |> Result.isOk | _ -> false))
+                        && (c.OutputCheckpointBase64.IsNone || c.GenesisCheckpointBase64.IsSome)
+                    | _ -> false
+                if state.Revision = 0UL || not validCustody
                    || not (present state.Original.Command.WorkspaceScope && present state.Original.Command.IdempotencyId)
                    || state.Original.ReceiverEpoch = Guid.Empty || not (digest state.Original.IntentDigest && digest state.Original.TrustPolicyDigest)
                    || not (present state.Original.QualifiedImage && present state.Original.SupplierSourceRevision)
@@ -1115,7 +3012,7 @@ module PortableSupplierAdmission =
 
     let private beginIntentCore (original: PortableSupplierAdmissionOriginal) =
         let state =
-            { JournalVersion = SupplierJournalV2; Revision = 1UL; Original = original; Phase = SupplierIntentStored; Challenge = None
+            { JournalVersion = SupplierJournalV2; Revision = 1UL; CheckpointCustody = None; Original = original; Phase = SupplierIntentStored; Challenge = None
               ChallengeLedger = []; Pinned = None; Head = None; Sequence = 0UL; EventsBase64 = []
               ResponsesBase64 = []; CheckpointBase64 = None; AckDraftBase64 = None
               FirstFailure = None; Conflicts = Set.empty }
@@ -1125,7 +3022,12 @@ module PortableSupplierAdmission =
 
     let private next (state: PortableSupplierAdmissionState) =
         if state.Revision = UInt64.MaxValue then Error "supplier-admission-revision-overflow"
-        else Ok { state with Revision = state.Revision + 1UL }
+        else
+            match state.JournalVersion, state.CheckpointCustody with
+            | SupplierJournalV4, Some custody when custody.StoreFence <> UInt64.MaxValue ->
+                Ok { state with Revision = state.Revision + 1UL; CheckpointCustody = Some { custody with StoreFence = custody.StoreFence + 1UL } }
+            | SupplierJournalV4, _ -> Error "supplier-admission-fence-overflow"
+            | _, _ -> Ok { state with Revision = state.Revision + 1UL }
 
     let private issueChallengeCore (challenge: PortableSupplierAdmissionChallenge) (state: PortableSupplierAdmissionState) =
         let expectedPurpose = if state.Phase = SupplierIntentStored then "creation" elif state.Head.IsNone then "genesis-readback" else "state-readback"
@@ -1152,7 +3054,7 @@ module PortableSupplierAdmission =
         if isNull (box authenticator) || isNull envelope || envelope.Length = 0 || envelope.Length > 65536 then refusal
         else
             match state.Challenge with
-            | None | Some(NativeProofV1 _) -> refusal
+            | None | Some(NativeProofV1 _) | Some(NativeSelectedProofV2 _) -> refusal
             | Some(WireV1 challenge) when now < challenge.IssuedAt || now >= challenge.NotAfter
                                   || monotonic < challenge.IssuedMonotonic || monotonic >= challenge.DeadlineMonotonic
                                   || state.FirstFailure.IsSome || not state.Conflicts.IsEmpty -> refusal
@@ -1198,7 +3100,7 @@ module PortableSupplierAdmission =
         else
             match state.Challenge with
             | None -> Error "supplier-admission-no-pending-challenge"
-            | Some(NativeProofV1 _) -> Error "supplier-admission-no-pending-wire-challenge"
+            | Some(NativeProofV1 _) | Some(NativeSelectedProofV2 _) -> Error "supplier-admission-no-pending-wire-challenge"
             | Some(WireV1 challenge) when value.ChallengeDigest <> challenge.Digest || value.Purpose <> challenge.Purpose -> Error "supplier-admission-challenge-changed"
             | Some(WireV1 challenge) ->
                 let pinnedMatches = state.Pinned |> Option.forall (fun pinned ->
@@ -1209,10 +3111,10 @@ module PortableSupplierAdmission =
                 else
                     let consumed = (SupplierWireV1, challenge.ChallengeId, challenge.Digest, "consumed") :: state.ChallengeLedger
                     let candidate phase head sequence events =
-                        next { state with Phase = phase; Challenge = None; ChallengeLedger = consumed
-                                          Pinned = Some value; Head = head; Sequence = sequence; EventsBase64 = events
-                                          ResponsesBase64 = (if value.Kind = SupplierCreation then state.ResponsesBase64 else state.ResponsesBase64 @ [value.ResponseBase64]) }
-                        |> Result.bind validate
+                        let proposed = next { state with Phase = phase; Challenge = None; ChallengeLedger = consumed
+                                                         Pinned = Some value; Head = head; Sequence = sequence; EventsBase64 = events
+                                                         ResponsesBase64 = (if value.Kind = SupplierCreation then state.ResponsesBase64 else state.ResponsesBase64 @ [value.ResponseBase64]) }
+                        if state.JournalVersion = SupplierJournalV4 then proposed else proposed |> Result.bind validate
                     match value.Kind, state.Phase with
                     | SupplierCreation, SupplierIntentStored when value.FromHead.IsNone && value.ToHead.IsNone && value.EventsBase64.IsEmpty ->
                         candidate SupplierCreationPinned None 0UL []
@@ -1233,38 +3135,134 @@ module PortableSupplierAdmission =
                         | _ -> Error "supplier-admission-append-head-refused"
                     | _ -> hold "supplier gap, fork or unsupported phase" verified.EnvelopeSha256 state
 
+    let private expectedV4 original revision fence (state: PortableSupplierAdmissionState) =
+        state.JournalVersion = SupplierJournalV4 && state.Original = original && state.Revision = revision
+        && (state.CheckpointCustody |> Option.exists (fun c -> c.StoreFence = fence))
+
+    let private retainWireV4 (verified: PortableSupplierVerifiedTranscript) (exchange: PortableSupplierRetainedWireExchange) original revision fence state =
+        if not (expectedV4 original revision fence state) then Error "supplier-v4-original-revision-fence-refused"
+        elif state.FirstFailure.IsSome || not state.Conflicts.IsEmpty then Ok(SupplierCheckpointHeld state)
+        elif state.Challenge <> Some(WireV1 exchange.Challenge) then Error "supplier-v4-exchange-challenge-refused"
+        elif verified.EnvelopeSha256 <> (raw 65536 exchange.EvidenceBase64 |> Result.defaultWith invalidOp |> digestBytes) then Error "supplier-v4-exchange-evidence-refused"
+        else
+            acceptCore verified state |> Result.bind (fun proposed ->
+                if proposed.FirstFailure.IsSome || not proposed.Conflicts.IsEmpty then
+                    validate proposed |> Result.map SupplierCheckpointHeld
+                else
+                    let custody = proposed.CheckpointCustody.Value
+                    let retained = { exchange with AcceptedRevision = proposed.Revision; AcceptedStoreFence = custody.StoreFence }
+                    let updated =
+                        if verified.Observation.Kind = SupplierCreation then
+                            if custody.CreationExchange.IsSome then PortableSupplierC1.fail ()
+                            { custody with CreationExchange = Some retained }
+                        else { custody with WireExchanges = custody.WireExchanges @ [retained] }
+                    let candidate = { proposed with CheckpointCustody = Some updated }
+                    if verified.Observation.Kind = SupplierGenesis then
+                        if updated.GenesisCheckpointBase64.IsSome then Error "supplier-v4-genesis-already-retained"
+                        else
+                            let common = checkpointCommon candidate retained proposed.Revision custody.StoreFence None "controlled-test"
+                            let exact = raw 26761 proposed.EventsBase64.Head |> Result.defaultWith invalidOp
+                            let payload,_ = PortableSupplierC1.payload 26761 18000 exact
+                            PortableSupplierCheckpoint.createGenesis common (domain "signed-envelope" exact) (domain "genesis" payload)
+                            |> Result.bind (fun checkpoint ->
+                                let complete = { candidate with CheckpointCustody = Some { updated with GenesisCheckpointBase64 = Some(Convert.ToBase64String(PortableSupplierCheckpoint.serializeGenesis checkpoint)) } }
+                                validate complete |> Result.map SupplierCheckpointData)
+                    else validate candidate |> Result.map SupplierCheckpointData)
+
+    /// Explicit structural caller: signatures are supplied by the separate transcript-verifier port.
+    /// The retained pair and all cold joins are checked here; no authenticated/durable result escapes.
+    let pinCreationV4 (verified: PortableSupplierVerifiedTranscript) exchange original revision fence state =
+        try
+            if verified.Observation.Kind <> SupplierCreation then Error "supplier-v4-creation-required"
+            else retainWireV4 verified exchange original revision fence state
+        with _ -> Error "supplier-v4-creation-refused"
+
+    /// Genesis and every later wire exchange share the existing reducer and owned byte custody.
+    let acceptWireV4 (verified: PortableSupplierVerifiedTranscript) exchange original revision fence state =
+        try
+            if verified.Observation.Kind = SupplierCreation then Error "supplier-v4-wire-required"
+            else retainWireV4 verified exchange original revision fence state
+        with _ -> Error "supplier-v4-wire-refused"
+
     /// A restart cannot revive an outstanding challenge in a new monotonic clock domain.
     let private abandonChallengeCore newEpoch (state: PortableSupplierAdmissionState) =
-        if newEpoch = Guid.Empty || newEpoch = state.Original.ReceiverEpoch then Error "supplier-admission-epoch-refused"
+        if newEpoch = Guid.Empty || newEpoch = state.Original.ReceiverEpoch
+           || (state.JournalVersion = SupplierJournalV4 && state.Challenge.IsNone) then Error "supplier-admission-epoch-refused"
         else
             let ledger =
                 match state.Challenge with
                 | None -> state.ChallengeLedger
                 | Some challenge -> (challenge.Kind, challenge.ChallengeId, challenge.Digest, "abandoned") :: state.ChallengeLedger
-            next { state with Original = { state.Original with ReceiverEpoch = newEpoch }; Challenge = None; ChallengeLedger = ledger }
+            let custody = state.CheckpointCustody |> Option.map (fun c ->
+                { c with AbandonedChallenges = c.AbandonedChallenges @ (state.Challenge |> Option.toList) })
+            next { state with Original = { state.Original with ReceiverEpoch = newEpoch }; Challenge = None; ChallengeLedger = ledger; CheckpointCustody = custody }
             |> Result.bind validate
 
     let beginIntent original =
         try beginIntentCore original with _ -> Error "supplier-admission-original-refused"
     /// Explicit fresh-original selection. Stage still refuses an occupied journal key.
     let beginIntentV3 original = beginIntent original |> Result.map (fun state -> { state with JournalVersion = SupplierJournalV3 })
+    /// Fresh /4 source custody only. The same-store StageV4 refuses every occupied key.
+    let beginIntentV4 original (signedOriginalIntent: byte array) =
+        try
+            let snapshot = Array.copy signedOriginalIntent
+            let bytes, intent = PortableSupplierC1.payload 65536 6000 snapshot
+            sourceOriginal original (Convert.ToBase64String snapshot) |> ignore
+            let originalBytes = raw 6000 original.IntentBase64 |> Result.defaultWith invalidOp
+            if bytes <> originalBytes || intent.GetProperty("schema").GetString() <> "fsgg.v3.receiver-intent/1"
+               || intent.GetProperty("requested_profile").GetString() <> "signed-hold-v1"
+               || intent.GetProperty("command_digest").GetString() <> domain "command" (originalWireCommand original.Command) then
+                Error "supplier-v4-original-refused"
+            else
+                beginIntentCore original |> Result.bind (fun state ->
+                    validate { state with JournalVersion = SupplierJournalV4
+                                          CheckpointCustody = Some { OriginalReceiverEpoch = original.ReceiverEpoch; StoreFence = 1UL
+                                                                     OriginalIntentEnvelopeBase64 = Convert.ToBase64String snapshot
+                                                                     CreationExchange = None; WireExchanges = []; NativeAcquisitions = []; AbandonedChallenges = []
+                                                                     GenesisCheckpointBase64 = None; OutputCheckpointBase64 = None } })
+        with _ -> Error "supplier-v4-original-refused"
     let issueChallenge challenge state =
         try issueChallengeCore challenge state with _ -> Error "supplier-admission-challenge-refused"
     /// Caller assertions only: this stores no authenticated proof or production clock/nonce policy.
     let issueNativeProofChallenge (expectedContext: PortableSupplierNativeProofContext)
                                   (challenge: PortableSupplierNativeProofChallenge) (state: PortableSupplierAdmissionState) =
         try
-            if state.JournalVersion <> SupplierJournalV3 || state.Challenge.IsSome
+            if state.JournalVersion = SupplierJournalV2 || state.Challenge.IsSome
                || state.FirstFailure.IsSome || not state.Conflicts.IsEmpty
                || state.ChallengeLedger.Length >= 128 || challenge.Context <> expectedContext
                || (state.ChallengeLedger |> List.exists (fun (_, id, _, _) -> id = challenge.ChallengeId))
                || not (validNative state.Original challenge) then Error "supplier-native-proof-challenge-refused"
             else next { state with Challenge = Some(NativeProofV1 challenge) } |> Result.bind validate
         with _ -> Error "supplier-native-proof-challenge-refused"
+    /// Structural issuance from the exact retained selected prefix; no receipt/hash input exists.
+    /// Authentication and current clock policy remain separately required by the source caller.
+    let issueSelectedNativeProofChallengeV4 original revision fence challengeId issuedAt notAfter
+                                            issuedMonotonic deadlineMonotonic (state: PortableSupplierAdmissionState) =
+        try
+            if not (expectedV4 original revision fence state) || state.Challenge.IsSome
+               || state.FirstFailure.IsSome || not state.Conflicts.IsEmpty
+               || state.Phase <> SupplierGenesisAccepted || state.CheckpointCustody.Value.OutputCheckpointBase64.IsSome
+               || state.ChallengeLedger.Length >= 128
+               || (state.ChallengeLedger |> List.exists (fun (_, id, _, _) -> id = challengeId)) then
+                Error "supplier-selected-native-proof-challenge-refused"
+            else
+                validate state |> Result.bind (fun current ->
+                    let context = selectedProofContext current
+                    let provisional: PortableSupplierSelectedNativeProofChallenge =
+                        { Context = context; ChallengeId = challengeId; Digest = String.replicate 64 "0"; BytesBase64 = ""
+                          ReceiverEpoch = current.Original.ReceiverEpoch; IssuedAt = issuedAt; NotAfter = notAfter
+                          IssuedMonotonic = issuedMonotonic; DeadlineMonotonic = deadlineMonotonic }
+                    let exact = selectedNativeBytes provisional
+                    let challenge = { provisional with Digest = digestBytes exact; BytesBase64 = Convert.ToBase64String exact }
+                    if not (validSelectedNative current.Original challenge) then Error "supplier-selected-native-proof-challenge-refused"
+                    else next { current with Challenge = Some(NativeSelectedProofV2 challenge) } |> Result.bind validate)
+        with _ -> Error "supplier-selected-native-proof-challenge-refused"
+
     let verify authenticator now monotonic state envelope =
         try verifyCore authenticator now monotonic state envelope with _ -> Error "supplier-admission-verification-refused"
     let accept verified state =
-        try acceptCore verified state with _ -> Error "supplier-admission-result-refused"
+        if state.JournalVersion = SupplierJournalV4 then Error "supplier-v4-paired-checkpoint-required"
+        else try acceptCore verified state with _ -> Error "supplier-admission-result-refused"
     let abandonChallenge epoch state =
         try abandonChallengeCore epoch state with _ -> Error "supplier-admission-restart-refused"
 

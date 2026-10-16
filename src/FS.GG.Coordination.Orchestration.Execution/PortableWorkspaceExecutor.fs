@@ -71,6 +71,8 @@ type PortableProcessRequest =
         RecipeSha256: string
     }
 
+exception private SupplierSourceConflictException
+
 [<RequireQualifiedAccess>]
 type PortableProcessRefusalStage =
     | SourceSnapshot
@@ -547,21 +549,31 @@ module PortableWorkspaceExecutor =
             writeDate writer challenge.IssuedAt; writeDate writer challenge.NotAfter
             writer.Write challenge.IssuedMonotonic; writer.Write challenge.DeadlineMonotonic
             optional (text 64) challenge.ExpectedHead
-        optional (fun pending ->
-            if state.JournalVersion = SupplierJournalV3 then writer.Write(match pending with WireV1 _ -> 0uy | NativeProofV1 _ -> 1uy)
-            match pending with
-            | WireV1 challenge -> wire challenge
-            | NativeProofV1 challenge ->
-                text 36 (challenge.Context.OperationId.ToString("D"))
-                text 64 challenge.Context.ReservationDigest; text 64 challenge.Context.ProofEventHead
-                text 64 challenge.Context.NativeReceiptSha256; writeDate writer challenge.Context.HostLeaseNotAfter
-                text 36 (challenge.ChallengeId.ToString("D")); text 64 challenge.Digest; text 60000 challenge.BytesBase64
-                text 36 (challenge.ReceiverEpoch.ToString("D"))
-                writeDate writer challenge.IssuedAt; writeDate writer challenge.NotAfter
-                writer.Write challenge.IssuedMonotonic; writer.Write challenge.DeadlineMonotonic) state.Challenge
+        let native (challenge: PortableSupplierNativeProofChallenge) =
+            text 36 (challenge.Context.OperationId.ToString("D"))
+            text 64 challenge.Context.ReservationDigest; text 64 challenge.Context.ProofEventHead
+            text 64 challenge.Context.NativeReceiptSha256; writeDate writer challenge.Context.HostLeaseNotAfter
+            text 36 (challenge.ChallengeId.ToString("D")); text 64 challenge.Digest; text 60000 challenge.BytesBase64
+            text 36 (challenge.ReceiverEpoch.ToString("D"))
+            writeDate writer challenge.IssuedAt; writeDate writer challenge.NotAfter
+            writer.Write challenge.IssuedMonotonic; writer.Write challenge.DeadlineMonotonic
+        let selectedNative (challenge: PortableSupplierSelectedNativeProofChallenge) =
+            if state.JournalVersion <> SupplierJournalV4 then invalidOp "supplier-selected-native-generation"
+            text 36 (challenge.Context.OperationId.ToString("D"))
+            text 64 challenge.Context.ReservationDigest; text 64 challenge.Context.ProofEventHead
+            writeDate writer challenge.Context.HostLeaseNotAfter
+            text 64 challenge.Context.ExpectedCurrentHead; writer.Write challenge.Context.ExpectedCurrentSequence
+            text 36 (challenge.ChallengeId.ToString("D")); text 64 challenge.Digest; text 60000 challenge.BytesBase64
+            text 36 (challenge.ReceiverEpoch.ToString("D"))
+            writeDate writer challenge.IssuedAt; writeDate writer challenge.NotAfter
+            writer.Write challenge.IssuedMonotonic; writer.Write challenge.DeadlineMonotonic
+        let pending pending =
+            if state.JournalVersion <> SupplierJournalV2 then writer.Write(match pending with WireV1 _ -> 0uy | NativeProofV1 _ -> 1uy | NativeSelectedProofV2 _ -> 2uy)
+            match pending with WireV1 challenge -> wire challenge | NativeProofV1 challenge -> native challenge | NativeSelectedProofV2 challenge -> selectedNative challenge
+        optional pending state.Challenge
         writer.Write state.ChallengeLedger.Length
         for kind, id, digest, disposition in state.ChallengeLedger do
-            if state.JournalVersion = SupplierJournalV3 then writer.Write(match kind with SupplierWireV1 -> 0uy | SupplierNativeProofV1 -> 1uy)
+            if state.JournalVersion <> SupplierJournalV2 then writer.Write(match kind with SupplierWireV1 -> 0uy | SupplierNativeProofV1 -> 1uy | SupplierSelectedNativeProofV2 -> 2uy)
             text 36 (id.ToString("D")); text 64 digest; text 16 disposition
         optional observation state.Pinned
         optional (text 64) state.Head; writer.Write state.Sequence
@@ -572,6 +584,26 @@ module PortableWorkspaceExecutor =
         optional (text 4096) state.FirstFailure
         writer.Write state.Conflicts.Count
         state.Conflicts |> Seq.iter (text 4096)
+        if state.JournalVersion = SupplierJournalV4 then
+            let c = state.CheckpointCustody |> Option.defaultWith (fun () -> invalidOp "supplier-v4-custody-missing")
+            text 36 (c.OriginalReceiverEpoch.ToString("D")); writer.Write c.StoreFence
+            text 87384 c.OriginalIntentEnvelopeBase64
+            let exchange (e: PortableSupplierRetainedWireExchange) =
+                writer.Write e.AcceptedRevision; writer.Write e.AcceptedStoreFence
+                wire e.Challenge
+                text 87384 e.RequestBase64; text 87384 e.ResultBase64; text 87384 e.EvidenceBase64
+                text 43692 e.ReceiverBundleBase64; text 10924 e.ControllerBundleBase64
+            optional exchange c.CreationExchange
+            writer.Write c.WireExchanges.Length; c.WireExchanges |> List.iter exchange
+            writer.Write c.NativeAcquisitions.Length
+            for e in c.NativeAcquisitions do
+                writer.Write e.AcceptedRevision; writer.Write e.AcceptedStoreFence
+                pending e.Challenge
+                text 87384 e.RequestBase64; text 87384 e.ResultBase64; text 87384 e.ProofEnvelopeBase64
+                text 43692 e.ReceiptBase64; text 10924 e.ControllerBundleBase64
+            writer.Write c.AbandonedChallenges.Length; c.AbandonedChallenges |> List.iter pending
+            optional (text 21848) c.GenesisCheckpointBase64
+            optional (text 21848) c.OutputCheckpointBase64
 
     let private readSupplier version (reader: BinaryReader) =
         let text maximum =
@@ -584,12 +616,12 @@ module PortableWorkspaceExecutor =
             value
         let optional read =
             let present = reader.ReadByte()
-            if version = SupplierJournalV3 && present > 1uy then invalidOp "supplier-journal-optional-tag"
+            if version <> SupplierJournalV2 && present > 1uy then invalidOp "supplier-journal-optional-tag"
             if present <> 0uy then Some(read()) else None
         let guid () =
             let value = text 36
             let parsed = Guid.ParseExact(value, "D")
-            if version = SupplierJournalV3 && parsed.ToString("D") <> value then invalidOp "supplier-journal-uuid"
+            if version <> SupplierJournalV2 && parsed.ToString("D") <> value then invalidOp "supplier-journal-uuid"
             parsed
         let count maximum =
             let n = reader.ReadInt32()
@@ -654,6 +686,7 @@ module PortableWorkspaceExecutor =
             if version = SupplierJournalV2 then SupplierWireV1
             else match reader.ReadByte() with
                  | 0uy -> SupplierWireV1 | 1uy -> SupplierNativeProofV1
+                 | 2uy when version = SupplierJournalV4 -> SupplierSelectedNativeProofV2
                  | _ -> invalidOp "supplier-challenge-kind"
         let wire () : PortableSupplierAdmissionChallenge =
             let id = guid ()
@@ -668,29 +701,54 @@ module PortableWorkspaceExecutor =
             let head = optional (fun () -> text 64)
             { ChallengeId = id; Digest = digest; BytesBase64 = bytes; Purpose = purpose; ReceiverEpoch = epoch
               IssuedAt = issued; NotAfter = deadline; IssuedMonotonic = monotonic; DeadlineMonotonic = bound; ExpectedHead = head }
-        let challenge = optional (fun () ->
+        let native () : PortableSupplierNativeProofChallenge =
+            let operation = guid ()
+            let reservation = text 64
+            let proofHead = text 64
+            let receipt = text 64
+            let lease = readDate reader
+            let id = guid ()
+            let digest = text 64
+            let bytes = text 60000
+            let epoch = guid ()
+            let issued = readDate reader
+            let deadline = readDate reader
+            let monotonic = reader.ReadInt64()
+            let bound = reader.ReadInt64()
+            let context =
+                { Original = { original with ReceiverEpoch = epoch }; OperationId = operation; ReservationDigest = reservation
+                  ProofEventHead = proofHead; NativeReceiptSha256 = receipt; HostLeaseNotAfter = lease }
+            { Context = context
+                            ChallengeId = id; Digest = digest; BytesBase64 = bytes; ReceiverEpoch = epoch
+                            IssuedAt = issued; NotAfter = deadline; IssuedMonotonic = monotonic; DeadlineMonotonic = bound }
+        let selectedNative () : PortableSupplierSelectedNativeProofChallenge =
+            if version <> SupplierJournalV4 then invalidOp "supplier-selected-native-generation"
+            let operation = guid ()
+            let reservation = text 64
+            let proofHead = text 64
+            let lease = readDate reader
+            let currentHead = text 64
+            let currentSequence = reader.ReadUInt64()
+            let id = guid ()
+            let digest = text 64
+            let bytes = text 60000
+            let epoch = guid ()
+            let issued = readDate reader
+            let deadline = readDate reader
+            let monotonic = reader.ReadInt64()
+            let bound = reader.ReadInt64()
+            let context =
+                { Original = { original with ReceiverEpoch = epoch }; OperationId = operation; ReservationDigest = reservation
+                  ProofEventHead = proofHead; HostLeaseNotAfter = lease
+                  ExpectedCurrentHead = currentHead; ExpectedCurrentSequence = currentSequence }
+            { Context = context; ChallengeId = id; Digest = digest; BytesBase64 = bytes; ReceiverEpoch = epoch
+              IssuedAt = issued; NotAfter = deadline; IssuedMonotonic = monotonic; DeadlineMonotonic = bound }
+        let pending () =
             match kind () with
             | SupplierWireV1 -> WireV1(wire ())
-            | SupplierNativeProofV1 ->
-                let operation = guid ()
-                let reservation = text 64
-                let proofHead = text 64
-                let receipt = text 64
-                let lease = readDate reader
-                let id = guid ()
-                let digest = text 64
-                let bytes = text 60000
-                let epoch = guid ()
-                let issued = readDate reader
-                let deadline = readDate reader
-                let monotonic = reader.ReadInt64()
-                let bound = reader.ReadInt64()
-                let context =
-                    { Original = original; OperationId = operation; ReservationDigest = reservation
-                      ProofEventHead = proofHead; NativeReceiptSha256 = receipt; HostLeaseNotAfter = lease }
-                NativeProofV1 { Context = context
-                                ChallengeId = id; Digest = digest; BytesBase64 = bytes; ReceiverEpoch = epoch
-                                IssuedAt = issued; NotAfter = deadline; IssuedMonotonic = monotonic; DeadlineMonotonic = bound })
+            | SupplierNativeProofV1 -> NativeProofV1(native ())
+            | SupplierSelectedNativeProofV2 -> NativeSelectedProofV2(selectedNative ())
+        let challenge = optional pending
         let ledger = [ for _ in 1 .. count 128 do
                            let kind = kind ()
                            let id = guid ()
@@ -707,11 +765,63 @@ module PortableWorkspaceExecutor =
         let ack = optional (fun () -> text 60000)
         let failure = optional (fun () -> text 4096)
         let conflicts = texts 1024 4096 |> Set.ofList
-        { JournalVersion = version; Revision = revision; Original = original
+        let custody =
+            if version <> SupplierJournalV4 then None
+            else
+                let initialEpoch = guid ()
+                let fence = reader.ReadUInt64()
+                let signedIntent = text 87384
+                let exchange () : PortableSupplierRetainedWireExchange =
+                    let accepted = reader.ReadUInt64()
+                    let acceptedFence = reader.ReadUInt64()
+                    let challenge = wire ()
+                    let request = text 87384
+                    let result = text 87384
+                    let evidence = text 87384
+                    let receiver = text 43692
+                    let controller = text 10924
+                    { AcceptedRevision = accepted; AcceptedStoreFence = acceptedFence
+                      Challenge = challenge; RequestBase64 = request; ResultBase64 = result; EvidenceBase64 = evidence
+                      ReceiverBundleBase64 = receiver; ControllerBundleBase64 = controller }
+                let creation = optional exchange
+                let exchanges = [ for _ in 1 .. count 128 -> exchange () ]
+                let acquisitions =
+                    [ for _ in 1 .. count 128 do
+                        let accepted = reader.ReadUInt64()
+                        let acceptedFence = reader.ReadUInt64()
+                        let challenge = pending ()
+                        match challenge with WireV1 _ -> invalidOp "supplier-native-acquisition-kind" | _ -> ()
+                        let request = text 87384
+                        let result = text 87384
+                        let proof = text 87384
+                        let receipt = text 43692
+                        let controller = text 10924
+                        yield { AcceptedRevision = accepted; AcceptedStoreFence = acceptedFence
+                                Challenge = challenge; RequestBase64 = request; ResultBase64 = result
+                                ProofEnvelopeBase64 = proof; ReceiptBase64 = receipt; ControllerBundleBase64 = controller } ]
+                let abandoned = [ for _ in 1 .. count 128 -> pending () ]
+                let genesis = optional (fun () -> text 21848)
+                let output = optional (fun () -> text 21848)
+                Some { OriginalReceiverEpoch = initialEpoch; StoreFence = fence; OriginalIntentEnvelopeBase64 = signedIntent
+                       CreationExchange = creation; WireExchanges = exchanges; NativeAcquisitions = acquisitions
+                       AbandonedChallenges = abandoned; GenesisCheckpointBase64 = genesis; OutputCheckpointBase64 = output }
+        { JournalVersion = version; Revision = revision; CheckpointCustody = custody; Original = original
           Phase = phase; Challenge = challenge; ChallengeLedger = ledger; Pinned = pinned; Head = head
           Sequence = sequence; EventsBase64 = events; ResponsesBase64 = responses; CheckpointBase64 = checkpoint
           AckDraftBase64 = ack; FirstFailure = failure; Conflicts = conflicts }
         |> PortableSupplierAdmission.validate |> Result.defaultWith invalidOp
+
+    let private supplierSourceBytes (state: PortableSupplierAdmissionState) =
+        use memory = new MemoryStream()
+        use writer = new BinaryWriter(memory, Encoding.UTF8, true)
+        writer.Write(match state.JournalVersion with
+                     | SupplierJournalV2 -> "fsgg.portable-execution-supplier-journal/2"
+                     | SupplierJournalV3 -> "fsgg.portable-execution-supplier-journal/3"
+                     | SupplierJournalV4 -> "fsgg.portable-execution-supplier-journal/4")
+        writeSupplier writer state
+        writer.Flush()
+        if memory.Length > int64 PortableSupplierAdmission.MaximumSupplierBytes then invalidOp "supplier-journal-size"
+        memory.ToArray()
 
     type private DurableJournal(stateRoot: string) =
         let journalRoot = Path.Combine(stateRoot, "journal-v1")
@@ -751,9 +861,10 @@ module PortableWorkspaceExecutor =
                 let entry =
                     match schema with
                     | "fsgg.portable-execution-supplier-journal/2"
-                    | "fsgg.portable-execution-supplier-journal/3" ->
+                    | "fsgg.portable-execution-supplier-journal/3"
+                    | "fsgg.portable-execution-supplier-journal/4" ->
                         if info.Length > int64 PortableSupplierAdmission.MaximumSupplierBytes then invalidOp "supplier-journal-size"
-                        PortableSupplierAdmissionDraft(readSupplier (if schema.EndsWith("/2", StringComparison.Ordinal) then SupplierJournalV2 else SupplierJournalV3) reader)
+                        PortableSupplierAdmissionDraft(readSupplier (if schema.EndsWith("/2", StringComparison.Ordinal) then SupplierJournalV2 elif schema.EndsWith("/3", StringComparison.Ordinal) then SupplierJournalV3 else SupplierJournalV4) reader)
                     | "fsgg.portable-execution-host-journal/1" -> PortableHost(readHost reader)
                     | "fsgg.portable-execution-journal/1" ->
                       match reader.ReadByte() with
@@ -773,6 +884,10 @@ module PortableWorkspaceExecutor =
                 Some entry
 
         let write path entry =
+            // /4 checks the complete candidate size before any temporary-file effect.
+            let prepared = match entry with
+                           | PortableSupplierAdmissionDraft state when state.JournalVersion = SupplierJournalV4 -> Some(supplierSourceBytes state)
+                           | _ -> None
             let temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp"
 
             try
@@ -781,8 +896,10 @@ module PortableWorkspaceExecutor =
 
                 use writer = new BinaryWriter(stream, Encoding.UTF8, true)
                 match entry with
+                | PortableSupplierAdmissionDraft state when state.JournalVersion = SupplierJournalV4 ->
+                    writer.Write(prepared.Value: byte array)
                 | PortableSupplierAdmissionDraft state ->
-                    writer.Write(match state.JournalVersion with SupplierJournalV2 -> "fsgg.portable-execution-supplier-journal/2" | SupplierJournalV3 -> "fsgg.portable-execution-supplier-journal/3")
+                    writer.Write(match state.JournalVersion with SupplierJournalV2 -> "fsgg.portable-execution-supplier-journal/2" | SupplierJournalV3 -> "fsgg.portable-execution-supplier-journal/3" | SupplierJournalV4 -> "fsgg.portable-execution-supplier-journal/4")
                     writeSupplier writer state
                 | PortableHost host ->
                     writer.Write "fsgg.portable-execution-host-journal/1"
@@ -824,6 +941,7 @@ module PortableWorkspaceExecutor =
 
                 Ok(action path)
             with
+            | SupplierSourceConflictException -> Error "supplier-source-conflict"
             | :? IOException
             | :? UnauthorizedAccessException
             | :? InvalidDataException
@@ -834,13 +952,32 @@ module PortableWorkspaceExecutor =
         member _.Read(workspaceScope, idempotencyId) =
             locked workspaceScope idempotencyId read
 
-        member _.StageSupplier(state: PortableSupplierAdmissionState, expectedRevision: uint64 option) =
+        member _.StageSupplier(state: PortableSupplierAdmissionState, expectedRevision: uint64 option, expectedFence: uint64 option) =
             locked state.Original.Command.WorkspaceScope state.Original.Command.IdempotencyId (fun path ->
                 let eligible =
                     match read path, expectedRevision with
-                    | None, None -> state.Revision = 1UL
+                    | None, None -> state.Revision = 1UL && expectedFence.IsNone
                     | Some(PortableSupplierAdmissionDraft previous), Some expected ->
                         previous.JournalVersion = state.JournalVersion
+                        && (match previous.CheckpointCustody, state.CheckpointCustody with
+                            | None, None -> expectedFence.IsNone
+                            | Some before, Some after when state.JournalVersion = SupplierJournalV4 ->
+                                expectedFence = Some before.StoreFence && before.StoreFence <> UInt64.MaxValue
+                                && after.StoreFence = before.StoreFence + 1UL
+                                && (previous.Original.ReceiverEpoch = state.Original.ReceiverEpoch
+                                    || (previous.Challenge |> Option.exists (fun challenge ->
+                                        state.Challenge.IsNone
+                                        && List.contains (challenge.Kind, challenge.ChallengeId, challenge.Digest, "abandoned") state.ChallengeLedger
+                                        && List.contains challenge after.AbandonedChallenges)))
+                                && before.OriginalReceiverEpoch = after.OriginalReceiverEpoch
+                                && before.OriginalIntentEnvelopeBase64 = after.OriginalIntentEnvelopeBase64
+                                && (before.CreationExchange |> Option.forall (fun e -> after.CreationExchange = Some e))
+                                && (after.WireExchanges |> List.truncate before.WireExchanges.Length) = before.WireExchanges
+                                && (after.NativeAcquisitions |> List.truncate before.NativeAcquisitions.Length) = before.NativeAcquisitions
+                                && (after.AbandonedChallenges |> List.truncate before.AbandonedChallenges.Length) = before.AbandonedChallenges
+                                && (before.GenesisCheckpointBase64 |> Option.forall (fun raw -> after.GenesisCheckpointBase64 = Some raw))
+                                && (before.OutputCheckpointBase64 |> Option.forall (fun raw -> after.OutputCheckpointBase64 = Some raw))
+                            | _ -> false)
                         && previous.Revision = expected && expected <> UInt64.MaxValue && state.Revision = expected + 1UL
                         && { previous.Original with ReceiverEpoch = state.Original.ReceiverEpoch } = state.Original
                         && (previous.FirstFailure |> Option.forall (fun failure -> state.FirstFailure = Some failure))
@@ -862,11 +999,25 @@ module PortableWorkspaceExecutor =
                                 && current.CreationReceiptBase64 = pinned.CreationReceiptBase64
                                 && current.ReservationBase64 = pinned.ReservationBase64)))
                     | _ -> false
-                if not eligible then invalidOp "supplier-journal-original-or-revision-conflict"
+                if not eligible then
+                    if state.JournalVersion = SupplierJournalV4 then raise SupplierSourceConflictException
+                    else invalidOp "supplier-journal-original-or-revision-conflict"
                 match state.Phase with
                 | SupplierIntentStored | SupplierCreationPinned | SupplierAwaitingGenesis | SupplierGenesisAccepted -> ()
                 | _ -> invalidOp "supplier-journal-effect-phase-unavailable"
+                let expectedBytes = if state.JournalVersion = SupplierJournalV4 then Some(supplierSourceBytes state) else None
                 write path (PortableSupplierAdmissionDraft state)
+                expectedBytes |> Option.iter (fun expected ->
+                    // New descriptor, bounded exact bytes, still under the same owner lock.
+                    use fresh = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read)
+                    if fresh.Length <> int64 expected.Length then invalidOp "supplier-source-readback-size"
+                    let actual = Array.zeroCreate<byte> expected.Length
+                    fresh.ReadExactly(actual.AsSpan())
+                    if fresh.ReadByte() <> -1 || actual <> expected then invalidOp "supplier-source-readback-mismatch"
+                    // Cold decoding invokes all structural checkpoint/reference checks again.
+                    match read path with
+                    | Some(PortableSupplierAdmissionDraft decoded) when decoded = state -> ()
+                    | _ -> invalidOp "supplier-source-cold-readback-mismatch")
                 // Flush+rename is NOT a qualified directory-durable commit. No ACK/runner receipt.
                 "supplier-admission-commit-unknown: directory durability is unavailable")
 
@@ -926,8 +1077,19 @@ module PortableWorkspaceExecutor =
                 | None -> Error "supplier-admission-journal-missing"
                 | _ -> Error "supplier-admission-journal-conflict")
         member _.Stage(state: PortableSupplierAdmissionState, expectedRevision: uint64 option) =
-            PortableSupplierAdmission.validate state
-            |> Result.bind (fun validated -> journal.StageSupplier(validated, expectedRevision))
+            if state.JournalVersion = SupplierJournalV4 then Error "supplier-v4-explicit-fence-required"
+            else
+                PortableSupplierAdmission.validate state
+                |> Result.bind (fun validated -> journal.StageSupplier(validated, expectedRevision, None))
+        /// Same-store source CAS/readback. No qualified directory barrier or capability is produced.
+        member _.StageV4(state: PortableSupplierAdmissionState, expectedRevision: uint64 option, expectedFence: uint64 option) =
+            if state.JournalVersion <> SupplierJournalV4 || (PortableSupplierAdmission.validate state |> Result.isError) then
+                SupplierSourceConflict
+            else
+                match journal.StageSupplier(state, expectedRevision, expectedFence) with
+                | Ok _ -> SupplierSourceReadback state
+                | Error "supplier-source-conflict" -> SupplierSourceConflict
+                | Error _ -> SupplierSourceCommitUnknown
 
     let private error code message retryable details =
         Some

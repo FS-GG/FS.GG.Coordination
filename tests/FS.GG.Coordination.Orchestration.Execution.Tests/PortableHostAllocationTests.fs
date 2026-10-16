@@ -421,7 +421,7 @@ module SupplierAdmissionFixtures =
           IssuedMonotonic = 100L; DeadlineMonotonic = 1000L; ExpectedHead = state.Head }
     let pending state = PortableSupplierAdmission.issueChallenge (challenge state) state |> ok
     let observation kind (state: PortableSupplierAdmissionState) : PortableSupplierTranscriptObservation =
-        let challenge = match state.Challenge.Value with WireV1 value -> value | NativeProofV1 _ -> failwith "wire fixture required"
+        let challenge = match state.Challenge.Value with WireV1 value -> value | _ -> failwith "wire fixture required"
         let event = "synthetic-event-" + Guid.NewGuid().ToString("D")
         { Kind = kind; IntentDigest = state.Original.IntentDigest; TrustPolicyDigest = state.Original.TrustPolicyDigest
           ChallengeDigest = challenge.Digest; Purpose = challenge.Purpose
@@ -840,3 +840,76 @@ type PortableHostAllocationTests_ReceiverCheckpointCodec() =
         Assert.NotEqual(hash (exact "originalIntent"), common.IntentDigest)
         Assert.True(PortableSupplierAdmission.prepareAck (SupplierAdmissionFixtures.initial ()) |> Result.isError)
         Assert.True(PortableSupplierAdmission.reserveHost (SupplierAdmissionFixtures.initial ()) |> Result.isError)
+
+/// Public lexical fixture bytes only; the opaque signature is never called authenticated.
+module SupplierCheckpointFixtures =
+    let ok = function Ok value -> value | Error error -> failwith error
+    let hash (bytes: byte array) = SHA256.HashData bytes |> Convert.ToHexString |> _.ToLowerInvariant()
+    let domain name bytes = Array.append (Encoding.ASCII.GetBytes("fsgg.v3." + name + "/1\000")) bytes |> hash
+    let corpus () =
+        let rec find (directory: DirectoryInfo) =
+            if isNull directory then failwith "checkpoint corpus missing"
+            let path = Path.Combine(directory.FullName, "contracts", "portable-workspace", "v1", "receiver-checkpoint-v2-vectors.json")
+            if File.Exists path then File.ReadAllBytes path else find directory.Parent
+        find (DirectoryInfo(AppContext.BaseDirectory)) |> fun raw -> JsonDocument.Parse(ReadOnlyMemory<byte>(raw))
+    let initial () =
+        use doc = corpus ()
+        let preimages = doc.RootElement.GetProperty("preimages")
+        let bytes name = preimages.GetProperty(name: string).GetString() |> Convert.FromBase64String
+        use intent = JsonDocument.Parse(ReadOnlyMemory<byte>(bytes "originalIntent"))
+        let value = intent.RootElement
+        let command: PortableWorkspaceCommand =
+            { CommandId = Guid.Parse "11111111-1111-1111-1111-111111111111"
+              IdempotencyId = "sample"; WorkspaceScope = "sample"; ProfileId = "sample"; ProfileRevision = 1UL
+              SourceRevision = value.GetProperty("requested_source_revision").GetString()
+              ExpectedWorkflowRevision = 1UL; FenceGeneration = 1UL; CausationId = None
+              Deadline = DateTimeOffset.Parse(value.GetProperty("command_deadline").GetString(), Globalization.CultureInfo.InvariantCulture)
+              Operation = "sample"; ComponentId = None }
+        let original =
+            { Command = command; QualifiedImage = value.GetProperty("qualified_inner_image").GetString()
+              IntentBase64 = Convert.ToBase64String(bytes "originalIntent"); IntentDigest = domain "intent" (bytes "originalIntent")
+              TrustPolicyDigest = String.replicate 64 "a"; SupplierSourceRevision = command.SourceRevision
+              ReceiverEpoch = Guid.Parse "22222222-2222-2222-2222-222222222222" }
+        PortableSupplierAdmission.beginIntentV4 original (bytes "originalIntentEnvelope") |> ok
+    let challenge (state: PortableSupplierAdmissionState) =
+        let issued = DateTimeOffset.Parse("2026-01-01T00:00:00.000000Z", Globalization.CultureInfo.InvariantCulture)
+        let exact = Encoding.ASCII.GetBytes(
+            "{\"challenge_id\":\"33333333-3333-3333-3333-333333333333\",\"challenge_nonce\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\",\"correlation_id\":\"11111111-1111-1111-1111-111111111111\",\"intent_digest\":\""
+            + state.Original.IntentDigest + "\",\"issued_at\":\"2026-01-01T00:00:00.000000Z\",\"not_after\":\"2026-01-01T00:00:30.000000Z\",\"schema\":\"fsgg.v3.creation-challenge/1\"}\n")
+        { ChallengeId = Guid.Parse "33333333-3333-3333-3333-333333333333"; Digest = domain "challenge" exact
+          BytesBase64 = Convert.ToBase64String exact; Purpose = "creation"; ReceiverEpoch = state.Original.ReceiverEpoch
+          IssuedAt = issued; NotAfter = issued.AddSeconds 30.; IssuedMonotonic = 1L; DeadlineMonotonic = 100L; ExpectedHead = None }
+
+type PortableHostAllocationTests_ReceiverCheckpointSource() =
+    [<Fact>]
+    member _.``fresh v4 retains original bytes and separate fence without creating a witness``() =
+        let initial = SupplierCheckpointFixtures.initial ()
+        Assert.Equal(SupplierJournalV4, initial.JournalVersion)
+        Assert.Equal(1UL, initial.CheckpointCustody.Value.StoreFence)
+        Assert.True(initial.CheckpointCustody.Value.GenesisCheckpointBase64.IsNone)
+        Assert.True(initial.CheckpointCustody.Value.OutputCheckpointBase64.IsNone)
+        let pending = PortableSupplierAdmission.issueChallenge (SupplierCheckpointFixtures.challenge initial) initial |> SupplierCheckpointFixtures.ok
+        Assert.Equal(2UL, pending.Revision)
+        Assert.Equal(2UL, pending.CheckpointCustody.Value.StoreFence)
+        let restarted = PortableSupplierAdmission.abandonChallenge (Guid.NewGuid()) pending |> SupplierCheckpointFixtures.ok
+        Assert.Equal(3UL, restarted.CheckpointCustody.Value.StoreFence)
+        Assert.Equal(initial.Original.ReceiverEpoch, restarted.CheckpointCustody.Value.OriginalReceiverEpoch)
+        Assert.Single(restarted.CheckpointCustody.Value.AbandonedChallenges) |> ignore
+        Assert.True(PortableSupplierAdmission.prepareAck restarted |> Result.isError)
+        Assert.True(PortableSupplierAdmission.reserveHost restarted |> Result.isError)
+
+    [<Fact>]
+    member _.``v4 refuses copied legacy state omitted custody and changed originals``() =
+        let initial = SupplierCheckpointFixtures.initial ()
+        let invalid =
+            [ { initial with CheckpointCustody = None }
+              { initial with CheckpointCustody = Some { initial.CheckpointCustody.Value with StoreFence = 2UL } }
+              { initial with Original = { initial.Original with IntentDigest = String.replicate 64 "f" } }
+              { initial with JournalVersion = SupplierJournalV3 }
+              { SupplierAdmissionFixtures.initial () with JournalVersion = SupplierJournalV4 } ]
+        for state in invalid do Assert.True(PortableSupplierAdmission.validate state |> Result.isError)
+        let malformed = { SupplierCheckpointFixtures.challenge initial with BytesBase64 = Convert.ToBase64String [| 1uy |] }
+        Assert.True(PortableSupplierAdmission.issueChallenge malformed initial |> Result.isError)
+        Assert.True(PortableSupplierAdmission.abandonChallenge (Guid.NewGuid()) initial |> Result.isError)
+        Assert.True(PortableSupplierAdmission.issueSelectedNativeProofChallengeV4 initial.Original initial.Revision 1UL
+                        (Guid.NewGuid()) DateTimeOffset.UtcNow (DateTimeOffset.UtcNow.AddSeconds 1.) 1L 2L initial |> Result.isError)

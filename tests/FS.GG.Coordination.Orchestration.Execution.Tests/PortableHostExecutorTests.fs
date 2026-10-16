@@ -1017,3 +1017,30 @@ type PortableHostExecutorTests_SupplierJournalV3() =
         for history in [ []; [ SupplierWireV1, id, digest, disposition ]; [ SupplierNativeProofV1, id, digest, "abandoned" ] ] do
             Assert.True(journal.Stage({ read with Revision = read.Revision + 1UL; ChallengeLedger = history }, Some read.Revision) |> Result.isError)
             Assert.True(File.ReadAllBytes fixture.Journal = bytes)
+
+/// Disk/source tests only: every successful stage remains durability-Unknown.
+type PortableHostExecutorTests_SupplierJournalV4() =
+    [<Fact>]
+    member _.``fresh v4 stages reopens and fences the same owned journal without a commit witness``() =
+        use fixture = new HostExecutorFixture()
+        let initial = SupplierCheckpointFixtures.initial ()
+        let journal = PortableWorkspaceExecutor.SupplierAdmissionJournal fixture.Policy.Runtime.StateRoot
+        let staged = journal.StageV4(initial, None, None)
+        match staged with SupplierSourceReadback value -> Assert.Equal(initial, value) | other -> failwithf "%A" other
+        let reopened = PortableWorkspaceExecutor.SupplierAdmissionJournal fixture.Policy.Runtime.StateRoot
+        let read, durability = reopened.Read initial.Original.Command |> SupplierCheckpointFixtures.ok
+        Assert.Equal(initial, read)
+        match durability with EvidenceUnknown _ -> () | _ -> failwith "source read cannot prove durability"
+        let pending = PortableSupplierAdmission.issueChallenge (SupplierCheckpointFixtures.challenge initial) read |> SupplierCheckpointFixtures.ok
+        Assert.Equal(SupplierSourceConflict, reopened.StageV4(pending, Some 1UL, Some 2UL))
+        match reopened.StageV4(pending, Some 1UL, Some 1UL) with
+        | SupplierSourceReadback value -> Assert.Equal(pending, value)
+        | other -> failwithf "%A" other
+        Assert.Equal(SupplierSourceConflict, reopened.StageV4(pending, Some 1UL, Some 1UL))
+        Assert.Equal(SupplierSourceConflict, reopened.StageV4(initial, None, None))
+        Assert.True(reopened.Stage(pending, Some 1UL) |> Result.isError)
+        let cold, _ = reopened.Read initial.Original.Command |> SupplierCheckpointFixtures.ok
+        Assert.Equal(pending, cold)
+        Assert.Equal(0, fixture.Runner.Runs)
+        Assert.Equal(0, fixture.Runner.Cleans)
+        Assert.Equal(0, fixture.Runner.Recoveries)
