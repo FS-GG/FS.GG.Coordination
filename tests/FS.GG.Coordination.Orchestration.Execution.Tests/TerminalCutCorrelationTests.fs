@@ -4,6 +4,7 @@ open System
 open System.Collections.Generic
 open System.Diagnostics
 open System.IO
+open System.Reflection
 open System.Runtime.ExceptionServices
 open System.Runtime.InteropServices
 open System.Security.Cryptography
@@ -91,6 +92,111 @@ module FiniteCustodyTransportTestsTerminalCutCorrelationTests =
         Assert.Equal(25738L, length) // Pinned thirteen-request source population only.
         printfn "terminal-cut-managed-capture originalRequests=%d endpointCopies=%d logicalBytes=%d" originals.Count copies.Count length
         Convert.ToHexString(digest.GetHashAndReset()).ToLowerInvariant()
+
+    // Walk fields only: public snapshot accessors deliberately allocate copies.
+    // The closed type boundary excludes fixture streams, process objects and runtime globals.
+    let private managedCensus (session: FiniteCustodySessionAdapter) (captures: (ReadOnlyMemory<byte> * byte array) array) =
+        let field name (value: obj) =
+            let found = value.GetType().GetField(name, BindingFlags.Instance ||| BindingFlags.Public ||| BindingFlags.NonPublic)
+            Assert.NotNull found
+            found.GetValue value
+        let composition = field "session" session
+        let bridge = field "bridge" session
+        let resultProtocol = field "protocol" composition
+        let callbackProtocol = field "protocol" bridge
+        let snapshots = field "retained" resultProtocol :?> PhaseResultSnapshot list
+        Assert.Equal(6, snapshots.Length)
+        Assert.Equal<int>([|1..6|], snapshots |> List.map _.Ordinal |> List.sort |> List.toArray)
+        let scoped = HashSet<obj>(ReferenceEqualityComparer.Instance)
+        let mutable payloadSliceBytes = 0
+        for snapshot in snapshots |> List.sortBy _.Ordinal do
+            let backing = field "frame" snapshot :?> byte array
+            let expected = [|1141; 972; 830; 917; 831; 991|][snapshot.Ordinal - 1]
+            Assert.Equal(expected, backing.Length)
+            Assert.True(scoped.Add backing, "snapshot backing objects must be distinct")
+            let mutable payload = Unchecked.defaultof<ArraySegment<byte>>
+            Assert.True(MemoryMarshal.TryGetArray<byte>(snapshot.OwnedPayload, &payload))
+            Assert.Same(backing, payload.Array)
+            Assert.InRange(payload.Offset, 4, backing.Length - 1)
+            Assert.InRange(payload.Count, 1, backing.Length - payload.Offset)
+            Assert.True(payload.Count < backing.Length, "payload slice length is not backing capacity")
+            payloadSliceBytes <- payloadSliceBytes + payload.Count
+        Assert.Equal(5682, scoped |> Seq.sumBy (fun value -> (value :?> byte array).Length))
+        let addArray expected owner name =
+            let bytes = field name owner :?> byte array
+            Assert.Equal(expected, bytes.Length)
+            Assert.True(scoped.Add bytes, "independently owned backing array must be distinct")
+        addArray 2048 resultProtocol "input"
+        addArray 512 callbackProtocol "input"
+        addArray 994 resultProtocol "bindingBytes"
+        addArray 994 callbackProtocol "owned"
+        let start = field "startFrame" composition :?> ReadOnlyMemory<byte>
+        let mutable startBacking = Unchecked.defaultof<ArraySegment<byte>>
+        Assert.True(MemoryMarshal.TryGetArray<byte>(start, &startBacking))
+        Assert.Equal(1123, start.Length)
+        Assert.Equal(1123, startBacking.Array.Length)
+        Assert.Equal(0, startBacking.Offset)
+        Assert.True(scoped.Add startBacking.Array)
+        let endpointArrays = HashSet<obj>(ReferenceEqualityComparer.Instance)
+        for alias, copy in captures do
+            let mutable backing = Unchecked.defaultof<ArraySegment<byte>>
+            Assert.True(MemoryMarshal.TryGetArray<byte>(alias, &backing))
+            Assert.Equal(0, backing.Offset)
+            Assert.Equal(alias.Length, backing.Array.Length)
+            Assert.True(endpointArrays.Add backing.Array)
+            Assert.True(endpointArrays.Add copy)
+        Assert.Equal(26, endpointArrays.Count)
+        Assert.All(scoped, fun value -> Assert.DoesNotContain(value, endpointArrays))
+        let seen = HashSet<obj>(ReferenceEqualityComparer.Instance)
+        let arrays = HashSet<obj>(ReferenceEqualityComparer.Instance)
+        let flags = BindingFlags.Instance ||| BindingFlags.Public ||| BindingFlags.NonPublic ||| BindingFlags.DeclaredOnly
+        let assembly = typeof<PhaseResultSnapshot>.Assembly
+        let rec walk depth (value: obj) =
+            if not (isNull value) then
+                Assert.InRange(depth, 0, 48)
+                let kind = value.GetType()
+                if kind = typeof<byte array> then
+                    arrays.Add value |> ignore
+                elif kind <> typeof<string> && not kind.IsPrimitive && not kind.IsEnum && seen.Add value then
+                    Assert.InRange(seen.Count, 1, 8192)
+                    let name = kind.FullName
+                    let admitted = kind.Assembly = assembly || kind.IsArray
+                                   || name.StartsWith("System.Threading.Tasks.", StringComparison.Ordinal)
+                                   || name.StartsWith("System.Runtime.CompilerServices.AsyncTaskMethodBuilder", StringComparison.Ordinal)
+                                   || name.StartsWith("System.Runtime.CompilerServices.TaskAwaiter", StringComparison.Ordinal)
+                                   || name.StartsWith("System.ReadOnlyMemory`", StringComparison.Ordinal)
+                                   || name.StartsWith("System.Memory`", StringComparison.Ordinal)
+                                   || name.StartsWith("System.Collections.Generic.", StringComparison.Ordinal)
+                                   || name.StartsWith("Microsoft.FSharp.Core.FSharpOption`", StringComparison.Ordinal)
+                                   || name.StartsWith("Microsoft.FSharp.Collections.FSharpList`", StringComparison.Ordinal)
+                                   || name.StartsWith("System.Tuple`", StringComparison.Ordinal)
+                    if admitted then
+                        match value with
+                        | :? Array as items ->
+                            Assert.InRange(items.Length, 0, 256)
+                            for index in 0 .. items.Length - 1 do walk (depth + 1) (items.GetValue index)
+                        | _ ->
+                            let mutable current = kind
+                            while not (isNull current) && current <> typeof<obj> do
+                                for field in current.GetFields flags do
+                                    walk (depth + 1) (field.GetValue value)
+                                current <- current.BaseType
+        walk 0 session
+        for work in session.RetainedTasks do walk 0 work
+        // Assert the discovered graph population, including its one existing request
+        // alias. No fixed byte allowance stands in for a missing root/object.
+        Assert.Equal(12, arrays.Count)
+        for value in scoped do Assert.True(arrays.Contains value, "declared backing must be reachable from live roots")
+        let aliases = arrays |> Seq.filter endpointArrays.Contains |> Seq.toArray
+        Assert.Single aliases |> ignore
+        let mutable lastRequest = Unchecked.defaultof<ArraySegment<byte>>
+        Assert.True(MemoryMarshal.TryGetArray<byte>(fst captures[12], &lastRequest))
+        Assert.Same(lastRequest.Array, aliases[0])
+        Assert.Equal(295, (aliases[0] :?> byte array).Length)
+        Assert.Equal(11, scoped.Count)
+        let capacity = scoped |> Seq.sumBy (fun value -> (value :?> byte array).Length)
+        Assert.Equal(11353, capacity)
+        printfn "terminal-cut-managed-source scopedObjects=%d backingCapacityBytes=%d snapshotCapacityBytes=5682 payloadSliceBytes=%d existingRequestAliases=%d unresolvedAckAndReaderRoots=true" scoped.Count capacity payloadSliceBytes aliases.Length
 
     [<Fact>]
     let ``same execution holds Python sixth readback across managed request aliases and copies`` () = task {
@@ -212,6 +318,7 @@ module FiniteCustodyTransportTestsTerminalCutCorrelationTests =
             let lengths = rows |> Array.map (fun row -> row.Value[1].GetInt32())
             Assert.Equal(11660, Array.sum lengths) // Scoped Python source objects only.
             let requestDigest = captureDigest requests.Captures
+            managedCensus session requests.Captures
             Assert.Equal(requestDigest, text cut "request")
             // The child remains inside its sixth readback stage while the managed
             // endpoint observes the actual supplied request memories and copies.
