@@ -175,8 +175,9 @@
         "type": "Project",
         "dependencies": {
           "Akka": "[1.5.71, )",
-          "FSharp.Core": "[10.1.302, )",
-          "FS.GG.Execution.Contracts": "[1.0.0, )"
+          "BouncyCastle.Cryptography": "[2.7.0, 2.7.0]",
+          "FS.GG.Execution.Contracts": "[0.3.0, )",
+          "FSharp.Core": "[10.1.302, )"
         }
       },
       "fs.gg.execution.contracts": {
@@ -184,6 +185,12 @@
         "dependencies": {
           "FSharp.Core": "[10.1.302, )"
         }
+      },
+      "BouncyCastle.Cryptography": {
+        "type": "CentralTransitive",
+        "requested": "[2.7.0, 2.7.0]",
+        "resolved": "2.7.0",
+        "contentHash": "U+12df8UEWHgBi04YVf/Lgi2dy3SItlIYvHjjEVa/BngCQIzDCDRBk50DDByCfDvSbe5pRNFr3b7UrVK2kMcLw=="
       }
     }
   }

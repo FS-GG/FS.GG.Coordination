@@ -53,6 +53,11 @@
         "resolved": "0.3.3",
         "contentHash": "SaS6yojDwqmy8PFCML8hiXlnSOQpO7adzrosTLbDD9paVAJk4WufteGbPhbiXiu2m4JscNhSM5joFeR9IZpF8g=="
       },
+      "BouncyCastle.Cryptography": {
+        "type": "Transitive",
+        "resolved": "2.7.0",
+        "contentHash": "U+12df8UEWHgBi04YVf/Lgi2dy3SItlIYvHjjEVa/BngCQIzDCDRBk50DDByCfDvSbe5pRNFr3b7UrVK2kMcLw=="
+      },
       "Google.Protobuf": {
         "type": "Transitive",
         "resolved": "3.30.2",
@@ -223,8 +228,9 @@
         "type": "Project",
         "dependencies": {
           "Akka": "[1.5.71, )",
-          "FSharp.Core": "[10.1.302, )",
-          "FS.GG.Execution.Contracts": "[1.0.0, )"
+          "BouncyCastle.Cryptography": "[2.7.0, 2.7.0]",
+          "FS.GG.Execution.Contracts": "[0.3.0, )",
+          "FSharp.Core": "[10.1.302, )"
         }
       },
       "fs.gg.coordination.orchestration.execution.codex": {

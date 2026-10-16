@@ -118,6 +118,11 @@
           "Reactive.Streams": "1.0.4"
         }
       },
+      "BouncyCastle.Cryptography": {
+        "type": "Transitive",
+        "resolved": "2.7.0",
+        "contentHash": "U+12df8UEWHgBi04YVf/Lgi2dy3SItlIYvHjjEVa/BngCQIzDCDRBk50DDByCfDvSbe5pRNFr3b7UrVK2kMcLw=="
+      },
       "FSharp.SystemTextJson": {
         "type": "Transitive",
         "resolved": "1.4.36",
@@ -328,8 +333,9 @@
         "type": "Project",
         "dependencies": {
           "Akka": "[1.5.71, )",
-          "FSharp.Core": "[10.1.302, )",
-          "FS.GG.Execution.Contracts": "[1.0.0, )"
+          "BouncyCastle.Cryptography": "[2.7.0, 2.7.0]",
+          "FS.GG.Execution.Contracts": "[0.3.0, )",
+          "FSharp.Core": "[10.1.302, )"
         }
       },
       "fs.gg.coordination.orchestration.execution.codex": {
@@ -384,6 +390,12 @@
           "FSharp.Core": "[10.1.302, )"
         }
       },
+      "fs.gg.execution.contracts": {
+        "type": "Project",
+        "dependencies": {
+          "FSharp.Core": "[10.1.302, )"
+        }
+      },
       "fsgg-coord-orchestration-host": {
         "type": "Project",
         "dependencies": {
@@ -396,12 +408,6 @@
           "FS.GG.Coordination.Orchestration.Pilot": "[1.0.0, )",
           "FS.GG.Coordination.Orchestration.PostgreSql": "[1.0.0, )",
           "FS.GG.Coordination.Orchestration.Runner.Protocol": "[1.0.0, )",
-          "FSharp.Core": "[10.1.302, )"
-        }
-      },
-      "fs.gg.execution.contracts": {
-        "type": "Project",
-        "dependencies": {
           "FSharp.Core": "[10.1.302, )"
         }
       }
