@@ -196,3 +196,44 @@ allocator padding, alternative cuts and uncertainty populations remain unresolve
 The new count is neither a complete population nor a revised physical-fit budget.
 `requireClosedPhysicalCopyProfile` continues to refuse. Installed custody, native
 ACK authentication, original `.103` replay/effects and `.104` remain held.
+
+### Held third ACK and pending child read
+
+The same source journey also pauses inside the third ACK `WriteAsync` call,
+for phase ordinal four, after the fixture queues phases five and six and
+before that write returns. The fifth child `ReadAsync` call has taken phase
+five from the queue but waits for ordinal four to be confirmed; phase six
+remains queued. The confirmed ordinal is still two. Both actual stream tasks
+must remain incomplete throughout inspection.
+
+At this earlier cut, the actual ACK memory exposes a 199-byte backing array
+and the pending child-read destination exposes a distinct 2,048-byte array.
+Both memories have zero offset and span their complete backing capacity.
+The ACK's binding, ordinal and phase-four frame digest identify the write.
+Neither array aliases the result parser input or any of the nine current
+callback request arrays and nine endpoint copies.
+
+The test follows named fields only: session → ports → channel endpoint →
+pending call/task → production adapter continuation/state machine. The
+production read state's `buffer` is the exact supplied read backing; its
+awaiter holds that exact read task. The production write state's `bytes`
+aliases the exact supplied ACK backing; its active awaiter holds that exact
+write task. Both states belong to the execution assembly and retain the
+same channel objects as the session's corresponding ports. Generated state
+names and field paths are asserted, with at most eight ancestor lookups;
+changed or unavailable structure fails instead of falling back to scanning.
+
+The fixture keeps one observation of each pending call and clears it when
+that call settles. Inspection references remain local and output contains
+only scalar call ordinals, capacities and assertion results. Releasing the
+hold continues the existing terminal readback correlation, eleven-array
+census, six exact slots, three ACKs, terminal confirmation and settled-task
+checks. Failure closes admission, releases the ACK hold and joins cleanup.
+
+This earlier cut does not establish that either object remains live or has
+been reclaimed at the terminal cut. Earlier ACK arrays, the one-byte callback
+reader, encoding/runtime/stream roots, uncertainty paths and the complete
+physical population remain unresolved. The observations from the two cuts
+are not a combined peak or a fit budget. Closed-profile admission, installed
+custody, native ACK authentication, original `.103` replay/effects and `.104`
+remain held.
