@@ -636,7 +636,7 @@ module FiniteCustodyTransportTestsTerminalCutCorrelationTests =
             let cut = before.RootElement
             Assert.Equal(nonce, text cut "nonce")
             Assert.Equal(bindingDigest, text cut "binding")
-            Assert.Equal("d84e66bc2eafc44b6f53e7ef0b20ed6f1477cc95", text cut "producerRevision")
+            Assert.Equal("dff1248d1a3b57ee2643155e2e59e94d55331bd5", text cut "producerRevision")
             Assert.Equal(Environment.ProcessId, cut.GetProperty("managedPid").GetInt32())
             Assert.Equal(owner.Id, cut.GetProperty("pythonPid").GetInt32())
             Assert.Equal(6, cut.GetProperty("ordinal").GetInt32())

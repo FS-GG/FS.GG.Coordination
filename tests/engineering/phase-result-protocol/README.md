@@ -325,10 +325,27 @@ original `.103` replay/effects and `.104` remain held.
 
 `FiniteCustodyClosedSource` selects `fsgg.utel-closed-source/1` without editing
 `FiniteCustodySessionAdapter.fs` or either frozen producer manifest. The separate
-`eng/utel-closed-callback-source.json` pins protected producer `ed58ca52` and its
-nine-file closed manifest. The maintained callback qualifier acquires and verifies
-that separate source checkout beside the existing `/2` and `/3` fixtures; it does
-not repin them or introduce a wire version.
+`eng/utel-closed-callback-source.json` and the selected slot pin now coherently
+select protected producer `dff1248d` (public producer successor PR #4617). The
+nine-file closed manifest is `96d9bf0e…`; slot profile
+`inert-slot-callback-pair/2` selects bundle `6a932c24…` and vectors `bf3b2649…`.
+The qualifier requires the slot and closed pins to name the same revision and
+vectors before either selected checkout is acquired. It rejects historical `/1`
+selection against the successor rather than falling forward. The separate legacy
+`eng/utel-callback-source.json` selection and all six frozen managed source roles,
+including the session adapter, stay byte-identical. No wire version changes.
+
+The actual paired Python control asserts `/2` evidence after the maintained
+thirteen-exchange/six-slot journey. The closed facade verifies the same new vector
+digest and replays that unsigned transcript with its fixed owned endpoints. The
+terminal-cut owner and managed assertion select the same protected revision and
+profile source. Its observer pin advances to the already-protected `fd1c6ab7…`
+observer: the selected-value and emission observations landed earlier in PR #4582,
+not in this adoption. The held terminal readback still requires the same sixteen
+objects and unchanged identities across release. Neither those identity checks nor
+the expanded observer infer a complete physical population or concurrent closed
+provider qualification. Hosted managed execution remains required for these
+controls; pure pin checks alone do not establish their runtime result.
 
 The public `Prepare(byte array)` accepts only the exact canonical
 profile digest and refuses with `closed-source-provider-unavailable`. Unknown,
