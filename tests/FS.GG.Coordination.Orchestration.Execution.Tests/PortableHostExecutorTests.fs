@@ -1448,7 +1448,7 @@ type PortableHostExecutorTests_ControlledAuthenticatedSource() =
                         Assert.Equal(retained,authenticated.State)
                         Assert.Equal(SupplierSourceConflict,fresh.StageControlledV4 transition)
                     else
-                        Assert.Equal<byte array>(before,File.ReadAllBytes failedPath)
+                        Assert.True((before = File.ReadAllBytes failedPath))
                         Assert.True(PortableSupplierAdmission.reverifyControlledSourceV4 current retained |> Result.isError)
                     Assert.True(PortableSupplierAdmission.prepareAck retained |> Result.isError)
                     Assert.True(PortableSupplierAdmission.reserveHost retained |> Result.isError)
