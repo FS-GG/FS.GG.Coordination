@@ -1444,12 +1444,13 @@ type PortableHostExecutorTests_ControlledAuthenticatedSource() =
                     Assert.Equal(pending.FirstFailure,retained.FirstFailure)
                     match durability with EvidenceUnknown _ -> () | _ -> failwith "failure cannot qualify directory durability"
                     if replaced then
-                        let authenticated = PortableSupplierAdmission.reverifyControlledSourceV4 current retained |> SupplierCheckpointFixtures.ok
+                        let authenticated,authenticatedDurability = fresh.ReadControlledV4(current,retained.Original,retained.Revision,retained.CheckpointCustody.Value.StoreFence) |> SupplierCheckpointFixtures.ok
                         Assert.Equal(retained,authenticated.State)
+                        match authenticatedDurability with EvidenceUnknown _ -> () | _ -> failwith "locked authentication cannot qualify durability"
                         Assert.Equal(SupplierSourceConflict,fresh.StageControlledV4 transition)
                     else
                         Assert.True((before = File.ReadAllBytes failedPath))
-                        Assert.True(PortableSupplierAdmission.reverifyControlledSourceV4 current retained |> Result.isError)
+                        Assert.True(fresh.ReadControlledV4(current,retained.Original,retained.Revision,retained.CheckpointCustody.Value.StoreFence) |> Result.isError)
                     Assert.True(PortableSupplierAdmission.prepareAck retained |> Result.isError)
                     Assert.True(PortableSupplierAdmission.reserveHost retained |> Result.isError)
                     Assert.Empty(Directory.GetFiles(failedDirectory,"*.tmp"))
@@ -1562,8 +1563,55 @@ type PortableHostExecutorTests_ControlledAuthenticatedSource() =
             Assert.Equal(state,cold)
             match durability with EvidenceUnknown _ -> () | _ -> failwith "controlled authentication cannot qualify durability"
             let at = expected.GetProperty("coldVerificationTime").GetString()
-            let readback = PortableSupplierAdmission.reverifyControlledSourceV4 (selection at false) cold |> SupplierCheckpointFixtures.ok
+            let current = selection at false
+            let fence = cold.CheckpointCustody.Value.StoreFence
+            let readback,authenticatedDurability = journal.ReadControlledV4(current,cold.Original,cold.Revision,fence) |> SupplierCheckpointFixtures.ok
             Assert.Equal(cold,readback.State)
+            match authenticatedDurability with EvidenceUnknown _ -> () | _ -> failwith "locked cold authentication cannot qualify durability"
+            let foreignOriginal = { cold.Original with ReceiverEpoch = Guid.Empty }
+            Assert.True(journal.ReadControlledV4(current,foreignOriginal,cold.Revision,fence) |> Result.isError)
+            Assert.True(journal.ReadControlledV4(current,cold.Original,cold.Revision - 1UL,fence) |> Result.isError)
+            Assert.True(journal.ReadControlledV4(current,cold.Original,cold.Revision,fence - 1UL) |> Result.isError)
+            use missingFixture = new HostExecutorFixture()
+            let missingJournal = PortableWorkspaceExecutor.SupplierAdmissionJournal missingFixture.Policy.Runtime.StateRoot
+            Assert.True(missingJournal.ReadControlledV4(current,cold.Original,cold.Revision,fence) |> Result.isError)
+            Assert.Equal(0,missingFixture.Runner.Runs)
+            Assert.Equal(0,missingFixture.Runner.Cleans)
+            Assert.Equal(0,missingFixture.Runner.Recoveries)
+            let directory = Path.Combine(fixture.Policy.Runtime.StateRoot,"journal-v1")
+            let recordPath = Directory.GetFiles(directory,"*.bin") |> Array.exactlyOne
+            let lockPath = Directory.GetFiles(directory,"*.lock") |> Array.exactlyOne
+            let deniedWhileLocked =
+                use owner = new FileStream(lockPath,FileMode.Open,FileAccess.ReadWrite,FileShare.None)
+                journal.ReadControlledV4(current,cold.Original,cold.Revision,fence)
+            Assert.True(deniedWhileLocked |> Result.isError)
+            let unlocked,_ = journal.ReadControlledV4(current,cold.Original,cold.Revision,fence) |> SupplierCheckpointFixtures.ok
+            Assert.Equal(cold,unlocked.State)
+            let recordBytes = File.ReadAllBytes recordPath
+            Assert.True(recordBytes[0] < 128uy)
+            // An overlong BinaryReader length prefix decodes to the same typed state, but
+            // is not the exact canonical record selected by the existing serializer.
+            let overlongHeader = Array.concat [ [| recordBytes[0] ||| 128uy; 0uy |]; recordBytes[1..] ]
+            for equivalent,damaged in
+                [ false,recordBytes[..recordBytes.Length - 2]
+                  false,Array.append recordBytes [| 0uy |]
+                  false,Array.append [| 0uy |] recordBytes[1..]
+                  true,overlongHeader ] do
+                use damagedFixture = new HostExecutorFixture()
+                let damagedDirectory = Path.Combine(damagedFixture.Policy.Runtime.StateRoot,"journal-v1")
+                Directory.CreateDirectory damagedDirectory |> ignore
+                let damagedPath = Path.Combine(damagedDirectory,Path.GetFileName recordPath)
+                File.WriteAllBytes(damagedPath,damaged)
+                let damagedJournal = PortableWorkspaceExecutor.SupplierAdmissionJournal damagedFixture.Policy.Runtime.StateRoot
+                if equivalent then
+                    let structural,_ = damagedJournal.Read cold.Original.Command |> SupplierCheckpointFixtures.ok
+                    Assert.Equal(cold,structural)
+                Assert.True(damagedJournal.ReadControlledV4(current,cold.Original,cold.Revision,fence) |> Result.isError)
+                Assert.True((damaged = File.ReadAllBytes damagedPath))
+                Assert.Empty(Directory.GetFiles(damagedDirectory,"*.tmp"))
+                Assert.Equal(0,damagedFixture.Runner.Runs)
+                Assert.Equal(0,damagedFixture.Runner.Cleans)
+                Assert.Equal(0,damagedFixture.Runner.Recoveries)
             let custody = cold.CheckpointCustody.Value
             let checkpoint = custody.OutputCheckpointBase64.Value |> Convert.FromBase64String |> Encoding.ASCII.GetString
             let relabelled = checkpoint.Replace("\"controlled-test\"","\"qualified-production\"") |> Encoding.ASCII.GetBytes |> Convert.ToBase64String
@@ -1580,7 +1628,7 @@ type PortableHostExecutorTests_ControlledAuthenticatedSource() =
                 let structural = { cold with Pinned = Some changed }
                 Assert.True(PortableSupplierAdmission.validate structural |> Result.isOk)
                 Assert.True(PortableSupplierAdmission.reverifyControlledSourceV4 (selection at false) structural |> Result.isError)
-            Assert.True(PortableSupplierAdmission.reverifyControlledSourceV4 (selection at true) cold |> Result.isError)
+            Assert.True(journal.ReadControlledV4(selection at true,cold.Original,cold.Revision,fence) |> Result.isError)
             let observations: (PortableSupplierControlledCurrentObservation -> PortableSupplierControlledCurrentObservation) list =
                 [ (fun current -> { current with SelectionObservedAt = current.VerifiedAt.AddTicks 10L })
                   (fun current -> { current with SelectionObservedAt = current.VerifiedAt.AddSeconds(-31.) })
@@ -1589,11 +1637,11 @@ type PortableHostExecutorTests_ControlledAuthenticatedSource() =
                   (fun current -> { current with ReceiverMonotonic = -1L })
                   (fun current -> { current with HostClock = { current.HostClock with Revision = current.HostClock.Revision + 1UL } }) ]
             for observation in observations do
-                Assert.True(PortableSupplierAdmission.reverifyControlledSourceV4 (selectionWith id observation at false) cold |> Result.isError)
+                Assert.True(journal.ReadControlledV4(selectionWith id observation at false,cold.Original,cold.Revision,fence) |> Result.isError)
             for policyChange in
                 [ List.filter (fun (policy: PortableSupplierControlledRolePolicy) -> policy.Role <> NativeProofSignature)
                   List.map (fun (policy: PortableSupplierControlledRolePolicy) -> if policy.Role = NativeProofSignature then { policy with Revocation = ControlledRevocationUnavailable } else policy) ] do
-                Assert.True(PortableSupplierAdmission.reverifyControlledSourceV4 (selectionWith policyChange id at false) cold |> Result.isError)
+                Assert.True(journal.ReadControlledV4(selectionWith policyChange id at false,cold.Original,cold.Revision,fence) |> Result.isError)
             Assert.True(PortableSupplierAdmission.prepareAck readback.State |> Result.isError)
             Assert.True(PortableSupplierAdmission.reserveHost readback.State |> Result.isError)
             Assert.Equal(0,fixture.Runner.Runs)

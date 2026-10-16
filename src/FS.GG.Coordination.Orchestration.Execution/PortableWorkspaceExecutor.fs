@@ -1087,6 +1087,28 @@ module PortableWorkspaceExecutor =
         member _.Read(workspaceScope, idempotencyId) =
             locked workspaceScope idempotencyId read
 
+        member _.ReadControlledSupplier(selection: PortableSupplierControlledSourceSelection, original: PortableSupplierAdmissionOriginal,
+                                        expectedRevision: uint64, expectedFence: uint64)
+            : Result<PortableSupplierAuthenticatedSourceReadback * PortableEvidence<unit>, string> =
+            locked original.Command.WorkspaceScope original.Command.IdempotencyId (fun path ->
+                match read path with
+                | Some(PortableSupplierAdmissionDraft state)
+                    when state.JournalVersion = SupplierJournalV4 && state.Original = original && state.Revision = expectedRevision
+                         && (state.CheckpointCustody |> Option.exists (fun custody -> custody.StoreFence = expectedFence)) ->
+                    // Bind the cold value to exact canonical current-record bytes under this same owner lock.
+                    let expected = supplierSourceBytes state
+                    use fresh = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read)
+                    if fresh.Length <> int64 expected.Length then invalidOp "supplier-source-readback-size"
+                    let actual = Array.zeroCreate<byte> expected.Length
+                    fresh.ReadExactly(actual.AsSpan())
+                    if fresh.ReadByte() <> -1 || actual <> expected then invalidOp "supplier-source-readback-mismatch"
+                    // Current controlled selection and every retained signature are checked before releasing the lock.
+                    PortableSupplierAdmission.reverifyControlledSourceV4 selection state
+                    |> Result.map (fun verified -> verified, EvidenceUnknown "supplier directory durability unqualified")
+                | None -> Error "supplier-admission-journal-missing"
+                | _ -> Error "supplier-source-conflict")
+            |> Result.bind id
+
         member _.StageSupplier(state: PortableSupplierAdmissionState, expectedRevision: uint64 option, expectedFence: uint64 option) =
             locked state.Original.Command.WorkspaceScope state.Original.Command.IdempotencyId (fun path ->
                 let eligible =
@@ -1220,6 +1242,12 @@ module PortableWorkspaceExecutor =
                 | Some(PortableSupplierAdmissionDraft state) -> Ok(state, EvidenceUnknown "supplier directory durability unqualified")
                 | None -> Error "supplier-admission-journal-missing"
                 | _ -> Error "supplier-admission-journal-conflict")
+        /// Fresh current-/4 read and real cold authentication under the existing owner lock.
+        /// The result authenticates a source snapshot only; it is not a live commit or ACK witness.
+        member _.ReadControlledV4(selection: PortableSupplierControlledSourceSelection, original: PortableSupplierAdmissionOriginal,
+                                  expectedRevision: uint64, expectedFence: uint64)
+            : Result<PortableSupplierAuthenticatedSourceReadback * PortableEvidence<unit>, string> =
+            journal.ReadControlledSupplier(selection, original, expectedRevision, expectedFence)
         member _.Stage(state: PortableSupplierAdmissionState, expectedRevision: uint64 option) =
             if state.JournalVersion = SupplierJournalV4 then Error "supplier-v4-explicit-fence-required"
             else
