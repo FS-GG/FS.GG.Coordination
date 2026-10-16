@@ -620,3 +620,56 @@ let ``scoped aggregate fixture rejects incomplete receipts and full donor use`` 
     Assert.True(child.ExitCode = 0, $"scoped fixture exit {child.ExitCode}\nstdout:\n{output}\nstderr:\n{error}")
     Assert.Contains("OPTIMISTIC_SCOPED_AGGREGATE_OK", output)
     Assert.Equal("", error)
+
+[<Theory>]
+[<InlineData("detach-formal")>]
+[<InlineData("bypass-formal-success")>]
+[<InlineData("allow-build-failure")>]
+[<InlineData("publish-failed-build")>]
+[<InlineData("move-preflight-after-upload")>]
+let ``coherent source prerequisite rejects actual job dominance mutations`` mutation =
+    let root = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../.."))
+    let scratch = Directory.CreateTempSubdirectory("fsgg-preflight-projection-")
+    try
+        for relative in [ "eng/optimistic-qualification-plan.json"; "eng/quint-qualification.json"; ".github/workflows/optimistic-parallel-validation.yml" ] do
+            let destination = Path.Combine(scratch.FullName, relative)
+            Directory.CreateDirectory(Path.GetDirectoryName destination) |> ignore
+            File.Copy(Path.Combine(root, relative), destination)
+        let path = Path.Combine(scratch.FullName, ".github/workflows/optimistic-parallel-validation.yml")
+        let original = File.ReadAllText path
+        let source = "      - name: Run early source compile and focused tests\n        env:\n          FSGG_CANDIDATE_SHA: ${{ needs.prepare.outputs.candidate }}\n        run: bash eng/bootstrap-gates/source-preflight.sh\n"
+        let changed =
+            match mutation with
+            | "detach-formal" ->
+                original.Replace("  formal-prepare:\n    needs: [prepare, classify-reuse, shared-build]", "  formal-prepare:\n    needs: [prepare, classify-reuse]")
+            | "bypass-formal-success" ->
+                original.Replace("  formal-prepare:\n", "  formal-prepare:\n    if: ${{ always() }}\n")
+            | "allow-build-failure" ->
+                original.Replace("        run: bash eng/bootstrap-gates/source-preflight.sh", "        continue-on-error: true\n        run: bash eng/bootstrap-gates/source-preflight.sh")
+            | "publish-failed-build" ->
+                original.Replace("      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a\n        with:\n          name: shared-build-${{ needs.prepare.outputs.candidate }}", "      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a\n        if: ${{ always() }}\n        with:\n          name: shared-build-${{ needs.prepare.outputs.candidate }}")
+            | _ ->
+                original.Replace(source, "").Replace("\n  formal-prepare:", "\n" + source + "\n  formal-prepare:")
+        Assert.NotEqual<string>(original, changed)
+        File.WriteAllText(path, changed)
+        let code, _, error = BootstrapCi.execute [ "optimistic-projection"; "--root"; scratch.FullName ]
+        Assert.NotEqual(0, code)
+        Assert.Contains("rule=source-preflight-", error)
+    finally
+        scratch.Delete(true)
+
+[<Fact>]
+let ``source preflight inert orchestration controls refuse failed or unknown qualification`` () =
+    let root = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../.."))
+    let startInfo = ProcessStartInfo("python3")
+    startInfo.WorkingDirectory <- root
+    for argument in [ "-I"; "-B"; "eng/tests/source-preflight/test_source_preflight.py" ] do
+        startInfo.ArgumentList.Add(argument)
+    startInfo.RedirectStandardOutput <- true
+    startInfo.RedirectStandardError <- true
+    startInfo.UseShellExecute <- false
+    use child = Process.Start startInfo
+    let output = child.StandardOutput.ReadToEnd()
+    let error = child.StandardError.ReadToEnd()
+    child.WaitForExit()
+    Assert.True(child.ExitCode = 0, output + error)

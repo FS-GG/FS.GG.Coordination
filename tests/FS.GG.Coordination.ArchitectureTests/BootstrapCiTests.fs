@@ -1972,3 +1972,29 @@ let ``compiler gate owns pinned native collector manager behavior`` () =
     Assert.False(valid runner (harness.Replace("ResponsesInstallationTests.dll", "missing-responses")))
     Assert.False(valid runner (harness.Replace("--locked-mode", "--force")))
     Assert.False(valid runner (harness.Replace("--warnaserror", "--no-warn")))
+
+[<Theory>]
+[<InlineData("remove-preflight")>]
+[<InlineData("allow-failure")>]
+[<InlineData("bypass-success")>]
+[<InlineData("detach-dependent")>]
+let ``early source qualification rejects fanout and success bypass mutations`` mutation =
+    withWorkflowMutation
+        (fun path ->
+            let original = File.ReadAllText path
+            let changed =
+                match mutation with
+                | "remove-preflight" ->
+                    original.Replace("        run: bash eng/bootstrap-gates/source-preflight.sh", "        run: echo skipped")
+                | "allow-failure" ->
+                    original.Replace("        run: bash eng/bootstrap-gates/source-preflight.sh", "        continue-on-error: true\n        run: bash eng/bootstrap-gates/source-preflight.sh")
+                | "bypass-success" ->
+                    original.Replace("    if: ${{ needs.reuse-decision.outputs.route == 'execute' }}", "    if: ${{ always() && needs.reuse-decision.outputs.route == 'execute' }}")
+                | _ ->
+                    original.Replace("    needs: [reuse-decision]\n", "    needs: []\n")
+            Assert.NotEqual<string>(original, changed)
+            File.WriteAllText(path, changed))
+        (fun root ->
+            let code, _, error = runBootstrap root [ "workflow" ]
+            Assert.NotEqual(0, code)
+            Assert.Contains("rule=source-preflight-", error))
