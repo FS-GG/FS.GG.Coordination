@@ -299,8 +299,9 @@ no claim about other encoding allocations. Diagnostic storage is not a
 protocol subtotal. Reference identity checks distinguish every selected
 array between adapters and fields, and from the prior eleven selected
 backings, one callback-read backing and twenty-six request/capture arrays.
-Same-length replacement arrays cannot satisfy the retained-field identity
-checks. The fixed field set, concrete adapter/array types, endpoint joins
+A same-length array substituted for the observed reference fails identity
+with the actual retained adapter field. No initial-allocation identity or
+replacement history is asserted. The fixed field set, concrete adapter/array types, endpoint joins
 and capacities are assertions; unavailable or changed structure refuses.
 
 Qualification records the actual loaded framework/runtime version, core
