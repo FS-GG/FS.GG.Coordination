@@ -46,7 +46,9 @@ cases because mutation fixtures omitted the validator's initial Bootstrap contra
 and an existing assertion expected an obsolete comment. The repaired fixtures prove
 an unmutated positive witness before each mutation, and these selected CI contracts
 now run before runtime cohorts or callback source preparation. No full suite is
-added to the early gate.
+added to the early gate. Literal line/job checks retain the typed core's no-regex
+constraint. Existing shell budgets remain unchanged; the shared preflight script has
+its own 160-line cap, checked in the selected early architecture cohort.
 
 The coherent build artifact remains candidate-named and limited to the current run.
 The preflight script and callback/census inputs participate in qualification-plan
