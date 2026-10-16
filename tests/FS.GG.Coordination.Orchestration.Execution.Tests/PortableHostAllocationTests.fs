@@ -739,18 +739,18 @@ type PortableHostAllocationTests_SelectedManifest() =
                 Assert.Equal(text "sha256", Convert.ToHexString(SHA256.HashData bytes).ToLowerInvariant())
                 Assert.Equal(text "byteCount", string bytes.Length)
             let result = PortableSupplierManifest.validateSelection selection raw
-            Assert.True(Result.isOk result = row.GetProperty("structuralAccept").GetBoolean(), text "name")
+            Assert.True((Result.isOk result = row.GetProperty("structuralAccept").GetBoolean()), text "name")
             match result with
             | Ok (Some value) ->
                 let bytes = raw.Value
-                Assert.True(bytes = PortableSupplierManifest.serialize value, text "name")
+                Assert.True((bytes = PortableSupplierManifest.serialize value), text "name")
                 let summary = PortableSupplierManifest.summary value
                 let expected = row.GetProperty("summary")
                 Assert.Equal(expected.GetProperty("digest").GetString(), summary.Digest)
                 Assert.Equal(expected.GetProperty("member_count").GetString(), string summary.MemberCount)
                 Assert.Equal(expected.GetProperty("total_bytes").GetString(), string summary.TotalBytes)
                 let recreated = PortableSupplierManifest.members value |> PortableSupplierManifest.create |> ok
-                Assert.True(bytes = PortableSupplierManifest.serialize recreated)
+                Assert.True((bytes = PortableSupplierManifest.serialize recreated))
                 // Both inbound and returned buffers are caller-owned; neither can mutate retained data.
                 bytes.[0] <- 0uy
                 let outbound = PortableSupplierManifest.serialize value
