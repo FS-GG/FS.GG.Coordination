@@ -421,7 +421,7 @@ module SupplierAdmissionFixtures =
           IssuedMonotonic = 100L; DeadlineMonotonic = 1000L; ExpectedHead = state.Head }
     let pending state = PortableSupplierAdmission.issueChallenge (challenge state) state |> ok
     let observation kind (state: PortableSupplierAdmissionState) : PortableSupplierTranscriptObservation =
-        let challenge = state.Challenge.Value
+        let challenge = match state.Challenge.Value with WireV1 value -> value | NativeProofV1 _ -> failwith "wire fixture required"
         let event = "synthetic-event-" + Guid.NewGuid().ToString("D")
         { Kind = kind; IntentDigest = state.Original.IntentDigest; TrustPolicyDigest = state.Original.TrustPolicyDigest
           ChallengeDigest = challenge.Digest; Purpose = challenge.Purpose
@@ -513,7 +513,7 @@ type PortableHostAllocationTests_SupplierAdmission() =
         let restarted = PortableSupplierAdmission.abandonChallenge (Guid.NewGuid()) state |> SupplierAdmissionFixtures.ok
         Assert.Equal(state.Original.IntentBase64, restarted.Original.IntentBase64)
         Assert.Equal(state.Original.Command, restarted.Original.Command)
-        Assert.Equal("abandoned", restarted.ChallengeLedger.Head |> fun (_, _, value) -> value)
+        Assert.Equal("abandoned", restarted.ChallengeLedger.Head |> fun (_, _, _, value) -> value)
         Assert.True(PortableSupplierAdmission.accept verified restarted |> Result.isError)
         let fresh = SupplierAdmissionFixtures.pending restarted
         let fake = { new IPortableSupplierTranscriptAuthenticator with member _.Authenticate _ = Ok(SupplierAdmissionFixtures.observation SupplierCreation fresh) }
@@ -530,7 +530,7 @@ type PortableHostAllocationTests_SupplierAdmission() =
         Assert.True(held.FirstFailure.IsSome)
         Assert.True(PortableSupplierAdmission.issueChallenge (SupplierAdmissionFixtures.challenge held) held |> Result.isError)
         Assert.True(PortableSupplierAdmission.validate { original with EventsBase64 = List.replicate 1025 (SupplierAdmissionFixtures.b64 "x") } |> Result.isError)
-        Assert.True(PortableSupplierAdmission.validate { original with ChallengeLedger = List.replicate 129 (Guid.NewGuid(), String.replicate 64 "a", "consumed") } |> Result.isError)
+        Assert.True(PortableSupplierAdmission.validate { original with ChallengeLedger = List.replicate 129 (SupplierWireV1, Guid.NewGuid(), String.replicate 64 "a", "consumed") } |> Result.isError)
         Assert.True(PortableSupplierAdmission.issueChallenge (SupplierAdmissionFixtures.challenge original) { original with Revision = UInt64.MaxValue } |> Result.isError)
 
     [<Fact>]
@@ -585,5 +585,124 @@ type PortableHostAllocationTests_SupplierAdmission() =
         let changedPinned = { p with EventsBase64 = p.EventsBase64 @ [SupplierAdmissionFixtures.b64 "one-more-copy"] }
         Assert.True(PortableSupplierAdmission.validate { boundary with Pinned = Some changedPinned } |> Result.isError)
         let expandedChallenge = String.replicate 45000 "x"
-        let changedPending = { genesis.Challenge.Value with BytesBase64 = SupplierAdmissionFixtures.b64 expandedChallenge; Digest = SupplierAdmissionFixtures.domain "challenge" expandedChallenge }
-        Assert.True(PortableSupplierAdmission.validate { boundary with Challenge = Some changedPending } |> Result.isError)
+        let wire = match genesis.Challenge.Value with WireV1 value -> value | _ -> failwith "wire fixture required"
+        let changedPending = { wire with BytesBase64 = SupplierAdmissionFixtures.b64 expandedChallenge; Digest = SupplierAdmissionFixtures.domain "challenge" expandedChallenge }
+        Assert.True(PortableSupplierAdmission.validate { boundary with Challenge = Some(WireV1 changedPending) } |> Result.isError)
+
+// Caller assertions and canonical bytes only; no real host, nonce generator or clock is enrolled.
+module SupplierNativeProofFixtures =
+    let hash (bytes: byte array) = SHA256.HashData bytes |> Convert.ToHexString |> _.ToLowerInvariant()
+    let native (state: PortableSupplierAdmissionState) : PortableSupplierNativeProofChallenge =
+        let context =
+            { Original = state.Original; OperationId = Guid.Parse "55555555-5555-5555-5555-555555555555"
+              ReservationDigest = String.replicate 64 "c"; ProofEventHead = String.replicate 64 "d"
+              NativeReceiptSha256 = String.replicate 64 "e"; HostLeaseNotAfter = SupplierAdmissionFixtures.at 90. }
+        let id = Guid.Parse "66666666-6666-6666-6666-666666666666"
+        let text =
+            sprintf "{\"challenge_id\":\"%s\",\"intent_digest\":\"%s\",\"issued_at\":\"2026-01-01T00:00:01.000000Z\",\"native_receipt_sha256\":\"%s\",\"not_after\":\"2026-01-01T00:00:30.000000Z\",\"operation_id\":\"%s\",\"profile\":\"signed-hold-v1\",\"proof_event_head\":\"%s\",\"receiver_epoch\":\"%s\",\"reservation_digest\":\"%s\",\"schema\":\"fsgg.v3.native-proof-challenge/1\"}\n"
+                (id.ToString("D")) state.Original.IntentDigest context.NativeReceiptSha256 (context.OperationId.ToString("D"))
+                context.ProofEventHead (state.Original.ReceiverEpoch.ToString("D")) context.ReservationDigest
+        let bytes = Encoding.ASCII.GetBytes text
+        { Context = context; ChallengeId = id; Digest = hash bytes; BytesBase64 = Convert.ToBase64String bytes
+          ReceiverEpoch = state.Original.ReceiverEpoch; IssuedAt = SupplierAdmissionFixtures.at 1.
+          NotAfter = SupplierAdmissionFixtures.at 30.; IssuedMonotonic = 100L; DeadlineMonotonic = 1000L }
+    let initial () = SupplierAdmissionFixtures.original () |> PortableSupplierAdmission.beginIntentV3 |> SupplierAdmissionFixtures.ok
+    let pending state =
+        let challenge = native state
+        PortableSupplierAdmission.issueNativeProofChallenge challenge.Context challenge state |> SupplierAdmissionFixtures.ok
+    let dispose disposition (state: PortableSupplierAdmissionState) =
+        let pending = state.Challenge.Value
+        { state with Revision = state.Revision + 1UL; Challenge = None
+                     ChallengeLedger = (pending.Kind, pending.ChallengeId, pending.Digest, disposition) :: state.ChallengeLedger }
+
+type PortableHostAllocationTests_TypedSupplierChallenge() =
+    [<Fact>]
+    member _.``native raw digest and exact C1 remain distinct from wire authentication``() =
+        let state = SupplierNativeProofFixtures.initial ()
+        let native = SupplierNativeProofFixtures.native state
+        let pending = SupplierNativeProofFixtures.pending state
+        Assert.Equal(Some(NativeProofV1 native), pending.Challenge)
+        Assert.NotEqual(native.Context.OperationId, state.Original.Command.CommandId)
+        let mutable calls = 0
+        let authenticator = { new IPortableSupplierTranscriptAuthenticator with member _.Authenticate _ = calls <- calls + 1; Error "must not run" }
+        Assert.True(PortableSupplierAdmission.verify authenticator (SupplierAdmissionFixtures.at 3.) 200L pending [| 1uy |] |> Result.isError)
+        Assert.Equal(0, calls)
+        Assert.True(PortableSupplierAdmission.prepareAck pending |> Result.isError)
+        Assert.True(PortableSupplierAdmission.reserveHost pending |> Result.isError)
+        let text = Convert.FromBase64String native.BytesBase64 |> Encoding.ASCII.GetString
+        let wireHash = SupplierAdmissionFixtures.domain "challenge" text
+        Assert.NotEqual(wireHash, native.Digest)
+        Assert.True(PortableSupplierAdmission.issueNativeProofChallenge native.Context { native with Digest = wireHash } state |> Result.isError)
+        let wire = { SupplierAdmissionFixtures.challenge state with BytesBase64 = native.BytesBase64; Digest = native.Digest }
+        Assert.True(PortableSupplierAdmission.issueChallenge wire state |> Result.isError)
+
+    [<Fact>]
+    member _.``native exact canonical bytes refuse alternate encodings and context changes``() =
+        let state = SupplierNativeProofFixtures.initial ()
+        let native = SupplierNativeProofFixtures.native state
+        let text = Convert.FromBase64String native.BytesBase64 |> Encoding.ASCII.GetString
+        let damaged =
+            [ text.TrimEnd('\n'); text + "\n"; text.Replace("signed-hold-v1", "other-profile")
+              text.Replace("000000Z", "000Z"); text.Replace("{", "{\"unknown\":\"x\", ")
+              text.Replace("{", "{\"schema\":\"duplicate\","); text.Replace("\"profile\":\"signed-hold-v1\"", "\"profile\":1")
+              text.Replace("\"challenge_id\":", " \"challenge_id\":"); text.Replace("fsgg.v3.native-proof-challenge/1", "fsgg.v3.challenge/1") ]
+        for value in damaged do
+            let bytes = Encoding.ASCII.GetBytes value
+            let changed = { native with BytesBase64 = Convert.ToBase64String bytes; Digest = SupplierNativeProofFixtures.hash bytes }
+            Assert.True(PortableSupplierAdmission.issueNativeProofChallenge native.Context changed state |> Result.isError)
+        for context in
+            [ { native.Context with OperationId = Guid.NewGuid() }; { native.Context with ReservationDigest = String.replicate 64 "f" }
+              { native.Context with ProofEventHead = String.replicate 64 "f" }; { native.Context with NativeReceiptSha256 = String.replicate 64 "f" }
+              { native.Context with Original = { state.Original with IntentDigest = String.replicate 64 "f" } } ] do
+            Assert.True(PortableSupplierAdmission.issueNativeProofChallenge context native state |> Result.isError)
+        for changed in
+            [ { native with ReceiverEpoch = Guid.NewGuid() }; { native with ChallengeId = Guid.Empty }
+              { native with NotAfter = SupplierAdmissionFixtures.at 101. }; { native with IssuedAt = native.IssuedAt.AddTicks 1L }
+              { native with Context = { native.Context with HostLeaseNotAfter = SupplierAdmissionFixtures.at 20. } }
+              { native with IssuedMonotonic = -1L }; { native with DeadlineMonotonic = 100L }
+              { native with BytesBase64 = Convert.ToBase64String(Array.zeroCreate<byte> 45001) } ] do
+            Assert.True(PortableSupplierAdmission.issueNativeProofChallenge changed.Context changed state |> Result.isError)
+
+    [<Theory>]
+    [<InlineData(false, "consumed")>]
+    [<InlineData(false, "abandoned")>]
+    [<InlineData(true, "consumed")>]
+    [<InlineData(true, "abandoned")>]
+    member _.``shared history rejects nonce reuse across both kinds``(nativeFirst: bool, disposition: string) =
+        let state = SupplierNativeProofFixtures.initial ()
+        let native = SupplierNativeProofFixtures.native state
+        let wire = { SupplierAdmissionFixtures.challenge state with ChallengeId = native.ChallengeId }
+        let pending =
+            if nativeFirst then SupplierNativeProofFixtures.pending state
+            else PortableSupplierAdmission.issueChallenge wire state |> SupplierAdmissionFixtures.ok
+        let disposed = SupplierNativeProofFixtures.dispose disposition pending
+        PortableSupplierAdmission.validate disposed |> SupplierAdmissionFixtures.ok |> ignore
+        Assert.True(PortableSupplierAdmission.issueChallenge wire disposed |> Result.isError)
+        Assert.True(PortableSupplierAdmission.issueNativeProofChallenge native.Context native disposed |> Result.isError)
+        let changedKind = if nativeFirst then SupplierWireV1 else SupplierNativeProofV1
+        let collision = { disposed with ChallengeLedger = (changedKind, native.ChallengeId, native.Digest, disposition) :: disposed.ChallengeLedger }
+        Assert.True(PortableSupplierAdmission.validate collision |> Result.isError)
+
+    [<Fact>]
+    member _.``native restart retains abandoned exact identity and original bounds``() =
+        let pending = SupplierNativeProofFixtures.initial () |> SupplierNativeProofFixtures.pending
+        let native = match pending.Challenge.Value with NativeProofV1 value -> value | _ -> failwith "native expected"
+        let restarted = PortableSupplierAdmission.abandonChallenge (Guid.NewGuid()) pending |> SupplierAdmissionFixtures.ok
+        Assert.Contains((SupplierNativeProofV1, native.ChallengeId, native.Digest, "abandoned"), restarted.ChallengeLedger)
+        Assert.Equal(None, restarted.Challenge)
+        Assert.Equal(pending.Original.Command.Deadline, restarted.Original.Command.Deadline)
+        Assert.True(PortableSupplierAdmission.abandonChallenge Guid.Empty pending |> Result.isError)
+        Assert.True(PortableSupplierAdmission.abandonChallenge pending.Original.ReceiverEpoch pending |> Result.isError)
+        Assert.True(PortableSupplierAdmission.issueNativeProofChallenge native.Context native restarted |> Result.isError)
+        Assert.True(PortableSupplierAdmission.validate { pending with JournalVersion = SupplierJournalV2 } |> Result.isError)
+        Assert.True(PortableSupplierAdmission.validate { restarted with JournalVersion = SupplierJournalV2 } |> Result.isError)
+
+    [<Fact>]
+    member _.``native proof event is explicit and can precede the latest wire head``() =
+        let genesis = { SupplierAdmissionFixtures.genesis () with JournalVersion = SupplierJournalV3 }
+        let native = SupplierNativeProofFixtures.native genesis
+        Assert.NotEqual(genesis.Head, Some native.Context.ProofEventHead)
+        let pending = PortableSupplierAdmission.issueNativeProofChallenge native.Context native genesis |> SupplierAdmissionFixtures.ok
+        Assert.Equal(genesis.Head, pending.Head)
+        Assert.True(PortableSupplierAdmission.issueChallenge (SupplierAdmissionFixtures.challenge pending) pending |> Result.isError)
+        Assert.True(PortableSupplierAdmission.issueNativeProofChallenge native.Context native pending |> Result.isError)

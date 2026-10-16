@@ -541,14 +541,28 @@ module PortableWorkspaceExecutor =
         text 4096 state.Original.QualifiedImage; text 60000 state.Original.IntentBase64
         text 64 state.Original.IntentDigest; text 64 state.Original.TrustPolicyDigest
         text 4096 state.Original.SupplierSourceRevision; text 36 (state.Original.ReceiverEpoch.ToString("D"))
-        optional (fun (challenge: PortableSupplierAdmissionChallenge) ->
+        let wire (challenge: PortableSupplierAdmissionChallenge) =
             text 36 (challenge.ChallengeId.ToString("D")); text 64 challenge.Digest; text 60000 challenge.BytesBase64
             text 64 challenge.Purpose; text 36 (challenge.ReceiverEpoch.ToString("D"))
             writeDate writer challenge.IssuedAt; writeDate writer challenge.NotAfter
             writer.Write challenge.IssuedMonotonic; writer.Write challenge.DeadlineMonotonic
-            optional (text 64) challenge.ExpectedHead) state.Challenge
+            optional (text 64) challenge.ExpectedHead
+        optional (fun pending ->
+            if state.JournalVersion = SupplierJournalV3 then writer.Write(match pending with WireV1 _ -> 0uy | NativeProofV1 _ -> 1uy)
+            match pending with
+            | WireV1 challenge -> wire challenge
+            | NativeProofV1 challenge ->
+                text 36 (challenge.Context.OperationId.ToString("D"))
+                text 64 challenge.Context.ReservationDigest; text 64 challenge.Context.ProofEventHead
+                text 64 challenge.Context.NativeReceiptSha256; writeDate writer challenge.Context.HostLeaseNotAfter
+                text 36 (challenge.ChallengeId.ToString("D")); text 64 challenge.Digest; text 60000 challenge.BytesBase64
+                text 36 (challenge.ReceiverEpoch.ToString("D"))
+                writeDate writer challenge.IssuedAt; writeDate writer challenge.NotAfter
+                writer.Write challenge.IssuedMonotonic; writer.Write challenge.DeadlineMonotonic) state.Challenge
         writer.Write state.ChallengeLedger.Length
-        for id, digest, disposition in state.ChallengeLedger do text 36 (id.ToString("D")); text 64 digest; text 16 disposition
+        for kind, id, digest, disposition in state.ChallengeLedger do
+            if state.JournalVersion = SupplierJournalV3 then writer.Write(match kind with SupplierWireV1 -> 0uy | SupplierNativeProofV1 -> 1uy)
+            text 36 (id.ToString("D")); text 64 digest; text 16 disposition
         optional observation state.Pinned
         optional (text 64) state.Head; writer.Write state.Sequence
         for values in [state.EventsBase64; state.ResponsesBase64] do
@@ -559,7 +573,7 @@ module PortableWorkspaceExecutor =
         writer.Write state.Conflicts.Count
         state.Conflicts |> Seq.iter (text 4096)
 
-    let private readSupplier (reader: BinaryReader) =
+    let private readSupplier version (reader: BinaryReader) =
         let text maximum =
             let length = reader.ReadInt32()
             if length < 0 || length > maximum || int64 length > reader.BaseStream.Length - reader.BaseStream.Position then
@@ -568,7 +582,15 @@ module PortableWorkspaceExecutor =
             let value = UTF8Encoding(false, true).GetString bytes
             if Encoding.UTF8.GetBytes(value) <> bytes then invalidOp "supplier-journal-text"
             value
-        let optional read = if reader.ReadBoolean() then Some(read()) else None
+        let optional read =
+            let present = reader.ReadByte()
+            if version = SupplierJournalV3 && present > 1uy then invalidOp "supplier-journal-optional-tag"
+            if present <> 0uy then Some(read()) else None
+        let guid () =
+            let value = text 36
+            let parsed = Guid.ParseExact(value, "D")
+            if version = SupplierJournalV3 && parsed.ToString("D") <> value then invalidOp "supplier-journal-uuid"
+            parsed
         let count maximum =
             let n = reader.ReadInt32()
             if n < 0 || n > maximum then invalidOp "supplier-journal-count"
@@ -619,26 +641,63 @@ module PortableWorkspaceExecutor =
         let intentDigest = text 64
         let policy = text 64
         let source = text 4096
-        let epoch = Guid.ParseExact(text 36, "D")
-        let challenge = optional (fun () ->
-            let id = Guid.ParseExact(text 36, "D")
+        let epoch = guid ()
+        let original: PortableSupplierAdmissionOriginal =
+            { Command = command
+              QualifiedImage = image
+              IntentBase64 = intent
+              IntentDigest = intentDigest
+              TrustPolicyDigest = policy
+              SupplierSourceRevision = source
+              ReceiverEpoch = epoch }
+        let kind () =
+            if version = SupplierJournalV2 then SupplierWireV1
+            else match reader.ReadByte() with
+                 | 0uy -> SupplierWireV1 | 1uy -> SupplierNativeProofV1
+                 | _ -> invalidOp "supplier-challenge-kind"
+        let wire () : PortableSupplierAdmissionChallenge =
+            let id = guid ()
             let digest = text 64
             let bytes = text 60000
             let purpose = text 64
-            let epoch = Guid.ParseExact(text 36, "D")
+            let epoch = guid ()
             let issued = readDate reader
             let deadline = readDate reader
             let monotonic = reader.ReadInt64()
             let bound = reader.ReadInt64()
             let head = optional (fun () -> text 64)
             { ChallengeId = id; Digest = digest; BytesBase64 = bytes; Purpose = purpose; ReceiverEpoch = epoch
-              IssuedAt = issued; NotAfter = deadline; IssuedMonotonic = monotonic; DeadlineMonotonic = bound; ExpectedHead = head })
+              IssuedAt = issued; NotAfter = deadline; IssuedMonotonic = monotonic; DeadlineMonotonic = bound; ExpectedHead = head }
+        let challenge = optional (fun () ->
+            match kind () with
+            | SupplierWireV1 -> WireV1(wire ())
+            | SupplierNativeProofV1 ->
+                let operation = guid ()
+                let reservation = text 64
+                let proofHead = text 64
+                let receipt = text 64
+                let lease = readDate reader
+                let id = guid ()
+                let digest = text 64
+                let bytes = text 60000
+                let epoch = guid ()
+                let issued = readDate reader
+                let deadline = readDate reader
+                let monotonic = reader.ReadInt64()
+                let bound = reader.ReadInt64()
+                let context =
+                    { Original = original; OperationId = operation; ReservationDigest = reservation
+                      ProofEventHead = proofHead; NativeReceiptSha256 = receipt; HostLeaseNotAfter = lease }
+                NativeProofV1 { Context = context
+                                ChallengeId = id; Digest = digest; BytesBase64 = bytes; ReceiverEpoch = epoch
+                                IssuedAt = issued; NotAfter = deadline; IssuedMonotonic = monotonic; DeadlineMonotonic = bound })
         let ledger = [ for _ in 1 .. count 128 do
-                           let id = Guid.ParseExact(text 36, "D")
+                           let kind = kind ()
+                           let id = guid ()
                            let digest = text 64
                            let disposition = text 16
                            if disposition <> "consumed" && disposition <> "abandoned" then invalidOp "supplier-challenge-disposition"
-                           yield id, digest, disposition ]
+                           yield kind, id, digest, disposition ]
         let pinned = optional observation
         let head = optional (fun () -> text 64)
         let sequence = reader.ReadUInt64()
@@ -648,15 +707,7 @@ module PortableWorkspaceExecutor =
         let ack = optional (fun () -> text 60000)
         let failure = optional (fun () -> text 4096)
         let conflicts = texts 1024 4096 |> Set.ofList
-        let original: PortableSupplierAdmissionOriginal =
-            { Command = command
-              QualifiedImage = image
-              IntentBase64 = intent
-              IntentDigest = intentDigest
-              TrustPolicyDigest = policy
-              SupplierSourceRevision = source
-              ReceiverEpoch = epoch }
-        { Revision = revision; Original = original
+        { JournalVersion = version; Revision = revision; Original = original
           Phase = phase; Challenge = challenge; ChallengeLedger = ledger; Pinned = pinned; Head = head
           Sequence = sequence; EventsBase64 = events; ResponsesBase64 = responses; CheckpointBase64 = checkpoint
           AckDraftBase64 = ack; FirstFailure = failure; Conflicts = conflicts }
@@ -699,9 +750,10 @@ module PortableWorkspaceExecutor =
                 let schema = reader.ReadString()
                 let entry =
                     match schema with
-                    | "fsgg.portable-execution-supplier-journal/2" ->
+                    | "fsgg.portable-execution-supplier-journal/2"
+                    | "fsgg.portable-execution-supplier-journal/3" ->
                         if info.Length > int64 PortableSupplierAdmission.MaximumSupplierBytes then invalidOp "supplier-journal-size"
-                        PortableSupplierAdmissionDraft(readSupplier reader)
+                        PortableSupplierAdmissionDraft(readSupplier (if schema.EndsWith("/2", StringComparison.Ordinal) then SupplierJournalV2 else SupplierJournalV3) reader)
                     | "fsgg.portable-execution-host-journal/1" -> PortableHost(readHost reader)
                     | "fsgg.portable-execution-journal/1" ->
                       match reader.ReadByte() with
@@ -730,7 +782,7 @@ module PortableWorkspaceExecutor =
                 use writer = new BinaryWriter(stream, Encoding.UTF8, true)
                 match entry with
                 | PortableSupplierAdmissionDraft state ->
-                    writer.Write "fsgg.portable-execution-supplier-journal/2"
+                    writer.Write(match state.JournalVersion with SupplierJournalV2 -> "fsgg.portable-execution-supplier-journal/2" | SupplierJournalV3 -> "fsgg.portable-execution-supplier-journal/3")
                     writeSupplier writer state
                 | PortableHost host ->
                     writer.Write "fsgg.portable-execution-host-journal/1"
@@ -788,15 +840,16 @@ module PortableWorkspaceExecutor =
                     match read path, expectedRevision with
                     | None, None -> state.Revision = 1UL
                     | Some(PortableSupplierAdmissionDraft previous), Some expected ->
-                        previous.Revision = expected && expected <> UInt64.MaxValue && state.Revision = expected + 1UL
+                        previous.JournalVersion = state.JournalVersion
+                        && previous.Revision = expected && expected <> UInt64.MaxValue && state.Revision = expected + 1UL
                         && { previous.Original with ReceiverEpoch = state.Original.ReceiverEpoch } = state.Original
                         && (previous.FirstFailure |> Option.forall (fun failure -> state.FirstFailure = Some failure))
                         && Set.isSubset previous.Conflicts state.Conflicts
                         && (previous.ChallengeLedger |> List.forall (fun entry -> List.contains entry state.ChallengeLedger))
                         && (previous.Challenge |> Option.forall (fun challenge ->
                             state.Challenge = Some challenge
-                            || (state.ChallengeLedger |> List.exists (fun (id, digest, disposition) ->
-                                id = challenge.ChallengeId && digest = challenge.Digest
+                            || (state.ChallengeLedger |> List.exists (fun (kind, id, digest, disposition) ->
+                                kind = challenge.Kind && id = challenge.ChallengeId && digest = challenge.Digest
                                 && (disposition = "consumed" || disposition = "abandoned")))))
                         && (state.EventsBase64 |> List.truncate previous.EventsBase64.Length) = previous.EventsBase64
                         && (state.ResponsesBase64 |> List.truncate previous.ResponsesBase64.Length) = previous.ResponsesBase64
