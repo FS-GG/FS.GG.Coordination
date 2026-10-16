@@ -272,3 +272,50 @@ a complete simultaneous population or a fit budget. Other runtime/stream,
 encoding, caller/backend/peer and uncertainty populations remain unresolved.
 Closed-profile admission stays refused; installed custody, native ACK,
 original `.103` replay/effects and `.104` remain held.
+
+### Process stdio adapter roots at terminal readback
+
+At the same held ordinal-six readback, the test follows the actual Python
+`Process` through its `_standardInput`, `_standardOutput` and `_standardError`
+text adapters. Their `_stream` fields identify the exact request-wrapper
+and response-observer targets, and the separate diagnostic stderr stream.
+The actual diagnostic task is the stderr reader's `_asyncReadTask`; it is
+pending during inspection. The callback read remains pending with its
+existing exact task/state/buffer joins.
+
+Only each adapter's `_byteBuffer` and `_charBuffer` fields are selected.
+The complete six-field observation contains five distinct arrays and one
+absent optional writer buffer in the qualified source journey:
+
+| Adapter | Ownership | Byte-array capacity | Character elements |
+| --- | --- | --- | --- |
+| stdin writer | Protocol transport | Buffer absent | 4,096 |
+| stdout reader | Protocol transport | 4,096 | 4,097 |
+| stderr reader | Diagnostic transport | 4,096 | 4,097 |
+
+Character element counts are separate from byte-array capacities. The
+absent optional writer buffer is not populated for measurement and supplies
+no claim about other encoding allocations. Diagnostic storage is not a
+protocol subtotal. Reference identity checks distinguish every selected
+array between adapters and fields, and from the prior eleven selected
+backings, one callback-read backing and twenty-six request/capture arrays.
+Same-length replacement arrays cannot satisfy the retained-field identity
+checks. The fixed field set, concrete adapter/array types, endpoint joins
+and capacities are assertions; unavailable or changed structure refuses.
+
+Qualification records the actual loaded framework/runtime version, core
+and Process assembly informational versions and module identities. The SDK
+pin or a public runtime tag does not establish those loaded bytes. The
+initial local observation used .NET 10.0.12; hosted qualification records
+its own runtime metadata. This witness supports the observed .NET 10 field
+shape and does not establish other runtime compatibility.
+
+The observation performs no stream read, flush, encoding or GC operation.
+Existing diagnostic consumption and callback transport continue through
+their original owners. Inspection references remain local; output contains
+scalar roles, counts and runtime metadata. Terminal correlation, Python
+resampling, six exact slots, three ACKs, observation clearing and joined
+cleanup remain required. These additional roots do not establish complete
+physical population, reclamation or fit. The earlier ACK/child-read cut
+remains separate. Closed-profile admission, installed custody, native ACK,
+original `.103` replay/effects and `.104` remain held.

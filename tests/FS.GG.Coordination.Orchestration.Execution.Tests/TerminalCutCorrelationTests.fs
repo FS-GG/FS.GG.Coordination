@@ -118,6 +118,7 @@ module FiniteCustodyTransportTestsTerminalCutCorrelationTests =
         let gate = obj()
         let captures = ResizeArray<ReadOnlyMemory<byte> * byte array>()
         member _.Captures = lock gate (fun () -> captures.ToArray())
+        member _.Target = target
         override _.CanRead = false
         override _.CanSeek = false
         override _.CanWrite = true
@@ -420,6 +421,92 @@ module FiniteCustodyTransportTestsTerminalCutCorrelationTests =
         Assert.False(read.Underlying.IsCompleted)
         printfn "terminal-cut-callback-read-source backingCapacityBytes=%d memoryLength=%d offset=%d exactAwaiterJoins=true distinctFromSelected11AndEndpoint26=true" backing.Array.Length read.Buffer.Length backing.Offset }
 
+    // Observe only the selected Process/text-adapter fields. No read, flush,
+    // encoding or collection is performed to expose or populate these buffers.
+    let private stdioCensus (owner: Process) (diagnostic: Task<string>) (requests: CapturingOutput) (responses: ObservingInput) (selected: HashSet<obj>) (captures: (ReadOnlyMemory<byte> * byte array) array) =
+        let field name (value: obj) =
+            Assert.NotNull value
+            let found = value.GetType().GetField(name, BindingFlags.Instance ||| BindingFlags.NonPublic)
+            Assert.NotNull found
+            found.GetValue value
+        Assert.IsType<Process>(owner) |> ignore
+        let input = Assert.IsType<StreamWriter>(field "_standardInput" owner)
+        let output = Assert.IsType<StreamReader>(field "_standardOutput" owner)
+        let error = Assert.IsType<StreamReader>(field "_standardError" owner)
+        Assert.Same(owner.StandardInput, input)
+        Assert.Same(owner.StandardOutput, output)
+        Assert.Same(owner.StandardError, error)
+        Assert.NotSame(output, error)
+        Assert.Same(requests.Target, field "_stream" input)
+        Assert.Same(responses.Target, field "_stream" output)
+        Assert.Same(owner.StandardError.BaseStream, field "_stream" error)
+        Assert.NotSame(field "_stream" input, field "_stream" output)
+        Assert.NotSame(field "_stream" output, field "_stream" error)
+        Assert.NotSame(field "_stream" input, field "_stream" error)
+        Assert.False(diagnostic.IsCompleted)
+        Assert.Same(diagnostic, field "_asyncReadTask" error)
+        let read = responses.PendingRead.Value
+        Assert.False(read.Work.Value.IsCompleted)
+        Assert.False(read.Underlying.IsCompleted)
+        let mutable callback = Unchecked.defaultof<ArraySegment<byte>>
+        Assert.True(MemoryMarshal.TryGetArray<byte>(Memory<byte>.op_Implicit read.Buffer, &callback))
+        Assert.Equal(1, callback.Array.Length)
+        Assert.Equal(11, selected.Count)
+        let existing = HashSet<obj>(selected, ReferenceEqualityComparer.Instance)
+        Assert.True(existing.Add callback.Array)
+        for alias, copy in captures do
+            let mutable request = Unchecked.defaultof<ArraySegment<byte>>
+            Assert.True(MemoryMarshal.TryGetArray<byte>(alias, &request))
+            Assert.True(existing.Add request.Array)
+            Assert.True(existing.Add copy)
+        Assert.Equal(38, existing.Count)
+        let observed = HashSet<obj>(ReferenceEqualityComparer.Instance)
+        let add value =
+            Assert.False(existing.Contains value, "stdio backing must not alias prior selected/callback/endpoint backings")
+            Assert.True(observed.Add value, "stdio buffers must be distinct between adapters and fields")
+        let rows = [| "stdin", "protocol", input :> obj, 4096
+                      "stdout", "protocol", output :> obj, 4097
+                      "stderr", "diagnostic", error :> obj, 4097 |]
+        Assert.Equal(3, rows.Length)
+        let mutable selectedFields = 0
+        for name, ownership, adapter, expectedChars in rows do
+            let byteBuffer = field "_byteBuffer" adapter
+            let charBuffer = Assert.IsType<char array>(field "_charBuffer" adapter)
+            selectedFields <- selectedFields + 2
+            Assert.Same(field "_charBuffer" adapter, charBuffer)
+            Assert.Equal(expectedChars, charBuffer.Length)
+            add charBuffer
+            let byteCapacity =
+                if name = "stdin" then
+                    Assert.Null byteBuffer // Observe the unallocated optional buffer; do not populate it.
+                    None
+                else
+                    let bytes = Assert.IsType<byte array>(byteBuffer)
+                    Assert.Same(field "_byteBuffer" adapter, bytes)
+                    Assert.Equal(4096, bytes.Length)
+                    add bytes
+                    Some bytes.Length
+            printfn "terminal-cut-stdio-source adapter=%s ownership=%s byteBufferPresent=%b byteCapacity=%d charElements=%d" name ownership byteCapacity.IsSome (defaultArg byteCapacity 0) charBuffer.Length
+        Assert.Equal(6, selectedFields)
+        Assert.Equal(5, observed.Count)
+        Assert.Equal(10, Environment.Version.Major)
+        let core = typeof<obj>.Assembly
+        let processAssembly = typeof<Process>.Assembly
+        Assert.Equal("System.Private.CoreLib", core.GetName().Name)
+        Assert.Equal("System.Diagnostics.Process", processAssembly.GetName().Name)
+        Assert.Equal(10, core.GetName().Version.Major)
+        Assert.Equal(10, processAssembly.GetName().Version.Major)
+        let metadata (assembly: Assembly) =
+            let version = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()
+            Assert.NotNull version
+            Assert.False(String.IsNullOrWhiteSpace version.InformationalVersion)
+            version.InformationalVersion
+        printfn "terminal-cut-stdio-runtime framework=%s version=%O coreMvid=%O processMvid=%O coreInformational=%s processInformational=%s" RuntimeInformation.FrameworkDescription Environment.Version core.ManifestModule.ModuleVersionId processAssembly.ManifestModule.ModuleVersionId (metadata core) (metadata processAssembly)
+        Assert.Same(read, responses.PendingRead.Value)
+        Assert.False(read.Work.Value.IsCompleted)
+        Assert.False(read.Underlying.IsCompleted)
+        Assert.False(diagnostic.IsCompleted)
+
     [<Fact>]
     let ``same execution holds Python sixth readback across managed request aliases and copies`` () = task {
         let sourceRoot = Environment.GetEnvironmentVariable "FSGG_UTEL_CALLBACK_SOURCE"
@@ -562,7 +649,9 @@ module FiniteCustodyTransportTestsTerminalCutCorrelationTests =
             let lengths = rows |> Array.map (fun row -> row.Value[1].GetInt32())
             Assert.Equal(11660, Array.sum lengths) // Scoped Python source objects only.
             let requestDigest = captureDigest requests.Captures
-            do! callbackReadCensus session responses owner.StandardOutput.BaseStream (managedCensus session requests.Captures) requests.Captures
+            let selected = managedCensus session requests.Captures
+            do! callbackReadCensus session responses owner.StandardOutput.BaseStream selected requests.Captures
+            stdioCensus owner diagnostic requests responses selected requests.Captures
             Assert.Equal(requestDigest, text cut "request")
             // The child remains inside its sixth readback stage while the managed
             // endpoint observes the actual supplied request memories and copies.
