@@ -3845,21 +3845,6 @@ module PortableSupplierAdmission =
                                 validate complete |> Result.map SupplierCheckpointData)
                     else validate candidate |> Result.map SupplierCheckpointData)
 
-    /// Explicit structural caller: signatures are supplied by the separate transcript-verifier port.
-    /// The retained pair and all cold joins are checked here; no authenticated/durable result escapes.
-    let pinCreationV4 (verified: PortableSupplierVerifiedTranscript) exchange original revision fence state =
-        try
-            if verified.Observation.Kind <> SupplierCreation then Error "supplier-v4-creation-required"
-            else retainWireV4 verified exchange original revision fence state
-        with _ -> Error "supplier-v4-creation-refused"
-
-    /// Genesis and every later wire exchange share the existing reducer and owned byte custody.
-    let acceptWireV4 (verified: PortableSupplierVerifiedTranscript) exchange original revision fence state =
-        try
-            if verified.Observation.Kind = SupplierCreation then Error "supplier-v4-wire-required"
-            else retainWireV4 verified exchange original revision fence state
-        with _ -> Error "supplier-v4-wire-refused"
-
     /// Quarantine the first encountered failed/uncertain exchange in the existing authority record.
     /// The pending challenge remains sticky; these bytes can only produce a held source state.
     let quarantineExchangeV4 original revision fence reason (request: string) (frames: string list)
@@ -3889,6 +3874,36 @@ module PortableSupplierAdmission =
                         validate { proposed with CheckpointCustody = Some { custody with RejectedExchanges = [rejected] } }
                         |> Result.map SupplierCheckpointHeld))
         with _ -> Error "supplier-v4-quarantine-refused"
+
+    // Before accepting supplied pair bytes, keep CAS/original/pending conflicts distinct.
+    // After that boundary every failed join is retained through the existing sticky hold.
+    let private acceptRetainedWireV4 verified (exchange: PortableSupplierRetainedWireExchange) original revision fence state =
+        if not (expectedV4 original revision fence state) then Error "supplier-v4-original-revision-fence-refused"
+        elif state.Challenge <> Some(WireV1 exchange.Challenge) then Error "supplier-v4-exchange-challenge-refused"
+        else
+            let quarantine () =
+                quarantineExchangeV4 original revision fence "supplier-context-refused" exchange.RequestBase64
+                    [exchange.ResultBase64;exchange.EvidenceBase64] (Some exchange.ReceiverBundleBase64) (Some exchange.ControllerBundleBase64) state
+            try
+                match retainWireV4 verified exchange original revision fence state with
+                | Ok accepted -> Ok accepted
+                | Error _ -> quarantine ()
+            with _ -> quarantine ()
+
+    /// Explicit structural caller: signatures are supplied by the separate transcript-verifier port.
+    /// The retained pair and all cold joins are checked here; no authenticated/durable result escapes.
+    let pinCreationV4 (verified: PortableSupplierVerifiedTranscript) exchange original revision fence state =
+        try
+            if verified.Observation.Kind <> SupplierCreation then Error "supplier-v4-creation-required"
+            else acceptRetainedWireV4 verified exchange original revision fence state
+        with _ -> Error "supplier-v4-creation-refused"
+
+    /// Genesis and every later wire exchange share the existing reducer and owned byte custody.
+    let acceptWireV4 (verified: PortableSupplierVerifiedTranscript) exchange original revision fence state =
+        try
+            if verified.Observation.Kind = SupplierCreation then Error "supplier-v4-wire-required"
+            else acceptRetainedWireV4 verified exchange original revision fence state
+        with _ -> Error "supplier-v4-wire-refused"
 
     /// Full structural native/output join. A real current-signature/policy factory must precede authenticated use.
     /// No native, durable, ACK or effect capability is produced by this source caller.

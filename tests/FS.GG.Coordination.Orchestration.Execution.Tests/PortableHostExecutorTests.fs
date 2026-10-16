@@ -1128,6 +1128,56 @@ type PortableHostExecutorTests_SupplierJournalV4() =
             Assert.Equal(0,fixture.Runner.Recoveries)
 
     [<Fact>]
+    member _.``wire pair join failures retain supplied bytes and first cause through same store reopen``() =
+        use corpus = SupplierCheckpointFixtures.journey ()
+        for creationInput in [true;false] do
+            use fixture = new HostExecutorFixture()
+            let journal = PortableWorkspaceExecutor.SupplierAdmissionJournal fixture.Policy.Runtime.StateRoot
+            let stage (state: PortableSupplierAdmissionState) =
+                let expected = if state.Revision = 1UL then None else Some(state.Revision - 1UL)
+                match journal.StageV4(state,expected,expected) with
+                | SupplierSourceReadback actual -> Assert.Equal(state,actual)
+                | other -> failwithf "%A" other
+                state
+            let initial = SupplierCheckpointFixtures.initial () |> stage
+            let ready =
+                if creationInput then initial
+                else
+                    let pair = SupplierCheckpointFixtures.exchange "creation" initial
+                    PortableSupplierAdmission.issueChallenge pair.Challenge initial |> SupplierCheckpointFixtures.ok |> stage |> ignore
+                    SupplierCheckpointFixtures.pinCreation initial |> stage
+            let kind,name = if creationInput then SupplierCreation,"creation" else SupplierGenesis,"genesis"
+            let pair = SupplierCheckpointFixtures.exchange name ready
+            let pending = PortableSupplierAdmission.issueChallenge pair.Challenge ready |> SupplierCheckpointFixtures.ok |> stage
+            let verified = SupplierCheckpointFixtures.verifyControlledFrom corpus.RootElement kind pair pending
+            // The exact response is valid; its supplied paired result is another request envelope.
+            let mismatched = { pair with ResultBase64 = pair.RequestBase64 }
+            let accept = if creationInput then PortableSupplierAdmission.pinCreationV4 else PortableSupplierAdmission.acceptWireV4
+            let held =
+                match accept verified mismatched pending.Original pending.Revision pending.CheckpointCustody.Value.StoreFence pending |> SupplierCheckpointFixtures.ok with
+                | SupplierCheckpointHeld value -> stage value
+                | _ -> failwith "failed paired join must retain a hold"
+            let cold,durability = journal.Read pending.Original.Command |> SupplierCheckpointFixtures.ok
+            Assert.Equal(held,cold)
+            match durability with EvidenceUnknown _ -> () | _ -> failwith "source read cannot qualify durability"
+            Assert.Equal(Some "supplier-context-refused",cold.FirstFailure)
+            Assert.Equal(pending.Challenge,cold.Challenge)
+            let rejected = cold.CheckpointCustody.Value.RejectedExchanges |> List.exactlyOne
+            Assert.Equal(mismatched.RequestBase64,rejected.RequestBase64)
+            Assert.Equal<string list>([mismatched.ResultBase64;mismatched.EvidenceBase64],rejected.FramesBase64)
+            let abandoned = PortableSupplierAdmission.abandonChallenge (Guid.NewGuid()) cold |> SupplierCheckpointFixtures.ok |> stage
+            let reopened,_ = journal.Read abandoned.Original.Command |> SupplierCheckpointFixtures.ok
+            Assert.Equal(abandoned,reopened)
+            Assert.Equal(cold.FirstFailure,reopened.FirstFailure)
+            Assert.Equal<PortableSupplierRejectedExchange list>(cold.CheckpointCustody.Value.RejectedExchanges,reopened.CheckpointCustody.Value.RejectedExchanges)
+            Assert.True(reopened.Challenge.IsNone)
+            Assert.True(PortableSupplierAdmission.prepareAck reopened |> Result.isError)
+            Assert.True(PortableSupplierAdmission.reserveHost reopened |> Result.isError)
+            Assert.Equal(0,fixture.Runner.Runs)
+            Assert.Equal(0,fixture.Runner.Cleans)
+            Assert.Equal(0,fixture.Runner.Recoveries)
+
+    [<Fact>]
     member _.``native pending anchors cannot be swapped and first rejected frames survive abandonment and cold reopen``() =
         use corpus = SupplierCheckpointFixtures.journey ()
         for row in corpus.RootElement.GetProperty("outputJourneys").EnumerateArray() do
