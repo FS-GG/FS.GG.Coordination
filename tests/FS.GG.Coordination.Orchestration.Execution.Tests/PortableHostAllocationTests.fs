@@ -706,3 +706,71 @@ type PortableHostAllocationTests_TypedSupplierChallenge() =
         Assert.Equal(genesis.Head, pending.Head)
         Assert.True(PortableSupplierAdmission.issueChallenge (SupplierAdmissionFixtures.challenge pending) pending |> Result.isError)
         Assert.True(PortableSupplierAdmission.issueNativeProofChallenge native.Context native pending |> Result.isError)
+
+/// Shared exact bytes exercise the actual companion codec, independently of the Python qualifier.
+type PortableHostAllocationTests_SelectedManifest() =
+    let ok = function Ok value -> value | Error reason -> failwith reason
+    let corpusPath () =
+        // The hosted test runs in the source checkout; no new project-content wildcard is needed.
+        let rec find (directory: DirectoryInfo) =
+            if isNull directory then failwith "selected-manifest corpus absent from source checkout"
+            else
+                let path = Path.Combine(directory.FullName, "contracts", "portable-workspace", "v1", "supplier-selected-manifest-v1-vectors.json")
+                if File.Exists path then path else find directory.Parent
+        find (DirectoryInfo(AppContext.BaseDirectory))
+
+    [<Fact>]
+    member _.``selected manifest matches immutable exact bytes and refusal corpus``() =
+        use corpus = JsonDocument.Parse(File.ReadAllBytes(corpusPath ()))
+        for row in corpus.RootElement.GetProperty("cases").EnumerateArray() do
+            let text key = row.GetProperty(key).GetString()
+            let raw =
+                if row.GetProperty("bytesBase64").ValueKind = JsonValueKind.Null then None
+                else Some (Convert.FromBase64String(text "bytesBase64"))
+            let selectionElement = row.GetProperty("selection")
+            let selection =
+                if selectionElement.GetProperty("kind").GetString() = "none" then NoSelectedOutputs
+                else
+                    SelectedOutputs
+                        { Digest = selectionElement.GetProperty("digest").GetString()
+                          MemberCount = UInt64.Parse(selectionElement.GetProperty("member_count").GetString())
+                          TotalBytes = UInt64.Parse(selectionElement.GetProperty("total_bytes").GetString()) }
+            for bytes in raw |> Option.toList do
+                Assert.Equal(text "sha256", Convert.ToHexString(SHA256.HashData bytes).ToLowerInvariant())
+                Assert.Equal(text "byteCount", string bytes.Length)
+            let result = PortableSupplierManifest.validateSelection selection raw
+            Assert.True(Result.isOk result = row.GetProperty("structuralAccept").GetBoolean(), text "name")
+            match result with
+            | Ok (Some value) ->
+                let bytes = raw.Value
+                Assert.True(bytes = PortableSupplierManifest.serialize value, text "name")
+                let summary = PortableSupplierManifest.summary value
+                let expected = row.GetProperty("summary")
+                Assert.Equal(expected.GetProperty("digest").GetString(), summary.Digest)
+                Assert.Equal(expected.GetProperty("member_count").GetString(), string summary.MemberCount)
+                Assert.Equal(expected.GetProperty("total_bytes").GetString(), string summary.TotalBytes)
+                let recreated = PortableSupplierManifest.members value |> PortableSupplierManifest.create |> ok
+                Assert.True(bytes = PortableSupplierManifest.serialize recreated)
+                // Both inbound and returned buffers are caller-owned; neither can mutate retained data.
+                bytes.[0] <- 0uy
+                let outbound = PortableSupplierManifest.serialize value
+                outbound.[0] <- 0uy
+                Assert.Equal(123uy, (PortableSupplierManifest.serialize value).[0])
+                Assert.Equal(summary, PortableSupplierManifest.summary value)
+            | _ -> ()
+
+    [<Fact>]
+    member _.``manifest parsing supplies neither durable export nor census ack or handoff``() =
+        let memberValue = { Bytes = 0UL; Path = "a"; Sha256 = String.replicate 64 "a" }
+        let value = PortableSupplierManifest.create [memberValue] |> ok
+        let selected = SelectedOutputs (PortableSupplierManifest.summary value)
+        Assert.True(PortableSupplierManifest.validateSelection selected (Some (PortableSupplierManifest.serialize value)) |> Result.isOk)
+        Assert.True(PortableSupplierManifest.validateSelection NoSelectedOutputs None |> Result.isOk)
+        for selection in [selected; NoSelectedOutputs] do
+            let original = { HostFixtures.reservation with Selection = selection }
+            let decision = PortableHostAllocation.retirement (HostFixtures.at 70.) original PortableHostAllocation.emptyLifecycle
+            Assert.NotEqual(HostEligible, decision.OutputDeletion)
+            Assert.NotEqual(EvidenceKnown (), decision.ReservationRelease)
+        let original = SupplierAdmissionFixtures.initial ()
+        Assert.True(PortableSupplierAdmission.prepareAck original |> Result.isError)
+        Assert.True(PortableSupplierAdmission.reserveHost original |> Result.isError)
