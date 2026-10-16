@@ -870,7 +870,10 @@ module SupplierCheckpointFixtures =
               IntentBase64 = Convert.ToBase64String(bytes "originalIntent"); IntentDigest = domain "intent" (bytes "originalIntent")
               TrustPolicyDigest = String.replicate 64 "a"; SupplierSourceRevision = command.SourceRevision
               ReceiverEpoch = Guid.Parse "22222222-2222-2222-2222-222222222222" }
-        PortableSupplierAdmission.beginIntentV4 original (bytes "originalIntentEnvelope") |> ok
+        let scope = Encoding.ASCII.GetBytes "{\"enumeration\":\"entire-source-root\",\"excluded_engine\":[],\"owner_gid\":\"1000\",\"owner_uid\":\"1000\",\"profile\":\"signed-hold-v1\",\"revision\":\"1\",\"role\":\"native-source\",\"schema\":\"fsgg.v3.native-scope-policy/1\",\"source_root_binding\":{\"kind\":\"creation-allocation\"}}\n"
+        let clock = Encoding.ASCII.GetBytes "{\"anchor_ticks\":\"0\",\"anchor_utc\":\"2026-01-01T00:00:00.000000Z\",\"clock_id\":\"controlled-source-clock-only\",\"host_boot_id\":\"11111111-1111-1111-1111-111111111111\",\"maximum_error_100ns_ticks\":\"0\",\"monotonic_domain_id\":\"77777777-7777-7777-7777-777777777777\",\"monotonic_frequency\":\"10000000\",\"profile\":\"signed-hold-v1\",\"revision\":\"1\",\"role\":\"native-observation\",\"schema\":\"fsgg.v3.original-clock-snapshot/1\",\"valid_from\":\"2026-01-01T00:00:00.000000Z\",\"valid_until\":\"2026-01-01T01:00:00.000000Z\"}\n"
+        let configuration = PortableSupplierOriginalNativeConfiguration.create original 1UL scope (hash scope) clock (hash clock) None |> ok
+        PortableSupplierAdmission.beginIntentV4 original (bytes "originalIntentEnvelope") configuration |> ok
     let challenge (state: PortableSupplierAdmissionState) =
         let issued = DateTimeOffset.Parse("2026-01-01T00:00:00.000000Z", Globalization.CultureInfo.InvariantCulture)
         let exact = Encoding.ASCII.GetBytes(
@@ -887,9 +890,22 @@ module SupplierCheckpointFixtures =
             if File.Exists path then File.ReadAllBytes path else find directory.Parent
         find (DirectoryInfo(AppContext.BaseDirectory)) |> fun raw -> JsonDocument.Parse(ReadOnlyMemory<byte>(raw))
     let urlBytes (text: string) = Convert.FromBase64String(text.Replace('-', '+').Replace('_', '/') + String.replicate ((4 - text.Length % 4) % 4) "=")
-    let exchange (name: string) (state: PortableSupplierAdmissionState) =
-        use doc = journey ()
-        let row = doc.RootElement.GetProperty name
+    let initialFrom (root: JsonElement) =
+        let template = initial ()
+        let exact key = root.GetProperty(key: string).GetString() |> urlBytes
+        let original = { template.Original with IntentBase64 = exact "originalIntent" |> Convert.ToBase64String;
+                                               IntentDigest = domain "intent" (exact "originalIntent") }
+        let config = root.GetProperty("configuration")
+        let bytes key = config.GetProperty(key: string).GetString() |> urlBytes
+        let destination =
+            if config.GetProperty("destination").ValueKind = JsonValueKind.Null then None
+            else Some(bytes "destination",config.GetProperty("destinationSha256").GetString())
+        let configuration = PortableSupplierOriginalNativeConfiguration.create original 1UL
+                                (bytes "scope") (config.GetProperty("scopeSha256").GetString())
+                                (bytes "clock") (config.GetProperty("clockSha256").GetString()) destination |> ok
+        PortableSupplierAdmission.beginIntentV4 original (exact "originalIntentEnvelope") configuration |> ok
+    let exchangeFrom (root: JsonElement) (name: string) (state: PortableSupplierAdmissionState) =
+        let row = root.GetProperty name
         let exact key = row.GetProperty(key: string).GetString() |> urlBytes
         let challengeBytes = exact "challenge"
         use challengeDoc = JsonDocument.Parse(ReadOnlyMemory<byte>(challengeBytes))
@@ -905,9 +921,8 @@ module SupplierCheckpointFixtures =
           EvidenceBase64 = exact "evidence" |> Convert.ToBase64String
           ReceiverBundleBase64 = exact "receiverBundle" |> Convert.ToBase64String
           ControllerBundleBase64 = exact "controllerBundle" |> Convert.ToBase64String }
-    let observation kind (exchange: PortableSupplierRetainedWireExchange) (state: PortableSupplierAdmissionState) =
-        use doc = journey ()
-        let exact key = doc.RootElement.GetProperty(key: string).GetString() |> urlBytes
+    let observationFrom (root: JsonElement) kind (exchange: PortableSupplierRetainedWireExchange) (state: PortableSupplierAdmissionState) =
+        let exact key = root.GetProperty(key: string).GetString() |> urlBytes
         use c = JsonDocument.Parse(ReadOnlyMemory<byte>(exact "creationCore"))
         use r = JsonDocument.Parse(ReadOnlyMemory<byte>(exact "reservation"))
         let core = c.RootElement
@@ -918,9 +933,20 @@ module SupplierCheckpointFixtures =
             { Binding = { HostFixtures.binding with Command = state.Original.Command; QualifiedImage = state.Original.QualifiedImage }
               AdmittedAt = time "admitted_at"; HostLeaseExpiresAt = time "host_lease_expires_at"
               MaximumRuntime = ticks "maximum_runtime_ticks"; ExportReserve = ticks "export_reserve_ticks"
-              CleanupReserve = ticks "cleanup_reserve_ticks"; Selection = NoSelectedOutputs }
-        let event = exact "genesisEvent"
-        let at = doc.RootElement.GetProperty(if kind = SupplierCreation then "creation" else "genesis").GetProperty("collectedAt").GetString()
+              CleanupReserve = ticks "cleanup_reserve_ticks"
+              Selection =
+                let selection = reservation.GetProperty("selection")
+                if selection.GetProperty("kind").GetString() = "none" then NoSelectedOutputs
+                else SelectedOutputs { Digest = selection.GetProperty("digest").GetString()
+                                       MemberCount = UInt64.Parse(selection.GetProperty("member_count").GetString())
+                                       TotalBytes = UInt64.Parse(selection.GetProperty("total_bytes").GetString()) } }
+        use response = JsonDocument.Parse(ReadOnlyMemory<byte>(Convert.FromBase64String exchange.EvidenceBase64))
+        let responsePayload = response.RootElement.GetProperty("payload").GetString() |> urlBytes
+        use payload = JsonDocument.Parse(ReadOnlyMemory<byte>(responsePayload))
+        let row = payload.RootElement
+        let at = if kind = SupplierCreation then root.GetProperty("creation").GetProperty("collectedAt").GetString()
+                 else row.GetProperty("collected_at").GetString()
+        let head key = let property = row.GetProperty(key: string) in if property.ValueKind = JsonValueKind.Null then None else Some(property.GetString())
         { Kind = kind; IntentDigest = state.Original.IntentDigest; TrustPolicyDigest = state.Original.TrustPolicyDigest
           ChallengeDigest = exchange.Challenge.Digest; Purpose = exchange.Challenge.Purpose; OriginalReservation = pinned
           Identity = { Issuer = "controlled-source-only"; ContainerId = core.GetProperty("cid").GetString()
@@ -930,27 +956,66 @@ module SupplierCheckpointFixtures =
           CreationBase64 = exact "creationCore" |> Convert.ToBase64String
           CreationReceiptBase64 = exact "creationReceipt" |> Convert.ToBase64String
           ReservationBase64 = exact "reservation" |> Convert.ToBase64String; ResponseBase64 = exchange.EvidenceBase64
-          EventsBase64 = if kind = SupplierCreation then [] else [Convert.ToBase64String event]
-          FromHead = None; ToHead = if kind = SupplierCreation then None else Some(domain "signed-envelope" event)
-          Sequence = 0UL; CollectedAt = DateTimeOffset.Parse(at, Globalization.CultureInfo.InvariantCulture) }
-    let verifyControlled kind exchange state =
-        let value = observation kind exchange state
+          EventsBase64 = if kind = SupplierCreation then [] else row.GetProperty("events").EnumerateArray() |> Seq.map (fun e -> e.GetString() |> urlBytes |> Convert.ToBase64String) |> Seq.toList
+          FromHead = if kind = SupplierCreation then None else head "from_head"
+          ToHead = if kind = SupplierCreation then None else head "to_head"
+          Sequence = if kind = SupplierAppend then 1UL else 0UL
+          CollectedAt = DateTimeOffset.Parse(at, Globalization.CultureInfo.InvariantCulture) }
+    let verifyControlledFrom root kind exchange state =
+        let value = observationFrom root kind exchange state
         let adapter = { new IPortableSupplierTranscriptAuthenticator with member _.Authenticate _ = Ok value }
         PortableSupplierAdmission.verify adapter value.CollectedAt 2L state (Convert.FromBase64String exchange.EvidenceBase64) |> ok
-    let pinCreation (state: PortableSupplierAdmissionState) =
-        let pair = exchange "creation" state
+    let pinCreationFrom root (state: PortableSupplierAdmissionState) =
+        let pair = exchangeFrom root "creation" state
         let pending = PortableSupplierAdmission.issueChallenge pair.Challenge state |> ok
-        let verified = verifyControlled SupplierCreation pair pending
+        let verified = verifyControlledFrom root SupplierCreation pair pending
         match PortableSupplierAdmission.pinCreationV4 verified pair pending.Original pending.Revision pending.CheckpointCustody.Value.StoreFence pending |> ok with
         | SupplierCheckpointData value -> value
         | SupplierCheckpointHeld _ -> failwith "controlled creation held"
-    let acceptGenesis (state: PortableSupplierAdmissionState) =
-        let pair = exchange "genesis" state
+    let acceptGenesisFrom root (state: PortableSupplierAdmissionState) =
+        let pair = exchangeFrom root "genesis" state
         let pending = PortableSupplierAdmission.issueChallenge pair.Challenge state |> ok
-        let verified = verifyControlled SupplierGenesis pair pending
+        let verified = verifyControlledFrom root SupplierGenesis pair pending
         match PortableSupplierAdmission.acceptWireV4 verified pair pending.Original pending.Revision pending.CheckpointCustody.Value.StoreFence pending |> ok with
         | SupplierCheckpointData value -> value
         | SupplierCheckpointHeld _ -> failwith "controlled genesis held"
+    let acceptAppendFrom root (state: PortableSupplierAdmissionState) =
+        let pair = exchangeFrom root "append" state
+        let pending = PortableSupplierAdmission.issueChallenge pair.Challenge state |> ok
+        let verified = verifyControlledFrom root SupplierAppend pair pending
+        match PortableSupplierAdmission.acceptWireV4 verified pair pending.Original pending.Revision pending.CheckpointCustody.Value.StoreFence pending |> ok with
+        | SupplierCheckpointData value -> value
+        | SupplierCheckpointHeld _ -> failwith "controlled append held"
+    let issueNativeFrom (root: JsonElement) (state: PortableSupplierAdmissionState) =
+        let selected = root.GetProperty("name").GetString() = "selected-sixteen"
+        let issue = if selected then PortableSupplierAdmission.issueSelectedNativeProofChallengeV4
+                    else PortableSupplierAdmission.issueZeroNativeProofChallengeV4
+        let at = DateTimeOffset.Parse("2026-01-01T00:00:07.000000Z",Globalization.CultureInfo.InvariantCulture)
+        issue state.Original state.Revision state.CheckpointCustody.Value.StoreFence
+            (Guid.Parse "88888888-8888-8888-8888-888888888888") at (at.AddSeconds 23.) 1L 100L state |> ok
+    let nativeFrom (root: JsonElement) (state: PortableSupplierAdmissionState) : PortableSupplierRetainedNativeAcquisition =
+        let row = root.GetProperty("native")
+        let exact key = row.GetProperty(key: string).GetString() |> urlBytes |> Convert.ToBase64String
+        Assert.True((row.GetProperty("challenge").GetString() |> urlBytes) = Convert.FromBase64String state.Challenge.Value.BytesBase64)
+        { AcceptedRevision = 0UL; AcceptedStoreFence = 0UL; Challenge = state.Challenge.Value
+          IssuanceAnchor = state.CheckpointCustody.Value.PendingNativeAnchor.Value
+          RequestBase64 = exact "request"; ResultBase64 = exact "result"; ProofEnvelopeBase64 = exact "proof"
+          ReceiptBase64 = exact "receipt"; ControllerBundleBase64 = exact "controllerBundle" }
+    let acceptNativeFrom root (state: PortableSupplierAdmissionState) =
+        let at = DateTimeOffset.Parse("2026-01-01T00:00:08.000000Z",Globalization.CultureInfo.InvariantCulture)
+        match PortableSupplierAdmission.acceptNativeV4 state.Original state.Revision state.CheckpointCustody.Value.StoreFence at 2L (nativeFrom root state) state |> ok with
+        | SupplierCheckpointData value -> value
+        | SupplierCheckpointHeld _ -> failwith "controlled native/output held"
+
+    let exchange name state =
+        use doc = journey ()
+        exchangeFrom doc.RootElement name state
+    let pinCreation state =
+        use doc = journey ()
+        pinCreationFrom doc.RootElement state
+    let acceptGenesis state =
+        use doc = journey ()
+        acceptGenesisFrom doc.RootElement state
 
 type PortableHostAllocationTests_ReceiverCheckpointSource() =
     [<Fact>]
@@ -975,6 +1040,12 @@ type PortableHostAllocationTests_ReceiverCheckpointSource() =
         let initial = SupplierCheckpointFixtures.initial ()
         let invalid =
             [ { initial with CheckpointCustody = None }
+              { initial with Head = Some(String.replicate 64 "f") }
+              { initial with Sequence = 1UL }
+              { initial with EventsBase64 = [initial.Original.IntentBase64] }
+              { initial with ResponsesBase64 = [initial.Original.IntentBase64] }
+              { initial with CheckpointCustody = Some { initial.CheckpointCustody.Value with OriginalReceiverEpoch = Guid.NewGuid() } }
+              { initial with Challenge = Some(WireV1(SupplierCheckpointFixtures.challenge initial)) }
               { initial with CheckpointCustody = Some { initial.CheckpointCustody.Value with StoreFence = 2UL } }
               { initial with Original = { initial.Original with IntentDigest = String.replicate 64 "f" } }
               { initial with JournalVersion = SupplierJournalV3 }
@@ -1005,7 +1076,7 @@ type PortableHostAllocationTests_NativeReceiptCodec() =
             Assert.True((Result.isOk parsed = expected), row.GetProperty("name").GetString())
             match parsed with
             | Ok receipt ->
-                Assert.True(bytes = PortableSupplierNativeReceipt.serialize receipt)
+                Assert.True((bytes = PortableSupplierNativeReceipt.serialize receipt))
                 Assert.Equal(row.GetProperty("sha256").GetString(), PortableSupplierNativeReceipt.rawSha256 receipt)
                 bytes.[0] <- 0uy
                 let copy = PortableSupplierNativeReceipt.serialize receipt
@@ -1024,6 +1095,7 @@ type PortableHostAllocationTests_ReceiverCheckpointControlledJourney() =
         let creation = SupplierCheckpointFixtures.pinCreation initial
         Assert.Equal(3UL, creation.Revision)
         let genesis = SupplierCheckpointFixtures.acceptGenesis creation
+        Assert.Equal(creation.Pinned,genesis.Pinned)
         Assert.Equal(5UL, genesis.Revision)
         Assert.Equal(5UL, genesis.CheckpointCustody.Value.StoreFence)
         Assert.True(genesis.CheckpointCustody.Value.GenesisCheckpointBase64.IsSome)
@@ -1042,3 +1114,74 @@ type PortableHostAllocationTests_ReceiverCheckpointControlledJourney() =
             Assert.True(PortableSupplierAdmission.validate invalid |> Result.isError)
         Assert.True(PortableSupplierAdmission.prepareAck genesis |> Result.isError)
         Assert.True(PortableSupplierAdmission.reserveHost genesis |> Result.isError)
+
+    [<Fact>]
+    member _.``rehash complete paired original and temporal mutations refuse the actual controlled caller``() =
+        use doc = SupplierCheckpointFixtures.journey ()
+        let positive = SupplierCheckpointFixtures.initial () |> SupplierCheckpointFixtures.pinCreationFrom doc.RootElement |> SupplierCheckpointFixtures.acceptGenesisFrom doc.RootElement
+        Assert.Equal(SupplierGenesisAccepted,positive.Phase)
+        Assert.True(PortableSupplierAdmission.validate positive |> Result.isOk)
+        for row in doc.RootElement.GetProperty("negativeJourneys").EnumerateArray() do
+            Assert.False(row.GetProperty("expectedSourceAccept").GetBoolean())
+            let creation =
+                try Ok(SupplierCheckpointFixtures.initial () |> SupplierCheckpointFixtures.pinCreationFrom row)
+                with error -> Error error.Message
+            let name = row.GetProperty("caseName").GetString()
+            if name = "creation-stopped-after-paired-collection" || name = "reservation-deadline-not-original-command" then
+                Assert.True(Result.isError creation,name)
+            else
+                let pinned = creation |> SupplierCheckpointFixtures.ok
+                let genesis =
+                    try Ok(SupplierCheckpointFixtures.acceptGenesisFrom row pinned)
+                    with error -> Error error.Message
+                Assert.True(Result.isError genesis,name)
+
+/// Real independent OpenSSH signatures exercise the maintained managed primitive, not runtime enrollment.
+type PortableHostAllocationTests_SupplierSshsig() =
+    [<Fact>]
+    member _.``eleven offline OpenSSH purposes verify with exact pin and refuse every other purpose key and mutation``() =
+        let rec find (directory: DirectoryInfo) =
+            if isNull directory then failwith "offline SSHSIG fixtures missing"
+            let path = Path.Combine(directory.FullName,"contracts","portable-workspace","v1","supplier-sshsig-v1-offline-fixtures.json")
+            if File.Exists path then File.ReadAllBytes path else find directory.Parent
+        use doc = find (DirectoryInfo(AppContext.BaseDirectory)) |> fun raw -> JsonDocument.Parse(ReadOnlyMemory<byte>(raw))
+        let root = doc.RootElement
+        Assert.False(root.GetProperty("semanticJourney").GetBoolean())
+        Assert.False(root.GetProperty("productionEnrollment").GetBoolean())
+        let roles =
+            [ "original-intent",OriginalIntentSignature; "create-effect-grant",EffectGrantSignature
+              "receiver-command",ReceiverCommandSignature; "receiver-genesis-ack",GenesisAckSignature
+              "receiver-export-readback",OutputAckSignature; "host-command-result",HostCommandResultSignature
+              "native-proof",NativeProofSignature; "creation",SupplierCreationSignature
+              "genesis",SupplierGenesisSignature; "supplier-event",SupplierEventSignature; "supplier-response",SupplierResponseSignature ]
+        let pin = root.GetProperty("publicKeyBlobBase64").GetString() |> Convert.FromBase64String
+        let url (bytes: byte array) = (Convert.ToBase64String bytes).TrimEnd('=').Replace('+','-').Replace('/','_')
+        let envelope payload signature = Encoding.ASCII.GetBytes("{\"payload\":\"" + url payload + "\",\"signature\":\"" + url signature + "\"}\n")
+        let armor (binary: byte array) =
+            let text = Convert.ToBase64String binary
+            let lines = [for start in 0 .. 70 .. text.Length-1 -> text.Substring(start,min 70 (text.Length-start))]
+            Encoding.ASCII.GetBytes("-----BEGIN SSH SIGNATURE-----\n" + String.concat "\n" lines + "\n-----END SSH SIGNATURE-----\n")
+        Assert.Equal(11,root.GetProperty("cases").GetArrayLength())
+        for row in root.GetProperty("cases").EnumerateArray() do
+            let role = roles |> List.find (fun (name,_) -> name = row.GetProperty("name").GetString()) |> snd
+            Assert.Equal(row.GetProperty("namespace").GetString(),PortableSupplierSshsig.signingNamespace role)
+            let exact = row.GetProperty("signedEnvelopeBase64url").GetString() |> SupplierCheckpointFixtures.urlBytes
+            Assert.Equal(row.GetProperty("signedEnvelopeSha256").GetString(),SupplierCheckpointFixtures.hash exact)
+            let verified = PortableSupplierSshsig.verify role pin exact |> SupplierCheckpointFixtures.ok
+            Assert.Equal(role,PortableSupplierSshsig.role verified)
+            Assert.True((exact = PortableSupplierSshsig.envelope verified))
+            for _,wrong in roles do
+                if wrong <> role then Assert.True(PortableSupplierSshsig.verify wrong pin exact |> Result.isError)
+            let wrongPin = Array.copy pin
+            wrongPin.[wrongPin.Length-1] <- wrongPin.[wrongPin.Length-1] ^^^ 1uy
+            Assert.True(PortableSupplierSshsig.verify role wrongPin exact |> Result.isError)
+            let payload = row.GetProperty("payloadBase64url").GetString() |> SupplierCheckpointFixtures.urlBytes
+            let signature = row.GetProperty("signatureBase64url").GetString() |> SupplierCheckpointFixtures.urlBytes
+            let text = Encoding.ASCII.GetString signature
+            let binary = text.Split('\n') |> Array.filter (fun line -> line.Length > 0 && not (line.StartsWith("-----",StringComparison.Ordinal))) |> String.concat "" |> Convert.FromBase64String
+            binary.[binary.Length-1] <- binary.[binary.Length-1] ^^^ 1uy
+            Assert.True(PortableSupplierSshsig.verify role pin (envelope payload (armor binary)) |> Result.isError)
+            Assert.True(PortableSupplierSshsig.verify role pin (envelope payload (Array.append signature [|10uy|])) |> Result.isError)
+            let exported = PortableSupplierSshsig.envelope verified
+            exported.[0] <- 0uy
+            Assert.True((exact = PortableSupplierSshsig.envelope verified))

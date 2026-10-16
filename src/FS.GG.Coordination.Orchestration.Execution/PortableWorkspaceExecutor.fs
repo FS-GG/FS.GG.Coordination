@@ -570,6 +570,9 @@ module PortableWorkspaceExecutor =
         let pending pending =
             if state.JournalVersion <> SupplierJournalV2 then writer.Write(match pending with WireV1 _ -> 0uy | NativeProofV1 _ -> 1uy | NativeSelectedProofV2 _ -> 2uy)
             match pending with WireV1 challenge -> wire challenge | NativeProofV1 challenge -> native challenge | NativeSelectedProofV2 challenge -> selectedNative challenge
+        let anchor (value: PortableSupplierNativeIssuanceAnchor) =
+            writer.Write(match value.ChallengeKind with SupplierWireV1 -> invalidOp "supplier-native-anchor-kind" | SupplierNativeProofV1 -> 1uy | SupplierSelectedNativeProofV2 -> 2uy)
+            text 36 (value.ChallengeId.ToString("D")); text 64 value.ChallengeDigest; text 64 value.Head; writer.Write value.Sequence
         optional pending state.Challenge
         writer.Write state.ChallengeLedger.Length
         for kind, id, digest, disposition in state.ChallengeLedger do
@@ -588,6 +591,15 @@ module PortableWorkspaceExecutor =
             let c = state.CheckpointCustody |> Option.defaultWith (fun () -> invalidOp "supplier-v4-custody-missing")
             text 36 (c.OriginalReceiverEpoch.ToString("D")); writer.Write c.StoreFence
             text 87384 c.OriginalIntentEnvelopeBase64
+            let config = c.NativeConfiguration
+            let intentDigest,signaturePolicy,initialEpoch,configRevision = PortableSupplierOriginalNativeConfiguration.metadata config
+            let scopeHash,clockHash,destinationHash = PortableSupplierOriginalNativeConfiguration.expectedHashes config
+            text 64 intentDigest; text 64 signaturePolicy; text 36 (initialEpoch.ToString("D")); writer.Write configRevision
+            text 10924 (PortableSupplierOriginalNativeConfiguration.scopeBytes config |> Convert.ToBase64String); text 64 scopeHash
+            text 5464 (PortableSupplierOriginalNativeConfiguration.clockBytes config |> Convert.ToBase64String); text 64 clockHash
+            optional (text 2732) (PortableSupplierOriginalNativeConfiguration.destinationBytes config |> Option.map Convert.ToBase64String)
+            optional (text 64) destinationHash
+            optional anchor c.PendingNativeAnchor
             let exchange (e: PortableSupplierRetainedWireExchange) =
                 writer.Write e.AcceptedRevision; writer.Write e.AcceptedStoreFence
                 wire e.Challenge
@@ -598,9 +610,16 @@ module PortableWorkspaceExecutor =
             writer.Write c.NativeAcquisitions.Length
             for e in c.NativeAcquisitions do
                 writer.Write e.AcceptedRevision; writer.Write e.AcceptedStoreFence
-                pending e.Challenge
+                pending e.Challenge; anchor e.IssuanceAnchor
                 text 87384 e.RequestBase64; text 87384 e.ResultBase64; text 87384 e.ProofEnvelopeBase64
                 text 43692 e.ReceiptBase64; text 10924 e.ControllerBundleBase64
+            writer.Write c.RejectedExchanges.Length
+            for e in c.RejectedExchanges do
+                writer.Write e.AcceptedRevision; writer.Write e.AcceptedStoreFence
+                pending e.Challenge; optional anchor e.NativeAnchor; text 87384 e.RequestBase64
+                writer.Write e.FramesBase64.Length; e.FramesBase64 |> List.iter (text 87384)
+                optional (text 43692) e.ReceiverBundleBase64; optional (text 10924) e.ControllerBundleBase64
+                text 4096 e.Reason
             writer.Write c.AbandonedChallenges.Length; c.AbandonedChallenges |> List.iter pending
             optional (text 21848) c.GenesisCheckpointBase64
             optional (text 21848) c.OutputCheckpointBase64
@@ -718,9 +737,8 @@ module PortableWorkspaceExecutor =
             let context =
                 { Original = { original with ReceiverEpoch = epoch }; OperationId = operation; ReservationDigest = reservation
                   ProofEventHead = proofHead; NativeReceiptSha256 = receipt; HostLeaseNotAfter = lease }
-            { Context = context
-                            ChallengeId = id; Digest = digest; BytesBase64 = bytes; ReceiverEpoch = epoch
-                            IssuedAt = issued; NotAfter = deadline; IssuedMonotonic = monotonic; DeadlineMonotonic = bound }
+            { Context = context; ChallengeId = id; Digest = digest; BytesBase64 = bytes; ReceiverEpoch = epoch
+              IssuedAt = issued; NotAfter = deadline; IssuedMonotonic = monotonic; DeadlineMonotonic = bound }
         let selectedNative () : PortableSupplierSelectedNativeProofChallenge =
             if version <> SupplierJournalV4 then invalidOp "supplier-selected-native-generation"
             let operation = guid ()
@@ -748,6 +766,15 @@ module PortableWorkspaceExecutor =
             | SupplierWireV1 -> WireV1(wire ())
             | SupplierNativeProofV1 -> NativeProofV1(native ())
             | SupplierSelectedNativeProofV2 -> NativeSelectedProofV2(selectedNative ())
+        let anchor () : PortableSupplierNativeIssuanceAnchor =
+            if version <> SupplierJournalV4 then invalidOp "supplier-native-anchor-generation"
+            let kind = kind ()
+            if kind = SupplierWireV1 then invalidOp "supplier-native-anchor-kind"
+            let id = guid ()
+            let digest = text 64
+            let head = text 64
+            let sequence = reader.ReadUInt64()
+            { ChallengeKind = kind; ChallengeId = id; ChallengeDigest = digest; Head = head; Sequence = sequence }
         let challenge = optional pending
         let ledger = [ for _ in 1 .. count 128 do
                            let kind = kind ()
@@ -771,6 +798,32 @@ module PortableWorkspaceExecutor =
                 let initialEpoch = guid ()
                 let fence = reader.ReadUInt64()
                 let signedIntent = text 87384
+                let configIntent = text 64
+                let configSignaturePolicy = text 64
+                let configInitialEpoch = guid ()
+                let configRevision = reader.ReadUInt64()
+                let configBytes maximum =
+                    let encoded = text maximum
+                    let bytes = Convert.FromBase64String encoded
+                    if Convert.ToBase64String bytes <> encoded then invalidOp "supplier-native-configuration-base64"
+                    bytes
+                let scope = configBytes 10924
+                let scopeHash = text 64
+                let clock = configBytes 5464
+                let clockHash = text 64
+                let destination = optional (fun () -> configBytes 2732)
+                let destinationHash = optional (fun () -> text 64)
+                if configIntent <> original.IntentDigest || configSignaturePolicy <> original.TrustPolicyDigest
+                   || configInitialEpoch <> initialEpoch then invalidOp "supplier-native-configuration-original"
+                let destinationInput =
+                    match destination,destinationHash with
+                    | None,None -> None
+                    | Some bytes,Some hash -> Some(bytes,hash)
+                    | _ -> invalidOp "supplier-native-configuration-destination"
+                let configuration =
+                    PortableSupplierOriginalNativeConfiguration.create { original with ReceiverEpoch = initialEpoch }
+                        configRevision scope scopeHash clock clockHash destinationInput |> Result.defaultWith invalidOp
+                let pendingAnchor = optional anchor
                 let exchange () : PortableSupplierRetainedWireExchange =
                     let accepted = reader.ReadUInt64()
                     let acceptedFence = reader.ReadUInt64()
@@ -791,19 +844,35 @@ module PortableWorkspaceExecutor =
                         let acceptedFence = reader.ReadUInt64()
                         let challenge = pending ()
                         match challenge with WireV1 _ -> invalidOp "supplier-native-acquisition-kind" | _ -> ()
+                        let issuanceAnchor = anchor ()
                         let request = text 87384
                         let result = text 87384
                         let proof = text 87384
                         let receipt = text 43692
                         let controller = text 10924
                         yield { AcceptedRevision = accepted; AcceptedStoreFence = acceptedFence
-                                Challenge = challenge; RequestBase64 = request; ResultBase64 = result
+                                Challenge = challenge; IssuanceAnchor = issuanceAnchor; RequestBase64 = request; ResultBase64 = result
                                 ProofEnvelopeBase64 = proof; ReceiptBase64 = receipt; ControllerBundleBase64 = controller } ]
+                let rejected =
+                    [ for _ in 1 .. count 1 do
+                        let accepted = reader.ReadUInt64()
+                        let acceptedFence = reader.ReadUInt64()
+                        let challenge = pending ()
+                        let nativeAnchor = optional anchor
+                        let request = text 87384
+                        let frames = texts 2 87384
+                        let receiver = optional (fun () -> text 43692)
+                        let controller = optional (fun () -> text 10924)
+                        let reason = text 4096
+                        yield { AcceptedRevision = accepted; AcceptedStoreFence = acceptedFence; Challenge = challenge; NativeAnchor = nativeAnchor
+                                RequestBase64 = request; FramesBase64 = frames; ReceiverBundleBase64 = receiver
+                                ControllerBundleBase64 = controller; Reason = reason } ]
                 let abandoned = [ for _ in 1 .. count 128 -> pending () ]
                 let genesis = optional (fun () -> text 21848)
                 let output = optional (fun () -> text 21848)
                 Some { OriginalReceiverEpoch = initialEpoch; StoreFence = fence; OriginalIntentEnvelopeBase64 = signedIntent
-                       CreationExchange = creation; WireExchanges = exchanges; NativeAcquisitions = acquisitions
+                       NativeConfiguration = configuration; PendingNativeAnchor = pendingAnchor
+                       CreationExchange = creation; WireExchanges = exchanges; NativeAcquisitions = acquisitions; RejectedExchanges = rejected
                        AbandonedChallenges = abandoned; GenesisCheckpointBase64 = genesis; OutputCheckpointBase64 = output }
         { JournalVersion = version; Revision = revision; CheckpointCustody = custody; Original = original
           Phase = phase; Challenge = challenge; ChallengeLedger = ledger; Pinned = pinned; Head = head
@@ -822,6 +891,59 @@ module PortableWorkspaceExecutor =
         writer.Flush()
         if memory.Length > int64 PortableSupplierAdmission.MaximumSupplierBytes then invalidOp "supplier-journal-size"
         memory.ToArray()
+
+    let private supplierV4Transition (previous: PortableSupplierAdmissionState) (current: PortableSupplierAdmissionState) =
+        let before = previous.CheckpointCustody.Value
+        let after = current.CheckpointCustody.Value
+        let created =
+            match before.CreationExchange,after.CreationExchange with
+            | None,Some e -> [WireV1 e.Challenge,e.AcceptedRevision,e.AcceptedStoreFence,None]
+            | _ -> []
+        let additions =
+            created
+            @ (after.WireExchanges |> List.skip before.WireExchanges.Length |> List.map (fun e -> WireV1 e.Challenge,e.AcceptedRevision,e.AcceptedStoreFence,None))
+            @ (after.NativeAcquisitions |> List.skip before.NativeAcquisitions.Length |> List.map (fun e -> e.Challenge,e.AcceptedRevision,e.AcceptedStoreFence,Some e.IssuanceAnchor))
+        let rejected = after.RejectedExchanges |> List.skip before.RejectedExchanges.Length
+        let abandoned = after.AbandonedChallenges |> List.skip before.AbandonedChallenges.Length
+        let originalPinned = previous.Pinned |> Option.forall (fun pinned -> current.Pinned = Some pinned)
+        let previouslyReady = previous.FirstFailure.IsNone && previous.Conflicts.IsEmpty
+        match previous.Challenge,current.Challenge with
+        | None,Some pending ->
+            let phase =
+                match pending,previous.Phase with
+                | WireV1 _,SupplierCreationPinned -> SupplierAwaitingGenesis
+                | _ -> previous.Phase
+            let expectedCustody = { before with StoreFence = after.StoreFence; PendingNativeAnchor = after.PendingNativeAnchor }
+            let expected = { previous with Revision = current.Revision; Challenge = Some pending; Phase = phase; CheckpointCustody = Some expectedCustody }
+            previouslyReady && additions.IsEmpty && abandoned.IsEmpty && current = expected
+        | Some pending,Some retained when retained = pending ->
+            let exactRejected =
+                match rejected with
+                | [row] -> row.Challenge = pending && row.AcceptedRevision = current.Revision && row.AcceptedStoreFence = after.StoreFence
+                           && row.NativeAnchor = before.PendingNativeAnchor
+                | _ -> false
+            let expectedCustody = { before with StoreFence = after.StoreFence; RejectedExchanges = after.RejectedExchanges }
+            let expected = { previous with Revision = current.Revision; FirstFailure = current.FirstFailure; Conflicts = current.Conflicts; CheckpointCustody = Some expectedCustody }
+            previouslyReady && current.FirstFailure.IsSome && not current.Conflicts.IsEmpty
+            && additions.IsEmpty && abandoned.IsEmpty && exactRejected && current = expected
+        | Some pending,None ->
+            match additions,abandoned,current.ChallengeLedger with
+            | [(challenge,revision,fence,anchor)],[],(kind,id,digest,"consumed")::ledger ->
+                previouslyReady && current.FirstFailure.IsNone && current.Conflicts.IsEmpty
+                && originalPinned && challenge = pending && revision = current.Revision && fence = after.StoreFence
+                && (kind,id,digest) = (pending.Kind,pending.ChallengeId,pending.Digest)
+                && ledger = previous.ChallengeLedger && current.Original = previous.Original
+                && after.PendingNativeAnchor.IsNone && rejected.IsEmpty
+                && (match pending with WireV1 _ -> anchor.IsNone | _ -> anchor = before.PendingNativeAnchor)
+            | [],[abandoned],(kind,id,digest,"abandoned")::ledger ->
+                let expectedCustody = { before with StoreFence = after.StoreFence; PendingNativeAnchor = None; AbandonedChallenges = before.AbandonedChallenges @ [pending] }
+                let expected = { previous with Revision = current.Revision; Challenge = None; Original = current.Original; ChallengeLedger = current.ChallengeLedger; CheckpointCustody = Some expectedCustody }
+                abandoned = pending && current.Original.ReceiverEpoch <> previous.Original.ReceiverEpoch
+                && { previous.Original with ReceiverEpoch = current.Original.ReceiverEpoch } = current.Original
+                && (kind,id,digest) = (pending.Kind,pending.ChallengeId,pending.Digest)
+                && ledger = previous.ChallengeLedger && current = expected
+            | _ -> false
+        | _ -> false
 
     type private DurableJournal(stateRoot: string) =
         let journalRoot = Path.Combine(stateRoot, "journal-v1")
@@ -971,9 +1093,11 @@ module PortableWorkspaceExecutor =
                                         && List.contains challenge after.AbandonedChallenges)))
                                 && before.OriginalReceiverEpoch = after.OriginalReceiverEpoch
                                 && before.OriginalIntentEnvelopeBase64 = after.OriginalIntentEnvelopeBase64
+                                && before.NativeConfiguration = after.NativeConfiguration
                                 && (before.CreationExchange |> Option.forall (fun e -> after.CreationExchange = Some e))
                                 && (after.WireExchanges |> List.truncate before.WireExchanges.Length) = before.WireExchanges
                                 && (after.NativeAcquisitions |> List.truncate before.NativeAcquisitions.Length) = before.NativeAcquisitions
+                                && (after.RejectedExchanges |> List.truncate before.RejectedExchanges.Length) = before.RejectedExchanges
                                 && (after.AbandonedChallenges |> List.truncate before.AbandonedChallenges.Length) = before.AbandonedChallenges
                                 && (before.GenesisCheckpointBase64 |> Option.forall (fun raw -> after.GenesisCheckpointBase64 = Some raw))
                                 && (before.OutputCheckpointBase64 |> Option.forall (fun raw -> after.OutputCheckpointBase64 = Some raw))
@@ -998,6 +1122,7 @@ module PortableWorkspaceExecutor =
                                 && current.CreationBase64 = pinned.CreationBase64
                                 && current.CreationReceiptBase64 = pinned.CreationReceiptBase64
                                 && current.ReservationBase64 = pinned.ReservationBase64)))
+                        && (state.JournalVersion <> SupplierJournalV4 || supplierV4Transition previous state)
                     | _ -> false
                 if not eligible then
                     if state.JournalVersion = SupplierJournalV4 then raise SupplierSourceConflictException

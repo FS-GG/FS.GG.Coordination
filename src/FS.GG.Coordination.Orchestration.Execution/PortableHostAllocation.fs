@@ -2487,6 +2487,151 @@ type PortableSupplierAdmissionOriginal =
       SupplierSourceRevision: string
       ReceiverEpoch: Guid }
 
+/// Original configuration data, never a native root, policy or clock witness.
+type PortableSupplierNativeRootIdentity =
+    { Device: uint64; Inode: uint64; FilesystemUuid: Guid }
+type PortableSupplierNativeSourceRoot = CreationAllocationRoot | IndependentlyPinnedRoot of PortableSupplierNativeRootIdentity
+type PortableSupplierNativeScopePolicy =
+    { Revision: uint64; SourceRoot: PortableSupplierNativeSourceRoot; OwnerUid: uint64; OwnerGid: uint64
+      ExcludedEnginePaths: string list }
+type PortableSupplierNativeDestinationPolicy =
+    { Revision: uint64; Root: PortableSupplierNativeRootIdentity; OwnerUid: uint64; OwnerGid: uint64 }
+type PortableSupplierOriginalClockSnapshot =
+    { Revision: uint64; ClockId: string; HostBootId: Guid; MonotonicDomainId: Guid; MonotonicFrequency: int64
+      AnchorTicks: int64; AnchorUtc: DateTimeOffset; MaximumErrorTicks: int64
+      ValidFrom: DateTimeOffset; ValidUntil: DateTimeOffset }
+type PortableSupplierOriginalNativeConfiguration =
+    private
+        { OriginalIntentDigest: string; SignaturePolicyDigest: string; InitialReceiverEpoch: Guid; ConfigurationRevision: uint64
+          ScopePolicyBase64: string; ExpectedScopePolicySha256: string
+          ClockSnapshotBase64: string; ExpectedClockSnapshotSha256: string
+          DestinationPolicyBase64: string option; ExpectedDestinationPolicySha256: string option }
+
+[<RequireQualifiedAccess>]
+module PortableSupplierOriginalNativeConfiguration =
+    open System.Text.Json
+    open PortableSupplierC1
+    let private positive value = let n = u64 value in if n = 0UL then fail () else n
+    let private root value =
+        fields ["device"; "inode"; "filesystem_uuid"] value
+        { Device = value.GetProperty("device") |> u64; Inode = value.GetProperty("inode") |> positive
+          FilesystemUuid = value.GetProperty("filesystem_uuid") |> uuid }
+    let private profile schema role (value: JsonElement) =
+        if value.GetProperty("schema").GetString() <> schema || value.GetProperty("profile").GetString() <> "signed-hold-v1"
+           || value.GetProperty("role").GetString() <> role then fail ()
+    let private path value =
+        let text = text 128 value
+        PortableSupplierManifest.create [{ Path = text; Bytes = 0UL; Sha256 = String.replicate 64 "0" }] |> Result.defaultWith invalidOp |> ignore
+        text
+    let pathsConflict (a: string) (b: string) =
+        String.Equals(a,b,StringComparison.OrdinalIgnoreCase)
+        || a.StartsWith(b + "/",StringComparison.OrdinalIgnoreCase) || b.StartsWith(a + "/",StringComparison.OrdinalIgnoreCase)
+    let private decodeScope value =
+        fields ["schema"; "profile"; "role"; "revision"; "source_root_binding"; "owner_uid"; "owner_gid"; "enumeration"; "excluded_engine"] value
+        profile "fsgg.v3.native-scope-policy/1" "native-source" value
+        if value.GetProperty("enumeration").GetString() <> "entire-source-root" then fail ()
+        let binding = value.GetProperty("source_root_binding")
+        let source =
+            match binding.GetProperty("kind").GetString() with
+            | "creation-allocation" -> fields ["kind"] binding; CreationAllocationRoot
+            | "pinned" -> fields ["kind"; "root"] binding; IndependentlyPinnedRoot(root (binding.GetProperty("root")))
+            | _ -> fail ()
+        let exclusions = value.GetProperty("excluded_engine")
+        if exclusions.ValueKind <> JsonValueKind.Array || exclusions.GetArrayLength() > 64 then fail ()
+        let paths =
+            exclusions.EnumerateArray() |> Seq.map (fun row ->
+                fields ["path"; "disposition"] row
+                if row.GetProperty("disposition").GetString() <> "discard-after-original-settlement" then fail ()
+                row.GetProperty("path") |> path) |> Seq.toList
+        if paths |> List.pairwise |> List.exists (fun (a,b) -> StringComparer.Ordinal.Compare(a,b) >= 0) then fail ()
+        for index,a in List.indexed paths do
+            if paths |> List.skip (index+1) |> List.exists (pathsConflict a) then fail ()
+        { Revision = value.GetProperty("revision") |> positive; SourceRoot = source
+          OwnerUid = value.GetProperty("owner_uid") |> u64; OwnerGid = value.GetProperty("owner_gid") |> u64
+          ExcludedEnginePaths = paths }
+    let private decodeDestination value =
+        fields ["schema"; "profile"; "role"; "revision"; "root"; "owner_uid"; "owner_gid"; "disposition"] value
+        profile "fsgg.v3.native-destination-policy/1" "selected-output-destination" value
+        if value.GetProperty("disposition").GetString() <> "retain-outside-original-cleanup" then fail ()
+        { Revision = value.GetProperty("revision") |> positive; Root = root (value.GetProperty("root"))
+          OwnerUid = value.GetProperty("owner_uid") |> u64; OwnerGid = value.GetProperty("owner_gid") |> u64 }
+    let private decodeClock value =
+        fields ["schema"; "profile"; "role"; "revision"; "clock_id"; "host_boot_id"; "monotonic_domain_id"; "monotonic_frequency"
+                "anchor_ticks"; "anchor_utc"; "maximum_error_100ns_ticks"; "valid_from"; "valid_until"] value
+        profile "fsgg.v3.original-clock-snapshot/1" "native-observation" value
+        let bounded key =
+            let n = value.GetProperty(key: string) |> u64
+            if n > uint64 Int64.MaxValue then fail ()
+            int64 n
+        let clock =
+            { Revision = value.GetProperty("revision") |> positive; ClockId = value.GetProperty("clock_id") |> text 128
+              HostBootId = value.GetProperty("host_boot_id") |> uuid; MonotonicDomainId = value.GetProperty("monotonic_domain_id") |> uuid
+              MonotonicFrequency = bounded "monotonic_frequency"; AnchorTicks = bounded "anchor_ticks"
+              AnchorUtc = value.GetProperty("anchor_utc") |> utc; MaximumErrorTicks = bounded "maximum_error_100ns_ticks"
+              ValidFrom = value.GetProperty("valid_from") |> utc; ValidUntil = value.GetProperty("valid_until") |> utc }
+        if clock.MonotonicFrequency <= 0L || clock.ValidFrom > clock.AnchorUtc || clock.AnchorUtc >= clock.ValidUntil
+           || clock.AnchorUtc.Ticks < clock.MaximumErrorTicks || DateTimeOffset.MaxValue.Ticks - clock.AnchorUtc.Ticks < clock.MaximumErrorTicks then fail ()
+        clock
+    let scopeBytes value = Convert.FromBase64String value.ScopePolicyBase64
+    let clockBytes value = Convert.FromBase64String value.ClockSnapshotBase64
+    let destinationBytes value = value.DestinationPolicyBase64 |> Option.map Convert.FromBase64String
+    let scope value = scopeBytes value |> document 8192 |> decodeScope
+    let clock value = clockBytes value |> document 4096 |> decodeClock
+    let destination value = destinationBytes value |> Option.map (document 2048 >> decodeDestination)
+    let metadata value = value.OriginalIntentDigest,value.SignaturePolicyDigest,value.InitialReceiverEpoch,value.ConfigurationRevision
+    let expectedHashes value = value.ExpectedScopePolicySha256,value.ExpectedClockSnapshotSha256,value.ExpectedDestinationPolicySha256
+    /// These expected hashes must come from independent admission selection, never the native receipt.
+    /// This factory constructs historical source data only; it supplies no current-policy/clock witness.
+    let create (original: PortableSupplierAdmissionOriginal) revision (scopeInput: byte array) expectedScope
+               (clockInput: byte array) expectedClock (destinationInput: (byte array * string) option) =
+        try
+            if revision = 0UL || original.ReceiverEpoch = Guid.Empty
+               || isNull scopeInput || scopeInput.Length = 0 || scopeInput.Length > 8192
+               || isNull clockInput || clockInput.Length = 0 || clockInput.Length > 4096
+               || (destinationInput |> Option.exists (fun (raw,_) -> isNull raw || raw.Length = 0 || raw.Length > 2048)) then fail ()
+            let scopeRaw = Array.copy scopeInput
+            let clockRaw = Array.copy clockInput
+            let destinationRaw = destinationInput |> Option.map (fun (bytes,expected) -> Array.copy bytes,expected)
+            if hash scopeRaw <> expectedScope || hash clockRaw <> expectedClock
+               || (destinationRaw |> Option.exists (fun (raw,expected) -> hash raw <> expected)) then fail ()
+            let parsedScope = document 8192 scopeRaw |> decodeScope
+            let parsedClock = document 4096 clockRaw |> decodeClock
+            destinationRaw |> Option.iter (fun (raw,_) -> document 2048 raw |> decodeDestination |> ignore)
+            let intent = Convert.FromBase64String original.IntentBase64 |> document 6000
+            let createdAt = intent.GetProperty("created_at") |> utc
+            if createdAt < parsedClock.ValidFrom || createdAt >= parsedClock.ValidUntil then fail ()
+            let selection = intent.GetProperty("selection")
+            let selected = selection.GetProperty("kind").GetString() = "selected"
+            if selected <> destinationRaw.IsSome then fail ()
+            // Full M is joined once retained with the creation pair; exclusions cannot substitute for it.
+            let metadataBytes =
+                objectBytes ["original_intent_digest",quoted original.IntentDigest; "signature_policy_digest",quoted original.TrustPolicyDigest
+                             "initial_receiver_epoch",quoted (original.ReceiverEpoch.ToString("D")); "configuration_revision",number revision
+                             "expected_scope_policy_sha256",quoted expectedScope; "expected_clock_snapshot_sha256",quoted expectedClock
+                             "expected_destination_policy_sha256",option quoted (destinationRaw |> Option.map snd)]
+            let total = int64 scopeRaw.Length + int64 clockRaw.Length + int64 metadataBytes.Length + (destinationRaw |> Option.map (fst >> Array.length >> int64) |> Option.defaultValue 0L)
+            if total > 16384L || parsedScope.Revision = 0UL then fail ()
+            Ok { OriginalIntentDigest = original.IntentDigest; SignaturePolicyDigest = original.TrustPolicyDigest
+                 InitialReceiverEpoch = original.ReceiverEpoch; ConfigurationRevision = revision
+                 ScopePolicyBase64 = Convert.ToBase64String scopeRaw; ExpectedScopePolicySha256 = expectedScope
+                 ClockSnapshotBase64 = Convert.ToBase64String clockRaw; ExpectedClockSnapshotSha256 = expectedClock
+                 DestinationPolicyBase64 = destinationRaw |> Option.map (fst >> Convert.ToBase64String)
+                 ExpectedDestinationPolicySha256 = destinationRaw |> Option.map snd }
+        with _ -> Error "supplier-native-configuration-refused"
+    let validate (original: PortableSupplierAdmissionOriginal) initialEpoch value =
+        let intent,policy,epoch,revision = metadata value
+        if intent <> original.IntentDigest || policy <> original.TrustPolicyDigest || epoch <> initialEpoch then Error "supplier-native-configuration-original-refused"
+        else
+            let destination =
+                match destinationBytes value,value.ExpectedDestinationPolicySha256 with
+                | None,None -> Ok None
+                | Some bytes,Some hash -> Ok(Some(bytes,hash))
+                | _ -> Error "supplier-native-configuration-destination-refused"
+            destination |> Result.bind (fun destination ->
+                create { original with ReceiverEpoch = initialEpoch } revision (scopeBytes value) value.ExpectedScopePolicySha256
+                       (clockBytes value) value.ExpectedClockSnapshotSha256 destination)
+            |> Result.bind (fun captured -> if captured = value then Ok value else Error "supplier-native-configuration-refused")
+
 type PortableSupplierAdmissionChallenge =
     { ChallengeId: Guid
       Digest: string
@@ -2553,6 +2698,14 @@ type PortableSupplierPendingChallenge =
     member this.Digest = match this with WireV1 c -> c.Digest | NativeProofV1 c -> c.Digest | NativeSelectedProofV2 c -> c.Digest
     member this.BytesBase64 = match this with WireV1 c -> c.BytesBase64 | NativeProofV1 c -> c.BytesBase64 | NativeSelectedProofV2 c -> c.BytesBase64
 
+/// /4 issuance context only; this is not an additional pending slot or nonce ledger.
+type PortableSupplierNativeIssuanceAnchor =
+    { ChallengeKind: PortableSupplierChallengeKind
+      ChallengeId: Guid
+      ChallengeDigest: string
+      Head: string
+      Sequence: uint64 }
+
 type PortableSupplierTranscriptKind = SupplierCreation | SupplierGenesis | SupplierAppend | SupplierUnchanged
 
 /// Contract of the trusted adapter, not an implementation of signature/schema verification.
@@ -2602,20 +2755,36 @@ type PortableSupplierRetainedNativeAcquisition =
     { AcceptedRevision: uint64
       AcceptedStoreFence: uint64
       Challenge: PortableSupplierPendingChallenge
+      IssuanceAnchor: PortableSupplierNativeIssuanceAnchor
       RequestBase64: string
       ResultBase64: string
       ProofEnvelopeBase64: string
       ReceiptBase64: string
       ControllerBundleBase64: string }
 
+/// Bounded first-failure input custody. These bytes need not be authenticated or schema-valid.
+type PortableSupplierRejectedExchange =
+    { AcceptedRevision: uint64
+      AcceptedStoreFence: uint64
+      Challenge: PortableSupplierPendingChallenge
+      NativeAnchor: PortableSupplierNativeIssuanceAnchor option
+      RequestBase64: string
+      FramesBase64: string list
+      ReceiverBundleBase64: string option
+      ControllerBundleBase64: string option
+      Reason: string }
+
 /// Fresh-only /4 custody. Its fence is data and cannot establish durable ownership.
 type PortableSupplierCheckpointCustody =
     { OriginalReceiverEpoch: Guid
       StoreFence: uint64
       OriginalIntentEnvelopeBase64: string
+      NativeConfiguration: PortableSupplierOriginalNativeConfiguration
+      PendingNativeAnchor: PortableSupplierNativeIssuanceAnchor option
       CreationExchange: PortableSupplierRetainedWireExchange option
       WireExchanges: PortableSupplierRetainedWireExchange list
       NativeAcquisitions: PortableSupplierRetainedNativeAcquisition list
+      RejectedExchanges: PortableSupplierRejectedExchange list
       AbandonedChallenges: PortableSupplierPendingChallenge list
       GenesisCheckpointBase64: string option
       OutputCheckpointBase64: string option }
@@ -2885,7 +3054,8 @@ module PortableSupplierAdmission =
             if not (List.contains (response.GetProperty("result").GetString()) ["observed"; "committed"])
                || response.GetProperty("evidence_kind").GetString() <> "supplier-response"
                || body.GetProperty("intent_digest").GetString() <> state.Original.IntentDigest
-               || body.GetProperty("operation_id").GetString() <> challengeRow.GetProperty("operation_id").GetString() then PortableSupplierC1.fail ()
+               || body.GetProperty("operation_id").GetString() <> challengeRow.GetProperty("operation_id").GetString()
+               || response.GetProperty("operation_id").GetString() <> challengeRow.GetProperty("operation_id").GetString() then PortableSupplierC1.fail ()
             if e.Challenge.Purpose = "genesis-readback" && kind <> "bind-original" && kind <> "collect" then PortableSupplierC1.fail ()
         command, response
 
@@ -2929,6 +3099,7 @@ module PortableSupplierAdmission =
         let count key = reservation.GetProperty(key: string) |> PortableSupplierC1.u64
         let original = pinned.OriginalReservation
         if original.AdmittedAt <> date "admitted_at" || original.HostLeaseExpiresAt <> date "host_lease_expires_at"
+           || original.Binding.Command.Deadline <> date "original_deadline"
            || original.Selection <> sourceSelection (reservation.GetProperty("selection"))
            || original.MaximumRuntime.Ticks < 0L || uint64 original.MaximumRuntime.Ticks <> count "maximum_runtime_ticks"
            || original.ExportReserve.Ticks < 0L || uint64 original.ExportReserve.Ticks <> count "export_reserve_ticks"
@@ -2953,8 +3124,21 @@ module PortableSupplierAdmission =
            || count "export_reserve_ticks" < (core.GetProperty("host_min_export_reserve_ticks") |> PortableSupplierC1.u64)
            || count "cleanup_reserve_ticks" < (core.GetProperty("host_min_cleanup_reserve_ticks") |> PortableSupplierC1.u64) then PortableSupplierC1.fail ()
         let request, result = sourceWirePair state creation
+        let creationCollected = result.GetProperty("collected_at") |> PortableSupplierC1.utc
+        if (core.GetProperty("stopped_at") |> PortableSupplierC1.utc) > creationCollected
+           || pinned.Kind <> SupplierCreation || pinned.ChallengeDigest <> creation.Challenge.Digest || pinned.Purpose <> "creation"
+           || pinned.ResponseBase64 <> creation.EvidenceBase64 || not pinned.EventsBase64.IsEmpty
+           || pinned.FromHead.IsSome || pinned.ToHead.IsSome || pinned.Sequence <> 0UL || pinned.CollectedAt <> creationCollected then PortableSupplierC1.fail ()
         let manifest = request.GetProperty("body").GetProperty("selection_manifest") |> PortableSupplierC1.optional (PortableSupplierC1.b64url 6000)
-        PortableSupplierManifest.validateSelection original.Selection manifest |> Result.defaultWith invalidOp |> ignore
+        let selectedManifest = PortableSupplierManifest.validateSelection original.Selection manifest |> Result.defaultWith invalidOp
+        let configuration = custody.NativeConfiguration
+        let scope = PortableSupplierOriginalNativeConfiguration.scope configuration
+        let clock = PortableSupplierOriginalNativeConfiguration.clock configuration
+        if clock.HostBootId <> (core.GetProperty("boot_id") |> PortableSupplierC1.uuid)
+           || clock.ValidFrom > original.AdmittedAt || clock.ValidUntil < min original.Binding.Command.Deadline original.HostLeaseExpiresAt then PortableSupplierC1.fail ()
+        selectedManifest |> Option.iter (fun value ->
+            for memberValue in PortableSupplierManifest.members value do
+                if scope.ExcludedEnginePaths |> List.exists (PortableSupplierOriginalNativeConfiguration.pathsConflict memberValue.Path) then PortableSupplierC1.fail ())
         if result.GetProperty("operation_id").GetString() <> core.GetProperty("operation_id").GetString() then PortableSupplierC1.fail ()
         bundleCoverage false creation.ReceiverBundleBase64 ["creation",receiptBytes,"creation"] |> ignore
         intent, core, reservation, coreBytes, receiptBytes, reservationBytes
@@ -3018,12 +3202,36 @@ module PortableSupplierAdmission =
           ExpectedCurrentHead = state.Head |> Option.defaultWith PortableSupplierC1.fail
           ExpectedCurrentSequence = state.Sequence }
 
+    let private zeroProofContext (state: PortableSupplierAdmissionState) =
+        let _,core,reservation,_,_,reservationBytes = sourceOriginals state
+        if sourceSelection (reservation.GetProperty("selection")) <> NoSelectedOutputs then PortableSupplierC1.fail ()
+        let proofs =
+            state.EventsBase64 |> List.skip 1 |> List.choose (fun encoded ->
+                let exact = raw 26761 encoded |> Result.defaultWith invalidOp
+                let _,event = PortableSupplierC1.payload 26761 12000 exact
+                if event.GetProperty("kind").GetString() = "zero-selection-census" then Some(exact,event) else None)
+        let exact,event = match proofs with [one] -> one | _ -> PortableSupplierC1.fail ()
+        let body = event.GetProperty("body")
+        if body.GetProperty("selection_digest").GetString() <> domain "selection" (PortableSupplierC1.nestedBytes (reservation.GetProperty("selection"))) then PortableSupplierC1.fail ()
+        { Original = state.Original; OperationId = core.GetProperty("operation_id") |> PortableSupplierC1.uuid
+          ReservationDigest = domain "reservation" reservationBytes; ProofEventHead = domain "signed-envelope" exact
+          NativeReceiptSha256 = body.GetProperty("receipt_digest") |> PortableSupplierC1.digest
+          HostLeaseNotAfter = state.Pinned.Value.OriginalReservation.HostLeaseExpiresAt }
+
+    let private nativeAnchorMatches (state: PortableSupplierAdmissionState) (challenge: PortableSupplierPendingChallenge)
+                                    (anchor: PortableSupplierNativeIssuanceAnchor) =
+        challenge.Kind <> SupplierWireV1 && anchor.ChallengeKind = challenge.Kind
+        && anchor.ChallengeId = challenge.ChallengeId && anchor.ChallengeDigest = challenge.Digest
+        && Some anchor.Head = state.Head && anchor.Sequence = state.Sequence
+        && digest anchor.Head
+
     let private sourceNativePair (state: PortableSupplierAdmissionState) (e: PortableSupplierRetainedNativeAcquisition) =
+        if not (nativeAnchorMatches state e.Challenge e.IssuanceAnchor) then PortableSupplierC1.fail ()
         let original,operation,reservation,proofHead,expectedReceipt,epoch,id,challengeDigest,challengeBytes,issued,notAfter,selected =
             match e.Challenge with
             | WireV1 _ -> PortableSupplierC1.fail ()
             | NativeProofV1 challenge ->
-                if not (validNative state.Original challenge) then PortableSupplierC1.fail ()
+                if not (validNative state.Original challenge) || challenge.Context <> zeroProofContext state then PortableSupplierC1.fail ()
                 let c = challenge.Context
                 c.Original,c.OperationId,c.ReservationDigest,c.ProofEventHead,Some c.NativeReceiptSha256,
                 challenge.ReceiverEpoch,challenge.ChallengeId,challenge.Digest,challenge.BytesBase64,challenge.IssuedAt,challenge.NotAfter,false
@@ -3106,10 +3314,109 @@ module PortableSupplierAdmission =
             if (receiptRow.GetProperty("manifest_bytes") |> PortableSupplierC1.b64url 6000) <> exactManifest then PortableSupplierC1.fail ()
             for key in ["manifest_digest"; "member_count"; "total_bytes"] do
                 if receiptRow.GetProperty(key).GetString() <> proofBody.GetProperty(key).GetString() then PortableSupplierC1.fail ()
+        let config = state.CheckpointCustody.Value.NativeConfiguration
+        let scope = PortableSupplierOriginalNativeConfiguration.scope config
+        let clock = PortableSupplierOriginalNativeConfiguration.clock config
+        let expectedScope,expectedClock,expectedDestination = PortableSupplierOriginalNativeConfiguration.expectedHashes config
+        let sourceRoot =
+            match scope.SourceRoot with
+            | IndependentlyPinnedRoot root -> root
+            | CreationAllocationRoot ->
+                { Device = core.GetProperty("allocation_device") |> PortableSupplierC1.u64
+                  Inode = core.GetProperty("allocation_inode") |> PortableSupplierC1.u64
+                  FilesystemUuid = core.GetProperty("allocation_fs_uuid") |> PortableSupplierC1.uuid }
+        if sourceRoot.Inode = 0UL then PortableSupplierC1.fail ()
+        let matchesRoot (expected: PortableSupplierNativeRootIdentity) (row: System.Text.Json.JsonElement) =
+            (row.GetProperty("device") |> PortableSupplierC1.u64) = expected.Device
+            && (row.GetProperty("inode") |> PortableSupplierC1.u64) = expected.Inode
+            && (row.GetProperty("filesystem_uuid") |> PortableSupplierC1.uuid) = expected.FilesystemUuid
+        if receiptRow.GetProperty("scope_policy_digest").GetString() <> expectedScope
+           || receiptRow.GetProperty("clock_snapshot_sha256").GetString() <> expectedClock
+           || not (matchesRoot sourceRoot (receiptRow.GetProperty("source_root")))
+           || clock.HostBootId <> (core.GetProperty("boot_id") |> PortableSupplierC1.uuid) then PortableSupplierC1.fail ()
+        // These are structural interval checks against declared uncertainty only, not clock qualification.
+        if observed.Ticks < clock.MaximumErrorTicks || DateTimeOffset.MaxValue.Ticks - observed.Ticks < clock.MaximumErrorTicks then PortableSupplierC1.fail ()
+        let earliest = observed.AddTicks(-clock.MaximumErrorTicks)
+        let latest = observed.AddTicks(clock.MaximumErrorTicks)
+        if earliest < state.Pinned.Value.OriginalReservation.AdmittedAt || earliest < clock.ValidFrom
+           || latest >= min original.Command.Deadline state.Pinned.Value.OriginalReservation.HostLeaseExpiresAt
+           || latest > collected || latest >= clock.ValidUntil then PortableSupplierC1.fail ()
+        let entries key = receiptRow.GetProperty(key: string).EnumerateArray() |> Seq.toList
+        if selected then
+            let destination = PortableSupplierOriginalNativeConfiguration.destination config |> Option.defaultWith PortableSupplierC1.fail
+            if Some(receiptRow.GetProperty("destination_policy_digest").GetString()) <> expectedDestination
+               || destination.Root = sourceRoot || not (matchesRoot destination.Root (receiptRow.GetProperty("destination_root"))) then PortableSupplierC1.fail ()
+            for row in entries "readback_members" do
+                if (row.GetProperty("uid") |> PortableSupplierC1.u64) <> destination.OwnerUid
+                   || (row.GetProperty("gid") |> PortableSupplierC1.u64) <> destination.OwnerGid then PortableSupplierC1.fail ()
+        else
+            if expectedDestination.IsSome || (PortableSupplierOriginalNativeConfiguration.destination config |> Option.isSome) then PortableSupplierC1.fail ()
+            let inventory = entries "inventory"
+            let directories =
+                inventory |> List.choose (fun row -> if row.GetProperty("kind").GetString() = "directory" then Some(row.GetProperty("path").GetString()) else None) |> Set.ofList
+            for row in inventory do
+                if (row.GetProperty("uid") |> PortableSupplierC1.u64) <> scope.OwnerUid
+                   || (row.GetProperty("gid") |> PortableSupplierC1.u64) <> scope.OwnerGid then PortableSupplierC1.fail ()
+                let path = row.GetProperty("path").GetString()
+                if row.GetProperty("kind").GetString() = "regular-file" && not (List.contains path scope.ExcludedEnginePaths) then PortableSupplierC1.fail ()
+                let segments = path.Split('/')
+                for length in 1 .. segments.Length-1 do
+                    let parent = String.Join("/",segments,0,length)
+                    if not (directories.Contains parent) then PortableSupplierC1.fail ()
         receiptRow,proofEnvelope,proofPayload,id,epoch
+
+    let private outputCheckpoint (state: PortableSupplierAdmissionState) (exchange: PortableSupplierRetainedNativeAcquisition) provenance =
+        let custody = state.CheckpointCustody.Value
+        let genesisBytes = raw 16384 custody.GenesisCheckpointBase64.Value |> Result.defaultWith invalidOp
+        let genesisHash = digestBytes genesisBytes
+        let receipt,proofEnvelope,proofPayload,id,epoch = sourceNativePair state exchange
+        let wireCommon = checkpointCommon state (List.last custody.WireExchanges) exchange.AcceptedRevision exchange.AcceptedStoreFence (Some genesisHash) provenance
+        let common = { wireCommon with ReceiverEpoch = epoch }
+        let selection =
+            match exchange.Challenge with
+            | NativeSelectedProofV2 _ ->
+                let exact = receipt.GetProperty("manifest_bytes") |> PortableSupplierC1.b64url 6000
+                let manifest = PortableSupplierManifest.parse exact |> Result.defaultWith invalidOp
+                CheckpointSelected(digestBytes exact, PortableSupplierManifest.summary manifest)
+            | NativeProofV1 _ -> CheckpointNone
+            | WireV1 _ -> PortableSupplierC1.fail ()
+        let output =
+            { GenesisCheckpointSha256 = genesisHash; Selection = selection
+              ProofSignedEnvelopeSha256 = digestBytes proofEnvelope; ProofPayloadDigest = domain "event" proofPayload
+              NativeReceiptSha256 = raw 32768 exchange.ReceiptBase64 |> Result.defaultWith invalidOp |> digestBytes
+              NativeProofEnvelopeSha256 = raw 65536 exchange.ProofEnvelopeBase64 |> Result.defaultWith invalidOp |> digestBytes
+              NativeRequestEnvelopeSha256 = raw 65536 exchange.RequestBase64 |> Result.defaultWith invalidOp |> digestBytes
+              NativeResultEnvelopeSha256 = raw 4096 exchange.ResultBase64 |> Result.defaultWith invalidOp |> digestBytes
+              NativeChallengeDigest = exchange.Challenge.Digest; NativeChallengeId = id; NativeReceiverEpoch = epoch
+              NativeControllerVerificationBundleSha256 = raw 8192 exchange.ControllerBundleBase64 |> Result.defaultWith invalidOp |> digestBytes }
+        PortableSupplierCheckpoint.createOutput common output |> Result.defaultWith invalidOp
 
     let private validateCustodyReferences (state: PortableSupplierAdmissionState) (c: PortableSupplierCheckpointCustody) =
         sourceOriginal state.Original c.OriginalIntentEnvelopeBase64 |> ignore
+        PortableSupplierOriginalNativeConfiguration.validate state.Original c.OriginalReceiverEpoch c.NativeConfiguration |> Result.defaultWith invalidOp |> ignore
+        if c.RejectedExchanges.Length > 1 || c.RejectedExchanges.IsEmpty <> state.FirstFailure.IsNone then PortableSupplierC1.fail ()
+        for rejected in c.RejectedExchanges do
+            match rejected.Challenge,rejected.NativeAnchor with
+            | WireV1 _,None -> ()
+            | (NativeProofV1 _ | NativeSelectedProofV2 _),Some anchor when nativeAnchorMatches state rejected.Challenge anchor -> ()
+            | _ -> PortableSupplierC1.fail ()
+            if Some rejected.Reason <> state.FirstFailure || not (present rejected.Reason)
+               || rejected.FramesBase64.Length > 2 || state.Conflicts.IsEmpty then PortableSupplierC1.fail ()
+            if rejected.AcceptedRevision < 2UL || rejected.AcceptedRevision > state.Revision || rejected.AcceptedStoreFence <> rejected.AcceptedRevision then PortableSupplierC1.fail ()
+            match state.Challenge with
+            | Some pending when pending = rejected.Challenge -> ()
+            | None when List.contains rejected.Challenge c.AbandonedChallenges
+                        && List.contains (rejected.Challenge.Kind,rejected.Challenge.ChallengeId,rejected.Challenge.Digest,"abandoned") state.ChallengeLedger -> ()
+            | _ -> PortableSupplierC1.fail ()
+            raw 65536 rejected.RequestBase64 |> Result.defaultWith invalidOp |> ignore
+            for frame in rejected.FramesBase64 do
+                if frame <> "" then raw 65536 frame |> Result.defaultWith invalidOp |> ignore
+            rejected.ReceiverBundleBase64 |> Option.iter (fun value -> raw 32768 value |> Result.defaultWith invalidOp |> ignore)
+            rejected.ControllerBundleBase64 |> Option.iter (fun value -> raw 8192 value |> Result.defaultWith invalidOp |> ignore)
+            match rejected.Challenge with
+            | WireV1 challenge -> sourceWireChallenge state challenge |> ignore
+            | NativeProofV1 challenge -> if not (validNative { state.Original with ReceiverEpoch = challenge.ReceiverEpoch } challenge) then PortableSupplierC1.fail ()
+            | NativeSelectedProofV2 challenge -> if not (validSelectedNative { state.Original with ReceiverEpoch = challenge.ReceiverEpoch } challenge) then PortableSupplierC1.fail ()
         if state.CheckpointBase64.IsSome || state.AckDraftBase64.IsSome then PortableSupplierC1.fail ()
         let wire = (c.CreationExchange |> Option.toList) @ c.WireExchanges
         let committed =
@@ -3133,7 +3440,13 @@ module PortableSupplierAdmission =
             | NativeSelectedProofV2 challenge ->
                 if not (validSelectedNative { state.Original with ReceiverEpoch = challenge.ReceiverEpoch } challenge) then PortableSupplierC1.fail ()
         if state.Pinned.IsSome <> c.CreationExchange.IsSome then PortableSupplierC1.fail ()
+        match state.Challenge,c.PendingNativeAnchor with
+        | (None | Some(WireV1 _)),None -> ()
+        | Some((NativeProofV1 _ | NativeSelectedProofV2 _) as challenge),Some anchor when nativeAnchorMatches state challenge anchor -> ()
+        | _ -> PortableSupplierC1.fail ()
         match state.Challenge with
+        | Some(NativeProofV1 challenge) ->
+            if challenge.Context <> zeroProofContext state then PortableSupplierC1.fail ()
         | Some(NativeSelectedProofV2 challenge) ->
             if challenge.Context <> selectedProofContext state then PortableSupplierC1.fail ()
         | Some(WireV1 challenge) -> sourceWireChallenge state challenge |> ignore
@@ -3186,6 +3499,8 @@ module PortableSupplierAdmission =
                            || event.GetProperty("creation_core_digest").GetString() <> domain "creation" (PortableSupplierC1.nestedBytes (event.GetProperty("creation_core")))
                            || event.GetProperty("creation_receipt_digest").GetString() <> domain "creation-receipt" receiptBytes
                            || event.GetProperty("reservation_digest").GetString() <> domain "reservation" reservationBytes then PortableSupplierC1.fail ()
+                        let observed = event.GetProperty("observed_at") |> PortableSupplierC1.utc
+                        if observed < admitted || observed > collected || observed >= originalLimit then PortableSupplierC1.fail ()
                         sequence <- 0UL
                     else
                         PortableSupplierWireShape.check_supplier_event event
@@ -3254,10 +3569,21 @@ module PortableSupplierAdmission =
                 let expected = PortableSupplierCheckpoint.createGenesis common (domain "signed-envelope" eg) (domain "genesis" g) |> Result.defaultWith invalidOp
                 if PortableSupplierCheckpoint.serializeGenesis expected <> bytes || state.Phase <> SupplierGenesisAccepted then PortableSupplierC1.fail ()
             | _ -> PortableSupplierC1.fail ()
-        elif not c.WireExchanges.IsEmpty || c.GenesisCheckpointBase64.IsSome || state.Phase <> SupplierIntentStored then PortableSupplierC1.fail ()
-        for acquisition in c.NativeAcquisitions do sourceNativePair state acquisition |> ignore
-        // Native acceptance remains held until the independent original policy snapshot join.
-        if not c.NativeAcquisitions.IsEmpty || c.OutputCheckpointBase64.IsSome then PortableSupplierC1.fail ()
+        elif not c.WireExchanges.IsEmpty || c.GenesisCheckpointBase64.IsSome || state.Phase <> SupplierIntentStored
+             || state.Head.IsSome || state.Sequence <> 0UL || not state.EventsBase64.IsEmpty || not state.ResponsesBase64.IsEmpty then PortableSupplierC1.fail ()
+        if state.Revision = 1UL && (state.Original.ReceiverEpoch <> c.OriginalReceiverEpoch || state.Challenge.IsSome
+                                   || not state.ChallengeLedger.IsEmpty || not c.AbandonedChallenges.IsEmpty
+                                   || state.FirstFailure.IsSome || not state.Conflicts.IsEmpty) then PortableSupplierC1.fail ()
+        match c.NativeAcquisitions,c.OutputCheckpointBase64 with
+        | [],None -> ()
+        | [acquisition],Some encoded ->
+            if state.Challenge.IsSome || c.PendingNativeAnchor.IsSome || c.GenesisCheckpointBase64.IsNone || c.WireExchanges.IsEmpty
+               || acquisition.AcceptedRevision <= (List.last c.WireExchanges).AcceptedRevision then PortableSupplierC1.fail ()
+            let bytes = raw 16384 encoded |> Result.defaultWith invalidOp
+            let parsed = PortableSupplierCheckpoint.parseOutput bytes |> Result.defaultWith invalidOp
+            let expected = outputCheckpoint state acquisition (PortableSupplierCheckpoint.outputCommon parsed).Provenance
+            if PortableSupplierCheckpoint.serializeOutput expected <> bytes then PortableSupplierC1.fail ()
+        | _ -> PortableSupplierC1.fail ()
 
     let private transcriptBytes (state: PortableSupplierAdmissionState) =
         let pinned =
@@ -3268,10 +3594,16 @@ module PortableSupplierAdmission =
             state.CheckpointCustody |> Option.map (fun c ->
                 let exchange (e: PortableSupplierRetainedWireExchange) =
                     [e.Challenge.BytesBase64; e.RequestBase64; e.ResultBase64; e.EvidenceBase64; e.ReceiverBundleBase64; e.ControllerBundleBase64]
-                [c.OriginalIntentEnvelopeBase64]
+                [c.OriginalIntentEnvelopeBase64
+                 PortableSupplierOriginalNativeConfiguration.scopeBytes c.NativeConfiguration |> Convert.ToBase64String
+                 PortableSupplierOriginalNativeConfiguration.clockBytes c.NativeConfiguration |> Convert.ToBase64String]
+                @ (PortableSupplierOriginalNativeConfiguration.destinationBytes c.NativeConfiguration |> Option.map Convert.ToBase64String |> Option.toList)
                 @ (c.CreationExchange |> Option.map exchange |> Option.defaultValue [])
                 @ (c.WireExchanges |> List.collect exchange)
                 @ (c.NativeAcquisitions |> List.collect (fun e -> [e.Challenge.BytesBase64; e.RequestBase64; e.ResultBase64; e.ProofEnvelopeBase64; e.ReceiptBase64; e.ControllerBundleBase64]))
+                @ (c.RejectedExchanges |> List.collect (fun e ->
+                    [e.Challenge.BytesBase64; e.RequestBase64] @ e.FramesBase64
+                    @ Option.toList e.ReceiverBundleBase64 @ Option.toList e.ControllerBundleBase64))
                 @ (c.AbandonedChallenges |> List.map _.BytesBase64)
                 @ (c.GenesisCheckpointBase64 |> Option.toList) @ (c.OutputCheckpointBase64 |> Option.toList))
             |> Option.defaultValue []
@@ -3283,7 +3615,8 @@ module PortableSupplierAdmission =
         try
             if isNull (box state) || isNull (box state.Original) then Error "supplier-admission-state-refused"
             else
-                let decoded = transcriptBytes state |> List.map (raw 65536)
+                // A quarantined malformed empty frame is retained exactly; it supplies zero raw bytes.
+                let decoded = transcriptBytes state |> List.map (fun value -> if value = "" then Ok [||] else raw 65536 value)
                 let total = decoded |> List.sumBy (function Ok bytes -> int64 bytes.Length | Error _ -> int64 MaximumRecordBytes)
                 let validLedger =
                     state.ChallengeLedger |> List.forall (fun (kind, id, hash, status) ->
@@ -3313,7 +3646,7 @@ module PortableSupplierAdmission =
                         validateCustodyReferences state c
                         c.OriginalReceiverEpoch <> Guid.Empty && c.StoreFence = state.Revision
                         && validRaw 65536 c.OriginalIntentEnvelopeBase64
-                        && c.WireExchanges.Length + c.NativeAcquisitions.Length + (if c.CreationExchange.IsSome then 1 else 0) <= 128
+                        && c.WireExchanges.Length + c.NativeAcquisitions.Length + c.RejectedExchanges.Length + (if c.CreationExchange.IsSome then 1 else 0) <= 128
                         && c.AbandonedChallenges.Length <= 128
                         && (c.GenesisCheckpointBase64 |> Option.forall (fun value ->
                             match raw 16384 value with Ok bytes -> PortableSupplierCheckpoint.parseGenesis bytes |> Result.isOk | _ -> false))
@@ -3322,6 +3655,7 @@ module PortableSupplierAdmission =
                         && (c.OutputCheckpointBase64.IsNone || c.GenesisCheckpointBase64.IsSome)
                     | _ -> false
                 if state.Revision = 0UL || not validCustody
+                   || (state.JournalVersion = SupplierJournalV4 && state.Revision = UInt64.MaxValue && state.Challenge.IsSome && state.FirstFailure.IsNone)
                    || not (present state.Original.Command.WorkspaceScope && present state.Original.Command.IdempotencyId)
                    || state.Original.ReceiverEpoch = Guid.Empty || not (digest state.Original.IntentDigest && digest state.Original.TrustPolicyDigest)
                    || not (present state.Original.QualifiedImage && present state.Original.SupplierSourceRevision)
@@ -3360,7 +3694,9 @@ module PortableSupplierAdmission =
 
     let private issueChallengeCore (challenge: PortableSupplierAdmissionChallenge) (state: PortableSupplierAdmissionState) =
         let expectedPurpose = if state.Phase = SupplierIntentStored then "creation" elif state.Head.IsNone then "genesis-readback" else "state-readback"
-        if state.FirstFailure.IsSome || not state.Conflicts.IsEmpty || state.Challenge.IsSome
+        if (state.CheckpointCustody |> Option.exists (fun c -> c.OutputCheckpointBase64.IsSome))
+           || (state.JournalVersion = SupplierJournalV4 && state.Revision > UInt64.MaxValue - 2UL)
+           || state.FirstFailure.IsSome || not state.Conflicts.IsEmpty || state.Challenge.IsSome
            || state.ChallengeLedger.Length >= 128 || challenge.ChallengeId = Guid.Empty
            || (state.ChallengeLedger |> List.exists (fun (_, id, _, _) -> id = challenge.ChallengeId))
            || challenge.ReceiverEpoch <> state.Original.ReceiverEpoch || challenge.ExpectedHead <> state.Head
@@ -3419,7 +3755,7 @@ module PortableSupplierAdmission =
     let private hold reason conflict state =
         next { state with FirstFailure = state.FirstFailure |> Option.orElse (Some reason)
                           Conflicts = state.Conflicts.Add conflict }
-        |> Result.bind validate
+        |> Result.bind (fun proposed -> if proposed.JournalVersion = SupplierJournalV4 then Ok proposed else validate proposed)
 
     /// No-effect reducer. Even a successful source transition is not ACK or execution authority.
     let private acceptCore (verified: PortableSupplierVerifiedTranscript) (state: PortableSupplierAdmissionState) =
@@ -3440,8 +3776,11 @@ module PortableSupplierAdmission =
                 else
                     let consumed = (SupplierWireV1, challenge.ChallengeId, challenge.Digest, "consumed") :: state.ChallengeLedger
                     let candidate phase head sequence events =
+                        let pinned =
+                            if state.JournalVersion = SupplierJournalV4 then state.Pinned |> Option.orElse (Some value)
+                            else Some value
                         let proposed = next { state with Phase = phase; Challenge = None; ChallengeLedger = consumed
-                                                         Pinned = Some value; Head = head; Sequence = sequence; EventsBase64 = events
+                                                         Pinned = pinned; Head = head; Sequence = sequence; EventsBase64 = events
                                                          ResponsesBase64 = (if value.Kind = SupplierCreation then state.ResponsesBase64 else state.ResponsesBase64 @ [value.ResponseBase64]) }
                         if state.JournalVersion = SupplierJournalV4 then proposed else proposed |> Result.bind validate
                     match value.Kind, state.Phase with
@@ -3476,7 +3815,15 @@ module PortableSupplierAdmission =
         else
             acceptCore verified state |> Result.bind (fun proposed ->
                 if proposed.FirstFailure.IsSome || not proposed.Conflicts.IsEmpty then
-                    validate proposed |> Result.map SupplierCheckpointHeld
+                    let custody = proposed.CheckpointCustody.Value
+                    let rejected =
+                        { AcceptedRevision = proposed.Revision; AcceptedStoreFence = custody.StoreFence
+                          Challenge = WireV1 exchange.Challenge; NativeAnchor = None; RequestBase64 = exchange.RequestBase64
+                          FramesBase64 = [exchange.ResultBase64; exchange.EvidenceBase64]
+                          ReceiverBundleBase64 = Some exchange.ReceiverBundleBase64; ControllerBundleBase64 = Some exchange.ControllerBundleBase64
+                          Reason = proposed.FirstFailure.Value }
+                    let complete = { proposed with CheckpointCustody = Some { custody with RejectedExchanges = [rejected] } }
+                    validate complete |> Result.map SupplierCheckpointHeld
                 else
                     let custody = proposed.CheckpointCustody.Value
                     let retained = { exchange with AcceptedRevision = proposed.Revision; AcceptedStoreFence = custody.StoreFence }
@@ -3513,6 +3860,73 @@ module PortableSupplierAdmission =
             else retainWireV4 verified exchange original revision fence state
         with _ -> Error "supplier-v4-wire-refused"
 
+    /// Quarantine the first encountered failed/uncertain exchange in the existing authority record.
+    /// The pending challenge remains sticky; these bytes can only produce a held source state.
+    let quarantineExchangeV4 original revision fence reason (request: string) (frames: string list)
+                             (receiverBundle: string option) (controllerBundle: string option)
+                             (state: PortableSupplierAdmissionState) =
+        try
+            if not (expectedV4 original revision fence state) then Error "supplier-v4-original-revision-fence-refused"
+            elif state.FirstFailure.IsSome || not state.Conflicts.IsEmpty then Ok(SupplierCheckpointHeld state)
+            elif state.Challenge.IsNone || frames.Length > 2
+                 || not (List.contains reason ["supplier-authentication-refused"; "supplier-context-refused"; "supplier-framing-refused"; "supplier-exchange-unknown"]) then
+                Error "supplier-v4-quarantine-refused"
+            else
+                validate state |> Result.bind (fun current ->
+                    let requestBytes = raw 65536 request |> Result.defaultWith invalidOp
+                    let exact = frames |> List.map (fun value -> if value = "" then [||] else raw 65536 value |> Result.defaultWith invalidOp)
+                    receiverBundle |> Option.iter (fun value -> raw 32768 value |> Result.defaultWith invalidOp |> ignore)
+                    controllerBundle |> Option.iter (fun value -> raw 8192 value |> Result.defaultWith invalidOp |> ignore)
+                    let challenge = current.Challenge.Value
+                    let cause = Array.concat (requestBytes::exact) |> digestBytes
+                    next { current with FirstFailure = Some reason; Conflicts = current.Conflicts.Add cause }
+                    |> Result.bind (fun proposed ->
+                        let custody = proposed.CheckpointCustody.Value
+                        let rejected =
+                            { AcceptedRevision = proposed.Revision; AcceptedStoreFence = custody.StoreFence; Challenge = challenge
+                              NativeAnchor = custody.PendingNativeAnchor; RequestBase64 = request; FramesBase64 = frames
+                              ReceiverBundleBase64 = receiverBundle; ControllerBundleBase64 = controllerBundle; Reason = reason }
+                        validate { proposed with CheckpointCustody = Some { custody with RejectedExchanges = [rejected] } }
+                        |> Result.map SupplierCheckpointHeld))
+        with _ -> Error "supplier-v4-quarantine-refused"
+
+    /// Full structural native/output join. A real current-signature/policy factory must precede authenticated use.
+    /// No native, durable, ACK or effect capability is produced by this source caller.
+    let acceptNativeV4 original revision fence now monotonic (exchange: PortableSupplierRetainedNativeAcquisition)
+                       (state: PortableSupplierAdmissionState) =
+        let refuse () =
+            quarantineExchangeV4 original revision fence "supplier-context-refused" exchange.RequestBase64
+                [exchange.ResultBase64;exchange.ProofEnvelopeBase64] None (Some exchange.ControllerBundleBase64) state
+        try
+            if not (expectedV4 original revision fence state) then Error "supplier-v4-original-revision-fence-refused"
+            elif state.FirstFailure.IsSome || not state.Conflicts.IsEmpty then Ok(SupplierCheckpointHeld state)
+            elif state.Challenge <> Some exchange.Challenge || state.CheckpointCustody.Value.PendingNativeAnchor <> Some exchange.IssuanceAnchor
+                 || state.CheckpointCustody.Value.OutputCheckpointBase64.IsSome then Error "supplier-v4-native-pending-refused"
+            else
+                validate state |> Result.bind (fun current ->
+                    sourceNativePair current exchange |> ignore
+                    let issued,notAfter,issuedMonotonic,deadlineMonotonic =
+                        match exchange.Challenge with
+                        | NativeProofV1 c -> c.IssuedAt,c.NotAfter,c.IssuedMonotonic,c.DeadlineMonotonic
+                        | NativeSelectedProofV2 c -> c.IssuedAt,c.NotAfter,c.IssuedMonotonic,c.DeadlineMonotonic
+                        | WireV1 _ -> PortableSupplierC1.fail ()
+                    let _,result = raw 4096 exchange.ResultBase64 |> Result.defaultWith invalidOp |> PortableSupplierC1.payload 4096 896
+                    let collected = result.GetProperty("collected_at") |> PortableSupplierC1.utc
+                    if now < issued || now >= notAfter || monotonic < issuedMonotonic || monotonic >= deadlineMonotonic
+                       || collected > now || now - collected > TimeSpan.FromSeconds 30. then PortableSupplierC1.fail ()
+                    next { current with Challenge = None
+                                        ChallengeLedger = (exchange.Challenge.Kind,exchange.Challenge.ChallengeId,exchange.Challenge.Digest,"consumed") :: current.ChallengeLedger }
+                    |> Result.bind (fun proposed ->
+                        let custody = proposed.CheckpointCustody.Value
+                        let retained = { exchange with AcceptedRevision = proposed.Revision; AcceptedStoreFence = custody.StoreFence }
+                        let candidate = { proposed with CheckpointCustody = Some { custody with PendingNativeAnchor = None; NativeAcquisitions = [retained] } }
+                        let checkpoint = outputCheckpoint candidate retained "controlled-test"
+                        let complete =
+                            { candidate with CheckpointCustody = Some { candidate.CheckpointCustody.Value with
+                                                                         OutputCheckpointBase64 = Some(PortableSupplierCheckpoint.serializeOutput checkpoint |> Convert.ToBase64String) } }
+                        validate complete |> Result.map SupplierCheckpointData))
+        with _ -> refuse ()
+
     /// A restart cannot revive an outstanding challenge in a new monotonic clock domain.
     let private abandonChallengeCore newEpoch (state: PortableSupplierAdmissionState) =
         if newEpoch = Guid.Empty || newEpoch = state.Original.ReceiverEpoch
@@ -3523,7 +3937,7 @@ module PortableSupplierAdmission =
                 | None -> state.ChallengeLedger
                 | Some challenge -> (challenge.Kind, challenge.ChallengeId, challenge.Digest, "abandoned") :: state.ChallengeLedger
             let custody = state.CheckpointCustody |> Option.map (fun c ->
-                { c with AbandonedChallenges = c.AbandonedChallenges @ (state.Challenge |> Option.toList) })
+                { c with PendingNativeAnchor = None; AbandonedChallenges = c.AbandonedChallenges @ (state.Challenge |> Option.toList) })
             next { state with Original = { state.Original with ReceiverEpoch = newEpoch }; Challenge = None; ChallengeLedger = ledger; CheckpointCustody = custody }
             |> Result.bind validate
 
@@ -3532,11 +3946,12 @@ module PortableSupplierAdmission =
     /// Explicit fresh-original selection. Stage still refuses an occupied journal key.
     let beginIntentV3 original = beginIntent original |> Result.map (fun state -> { state with JournalVersion = SupplierJournalV3 })
     /// Fresh /4 source custody only. The same-store StageV4 refuses every occupied key.
-    let beginIntentV4 original (signedOriginalIntent: byte array) =
+    let beginIntentV4 original (signedOriginalIntent: byte array) (configuration: PortableSupplierOriginalNativeConfiguration) =
         try
             let snapshot = Array.copy signedOriginalIntent
             let bytes, intent = PortableSupplierC1.payload 65536 6000 snapshot
             sourceOriginal original (Convert.ToBase64String snapshot) |> ignore
+            PortableSupplierOriginalNativeConfiguration.validate original original.ReceiverEpoch configuration |> Result.defaultWith invalidOp |> ignore
             let originalBytes = raw 6000 original.IntentBase64 |> Result.defaultWith invalidOp
             if bytes <> originalBytes || intent.GetProperty("schema").GetString() <> "fsgg.v3.receiver-intent/1"
                || intent.GetProperty("requested_profile").GetString() <> "signed-hold-v1"
@@ -3547,7 +3962,8 @@ module PortableSupplierAdmission =
                     validate { state with JournalVersion = SupplierJournalV4
                                           CheckpointCustody = Some { OriginalReceiverEpoch = original.ReceiverEpoch; StoreFence = 1UL
                                                                      OriginalIntentEnvelopeBase64 = Convert.ToBase64String snapshot
-                                                                     CreationExchange = None; WireExchanges = []; NativeAcquisitions = []; AbandonedChallenges = []
+                                                                     NativeConfiguration = configuration; PendingNativeAnchor = None
+                                                                     CreationExchange = None; WireExchanges = []; NativeAcquisitions = []; RejectedExchanges = []; AbandonedChallenges = []
                                                                      GenesisCheckpointBase64 = None; OutputCheckpointBase64 = None } })
         with _ -> Error "supplier-v4-original-refused"
     let issueChallenge challenge state =
@@ -3556,7 +3972,7 @@ module PortableSupplierAdmission =
     let issueNativeProofChallenge (expectedContext: PortableSupplierNativeProofContext)
                                   (challenge: PortableSupplierNativeProofChallenge) (state: PortableSupplierAdmissionState) =
         try
-            if state.JournalVersion = SupplierJournalV2 || state.Challenge.IsSome
+            if state.JournalVersion <> SupplierJournalV3 || state.Challenge.IsSome
                || state.FirstFailure.IsSome || not state.Conflicts.IsEmpty
                || state.ChallengeLedger.Length >= 128 || challenge.Context <> expectedContext
                || (state.ChallengeLedger |> List.exists (fun (_, id, _, _) -> id = challenge.ChallengeId))
@@ -3569,6 +3985,7 @@ module PortableSupplierAdmission =
                                             issuedMonotonic deadlineMonotonic (state: PortableSupplierAdmissionState) =
         try
             if not (expectedV4 original revision fence state) || state.Challenge.IsSome
+               || state.Revision > UInt64.MaxValue - 2UL
                || state.FirstFailure.IsSome || not state.Conflicts.IsEmpty
                || state.Phase <> SupplierGenesisAccepted || state.CheckpointCustody.Value.OutputCheckpointBase64.IsSome
                || state.ChallengeLedger.Length >= 128
@@ -3584,8 +4001,40 @@ module PortableSupplierAdmission =
                     let exact = selectedNativeBytes provisional
                     let challenge = { provisional with Digest = digestBytes exact; BytesBase64 = Convert.ToBase64String exact }
                     if not (validSelectedNative current.Original challenge) then Error "supplier-selected-native-proof-challenge-refused"
-                    else next { current with Challenge = Some(NativeSelectedProofV2 challenge) } |> Result.bind validate)
+                    else
+                        let anchor = { ChallengeKind = SupplierSelectedNativeProofV2; ChallengeId = challenge.ChallengeId
+                                       ChallengeDigest = challenge.Digest; Head = context.ExpectedCurrentHead; Sequence = context.ExpectedCurrentSequence }
+                        let custody = { current.CheckpointCustody.Value with PendingNativeAnchor = Some anchor }
+                        next { current with Challenge = Some(NativeSelectedProofV2 challenge); CheckpointCustody = Some custody } |> Result.bind validate)
         with _ -> Error "supplier-selected-native-proof-challenge-refused"
+
+    /// /4 zero issuance derives the known receipt reference from the exact retained census event.
+    let issueZeroNativeProofChallengeV4 original revision fence challengeId issuedAt notAfter
+                                        issuedMonotonic deadlineMonotonic (state: PortableSupplierAdmissionState) =
+        try
+            if not (expectedV4 original revision fence state) || state.Challenge.IsSome
+               || state.Revision > UInt64.MaxValue - 2UL
+               || state.FirstFailure.IsSome || not state.Conflicts.IsEmpty
+               || state.Phase <> SupplierGenesisAccepted || state.CheckpointCustody.Value.OutputCheckpointBase64.IsSome
+               || state.ChallengeLedger.Length >= 128
+               || (state.ChallengeLedger |> List.exists (fun (_, id, _, _) -> id = challengeId)) then
+                Error "supplier-zero-native-proof-challenge-refused"
+            else
+                validate state |> Result.bind (fun current ->
+                    let context = zeroProofContext current
+                    let provisional: PortableSupplierNativeProofChallenge =
+                        { Context = context; ChallengeId = challengeId; Digest = String.replicate 64 "0"; BytesBase64 = ""
+                          ReceiverEpoch = current.Original.ReceiverEpoch; IssuedAt = issuedAt; NotAfter = notAfter
+                          IssuedMonotonic = issuedMonotonic; DeadlineMonotonic = deadlineMonotonic }
+                    let exact = nativeBytes provisional
+                    let challenge = { provisional with Digest = digestBytes exact; BytesBase64 = Convert.ToBase64String exact }
+                    if not (validNative current.Original challenge) then Error "supplier-zero-native-proof-challenge-refused"
+                    else
+                        let anchor = { ChallengeKind = SupplierNativeProofV1; ChallengeId = challenge.ChallengeId
+                                       ChallengeDigest = challenge.Digest; Head = current.Head.Value; Sequence = current.Sequence }
+                        let custody = { current.CheckpointCustody.Value with PendingNativeAnchor = Some anchor }
+                        next { current with Challenge = Some(NativeProofV1 challenge); CheckpointCustody = Some custody } |> Result.bind validate)
+        with _ -> Error "supplier-zero-native-proof-challenge-refused"
 
     let verify authenticator now monotonic state envelope =
         try verifyCore authenticator now monotonic state envelope with _ -> Error "supplier-admission-verification-refused"
