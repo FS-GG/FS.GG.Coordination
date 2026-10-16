@@ -29,7 +29,7 @@ PAIR_ROLES = {
         'src/FS.GG.Coordination.Orchestration.Runner.Client/FiniteCustodyInertAdapter.fs',
         'src/FS.GG.Coordination.Orchestration.Runner.Client/Program.fs'}}
 
-SLOT_PROFILE = 'inert-slot-callback-pair/1'
+SLOT_PROFILE = 'inert-slot-callback-pair/2'
 SLOT_MANIFEST_PATH = 'tests/release-successor-authentication/slot-callback-pair-manifest.json'
 SLOT_VECTORS_PATH = 'tests/release-successor-authentication/slot-callback-pair-vectors.json'
 SLOT_ENTRY_PATH = 'tests/release-successor-authentication/slot-sink-callback-entry.py'
@@ -108,6 +108,9 @@ def validate_pair(pin, destination):
     require(vectors['schema'] == 'fsgg.authentication-callback-vectors/1'
             and vectors['binding']['source']['contract'] == manifest['bundleDigest'],
             'callback vectors bundle differs')
+    if pin['schema'] == 'fsgg.utel-callback-source/3':
+        require(vectors['slotEvidence']['profile'] == SLOT_PROFILE,
+                'callback vectors selected profile differs')
     return manifest
 
 
@@ -160,6 +163,7 @@ def validate_closed(pin, destination):
 def prepare_closed():
     # Existing maintained acquisition route, separate immutable opt-in pin.
     pin = json.loads((ROOT / CLOSED_PIN_PATH).read_bytes())
+    validate_selected_sources(json.loads((ROOT / 'eng/utel-slot-callback-source.json').read_bytes()), pin)
     destination = pathlib.Path(os.environ['FSGG_UTEL_CALLBACK_SOURCE'] + '-closed')
     require(destination.is_absolute() and not destination.exists(), 'fresh closed source directory required')
     destination.mkdir(mode=0o700, parents=True)
@@ -180,10 +184,23 @@ def prepare_closed():
     print('Pinned closed SOURCE fixture prepared; provider remains unavailable')
 
 
+def validate_selected_sources(slot, closed):
+    validate_pin(slot)
+    require(slot.get('schema') == 'fsgg.utel-callback-source/3'
+            and type(closed) is dict
+            and closed.get('schema') == 'fsgg.utel-closed-callback-source/1'
+            and closed.get('repository') == slot['repository']
+            and closed.get('revision') == slot['revision']
+            and closed.get('vectorsSha256') == slot['vectorsSha256'],
+            'selected slot and closed sources differ')
+
+
 def prepare(slot=False):
     pin = json.loads((ROOT / ('eng/utel-slot-callback-source.json' if slot else 'eng/utel-callback-source.json')).read_bytes())
     validate_pin(pin)
     require((pin['schema'] == 'fsgg.utel-callback-source/3') == slot, 'callback operation profile differs')
+    if slot:
+        validate_selected_sources(pin, json.loads((ROOT / CLOSED_PIN_PATH).read_bytes()))
     destination = pathlib.Path(os.environ['FSGG_UTEL_CALLBACK_SOURCE'] + ('-slots' if slot else ''))
     require(destination.is_absolute() and not destination.exists(), 'fresh callback source directory required')
     destination.mkdir(mode=0o700, parents=True)
