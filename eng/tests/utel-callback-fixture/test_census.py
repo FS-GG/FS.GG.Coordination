@@ -88,6 +88,8 @@ class PairControls(unittest.TestCase):
                         'files': rows, 'bundleDigest': bundle}
             vectors = {'schema': 'fsgg.authentication-callback-vectors/1',
                        'binding': {'source': {'contract': bundle}}}
+            if slot:
+                vectors['slotEvidence'] = {'profile': helper['SLOT_PROFILE']}
             manifest_name = helper['SLOT_MANIFEST_PATH' if slot else 'MANIFEST_PATH']
             vectors_name = helper['SLOT_VECTORS_PATH' if slot else 'VECTORS_PATH']
             manifest_path, vectors_path = owner / manifest_name, owner / vectors_name
@@ -107,13 +109,14 @@ class PairControls(unittest.TestCase):
             self.assertEqual(manifest, helper['validate_pair'](pin, owner))
 
     def test_slot_profile_accepts_exact_sixteen_roles(self):
+        self.assertEqual('inert-slot-callback-pair/2', helper['SLOT_PROFILE'])
         with self.pair(slot=True) as (pin, owner, _, manifest, _):
             self.assertEqual(16, len(manifest['files']))
             self.assertEqual(manifest, helper['validate_pair'](pin, owner))
 
     def test_slot_profile_unknown_and_crossed_profiles_and_paths_refuse(self):
         with self.pair(slot=True) as (pin, owner, _, _, _):
-            for changed in [dict(pin, profile='unknown'), dict(pin, profile='inert-callback-pair/1'),
+            for changed in [dict(pin, profile='unknown'), dict(pin, profile='inert-slot-callback-pair/1'), dict(pin, profile='inert-callback-pair/1'),
                             dict(pin, entryPath=helper['SLOT_ENTRY_PATH']),
                             dict(pin, manifestPath=helper['SLOT_MANIFEST_PATH']),
                             {key: value for key, value in pin.items() if key != 'profile'},
@@ -122,12 +125,14 @@ class PairControls(unittest.TestCase):
                     with self.assertRaises(RuntimeError): helper['validate_pair'](changed, owner)
 
     def test_slot_profile_rehashed_foreign_role_and_crossed_vectors_refuse(self):
-        for mutation in ['foreign-role', 'crossed-vectors']:
+        for mutation in ['foreign-role', 'crossed-vectors', 'crossed-profile']:
             with self.pair(slot=True) as (pin, owner, _, manifest, vectors):
                 if mutation == 'foreign-role':
                     manifest['files'][0]['path'] = 'scripts/release-successor-publish.py'
-                else:
+                elif mutation == 'crossed-vectors':
                     vectors['binding']['source']['contract'] = 'f' * 64
+                else:
+                    vectors['slotEvidence']['profile'] = 'inert-slot-callback-pair/1'
                 manifest_path = owner / helper['SLOT_MANIFEST_PATH']
                 vectors_path = owner / helper['SLOT_VECTORS_PATH']
                 manifest_path.write_text(json.dumps(manifest))
@@ -173,6 +178,15 @@ class PairControls(unittest.TestCase):
 
 
 class ClosedSourcePinControls(unittest.TestCase):
+    def test_selected_slot_and_closed_pins_require_same_revision_and_vectors(self):
+        slot = json.loads((ROOT / 'eng/utel-slot-callback-source.json').read_bytes())
+        closed = json.loads((ROOT / 'eng/utel-closed-callback-source.json').read_bytes())
+        helper['validate_selected_sources'](slot, closed)
+        for key in ('revision', 'vectorsSha256'):
+            changed = dict(closed, **{key: '0' * len(closed[key])})
+            with self.subTest(key=key), self.assertRaises(RuntimeError):
+                helper['validate_selected_sources'](slot, changed)
+
     def fixture(self, root):
         profile = {'schema': 'fsgg.utel-closed-source/1', 'admission': False,
                    'production': {'provider': None, 'enrollment': None, 'physicalUpperBound': None}}

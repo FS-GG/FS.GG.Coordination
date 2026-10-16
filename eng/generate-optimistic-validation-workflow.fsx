@@ -143,6 +143,8 @@ for required in
         "prepare:"
         "needs: [prepare, classify-reuse]"
         "run-partition:"
+        "needs: [prepare, classify-reuse, shared-build, formal-prepare]"
+        "if: ${{ always() && needs.shared-build.result == 'success' && needs.formal-prepare.result == 'success' }}"
         "formal-aggregate:"
         "aggregate:"
         "offline-formal-shadow:"
@@ -154,6 +156,33 @@ for required in
     ] do
     if not (text.Contains required) then
         failwith $"workflow projection missing {required}"
+
+// Check actual job boundaries as well as template equality: a template edit must
+// not move expensive preparation ahead of the compile/focused-test prerequisite.
+let jobBody name =
+    let pattern = "(?ms)^  " + Text.RegularExpressions.Regex.Escape(name) + ":\n(.*?)(?=^  [a-z][a-z0-9-]*:|\\z)"
+    let matched = Text.RegularExpressions.Regex.Match(text, pattern)
+    if not matched.Success then failwith $"source preflight missing job {name}"
+    matched.Groups[1].Value
+
+let sharedBuild = jobBody "shared-build"
+let sharedHeader = sharedBuild.Split([| "    steps:" |], StringSplitOptions.None)[0]
+let formalHeader = (jobBody "formal-prepare").Split([| "    steps:" |], StringSplitOptions.None)[0]
+let buildSteps = sharedBuild.Split([| "      - " |], StringSplitOptions.None)
+let preflight = buildSteps |> Array.filter (fun step -> step.Contains("run: bash eng/bootstrap-gates/source-preflight.sh"))
+let publication = buildSteps |> Array.filter (fun step -> step.Contains("name: shared-build-${{ needs.prepare.outputs.candidate }}"))
+
+if preflight.Length <> 1
+   || preflight[0] <> "name: Run early source compile and focused tests\n        env:\n          FSGG_CANDIDATE_SHA: ${{ needs.prepare.outputs.candidate }}\n        run: bash eng/bootstrap-gates/source-preflight.sh\n"
+   || not (sharedHeader.Contains("    timeout-minutes: 10\n"))
+   || sharedHeader.Contains("continue-on-error:") || sharedHeader.Contains("    if:")
+   || not (sharedHeader.Contains("    needs: [prepare, classify-reuse]\n"))
+   || not (formalHeader.Contains("    needs: [prepare, classify-reuse, shared-build]\n"))
+   || formalHeader.Contains("    if:") || formalHeader.Contains("continue-on-error:")
+   || publication.Length <> 1 || publication[0].Contains("        if:") || publication[0].Contains("continue-on-error:")
+   || sharedBuild.IndexOf("name: shared-build-${{ needs.prepare.outputs.candidate }}", StringComparison.Ordinal)
+      < sharedBuild.IndexOf("run: bash eng/bootstrap-gates/source-preflight.sh", StringComparison.Ordinal) then
+    failwith "source preflight must succeed before formal preparation and shared build publication"
 
 let offlineRouteChecks =
     if offlineEnabled then

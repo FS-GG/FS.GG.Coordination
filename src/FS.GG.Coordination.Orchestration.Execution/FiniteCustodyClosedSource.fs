@@ -95,7 +95,7 @@ type private ClosedSourceOutput(maximumCalls: int, maximumBytes: int, onWrite: R
 
 module private ClosedSourceConstruction =
     let profileDigest = "ed652bb3fe4f6132a9329f4b791f60f51297bb2ac0507dacb344b0e5191df660"
-    let vectorsDigest = "edb142bac8a253be2e031c7a5ccad1f75ab669a55ec6d9f598439130e43836aa"
+    let vectorsDigest = "bf3b26495dab92cf57d3e3f77d74f270bc4346a7b7e4f0a06e0e55399f0095bb"
     let digest (bytes: byte array) = Convert.ToHexString(SHA256.HashData bytes).ToLowerInvariant()
     let profileMatches (bytes: ReadOnlyMemory<byte>) =
         bytes.Length > 0 && bytes.Length <= 65536 && digest(bytes.ToArray()) = profileDigest

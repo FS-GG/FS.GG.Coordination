@@ -56,7 +56,7 @@
   "reuse": {
     "jobId": "reuse-decision",
     "artifact": "reuse-decision/decision.json",
-    "timeoutMinutes": 5,
+    "timeoutMinutes": 10,
     "entryPoint": "bash eng/bootstrap-gates/reuse-decision.sh",
     "uploadName": "reuse-decision",
     "workflowPath": ".github/workflows/bootstrap-qualification.yml",
