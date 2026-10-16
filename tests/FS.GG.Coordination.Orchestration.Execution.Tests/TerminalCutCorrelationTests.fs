@@ -121,6 +121,7 @@ module FiniteCustodyTransportTestsTerminalCutCorrelationTests =
             Assert.InRange(payload.Count, 1, backing.Length - payload.Offset)
             Assert.True(payload.Count < backing.Length, "payload slice length is not backing capacity")
             payloadSliceBytes <- payloadSliceBytes + payload.Count
+        Assert.Equal(4835, payloadSliceBytes)
         Assert.Equal(5682, scoped |> Seq.sumBy (fun value -> (value :?> byte array).Length))
         let addArray expected owner name =
             let bytes = field name owner :?> byte array
