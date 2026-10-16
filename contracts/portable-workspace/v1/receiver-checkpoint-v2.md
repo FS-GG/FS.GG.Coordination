@@ -24,9 +24,42 @@ verified policies, then stage/reopen/revalidate them in the existing supplier st
 Cold decode never restores authentication or durability. `prepareAck` and
 `reserveHost` continue refusing until separately qualified production evidence exists.
 
-The additive `receiver-checkpoint-v2-vectors.json` corpus currently qualifies lexical
-codecs only. Its historical wire preimages and deliberately opaque controller fixture
-bytes are explicitly structural, with authentication and semantic journey false.
-These vectors cannot count as authenticated caller/store positives. Complete selected
-and zero-census journeys, real independently generated test signatures, `/4` CAS/cold
-readback and their failure controls remain required by the owning implementation.
+The lexical `receiver-checkpoint-v2-vectors.json` corpus retains its historical
+opaque controller bytes and does not establish authenticated caller/store behavior.
+The separate `receiver-checkpoint-v2-signed-source-journeys.json` contains independent
+OpenSSH test signatures, nine explicit public role pins and fixed controlled policy,
+configuration and clock inputs for zero and selected-sixteen journeys. Its input-only
+flags remain false; actual managed qualification belongs to the exact source run.
+
+The [controlled source factory](../../../src/FS.GG.Coordination.Orchestration.Execution/PortableHostAllocation.fs) verifies creation, genesis,
+output wire and native acquisition against copied **controlled test data**. It derives
+observations and complete role bundles from exact bytes and the executing verifier;
+a public structural transcript adapter or parsed bundle cannot construct the private
+successful transition. Native receipt bytes come from the verified proof envelope.
+Selected V2 issuance binds the current proof head without knowing the later receipt
+hash; zero V1 retains its independently selected receipt hash. The sixteen-member
+manifest limit is separate from event count. Existing receiver eighteen-observation
+and controller four-observation caps still apply before per-role cryptography.
+
+Append and unchanged responses follow their canonical mode. An unchanged response
+retains the exact last signed envelope, including its genesis role when applicable.
+Warm verification and `reverifyControlledSourceV4` recheck retained signatures,
+independent original/configuration bindings and role policies. Fresh revocation and
+clock observations remain separate from historical bundle metadata. Verifier binary
+and profile digests come from the actual loaded assemblies. Production provenance
+refuses; these APIs expose no production enrollment or execution capability.
+
+The [supplier journal](../../../src/FS.GG.Coordination.Orchestration.Execution/PortableWorkspaceExecutor.fs) `StageControlledV4` accepts only the private immutable
+transition and delegates the existing exact serializer, expected original/revision/
+fence CAS and fresh-byte/cold-state readback. A stage readback is structural data;
+only separate current-policy revalidation returns the private controlled-source
+readback. Durability remains Unknown, with ACK, host effects and provider/native
+qualification outside this source boundary.
+
+The SDK-generated `packages.lock.json` files retain NuGet package-content hashes.
+For signed packages that identity can differ from a raw archive SHA512: NuGet's
+[immutable package reader source](https://github.com/NuGet/NuGet.Client/blob/d3a633a04da7cd83900498334ec5e7650a52fa86/src/NuGet.Core/NuGet.Packaging/PackageArchiveReader.cs)
+separates `GetContentHash` and `GetArchiveHash`. Compare each hash with the same
+identity kind and retain original archive observations as archive evidence. A lock
+hash does not replace package-signature, dependency/security or executed-artifact
+qualification.
