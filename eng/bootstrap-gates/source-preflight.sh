@@ -120,12 +120,17 @@ cohort() {
   fi
   printf '%s passed\n' "$name" >> "$evidence/stages.txt"
 }
-# Independent fixed cohorts may collect their own diagnostics after a test failure.
-cohort portable-host-allocation PortableHostAllocationTests || :
-cohort portable-host-executor PortableHostExecutorTests || :
-cohort finite-custody-inert FiniteCustodyWindowTests || :
+# A failed invocation/census does not prove healthy test-host completion or
+# cleanup. Block later launches rather than treating that outcome as independent.
+block_remaining() {
+  printf '%s\n' 'remaining-cohorts prerequisite-blocked failed-or-unknown-test-outcome' >> "$evidence/stages.txt"
+  exit "$first"
+}
+cohort portable-host-allocation PortableHostAllocationTests || block_remaining
+cohort portable-host-executor PortableHostExecutorTests || block_remaining
+cohort finite-custody-inert FiniteCustodyWindowTests || block_remaining
 if run_required callback-fixture python3 eng/utel-callback-fixture.py prepare; then
-  cohort finite-custody-transport FiniteCustodyTransportTests || :
+  cohort finite-custody-transport FiniteCustodyTransportTests || block_remaining
 else
   printf '%s\n' 'finite-custody-transport prerequisite-blocked callback-fixture' >> "$evidence/stages.txt"
 fi

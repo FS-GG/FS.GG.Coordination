@@ -29,9 +29,11 @@ solution in locked mode, and compiles the full Release solution with warnings as
 errors. It then runs the existing allocation, executor, inert custody and transport
 cohorts against those binaries. Each cohort needs a fresh nonzero passing TRX census;
 transport additionally needs the existing exact callback-case census and pinned
-source-only callback fixtures. Compilation precedes fixture preparation. Independent
-cohort failures can be collected serially while preserving the first cause. Each
-attempt has fresh evidence, an eight-minute process-group deadline and a ten-minute
+source-only callback fixtures. Compilation precedes fixture preparation. Failed or
+invalid cohort outcomes block later launches because healthy test-host completion
+and cleanup are then unknown. The attempt preserves its first cause separately from
+retention failures. Each attempt has fresh evidence, an eight-minute process-group
+deadline and a ten-minute
 job budget. There is no retry. Diagnostics upload separately from successful build
 artifacts; stage transitions retain unexecuted and prerequisite-blocked coverage.
 

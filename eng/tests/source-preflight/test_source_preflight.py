@@ -124,12 +124,25 @@ class SourcePreflight(unittest.TestCase):
                 self.assertNotEqual(0, result.returncode, mode)
                 self.assertIn('finite-custody-transport exit=', self.cause())
 
-    def test_independent_cohorts_continue_but_first_cause_survives(self):
-        result = self.run_gate(FAIL_STAGE='portable-host-allocation', FAIL_FIXTURE='1')
+    def test_failed_test_process_blocks_later_launches(self):
+        result = self.run_gate(FAIL_STAGE='portable-host-allocation')
         self.assertEqual(17, result.returncode)
+        self.assertEqual(['restore', 'build', 'portable-host-allocation'], self.launched())
+        self.assertIn('portable-host-allocation exit=17', self.cause())
+        self.assertIn('prerequisite-blocked failed-or-unknown-test-outcome', (self.runner / 'source-preflight/stages.txt').read_text())
+
+    def test_unknown_census_blocks_later_launches(self):
+        result = self.run_gate(CENSUS_MODE='missing', BAD_COHORT='portable-host-allocation')
+        self.assertNotEqual(0, result.returncode)
+        self.assertEqual(['restore', 'build', 'portable-host-allocation'], self.launched())
+        self.assertIn('portable-host-allocation exit=', self.cause())
+
+    def test_fixture_failure_blocks_transport(self):
+        result = self.run_gate(FAIL_FIXTURE='1')
+        self.assertEqual(19, result.returncode)
         self.assertIn('finite-custody-inert', self.launched())
         self.assertNotIn('finite-custody-transport', self.launched())
-        self.assertIn('portable-host-allocation exit=17', self.cause())
+        self.assertIn('callback-fixture exit=19', self.cause())
         self.assertIn('prerequisite-blocked callback-fixture', (self.runner / 'source-preflight/stages.txt').read_text())
 
     def test_retention_failure_is_separate_from_original_compile_failure(self):
