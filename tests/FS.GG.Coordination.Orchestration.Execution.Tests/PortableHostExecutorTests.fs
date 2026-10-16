@@ -1453,6 +1453,12 @@ type PortableHostExecutorTests_ControlledAuthenticatedSource() =
             let at = expected.GetProperty("coldVerificationTime").GetString()
             let readback = PortableSupplierAdmission.reverifyControlledSourceV4 (selection at false) cold |> SupplierCheckpointFixtures.ok
             Assert.Equal(cold,readback.State)
+            let custody = cold.CheckpointCustody.Value
+            let checkpoint = custody.GenesisCheckpointBase64.Value |> Convert.FromBase64String |> Encoding.ASCII.GetString
+            let relabelled = checkpoint.Replace("\"controlled-test\"","\"qualified-production\"") |> Encoding.ASCII.GetBytes |> Convert.ToBase64String
+            let structuralRelabel = { cold with CheckpointCustody = Some { custody with GenesisCheckpointBase64 = Some relabelled } }
+            Assert.True(PortableSupplierAdmission.validate structuralRelabel |> Result.isOk)
+            Assert.True(PortableSupplierAdmission.reverifyControlledSourceV4 (selection at false) structuralRelabel |> Result.isError)
             let pinned = cold.Pinned.Value
             let binding = pinned.OriginalReservation.Binding
             for changed in

@@ -4341,6 +4341,9 @@ module PortableSupplierAdmission =
             if state.FirstFailure.IsSome || not state.Conflicts.IsEmpty
                || not custody.NativeAcquisitions.IsEmpty || custody.OutputCheckpointBase64.IsSome
                || custody.WireExchanges.Length > 1 then PortableSupplierC1.fail ()
+            custody.GenesisCheckpointBase64 |> Option.iter (fun encoded ->
+                let checkpoint = raw 16384 encoded |> Result.defaultWith invalidOp |> PortableSupplierCheckpoint.parseGenesis |> Result.defaultWith invalidOp
+                if (PortableSupplierCheckpoint.genesisCommon checkpoint).Provenance <> "controlled-test" then PortableSupplierC1.fail ())
             let creation = custody.CreationExchange |> Option.defaultWith PortableSupplierC1.fail
             let original = raw 65536 custody.OriginalIntentEnvelopeBase64 |> Result.defaultWith invalidOp
             let rawRequest (exchange: PortableSupplierRetainedWireExchange) = raw 65536 exchange.RequestBase64 |> Result.defaultWith invalidOp
