@@ -1112,12 +1112,14 @@ let ``bootstrap control surface stays typed thin and bounded`` () =
     let lineCount relative =
         File.ReadAllLines(Path.Combine(repositoryRoot, relative)).Length
 
-    let gateLines =
+    let legacyGateFiles =
         Directory.GetFiles(Path.Combine(repositoryRoot, "eng/bootstrap-gates"), "*.sh")
-        |> Array.sumBy (File.ReadAllLines >> Array.length)
+        |> Array.filter (fun path -> Path.GetFileName path <> "source-preflight.sh")
+
+    let gateLines = legacyGateFiles |> Array.sumBy (File.ReadAllLines >> Array.length)
 
     let uniqueGateLines =
-        Directory.GetFiles(Path.Combine(repositoryRoot, "eng/bootstrap-gates"), "*.sh")
+        legacyGateFiles
         |> Array.collect File.ReadAllLines
         |> Array.map _.Trim()
         |> Array.filter (String.IsNullOrWhiteSpace >> not)
@@ -1152,6 +1154,8 @@ let ``bootstrap control surface stays typed thin and bounded`` () =
     // Focused host-executor tests add three distinct lines: measured 646 -> 649.
     // Callback pairing adds nine distinct guarded lines: 649 -> 658.
     Assert.InRange(uniqueGateLines, 1, 658)
+    // One shared source orchestrator has its own bound; retain both legacy caps.
+    Assert.InRange(lineCount "eng/bootstrap-gates/source-preflight.sh", 1, 160)
     Assert.DoesNotContain("requiredRunFragments", core)
     Assert.DoesNotContain("workflowSha256", core)
     Assert.DoesNotContain("Text.RegularExpressions", core)

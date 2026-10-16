@@ -596,10 +596,19 @@ let private isSha value =
 // Independent launch-order requirements inspect the actual projected jobs. Exact
 // projection equality alone could approve a renderer and template changed together.
 let private sourcePreflightViolations bootstrap (workflow: string) =
+    let lines = workflow.Split('\n')
+    let isJobHeader (line: string) =
+        line.StartsWith("  ", StringComparison.Ordinal)
+        && not (line.StartsWith("   ", StringComparison.Ordinal))
+        && line.EndsWith(":", StringComparison.Ordinal)
+        && line.Length > 3
+        && (line.Substring(2, line.Length - 3)
+            |> Seq.forall (fun character -> Char.IsLower character || Char.IsDigit character || character = '-'))
     let job name =
-        let pattern = "(?ms)^  " + System.Text.RegularExpressions.Regex.Escape(name) + ":\n(.*?)(?=^  [a-z][a-z0-9-]*:|\\z)"
-        let matched = System.Text.RegularExpressions.Regex.Match(workflow, pattern)
-        if matched.Success then matched.Groups[1].Value else ""
+        match lines |> Array.tryFindIndex ((=) ("  " + name + ":")) with
+        | None -> ""
+        | Some index ->
+            (lines |> Array.skip (index + 1) |> Array.takeWhile (isJobHeader >> not) |> String.concat "\n") + "\n"
 
     let header (body: string) = body.Split([| "    steps:" |], StringSplitOptions.None)[0]
     let preflightJob = job (if bootstrap then "reuse-decision" else "shared-build")
@@ -624,14 +633,17 @@ let private sourcePreflightViolations bootstrap (workflow: string) =
                 yield violation "source-preflight-route-order" "route selection must precede compile"
             for name in [ "canonical-quint-prepare"; "canonical-quint-semantic"; "canonical-quint-performance"; "deterministic-build"; "compiler-and-tests"; "dependency-and-security"; "package-install-smoke"; "orchestration-postgresql"; "orchestration-observer-postgresql"; "orchestration-pilot-postgresql"; "bootstrap-recovery" ] do
                 let dependencies = header (job name)
-                let needs = System.Text.RegularExpressions.Regex.Match(dependencies, "(?m)^    needs: \\[([^\\]\\r\\n]*)\\]$")
+                let prerequisiteNames =
+                    dependencies.Split('\n')
+                    |> Array.tryFind (fun line -> line.StartsWith("    needs: [", StringComparison.Ordinal) && line.EndsWith("]", StringComparison.Ordinal))
+                    |> Option.map (fun line -> line.Substring(12, line.Length - 13).Split(',') |> Array.map _.Trim())
+                    |> Option.defaultValue [||]
                 let allowedConditions =
                     set [ "    if: ${{ needs.reuse-decision.outputs.route == 'execute' }}"
                           "    if: ${{ needs.reuse-decision.outputs.route == 'execute' && needs.reuse-decision.outputs.formal-route == 'execute' }}"
                           "    if: ${{ needs.canonical-quint-prepare.result == 'success' }}" ]
                 let conditions = dependencies.Split('\n') |> Array.filter (fun line -> line.StartsWith("    if:", StringComparison.Ordinal))
-                if not needs.Success
-                   || not (needs.Groups[1].Value.Split(',') |> Array.map _.Trim() |> Array.contains "reuse-decision")
+                if not (prerequisiteNames |> Array.contains "reuse-decision")
                    || conditions.Length <> 1 || not (Set.contains conditions[0] allowedConditions)
                    || dependencies.Contains("continue-on-error:") then
                     yield violation "source-preflight-fanout-dominance" name

@@ -136,7 +136,7 @@ block_remaining() {
 # remaining class methods include FSI/shell/formal fixtures and stay in full CI.
 cohort ci-reuse-contracts 'FullyQualifiedName~QualificationReuseSelectionTests&(FullyQualifiedName~coherent source prerequisite|FullyQualifiedName~workflow recovery|FullyQualifiedName~optimistic workflow projection|FullyQualifiedName~hosted partition scripts|FullyQualifiedName~source preflight inert)' \
   tests/FS.GG.Coordination.UnitTests/FS.GG.Coordination.UnitTests.fsproj || block_remaining
-cohort ci-bootstrap-contracts 'FullyQualifiedName~BootstrapCiTests&(FullyQualifiedName~early source qualification|FullyQualifiedName~bootstrap workflow satisfies|FullyQualifiedName~workflow generator reproduces)' \
+cohort ci-bootstrap-contracts 'FullyQualifiedName~BootstrapCiTests&(FullyQualifiedName~early source qualification|FullyQualifiedName~bootstrap workflow satisfies|FullyQualifiedName~workflow generator reproduces|FullyQualifiedName~bootstrap control surface)' \
   tests/FS.GG.Coordination.ArchitectureTests/FS.GG.Coordination.ArchitectureTests.fsproj || block_remaining
 cohort portable-host-allocation 'FullyQualifiedName~PortableHostAllocationTests' || block_remaining
 cohort portable-host-executor 'FullyQualifiedName~PortableHostExecutorTests' || block_remaining
