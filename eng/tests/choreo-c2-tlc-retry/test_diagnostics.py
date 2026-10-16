@@ -1339,7 +1339,8 @@ class CommandInterfaceControls(unittest.TestCase):
         value,log=self.startup_retry_fixture()
         eligible=lambda v,l=log,now=252:module.preparser_startup_retry_eligible(v,l,150,19822,['/quint','verify','/model'],now=now)
         self.assertTrue(eligible(value));self.assertFalse(eligible(value,now=280))
-        mutations=[lambda v:v.pop('input'), lambda v:v.update(cleanupObservedAt=249),
+        mutations=[lambda v:v.pop('input'),lambda v:v.update(input=[]),lambda v:v.update(ownerReceipt=[]),
+                   lambda v:v['endpointObservations'].update(entries=[None]), lambda v:v.update(cleanupObservedAt=249),
                    lambda v:v.update(commandAccepted=True),lambda v:v.update(commandExit=0),
                    lambda v:v['firstCause'].update(message='different deadline'),
                    lambda v:v['additionalFailures'].append({'type':'Error','message':'report failed'}),
@@ -1361,7 +1362,8 @@ class CommandInterfaceControls(unittest.TestCase):
         for number,mutate in enumerate(mutations):
             with self.subTest(mutation=number):
                 changed=copy.deepcopy(value);mutate(changed);self.assertFalse(eligible(changed))
-        for marker in ('SanyParser','[TLC] Running','states generated','Invariant violated','[error]','ERROR','Exception'):
+        for marker in ('SanyParser','PASS #0','Parsing file','TLC2 Version','[TLC] Computing','states generated',
+                       'distinct states','initial states','violation found','Invariant violated','[error]','ERROR','Exception'):
             with self.subTest(marker=marker):self.assertFalse(eligible(value,log+marker))
         self.assertFalse(eligible(value,''))  # plain pre-parser sleep cannot qualify
         self.assertEqual({'type':'TimeoutError','message':'original canonical work deadline'},value['firstCause'])

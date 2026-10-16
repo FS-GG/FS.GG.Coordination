@@ -2924,7 +2924,8 @@ def preparser_startup_observation(summary, log, endpoint):
                 or owner['birthIdentityUnavailable'] is not False): return False
         if (f'Starting checker server on port {endpoint}...' not in log
                 or f'The Apalache server is running on port {endpoint}.' not in log
-                or any(marker in log for marker in ('SanyParser','[TLC] Running','states generated',
+                or any(marker in log for marker in ('SanyParser','PASS #','Parsing file','TLC2 Version','[TLC]',
+                                                     'states generated','distinct states','initial states','violation found',
                                                      'Invariant','[error]','ERROR','Error:','error:','Exception'))): return False
         births = life['serverBirths']
         if births['omittedMembers'] != 0 or len(births['members']) != 1: return False
@@ -2954,7 +2955,7 @@ def preparser_startup_observation(summary, log, endpoint):
                    and scan['socketInodes']['omitted'] == 0
                    and set(inodes['values']) <= set(scan['socketInodes']['values']) for scan in scans): return False
         return True
-    except (KeyError,TypeError,ValueError,IndexError): return False
+    except (KeyError,TypeError,ValueError,IndexError,AttributeError): return False
 
 
 def preparser_startup_retry_eligible(value, log, seconds, endpoint, argv, *, now):
@@ -2976,7 +2977,7 @@ def preparser_startup_retry_eligible(value, log, seconds, endpoint, argv, *, now
         summary['owner'] = {key:owner[key] for key in ('firstCause','additionalFailures','cleanup','custody','exit','birthIdentityUnavailable')}
         summary['lifecycle'] = lifecycle_summary(value)
         return preparser_startup_observation(summary,log,endpoint)
-    except (KeyError,TypeError,ValueError,IndexError): return False
+    except (KeyError,TypeError,ValueError,IndexError,AttributeError): return False
 
 
 def classify_preparser_startup_retry(seconds, log_path, endpoint, argv):
@@ -3047,7 +3048,7 @@ def classify_preparser_startup_retry(seconds, log_path, endpoint, argv):
         if (fresh_pin(archive)['sha256'] if archive else None) != spec['archiveSha256']: return ''
         if time.monotonic() >= spec['totalDeadline']: return ''
         return 'owned-startup-timeout-before-parser'
-    except (OSError,ValueError,TypeError,KeyError,IndexError,RecursionError): return ''
+    except (OSError,ValueError,TypeError,KeyError,IndexError,AttributeError,RecursionError): return ''
 
 
 def execute_command(seconds, log_path, endpoint, argv):
