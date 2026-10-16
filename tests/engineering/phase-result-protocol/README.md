@@ -154,3 +154,45 @@ allocator capacity, task/channel storage and uncertain paths; they are not
 a complete simultaneous physical population or a 65,536-byte fit. The test
 does not establish native authentication, host custody, replay permission,
 original-operation effects or installed adoption.
+
+### Managed backing arrays at that same cut
+
+The same test inspects fields of the live adapter, composition, protocol,
+snapshot and retained-task roots before releasing Python. It never calls the
+copying public `Frame`/`Payload` accessors. The test checks these eleven distinct
+backing arrays, separately from the existing twenty-six request/capture arrays:
+
+| Reachable representation | Objects | Byte-array capacity |
+| --- | ---: | ---: |
+| Snapshots, ordinals 1–6 | 6 | 1,141 + 972 + 830 + 917 + 831 + 991 = 5,682 |
+| Result parser input | 1 | 2,048 |
+| Callback parser input | 1 | 512 |
+| Result and callback binding copies | 2 | 994 each = 1,988 |
+| Composition start frame | 1 | 1,123 |
+| Selected additional backing arrays | 11 | 11,353 |
+
+Payload memories alias the snapshot backing arrays; their 4,835 slice bytes
+are not another allocation or the backing capacity. The start and captured
+request memories expose their full arrays with zero offset. All eleven selected
+arrays are disjoint from the twenty-six existing request/capture arrays. A bounded
+field walk reaches twelve byte arrays: the eleven above and the current 295-byte
+callback request, whose reference equals the thirteenth captured original. That
+request is counted once. Array references and inspected objects remain local to
+the inspection; output retains scalar counts and lengths only.
+
+The walker follows instance fields within the execution assembly and explicitly
+selected task, memory, collection, option and tuple containers. It excludes fixture
+streams, processes and other runtime objects. Depth, object count and container
+length are bounded. Named fields, exact snapshot ordinals, object identities,
+lengths and the discovered byte-array population are assertions; unavailable or
+changed inspected structure fails the test instead of substituting byte allowances.
+
+This proves reachability for the selected arrays only. The three generated
+199-byte ACK arrays, child-read 2,048-byte buffers and callback-reader one-byte
+buffer have no established live-root join in this bounded view. Their absence
+from this view does not prove death, reclamation or zero bytes. Runtime/stream
+roots, encoding temporaries, other caller/backend/peer objects, object headers,
+allocator padding, alternative cuts and uncertainty populations remain unresolved.
+The new count is neither a complete population nor a revised physical-fit budget.
+`requireClosedPhysicalCopyProfile` continues to refuse. Installed custody, native
+ACK authentication, original `.103` replay/effects and `.104` remain held.
