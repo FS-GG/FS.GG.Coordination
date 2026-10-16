@@ -509,7 +509,7 @@ module FiniteCustodyTransportTests =
                 let keys = projection.EnumerateObject() |> Seq.map _.Name |> Seq.sort |> Seq.toArray
                 Assert.Equal<string>([| "binding"; "inputEofObserved"; "nativeAttempt"; "nativeCampaign"; "operationalReceipt"; "ordinal"; "profile"; "schema"; "slots"; "terminalResponseConfirmed"; "trailingInputChecked" |], keys)
                 Assert.Equal("fsgg.inert-slot-callback-test-evidence/1", text projection "schema")
-                Assert.Equal("inert-slot-callback-pair/1", text projection "profile")
+                Assert.Equal("inert-slot-callback-pair/2", text projection "profile")
                 Assert.Equal(text expected "binding", text projection "binding")
                 Assert.Equal(6, projection.GetProperty("ordinal").GetInt32())
                 Assert.True(projection.GetProperty("terminalResponseConfirmed").GetBoolean())
