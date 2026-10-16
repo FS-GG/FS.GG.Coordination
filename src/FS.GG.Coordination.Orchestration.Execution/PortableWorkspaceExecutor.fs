@@ -1311,7 +1311,7 @@ module PortableWorkspaceExecutor =
         let clock = defaultArg clock (fun () ->
             let now = DateTimeOffset.UtcNow
             DateTimeOffset(now.Ticks - now.Ticks % 10L, TimeSpan.Zero))
-        let journal = DurableJournal policy.Runtime.StateRoot
+        let journal = DurableJournal(policy.Runtime.StateRoot, None)
         let prerequisites = defaultArg prerequisites Map.empty
         let evidenceCurrent () =
             try (defaultArg hostEvidenceCurrent (fun () -> true)) ()
