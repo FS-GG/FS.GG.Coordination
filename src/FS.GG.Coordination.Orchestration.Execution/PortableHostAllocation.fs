@@ -468,6 +468,38 @@ type PortableSupplierAdmissionChallenge =
       DeadlineMonotonic: int64
       ExpectedHead: string option }
 
+type PortableSupplierJournalVersion = SupplierJournalV2 | SupplierJournalV3
+type PortableSupplierChallengeKind = SupplierWireV1 | SupplierNativeProofV1
+
+/// Inert expected joins supplied by a caller; no host identity is inferred from a workspace command.
+type PortableSupplierNativeProofContext =
+    { Original: PortableSupplierAdmissionOriginal
+      OperationId: Guid
+      ReservationDigest: string
+      ProofEventHead: string
+      NativeReceiptSha256: string
+      HostLeaseNotAfter: DateTimeOffset }
+
+/// Exact canonical C1 bytes and raw SHA256, without an authentication or effect witness.
+type PortableSupplierNativeProofChallenge =
+    { Context: PortableSupplierNativeProofContext
+      ChallengeId: Guid
+      Digest: string
+      BytesBase64: string
+      ReceiverEpoch: Guid
+      IssuedAt: DateTimeOffset
+      NotAfter: DateTimeOffset
+      IssuedMonotonic: int64
+      DeadlineMonotonic: int64 }
+
+type PortableSupplierPendingChallenge =
+    | WireV1 of PortableSupplierAdmissionChallenge
+    | NativeProofV1 of PortableSupplierNativeProofChallenge
+    member this.Kind = match this with WireV1 _ -> SupplierWireV1 | NativeProofV1 _ -> SupplierNativeProofV1
+    member this.ChallengeId = match this with WireV1 c -> c.ChallengeId | NativeProofV1 c -> c.ChallengeId
+    member this.Digest = match this with WireV1 c -> c.Digest | NativeProofV1 c -> c.Digest
+    member this.BytesBase64 = match this with WireV1 c -> c.BytesBase64 | NativeProofV1 c -> c.BytesBase64
+
 type PortableSupplierTranscriptKind = SupplierCreation | SupplierGenesis | SupplierAppend | SupplierUnchanged
 
 /// Contract of the trusted adapter, not an implementation of signature/schema verification.
@@ -503,11 +535,12 @@ type PortableSupplierVerifiedTranscript =
     member this.Observation = let (SupplierVerifiedTranscript(_, _, value)) = this in value
 
 type PortableSupplierAdmissionState =
-    { Revision: uint64
+    { JournalVersion: PortableSupplierJournalVersion
+      Revision: uint64
       Original: PortableSupplierAdmissionOriginal
       Phase: PortableSupplierAdmissionPhase
-      Challenge: PortableSupplierAdmissionChallenge option
-      ChallengeLedger: (Guid * string * string) list
+      Challenge: PortableSupplierPendingChallenge option
+      ChallengeLedger: (PortableSupplierChallengeKind * Guid * string * string) list
       Pinned: PortableSupplierTranscriptObservation option
       Head: string option
       Sequence: uint64
@@ -543,6 +576,38 @@ module PortableSupplierAdmission =
                 else Ok bytes
             with :? FormatException -> Error "supplier-admission-bytes"
     let private validRaw maximum value = raw maximum value |> Result.isOk
+
+    let private utcMicroseconds (value: DateTimeOffset) = value.Offset = TimeSpan.Zero && value.Ticks % 10L = 0L
+    let private nativeBytes (challenge: PortableSupplierNativeProofChallenge) =
+        let context = challenge.Context
+        let date (value: DateTimeOffset) = value.ToString("yyyy-MM-dd'T'HH:mm:ss.ffffff'Z'", Globalization.CultureInfo.InvariantCulture)
+        // Every interpolated value is a validated UUID, digest or fixed-format UTC value.
+        System.Text.Encoding.ASCII.GetBytes(
+            "{\"challenge_id\":\"" + challenge.ChallengeId.ToString("D")
+            + "\",\"intent_digest\":\"" + context.Original.IntentDigest
+            + "\",\"issued_at\":\"" + date challenge.IssuedAt
+            + "\",\"native_receipt_sha256\":\"" + context.NativeReceiptSha256
+            + "\",\"not_after\":\"" + date challenge.NotAfter
+            + "\",\"operation_id\":\"" + context.OperationId.ToString("D")
+            + "\",\"profile\":\"signed-hold-v1\",\"proof_event_head\":\"" + context.ProofEventHead
+            + "\",\"receiver_epoch\":\"" + challenge.ReceiverEpoch.ToString("D")
+            + "\",\"reservation_digest\":\"" + context.ReservationDigest
+            + "\",\"schema\":\"fsgg.v3.native-proof-challenge/1\"}\n")
+
+    let private validNative (original: PortableSupplierAdmissionOriginal) (challenge: PortableSupplierNativeProofChallenge) =
+        let context = challenge.Context
+        context.Original = original && context.OperationId <> Guid.Empty
+        && digest context.ReservationDigest && digest context.ProofEventHead && digest context.NativeReceiptSha256
+        && utcMicroseconds context.HostLeaseNotAfter
+        && challenge.ChallengeId <> Guid.Empty && challenge.ReceiverEpoch = original.ReceiverEpoch
+        && utcMicroseconds challenge.IssuedAt && utcMicroseconds challenge.NotAfter
+        && challenge.IssuedAt < challenge.NotAfter && challenge.NotAfter <= original.Command.Deadline
+        && challenge.NotAfter <= context.HostLeaseNotAfter
+        && challenge.IssuedMonotonic >= 0L && challenge.DeadlineMonotonic > challenge.IssuedMonotonic
+        && digest challenge.Digest
+        && (match raw 45000 challenge.BytesBase64 with
+            | Ok bytes -> bytes = nativeBytes challenge && digestBytes bytes = challenge.Digest
+            | _ -> false)
     let private sameOriginal (original: PortableSupplierAdmissionOriginal) (value: PortableSupplierTranscriptObservation) =
         value.IntentDigest = original.IntentDigest && value.TrustPolicyDigest = original.TrustPolicyDigest
         && value.OriginalReservation.Binding.Command = original.Command
@@ -564,17 +629,22 @@ module PortableSupplierAdmission =
                 let decoded = transcriptBytes state |> List.map (raw 65536)
                 let total = decoded |> List.sumBy (function Ok bytes -> int64 bytes.Length | Error _ -> int64 MaximumRecordBytes)
                 let validLedger =
-                    state.ChallengeLedger |> List.forall (fun (id, hash, status) ->
-                        id <> Guid.Empty && digest hash && (status = "consumed" || status = "abandoned"))
-                let uniqueIds = state.ChallengeLedger |> List.map (fun (id, _, _) -> id) |> Set.ofList
+                    state.ChallengeLedger |> List.forall (fun (kind, id, hash, status) ->
+                        (state.JournalVersion = SupplierJournalV3 || kind = SupplierWireV1)
+                        && id <> Guid.Empty && digest hash && (status = "consumed" || status = "abandoned"))
+                let uniqueIds = state.ChallengeLedger |> List.map (fun (_, id, _, _) -> id) |> Set.ofList
                 let validChallenge =
-                    state.Challenge |> Option.forall (fun challenge ->
-                        challenge.ChallengeId <> Guid.Empty && digest challenge.Digest
-                        && challenge.ReceiverEpoch = state.Original.ReceiverEpoch && challenge.ExpectedHead = state.Head
-                        && challenge.IssuedAt < challenge.NotAfter && challenge.NotAfter <= state.Original.Command.Deadline
-                        && challenge.IssuedMonotonic >= 0L && challenge.DeadlineMonotonic > challenge.IssuedMonotonic
-                        && not (uniqueIds.Contains challenge.ChallengeId)
-                        && (match raw 45000 challenge.BytesBase64 with Ok bytes -> domain "challenge" bytes = challenge.Digest | _ -> false))
+                    state.Challenge |> Option.forall (fun pending ->
+                        let valid =
+                            match pending with
+                            | NativeProofV1 challenge -> state.JournalVersion = SupplierJournalV3 && validNative state.Original challenge
+                            | WireV1 challenge ->
+                                challenge.ChallengeId <> Guid.Empty && digest challenge.Digest
+                                && challenge.ReceiverEpoch = state.Original.ReceiverEpoch && challenge.ExpectedHead = state.Head
+                                && challenge.IssuedAt < challenge.NotAfter && challenge.NotAfter <= state.Original.Command.Deadline
+                                && challenge.IssuedMonotonic >= 0L && challenge.DeadlineMonotonic > challenge.IssuedMonotonic
+                                && (match raw 45000 challenge.BytesBase64 with Ok bytes -> domain "challenge" bytes = challenge.Digest | _ -> false)
+                        valid && not (uniqueIds.Contains pending.ChallengeId))
                 if state.Revision = 0UL
                    || not (present state.Original.Command.WorkspaceScope && present state.Original.Command.IdempotencyId)
                    || state.Original.ReceiverEpoch = Guid.Empty || not (digest state.Original.IntentDigest && digest state.Original.TrustPolicyDigest)
@@ -595,7 +665,7 @@ module PortableSupplierAdmission =
 
     let private beginIntentCore (original: PortableSupplierAdmissionOriginal) =
         let state =
-            { Revision = 1UL; Original = original; Phase = SupplierIntentStored; Challenge = None
+            { JournalVersion = SupplierJournalV2; Revision = 1UL; Original = original; Phase = SupplierIntentStored; Challenge = None
               ChallengeLedger = []; Pinned = None; Head = None; Sequence = 0UL; EventsBase64 = []
               ResponsesBase64 = []; CheckpointBase64 = None; AckDraftBase64 = None
               FirstFailure = None; Conflicts = Set.empty }
@@ -611,7 +681,7 @@ module PortableSupplierAdmission =
         let expectedPurpose = if state.Phase = SupplierIntentStored then "creation" elif state.Head.IsNone then "genesis-readback" else "state-readback"
         if state.FirstFailure.IsSome || not state.Conflicts.IsEmpty || state.Challenge.IsSome
            || state.ChallengeLedger.Length >= 128 || challenge.ChallengeId = Guid.Empty
-           || (state.ChallengeLedger |> List.exists (fun (id, _, _) -> id = challenge.ChallengeId))
+           || (state.ChallengeLedger |> List.exists (fun (_, id, _, _) -> id = challenge.ChallengeId))
            || challenge.ReceiverEpoch <> state.Original.ReceiverEpoch || challenge.ExpectedHead <> state.Head
            || challenge.Purpose <> expectedPurpose && not (expectedPurpose = "state-readback" && challenge.Purpose = "retirement-readback")
            || challenge.IssuedAt >= challenge.NotAfter || challenge.NotAfter > state.Original.Command.Deadline
@@ -620,7 +690,7 @@ module PortableSupplierAdmission =
         else
             match raw 45000 challenge.BytesBase64 with
             | Ok bytes when domain "challenge" bytes = challenge.Digest ->
-                next { state with Challenge = Some challenge
+                next { state with Challenge = Some(WireV1 challenge)
                                   Phase = if state.Phase = SupplierCreationPinned then SupplierAwaitingGenesis else state.Phase }
                 |> Result.bind validate
             | _ -> Error "supplier-admission-challenge-bytes-refused"
@@ -632,11 +702,11 @@ module PortableSupplierAdmission =
         if isNull (box authenticator) || isNull envelope || envelope.Length = 0 || envelope.Length > 65536 then refusal
         else
             match state.Challenge with
-            | None -> refusal
-            | Some challenge when now < challenge.IssuedAt || now >= challenge.NotAfter
+            | None | Some(NativeProofV1 _) -> refusal
+            | Some(WireV1 challenge) when now < challenge.IssuedAt || now >= challenge.NotAfter
                                   || monotonic < challenge.IssuedMonotonic || monotonic >= challenge.DeadlineMonotonic
                                   || state.FirstFailure.IsSome || not state.Conflicts.IsEmpty -> refusal
-            | Some challenge ->
+            | Some(WireV1 challenge) ->
                 try
                     let snapshot = Array.copy envelope
                     match authenticator.Authenticate(Array.copy snapshot) with
@@ -678,15 +748,16 @@ module PortableSupplierAdmission =
         else
             match state.Challenge with
             | None -> Error "supplier-admission-no-pending-challenge"
-            | Some challenge when value.ChallengeDigest <> challenge.Digest || value.Purpose <> challenge.Purpose -> Error "supplier-admission-challenge-changed"
-            | Some challenge ->
+            | Some(NativeProofV1 _) -> Error "supplier-admission-no-pending-wire-challenge"
+            | Some(WireV1 challenge) when value.ChallengeDigest <> challenge.Digest || value.Purpose <> challenge.Purpose -> Error "supplier-admission-challenge-changed"
+            | Some(WireV1 challenge) ->
                 let pinnedMatches = state.Pinned |> Option.forall (fun pinned ->
                     pinned.Identity = value.Identity && pinned.OuterImageId = value.OuterImageId
                     && pinned.CreationBase64 = value.CreationBase64 && pinned.CreationReceiptBase64 = value.CreationReceiptBase64
                     && pinned.ReservationBase64 = value.ReservationBase64 && pinned.OriginalReservation = value.OriginalReservation)
                 if not pinnedMatches then hold "supplier original pins changed" verified.EnvelopeSha256 state
                 else
-                    let consumed = (challenge.ChallengeId, challenge.Digest, "consumed") :: state.ChallengeLedger
+                    let consumed = (SupplierWireV1, challenge.ChallengeId, challenge.Digest, "consumed") :: state.ChallengeLedger
                     let candidate phase head sequence events =
                         next { state with Phase = phase; Challenge = None; ChallengeLedger = consumed
                                           Pinned = Some value; Head = head; Sequence = sequence; EventsBase64 = events
@@ -719,14 +790,27 @@ module PortableSupplierAdmission =
             let ledger =
                 match state.Challenge with
                 | None -> state.ChallengeLedger
-                | Some challenge -> (challenge.ChallengeId, challenge.Digest, "abandoned") :: state.ChallengeLedger
+                | Some challenge -> (challenge.Kind, challenge.ChallengeId, challenge.Digest, "abandoned") :: state.ChallengeLedger
             next { state with Original = { state.Original with ReceiverEpoch = newEpoch }; Challenge = None; ChallengeLedger = ledger }
             |> Result.bind validate
 
     let beginIntent original =
         try beginIntentCore original with _ -> Error "supplier-admission-original-refused"
+    /// Explicit fresh-original selection. Stage still refuses an occupied journal key.
+    let beginIntentV3 original = beginIntent original |> Result.map (fun state -> { state with JournalVersion = SupplierJournalV3 })
     let issueChallenge challenge state =
         try issueChallengeCore challenge state with _ -> Error "supplier-admission-challenge-refused"
+    /// Caller assertions only: this stores no authenticated proof or production clock/nonce policy.
+    let issueNativeProofChallenge (expectedContext: PortableSupplierNativeProofContext)
+                                  (challenge: PortableSupplierNativeProofChallenge) (state: PortableSupplierAdmissionState) =
+        try
+            if state.JournalVersion <> SupplierJournalV3 || state.Challenge.IsSome
+               || state.FirstFailure.IsSome || not state.Conflicts.IsEmpty
+               || state.ChallengeLedger.Length >= 128 || challenge.Context <> expectedContext
+               || (state.ChallengeLedger |> List.exists (fun (_, id, _, _) -> id = challenge.ChallengeId))
+               || not (validNative state.Original challenge) then Error "supplier-native-proof-challenge-refused"
+            else next { state with Challenge = Some(NativeProofV1 challenge) } |> Result.bind validate
+        with _ -> Error "supplier-native-proof-challenge-refused"
     let verify authenticator now monotonic state envelope =
         try verifyCore authenticator now monotonic state envelope with _ -> Error "supplier-admission-verification-refused"
     let accept verified state =

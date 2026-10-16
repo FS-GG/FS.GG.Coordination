@@ -634,8 +634,8 @@ type PortableHostExecutorTests_SupplierAdmissionJournal() =
         let restored, _ = journal.Read fixture.Command |> SupplierAdmissionFixtures.ok
         Assert.Equal(abandoned, restored)
         Assert.Equal(None, restored.Challenge)
-        Assert.Contains((read.Challenge.Value.ChallengeId, read.Challenge.Value.Digest, "abandoned"), restored.ChallengeLedger)
-        Assert.Equal("abandoned", restored.ChallengeLedger.Head |> fun (_, _, value) -> value)
+        Assert.Contains((SupplierWireV1, read.Challenge.Value.ChallengeId, read.Challenge.Value.Digest, "abandoned"), restored.ChallengeLedger)
+        Assert.Equal("abandoned", restored.ChallengeLedger.Head |> fun (_, _, _, value) -> value)
         Assert.True(PortableSupplierAdmission.prepareAck restored |> Result.isError)
         Assert.True(PortableSupplierAdmission.reserveHost restored |> Result.isError)
         Assert.Equal(0, fixture.Runner.Runs)
@@ -675,13 +675,13 @@ type PortableHostExecutorTests_SupplierAdmissionJournal() =
                 Original = { pending.Original with ReceiverEpoch = epoch }
                 Challenge =
                     match change with
-                    | "replace" -> Some replacement
-                    | "mutate" -> Some { challenge with Purpose = "changed-purpose" }
+                    | "replace" -> Some(WireV1 replacement)
+                    | "mutate" -> Some(WireV1 { challenge with Purpose = "changed-purpose" })
                     | _ -> None
                 ChallengeLedger =
                     match change with
-                    | "wrong-id" -> [ replacement.ChallengeId, challenge.Digest, "consumed" ]
-                    | "wrong-digest" -> [ challenge.ChallengeId, replacement.Digest, "abandoned" ]
+                    | "wrong-id" -> [ SupplierWireV1, replacement.ChallengeId, challenge.Digest, "consumed" ]
+                    | "wrong-digest" -> [ SupplierWireV1, challenge.ChallengeId, replacement.Digest, "abandoned" ]
                     | _ -> [] }
         // Each candidate is individually valid; the persisted predecessor makes the transition invalid.
         PortableSupplierAdmission.validate candidate |> SupplierAdmissionFixtures.ok |> ignore
@@ -710,7 +710,7 @@ type PortableHostExecutorTests_SupplierAdmissionJournal() =
                 Challenge = if disposition = "unchanged" then pending.Challenge else None
                 ChallengeLedger =
                     if disposition = "unchanged" then pending.ChallengeLedger
-                    else (pending.Challenge.Value.ChallengeId, pending.Challenge.Value.Digest, disposition) :: pending.ChallengeLedger }
+                    else (SupplierWireV1, pending.Challenge.Value.ChallengeId, pending.Challenge.Value.Digest, disposition) :: pending.ChallengeLedger }
         journal.Stage(candidate, Some pending.Revision) |> SupplierAdmissionFixtures.ok |> ignore
         let restored, _ = journal.Read fixture.Command |> SupplierAdmissionFixtures.ok
         Assert.Equal(candidate, restored)
@@ -768,3 +768,246 @@ type PortableHostExecutorTests_SupplierAdmissionJournal() =
         Assert.True((File.ReadAllBytes fixture.Journal = old))
         Assert.Equal(0, fixture.Runner.Runs)
         Assert.Equal(0, fixture.Runner.Cleans)
+
+// Frozen by the protected 6970fd73a6fecafde61d403713c16fb5b0f7aa63 writer, before the /3 codec.
+module private SupplierJournalCompatibilityFixtures =
+    let pending = Convert.FromBase64String "KmZzZ2cucG9ydGFibGUtZXhlY3V0aW9uLXN1cHBsaWVyLWpvdXJuYWwvMjUAAABzb3VyY2Utb25seS11bnF1YWxpZmllZC1hdXRoZW50aWNhdGlvbi1hbmQtZHVyYWJpbGl0eQIAAAAAAAAAABwCAABleUp6WTJobGJXRWlPaUptYzJkbkxuZHZjbXR6Y0dGalpTNWpiMjF0WVc1a0x6RWlMQ0pqYjIxdFlXNWtTV1FpT2lJeE1URXhNVEV4TVMweE1URXhMVEV4TVRFdE1URXhNUzB4TVRFeE1URXhNVEV4TVRFaUxDSnBaR1Z0Y0c5MFpXNWplVWxrSWpvaWFXNWxjblF0YVdSbGJYQnZkR1Z1WTNraUxDSjNiM0pyYzNCaFkyVlRZMjl3WlNJNkltbHVaWEowTFhkdmNtdHpjR0ZqWlNJc0luQnliMlpwYkdWSlpDSTZJbWx1WlhKMExXaHZjM1FpTENKd2NtOW1hV3hsVW1WMmFYTnBiMjRpT2lJeElpd2ljMjkxY21ObFVtVjJhWE5wYjI0aU9pSmpaR05rWTJSalpHTmtZMlJqWkdOa1kyUmpaR05rWTJSalpHTmtZMlJqWkdOa1kyUmpaR05rSWl3aVpYaHdaV04wWldSWGIzSnJabXh2ZDFKbGRtbHphVzl1SWpvaU1TSXNJbVpsYm1ObFIyVnVaWEpoZEdsdmJpSTZJakVpTENKa1pXRmtiR2x1WlNJNklqSXdNall0TURFdE1ERlVNREE2TURFNk5EQXVNREF3TURBd1dpSXNJbTl3WlhKaGRHbHZiaUk2SW1KMWFXeGtJaXdpWTI5dGNHOXVaVzUwU1dRaU9pSnpZVzF3YkdVaWZRPT1bAAAAZ2hjci5pby9mcy1nZy9pbmVydEBzaGEyNTY6YWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYiQAAABjM2x1ZEdobGRHbGpMVzl5YVdkcGJtRnNMV2x1ZEdWdWRBPT1AAAAANDExZDY3MTEzOTA2NWJmZmU0NDllMDY3YjQ4YmYwY2Y1NDU2ZThlNjI0MDcxNDc5MDdmYWVlNjk5ZGZhM2JjZUAAAABhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhKAAAAGJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmIkAAAAMjIyMjIyMjItMjIyMi0yMjIyLTIyMjItMjIyMjIyMjIyMjIyASQAAAAzMzMzMzMzMy0zMzMzLTMzMzMtMzMzMy0zMzMzMzMzMzMzMzNAAAAANWEyYTVmNDZhZjc4ZTRiNDI5NjJkODMzNjJlOWI1N2I4MTliMTRhMGVmM2VkYTkwYTg4YWJmZjc3ZjBiODJlNBwAAABabkp2ZW1WdUxYZHBjbVV0WTJoaGJHeGxibWRsCAAAAGNyZWF0aW9uJAAAADIyMjIyMjIyLTIyMjItMjIyMi0yMjIyLTIyMjIyMjIyMjIyMoCWkLXISN4IAAAAAAAAAAAAo9nGyEjeCAAAAAAAAAAAZAAAAAAAAADoAwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
+    let abandoned = Convert.FromBase64String "KmZzZ2cucG9ydGFibGUtZXhlY3V0aW9uLXN1cHBsaWVyLWpvdXJuYWwvMjUAAABzb3VyY2Utb25seS11bnF1YWxpZmllZC1hdXRoZW50aWNhdGlvbi1hbmQtZHVyYWJpbGl0eQMAAAAAAAAAABwCAABleUp6WTJobGJXRWlPaUptYzJkbkxuZHZjbXR6Y0dGalpTNWpiMjF0WVc1a0x6RWlMQ0pqYjIxdFlXNWtTV1FpT2lJeE1URXhNVEV4TVMweE1URXhMVEV4TVRFdE1URXhNUzB4TVRFeE1URXhNVEV4TVRFaUxDSnBaR1Z0Y0c5MFpXNWplVWxrSWpvaWFXNWxjblF0YVdSbGJYQnZkR1Z1WTNraUxDSjNiM0pyYzNCaFkyVlRZMjl3WlNJNkltbHVaWEowTFhkdmNtdHpjR0ZqWlNJc0luQnliMlpwYkdWSlpDSTZJbWx1WlhKMExXaHZjM1FpTENKd2NtOW1hV3hsVW1WMmFYTnBiMjRpT2lJeElpd2ljMjkxY21ObFVtVjJhWE5wYjI0aU9pSmpaR05rWTJSalpHTmtZMlJqWkdOa1kyUmpaR05rWTJSalpHTmtZMlJqWkdOa1kyUmpaR05rSWl3aVpYaHdaV04wWldSWGIzSnJabXh2ZDFKbGRtbHphVzl1SWpvaU1TSXNJbVpsYm1ObFIyVnVaWEpoZEdsdmJpSTZJakVpTENKa1pXRmtiR2x1WlNJNklqSXdNall0TURFdE1ERlVNREE2TURFNk5EQXVNREF3TURBd1dpSXNJbTl3WlhKaGRHbHZiaUk2SW1KMWFXeGtJaXdpWTI5dGNHOXVaVzUwU1dRaU9pSnpZVzF3YkdVaWZRPT1bAAAAZ2hjci5pby9mcy1nZy9pbmVydEBzaGEyNTY6YWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYiQAAABjM2x1ZEdobGRHbGpMVzl5YVdkcGJtRnNMV2x1ZEdWdWRBPT1AAAAANDExZDY3MTEzOTA2NWJmZmU0NDllMDY3YjQ4YmYwY2Y1NDU2ZThlNjI0MDcxNDc5MDdmYWVlNjk5ZGZhM2JjZUAAAABhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhKAAAAGJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmIkAAAANDQ0NDQ0NDQtNDQ0NC00NDQ0LTQ0NDQtNDQ0NDQ0NDQ0NDQ0AAEAAAAkAAAAMzMzMzMzMzMtMzMzMy0zMzMzLTMzMzMtMzMzMzMzMzMzMzMzQAAAADVhMmE1ZjQ2YWY3OGU0YjQyOTYyZDgzMzYyZTliNTdiODE5YjE0YTBlZjNlZGE5MGE4OGFiZmY3N2YwYjgyZTQJAAAAYWJhbmRvbmVkAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
+
+type PortableHostExecutorTests_SupplierJournalV3() =
+    [<Fact>]
+    member _.``frozen v2 pending reads without rewrite and CAS matches frozen old successor``() =
+        use fixture = new HostExecutorFixture()
+        let journal = PortableWorkspaceExecutor.SupplierAdmissionJournal fixture.Policy.Runtime.StateRoot
+        let initial = SupplierAdmissionFixtures.originalFor fixture.Command fixture.Profile.QualifiedImage |> PortableSupplierAdmission.beginIntent |> SupplierAdmissionFixtures.ok
+        journal.Stage(initial, None) |> SupplierAdmissionFixtures.ok |> ignore
+        File.WriteAllBytes(fixture.Journal, SupplierJournalCompatibilityFixtures.pending)
+        let read, _ = journal.Read fixture.Command |> SupplierAdmissionFixtures.ok
+        Assert.Equal(SupplierJournalV2, read.JournalVersion)
+        Assert.Equal(Some SupplierWireV1, read.Challenge |> Option.map _.Kind)
+        Assert.True(File.ReadAllBytes fixture.Journal = SupplierJournalCompatibilityFixtures.pending)
+        let abandoned = PortableSupplierAdmission.abandonChallenge (Guid.Parse "44444444-4444-4444-4444-444444444444") read |> SupplierAdmissionFixtures.ok
+        journal.Stage(abandoned, Some read.Revision) |> SupplierAdmissionFixtures.ok |> ignore
+        Assert.True(File.ReadAllBytes fixture.Journal = SupplierJournalCompatibilityFixtures.abandoned)
+        let reread, _ = journal.Read fixture.Command |> SupplierAdmissionFixtures.ok
+        Assert.Equal(abandoned, reread)
+        Assert.Equal(0, fixture.Runner.Runs)
+        Assert.Equal(0, fixture.Runner.Cleans)
+        Assert.Equal(0, fixture.Runner.Recoveries)
+
+    [<Theory>]
+    [<InlineData("empty")>]
+    [<InlineData("wire")>]
+    [<InlineData("native")>]
+    member _.``explicit v3 survives actual read CAS and restart for every pending variant``(kind: string) =
+        use fixture = new HostExecutorFixture()
+        let initial = SupplierAdmissionFixtures.originalFor fixture.Command fixture.Profile.QualifiedImage |> PortableSupplierAdmission.beginIntentV3 |> SupplierAdmissionFixtures.ok
+        let journal = PortableWorkspaceExecutor.SupplierAdmissionJournal fixture.Policy.Runtime.StateRoot
+        journal.Stage(initial, None) |> SupplierAdmissionFixtures.ok |> ignore
+        let read, _ = journal.Read fixture.Command |> SupplierAdmissionFixtures.ok
+        Assert.Equal(initial, read)
+        let candidate =
+            match kind with
+            | "wire" -> SupplierAdmissionFixtures.pending read
+            | "native" -> SupplierNativeProofFixtures.pending read
+            | _ -> { read with Revision = read.Revision + 1UL }
+        journal.Stage(candidate, Some read.Revision) |> SupplierAdmissionFixtures.ok |> ignore
+        let bytes = File.ReadAllBytes fixture.Journal
+        let restored, durability = journal.Read fixture.Command |> SupplierAdmissionFixtures.ok
+        Assert.Equal(candidate, restored)
+        Assert.True(File.ReadAllBytes fixture.Journal = bytes)
+        match durability with EvidenceUnknown _ -> () | _ -> failwith "source durability must remain Unknown"
+        use memory = new MemoryStream(bytes)
+        use reader = new BinaryReader(memory, Encoding.UTF8)
+        let schema = reader.ReadString()
+        Assert.Equal("fsgg.portable-execution-supplier-journal/3", schema)
+        // Frozen legacy schema dispatch, not a claim about a deployed legacy binary.
+        let frozenOldReaderRecognizes = function
+            | "fsgg.portable-execution-supplier-journal/2"
+            | "fsgg.portable-execution-host-journal/1"
+            | "fsgg.portable-execution-journal/1" -> true
+            | _ -> false
+        Assert.False(frozenOldReaderRecognizes schema)
+        let restarted = PortableSupplierAdmission.abandonChallenge (Guid.NewGuid()) restored |> SupplierAdmissionFixtures.ok
+        journal.Stage(restarted, Some restored.Revision) |> SupplierAdmissionFixtures.ok |> ignore
+        let final, _ = journal.Read fixture.Command |> SupplierAdmissionFixtures.ok
+        Assert.Equal(SupplierJournalV3, final.JournalVersion)
+        Assert.Equal(restarted, final)
+        Assert.Equal(None, final.Challenge)
+        Assert.Equal(initial.Original.Command.Deadline, final.Original.Command.Deadline)
+        fixture.Executor().ExecuteAsync(fixture.Authority, fixture.Profile, fixture.Command, CancellationToken.None)
+        |> HostExecutorAssertions.wait |> HostExecutorAssertions.refused
+        Assert.Equal(0, fixture.Runner.Runs)
+        Assert.Equal(0, fixture.Runner.Cleans)
+        Assert.Equal(0, fixture.Runner.Recoveries)
+
+    [<Theory>]
+    [<InlineData(false)>]
+    [<InlineData(true)>]
+    member _.``both version changes and fresh replacement refuse without changing bytes``(v3: bool) =
+        use fixture = new HostExecutorFixture()
+        let original = SupplierAdmissionFixtures.originalFor fixture.Command fixture.Profile.QualifiedImage
+        let state = (if v3 then PortableSupplierAdmission.beginIntentV3 original else PortableSupplierAdmission.beginIntent original) |> SupplierAdmissionFixtures.ok
+        let journal = PortableWorkspaceExecutor.SupplierAdmissionJournal fixture.Policy.Runtime.StateRoot
+        journal.Stage(state, None) |> SupplierAdmissionFixtures.ok |> ignore
+        let bytes = File.ReadAllBytes fixture.Journal
+        let other = if v3 then SupplierJournalV2 else SupplierJournalV3
+        for candidate, expected in
+            [ { state with JournalVersion = other; Revision = 2UL }, Some 1UL
+              { state with JournalVersion = SupplierJournalV3 }, None
+              { state with Revision = 2UL }, Some 999UL ] do
+            Assert.True(journal.Stage(candidate, expected) |> Result.isError)
+            Assert.True(File.ReadAllBytes fixture.Journal = bytes)
+        if not v3 then
+            let nativeState = SupplierNativeProofFixtures.pending { state with JournalVersion = SupplierJournalV3 }
+            let nativeV2 = { nativeState with JournalVersion = SupplierJournalV2 }
+            let historyV2 = { SupplierNativeProofFixtures.dispose "abandoned" nativeState with JournalVersion = SupplierJournalV2; Revision = 2UL }
+            for candidate in [ nativeV2; historyV2 ] do
+                Assert.True(journal.Stage(candidate, Some state.Revision) |> Result.isError)
+                Assert.True(File.ReadAllBytes fixture.Journal = bytes)
+
+    [<Theory>]
+    [<InlineData(false)>]
+    [<InlineData(true)>]
+    member _.``v3 cannot replace occupied execution or host v1 originals``(host: bool) =
+        use fixture = new HostExecutorFixture()
+        if host then execute fixture (fixture.Executor()) |> receipt |> ignore
+        else execute fixture (fixture.Executor(legacy = true)) |> receipt |> ignore
+        let bytes = File.ReadAllBytes fixture.Journal
+        let state = SupplierAdmissionFixtures.originalFor fixture.Command fixture.Profile.QualifiedImage |> PortableSupplierAdmission.beginIntentV3 |> SupplierAdmissionFixtures.ok
+        let journal = PortableWorkspaceExecutor.SupplierAdmissionJournal fixture.Policy.Runtime.StateRoot
+        Assert.True(journal.Stage(state, None) |> Result.isError)
+        Assert.True(File.ReadAllBytes fixture.Journal = bytes)
+
+    [<Theory>]
+    [<InlineData("kind")>]
+    [<InlineData("id")>]
+    [<InlineData("digest")>]
+    [<InlineData("status")>]
+    [<InlineData("drop")>]
+    member _.``native pending disposal requires exact kind nonce digest and disposition``(change: string) =
+        use fixture = new HostExecutorFixture()
+        let initial = SupplierAdmissionFixtures.originalFor fixture.Command fixture.Profile.QualifiedImage |> PortableSupplierAdmission.beginIntentV3 |> SupplierAdmissionFixtures.ok
+        let pending = SupplierNativeProofFixtures.pending initial
+        let journal = PortableWorkspaceExecutor.SupplierAdmissionJournal fixture.Policy.Runtime.StateRoot
+        journal.Stage(initial, None) |> SupplierAdmissionFixtures.ok |> ignore
+        journal.Stage(pending, Some initial.Revision) |> SupplierAdmissionFixtures.ok |> ignore
+        let bytes = File.ReadAllBytes fixture.Journal
+        let challenge = pending.Challenge.Value
+        let ledger =
+            if change = "drop" then []
+            else [ (if change = "kind" then SupplierWireV1 else SupplierNativeProofV1),
+                   (if change = "id" then Guid.NewGuid() else challenge.ChallengeId),
+                   (if change = "digest" then String.replicate 64 "a" else challenge.Digest),
+                   (if change = "status" then "unknown" else "abandoned") ]
+        let invalid = { pending with Revision = pending.Revision + 1UL; Challenge = None; ChallengeLedger = ledger }
+        Assert.True(journal.Stage(invalid, Some pending.Revision) |> Result.isError)
+        Assert.True(File.ReadAllBytes fixture.Journal = bytes)
+        let preserved = { pending with Revision = pending.Revision + 1UL }
+        journal.Stage(preserved, Some pending.Revision) |> SupplierAdmissionFixtures.ok |> ignore
+        let disposed = SupplierNativeProofFixtures.dispose "consumed" preserved
+        journal.Stage(disposed, Some preserved.Revision) |> SupplierAdmissionFixtures.ok |> ignore
+        let restored, _ = journal.Read fixture.Command |> SupplierAdmissionFixtures.ok
+        Assert.Equal(disposed, restored)
+
+    [<Theory>]
+    [<InlineData("pending-tag")>]
+    [<InlineData("optional-tag")>]
+    [<InlineData("uuid")>]
+    [<InlineData("history-tag")>]
+    [<InlineData("history-negative")>]
+    [<InlineData("history-overflow")>]
+    [<InlineData("disposition")>]
+    [<InlineData("base64")>]
+    [<InlineData("field-negative")>]
+    [<InlineData("field-overflow")>]
+    [<InlineData("schema")>]
+    [<InlineData("truncated")>]
+    [<InlineData("trailing")>]
+    [<InlineData("oversized")>]
+    member _.``malformed v3 tags counts fields and framing refuse without replacing original``(damage: string) =
+        use fixture = new HostExecutorFixture()
+        let initial = SupplierAdmissionFixtures.originalFor fixture.Command fixture.Profile.QualifiedImage |> PortableSupplierAdmission.beginIntentV3 |> SupplierAdmissionFixtures.ok
+        let first = SupplierAdmissionFixtures.pending initial
+        let abandoned = PortableSupplierAdmission.abandonChallenge (Guid.NewGuid()) first |> SupplierAdmissionFixtures.ok
+        let pending = SupplierAdmissionFixtures.pending abandoned
+        let journal = PortableWorkspaceExecutor.SupplierAdmissionJournal fixture.Policy.Runtime.StateRoot
+        for state, expected in [initial, None; first, Some initial.Revision; abandoned, Some first.Revision; pending, Some abandoned.Revision] do
+            journal.Stage(state, expected) |> SupplierAdmissionFixtures.ok |> ignore
+        let original = File.ReadAllBytes fixture.Journal
+        use memory = new MemoryStream(original)
+        use reader = new BinaryReader(memory, Encoding.UTF8)
+        let text () =
+            let n = reader.ReadInt32()
+            let offset = int memory.Position
+            reader.ReadBytes n |> ignore
+            offset
+        reader.ReadString() |> ignore
+        let fieldLength = int memory.Position
+        text () |> ignore
+        reader.ReadUInt64() |> ignore
+        reader.ReadByte() |> ignore
+        let originalFields = [ for _ in 1..7 -> text () ]
+        Assert.True(reader.ReadBoolean())
+        let pendingTag = int memory.Position
+        reader.ReadByte() |> ignore
+        text () |> ignore
+        text () |> ignore
+        let base64Offset = text ()
+        text () |> ignore
+        text () |> ignore
+        for _ in 1..6 do reader.ReadInt64() |> ignore
+        Assert.False(reader.ReadBoolean())
+        let historyCount = int memory.Position
+        Assert.Equal(1, reader.ReadInt32())
+        let historyTag = int memory.Position
+        reader.ReadByte() |> ignore
+        text () |> ignore
+        text () |> ignore
+        let disposition = text ()
+        let damaged = Array.copy original
+        let setInt offset value = Array.Copy(BitConverter.GetBytes(value: int), 0, damaged, offset, 4)
+        let damaged =
+            match damage with
+            | "pending-tag" -> damaged[pendingTag] <- 2uy; damaged
+            | "optional-tag" -> damaged[pendingTag - 1] <- 2uy; damaged
+            | "uuid" -> damaged[List.last originalFields] <- byte 'A'; damaged
+            | "history-tag" -> damaged[historyTag] <- 255uy; damaged
+            | "history-negative" -> setInt historyCount -1; damaged
+            | "history-overflow" -> setInt historyCount 129; damaged
+            | "disposition" -> damaged[disposition] <- byte 'x'; damaged
+            | "base64" -> damaged[base64Offset] <- byte '!'; damaged
+            | "field-negative" -> setInt fieldLength -1; damaged
+            | "field-overflow" -> setInt fieldLength Int32.MaxValue; damaged
+            | "schema" -> damaged[42] <- byte '9'; damaged
+            | "truncated" -> damaged[..damaged.Length - 2]
+            | "trailing" -> Array.append damaged [| 0uy |]
+            | "oversized" -> Array.zeroCreate<byte> (PortableSupplierAdmission.MaximumSupplierBytes + 1)
+            | _ -> failwith "unknown control"
+        File.WriteAllBytes(fixture.Journal, damaged)
+        Assert.True(journal.Read fixture.Command |> Result.isError)
+        Assert.True(journal.Stage(initial, None) |> Result.isError)
+        Assert.True(journal.Stage({ pending with Revision = pending.Revision + 1UL }, Some pending.Revision) |> Result.isError)
+        Assert.True(File.ReadAllBytes fixture.Journal = damaged)
+        Assert.Equal(0, fixture.Runner.Runs)
+        Assert.Equal(0, fixture.Runner.Cleans)
+        Assert.Equal(0, fixture.Runner.Recoveries)
+
+    [<Fact>]
+    member _.``v3 disposed native history permits a distinct wire nonce and cannot be mutated``() =
+        use fixture = new HostExecutorFixture()
+        let initial = SupplierAdmissionFixtures.originalFor fixture.Command fixture.Profile.QualifiedImage |> PortableSupplierAdmission.beginIntentV3 |> SupplierAdmissionFixtures.ok
+        let native = SupplierNativeProofFixtures.pending initial
+        let disposed = SupplierNativeProofFixtures.dispose "consumed" native
+        let wire = SupplierAdmissionFixtures.pending disposed
+        let journal = PortableWorkspaceExecutor.SupplierAdmissionJournal fixture.Policy.Runtime.StateRoot
+        for state, expected in [initial, None; native, Some initial.Revision; disposed, Some native.Revision; wire, Some disposed.Revision] do
+            journal.Stage(state, expected) |> SupplierAdmissionFixtures.ok |> ignore
+        let bytes = File.ReadAllBytes fixture.Journal
+        let read, _ = journal.Read fixture.Command |> SupplierAdmissionFixtures.ok
+        Assert.Equal(wire, read)
+        Assert.Equal(Some SupplierWireV1, read.Challenge |> Option.map _.Kind)
+        let _, id, digest, disposition = read.ChallengeLedger.Head
+        for history in [ []; [ SupplierWireV1, id, digest, disposition ]; [ SupplierNativeProofV1, id, digest, "abandoned" ] ] do
+            Assert.True(journal.Stage({ read with Revision = read.Revision + 1UL; ChallengeLedger = history }, Some read.Revision) |> Result.isError)
+            Assert.True(File.ReadAllBytes fixture.Journal = bytes)
