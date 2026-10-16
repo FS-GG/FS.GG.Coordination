@@ -1154,7 +1154,7 @@ type PortableHostExecutorTests_SupplierJournalV4() =
             | _ -> failwith "changed original must remain held"
         Assert.True(held.FirstFailure.IsSome)
         Assert.Equal(pending.Challenge,held.Challenge)
-        Assert.Equal(pending.ChallengeLedger,held.ChallengeLedger)
+        Assert.Equal<(PortableSupplierChallengeKind * Guid * string * string) list>(pending.ChallengeLedger,held.ChallengeLedger)
         Assert.Equal(pending.Pinned,held.Pinned)
         stage held (Some 4UL)
         let cold,_ = journal.Read initial.Original.Command |> SupplierCheckpointFixtures.ok
@@ -1163,7 +1163,7 @@ type PortableHostExecutorTests_SupplierJournalV4() =
         Assert.Equal(SupplierSourceConflict,journal.StageV4(cleared,Some 5UL,Some 5UL))
         let abandoned = PortableSupplierAdmission.abandonChallenge (Guid.NewGuid()) cold |> SupplierCheckpointFixtures.ok
         Assert.Equal(held.FirstFailure,abandoned.FirstFailure)
-        Assert.Equal(held.Conflicts,abandoned.Conflicts)
+        Assert.Equal<Set<string>>(held.Conflicts,abandoned.Conflicts)
         Assert.True(abandoned.Challenge.IsNone)
         Assert.Contains((SupplierWireV1,pair.Challenge.ChallengeId,pair.Challenge.Digest,"abandoned"),abandoned.ChallengeLedger)
         stage abandoned (Some 5UL)
