@@ -232,9 +232,43 @@ checks. On test failure, the fixture releases the ACK hold and joins cleanup;
 closed-profile admission remains refused.
 
 This earlier cut does not establish that either object remains live or has
-been reclaimed at the terminal cut. Earlier ACK arrays, the one-byte callback
-reader, encoding/runtime/stream roots, uncertainty paths and the complete
+been reclaimed at the terminal cut. Earlier ACK arrays, other
+encoding/runtime/stream roots, uncertainty paths and the complete
 physical population remain unresolved. The observations from the two cuts
 are not a combined peak or a fit budget. Closed-profile admission, installed
 custody, native ACK authentication, original `.103` replay/effects and `.104`
 remain held.
+
+### Pending callback read at terminal readback
+
+At the existing ordinal-six Python readback hold, a transparent test stream
+observes the callback reader's actual pending stdout read. It forwards the
+identical `Memory<byte>` and cancellation token once to
+`owner.StandardOutput.BaseStream`, with no synthetic bytes, copying or
+read-ahead. Its task awaits the real stream task, and clears its pending-call
+observation in `finally` when that read settles.
+
+The bounded named-field witness requires both tasks and their registered
+continuations to remain incomplete. The production callback state belongs
+to the execution assembly, retains the session's exact callback bridge, and
+awaits the observer task. That bridge's channel endpoint is the observer;
+the observer's target is the actual Python stdout stream. The observer state
+awaits the exact underlying stream task. Generated state names and all field
+joins are asserted, with at most eight ancestor lookups and no scanning
+fallback. Changed or unavailable structure refuses the test.
+
+The production state's buffer is the exact supplied memory backing: one
+byte of complete array capacity, memory length one, offset zero. Reference
+identity checks distinguish it from the eleven selected terminal backings
+and all twenty-six request/capture arrays. Output retains only scalar
+capacity, memory length, offset and join results. Settlement asserts that
+the observation is cleared. Failure releases the holds, retires Python and
+joins the existing cleanup; six exact slots, three ACKs, terminal confirmation,
+Python resampling and settled-task checks remain required.
+
+This adds one terminal-cut root relation. It does not combine the earlier
+ACK/child-read cut with the terminal cut or establish physical reclamation,
+a complete simultaneous population or a fit budget. Other runtime/stream,
+encoding, caller/backend/peer and uncertainty populations remain unresolved.
+Closed-profile admission stays refused; installed custody, native ACK,
+original `.103` replay/effects and `.104` remain held.
