@@ -2368,6 +2368,111 @@ module PortableSupplierVerificationBundle =
     let serializeReceiver (StructuralReceiverBundle raw) = System.Text.Encoding.ASCII.GetBytes raw
     let serializeController (StructuralControllerBundle raw) = System.Text.Encoding.ASCII.GetBytes raw
 
+/// A fixed signing purpose, independent of the enrolled key and current policy decision.
+type PortableSupplierSignatureRole =
+    | OriginalIntentSignature | EffectGrantSignature | ReceiverCommandSignature
+    | GenesisAckSignature | OutputAckSignature | HostCommandResultSignature | NativeProofSignature
+    | SupplierCreationSignature | SupplierGenesisSignature | SupplierEventSignature | SupplierResponseSignature
+
+/// Cryptographic byte verification only; no enrollment, policy, native or durable authority.
+type PortableSupplierSignatureVerification =
+    private | CryptographicSupplierSignature of PortableSupplierSignatureRole * string * string
+
+[<RequireQualifiedAccess>]
+module PortableSupplierSshsig =
+    let signingNamespace = function
+        | OriginalIntentSignature -> "fsgg-v3-original-intent-v1"
+        | EffectGrantSignature -> "fsgg-v3-effect-grant-v1"
+        | ReceiverCommandSignature -> "fsgg-v3-host-command-v1"
+        | GenesisAckSignature -> "fsgg-v3-genesis-ack-v1"
+        | OutputAckSignature -> "fsgg-v3-output-ack-v1"
+        | HostCommandResultSignature -> "fsgg-v3-host-command-result-v1"
+        | NativeProofSignature -> "fsgg-v3-native-proof-v1"
+        | SupplierCreationSignature -> "fsgg-v3-supplier-creation-v1"
+        | SupplierGenesisSignature -> "fsgg-v3-supplier-genesis-v1"
+        | SupplierEventSignature -> "fsgg-v3-supplier-event-v1"
+        | SupplierResponseSignature -> "fsgg-v3-supplier-response-v1"
+    let private ascii (value: string) = System.Text.Encoding.ASCII.GetBytes value
+    let private sshString (value: byte array) =
+        let result = Array.zeroCreate<byte> (4 + value.Length)
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt32BigEndian(result.AsSpan(0,4), uint32 value.Length)
+        value.CopyTo(result,4)
+        result
+    let private reader (bytes: byte array) =
+        let mutable position = 0
+        let take length =
+            if length < 0 || length > bytes.Length - position then PortableSupplierC1.fail ()
+            let value = bytes.AsSpan(position,length).ToArray()
+            position <- position + length
+            value
+        let word () = take 4 |> fun value -> System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(value.AsSpan())
+        let field maximum =
+            let length = word ()
+            if length > uint32 maximum then PortableSupplierC1.fail ()
+            take (int length)
+        let complete () = if position <> bytes.Length then PortableSupplierC1.fail ()
+        take,word,field,complete
+    let private armor (bytes: byte array) =
+        if bytes.Length = 0 || bytes.Length > 2048 || (bytes |> Array.exists (fun b -> b > 127uy)) then PortableSupplierC1.fail ()
+        let text = System.Text.Encoding.ASCII.GetString bytes
+        let header,footer = "-----BEGIN SSH SIGNATURE-----\n","-----END SSH SIGNATURE-----\n"
+        if not (text.StartsWith(header,StringComparison.Ordinal)) || not (text.EndsWith(footer,StringComparison.Ordinal)) then PortableSupplierC1.fail ()
+        let middle = text.Substring(header.Length,text.Length-header.Length-footer.Length)
+        if middle.Length = 0 || not (middle.EndsWith("\n",StringComparison.Ordinal)) then PortableSupplierC1.fail ()
+        let lines = middle.Substring(0,middle.Length-1).Split('\n')
+        if lines.Length = 0 || (lines |> Array.mapi (fun i line -> line.Length = 0 || line.Length > 70 || (i < lines.Length-1 && line.Length <> 70)) |> Array.exists id) then PortableSupplierC1.fail ()
+        let encoded = String.concat "" lines
+        let binary = Convert.FromBase64String encoded
+        if Convert.ToBase64String binary <> encoded then PortableSupplierC1.fail ()
+        let canonical =
+            let encoded = Convert.ToBase64String binary
+            let body = [for start in 0 .. 70 .. encoded.Length-1 -> encoded.Substring(start,min 70 (encoded.Length-start))] |> String.concat "\n"
+            header + body + "\n" + footer
+        if text <> canonical then PortableSupplierC1.fail ()
+        binary
+    /// Exact pin bytes are independently selected by the caller's policy; none are inferred from the signature.
+    /// This primitive does not validate a family/original, construct a bundle, or select a current policy.
+    let verify role (expectedSshPublicKeyBlob: byte array) (exactEnvelope: byte array) =
+        try
+            if isNull expectedSshPublicKeyBlob || expectedSshPublicKeyBlob.Length <> 51 then PortableSupplierC1.fail ()
+            let pin = Array.copy expectedSshPublicKeyBlob
+            if isNull exactEnvelope || exactEnvelope.Length = 0 || exactEnvelope.Length > 65536 then PortableSupplierC1.fail ()
+            let snapshot = Array.copy exactEnvelope
+            let payload,_ = PortableSupplierC1.payload 65536 45000 snapshot
+            let envelope = PortableSupplierC1.document 65536 snapshot
+            let signature = envelope.GetProperty("signature") |> PortableSupplierC1.b64url 2048 |> armor
+            let take,word,field,complete = reader signature
+            if take 6 <> ascii "SSHSIG" || word () <> 1u then PortableSupplierC1.fail ()
+            let publicKey = field 128
+            let purpose = field 128
+            let reserved = field 0
+            let algorithm = field 16
+            let signatureBlob = field 128
+            complete ()
+            if publicKey <> pin || purpose <> ascii (signingNamespace role) || reserved.Length <> 0 || algorithm <> ascii "sha512" then PortableSupplierC1.fail ()
+            let _,_,keyField,keyComplete = reader publicKey
+            if keyField 32 <> ascii "ssh-ed25519" then PortableSupplierC1.fail ()
+            let key = keyField 32
+            keyComplete ()
+            let _,_,signatureField,signatureComplete = reader signatureBlob
+            if signatureField 32 <> ascii "ssh-ed25519" then PortableSupplierC1.fail ()
+            let rawSignature = signatureField 64
+            signatureComplete ()
+            if key.Length <> 32 || rawSignature.Length <> 64 then PortableSupplierC1.fail ()
+            if not (Org.BouncyCastle.Math.EC.Rfc8032.Ed25519.ValidatePublicKeyFull(ReadOnlySpan<byte>(key))) then PortableSupplierC1.fail ()
+            let preimage =
+                [ascii "SSHSIG"; sshString purpose; sshString reserved; sshString algorithm; sshString (SHA512.HashData payload)] |> Array.concat
+            let verifier = Org.BouncyCastle.Crypto.Parameters.Ed25519PublicKeyParameters(key)
+            if not (verifier.Verify(Org.BouncyCastle.Math.EC.Rfc8032.Ed25519.Algorithm.Ed25519, null,
+                                    ReadOnlySpan<byte>(preimage), ReadOnlySpan<byte>(rawSignature))) then PortableSupplierC1.fail ()
+            let canonicalEnvelope = PortableSupplierC1.objectBytes (envelope.EnumerateObject() |> Seq.map (fun p -> p.Name,PortableSupplierC1.canonical p.Value) |> Seq.toList)
+            Ok(CryptographicSupplierSignature(role,Convert.ToBase64String canonicalEnvelope,Convert.ToBase64String pin))
+        with _ -> Error "supplier-signature-refused"
+    let role (CryptographicSupplierSignature(value,_,_)) = value
+    let envelope (CryptographicSupplierSignature(_,value,_)) = Convert.FromBase64String value
+    let publicKeyFingerprint (CryptographicSupplierSignature(_,_,key)) =
+        "SHA256:" + (Convert.FromBase64String key |> SHA256.HashData |> Convert.ToBase64String).TrimEnd('=')
+
 /// Source-only receiver admission. These snapshots cannot authorize a runner, ACK or host effect.
 type PortableSupplierAdmissionPhase =
     | SupplierIntentStored | SupplierCreationPinned | SupplierAwaitingGenesis
