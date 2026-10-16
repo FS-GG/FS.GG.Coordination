@@ -880,6 +880,78 @@ module SupplierCheckpointFixtures =
           BytesBase64 = Convert.ToBase64String exact; Purpose = "creation"; ReceiverEpoch = state.Original.ReceiverEpoch
           IssuedAt = issued; NotAfter = issued.AddSeconds 30.; IssuedMonotonic = 1L; DeadlineMonotonic = 100L; ExpectedHead = None }
 
+    let journey () =
+        let rec find (directory: DirectoryInfo) =
+            if isNull directory then failwith "controlled checkpoint journey missing"
+            let path = Path.Combine(directory.FullName, "contracts", "portable-workspace", "v1", "receiver-checkpoint-v2-controlled-journey.json")
+            if File.Exists path then File.ReadAllBytes path else find directory.Parent
+        find (DirectoryInfo(AppContext.BaseDirectory)) |> fun raw -> JsonDocument.Parse(ReadOnlyMemory<byte>(raw))
+    let urlBytes (text: string) = Convert.FromBase64String(text.Replace('-', '+').Replace('_', '/') + String.replicate ((4 - text.Length % 4) % 4) "=")
+    let exchange (name: string) (state: PortableSupplierAdmissionState) =
+        use doc = journey ()
+        let row = doc.RootElement.GetProperty name
+        let exact key = row.GetProperty(key: string).GetString() |> urlBytes
+        let challengeBytes = exact "challenge"
+        use challengeDoc = JsonDocument.Parse(ReadOnlyMemory<byte>(challengeBytes))
+        let value = challengeDoc.RootElement
+        let date key = DateTimeOffset.Parse(value.GetProperty(key: string).GetString(), Globalization.CultureInfo.InvariantCulture)
+        let challenge: PortableSupplierAdmissionChallenge =
+            { ChallengeId = Guid.Parse(value.GetProperty("challenge_id").GetString()); Digest = domain "challenge" challengeBytes
+              BytesBase64 = Convert.ToBase64String challengeBytes; Purpose = row.GetProperty("purpose").GetString()
+              ReceiverEpoch = state.Original.ReceiverEpoch; IssuedAt = date "issued_at"; NotAfter = date "not_after"
+              IssuedMonotonic = 1L; DeadlineMonotonic = 100L; ExpectedHead = state.Head }
+        { AcceptedRevision = 0UL; AcceptedStoreFence = 0UL; Challenge = challenge
+          RequestBase64 = exact "request" |> Convert.ToBase64String; ResultBase64 = exact "result" |> Convert.ToBase64String
+          EvidenceBase64 = exact "evidence" |> Convert.ToBase64String
+          ReceiverBundleBase64 = exact "receiverBundle" |> Convert.ToBase64String
+          ControllerBundleBase64 = exact "controllerBundle" |> Convert.ToBase64String }
+    let observation kind (exchange: PortableSupplierRetainedWireExchange) (state: PortableSupplierAdmissionState) =
+        use doc = journey ()
+        let exact key = doc.RootElement.GetProperty(key: string).GetString() |> urlBytes
+        use c = JsonDocument.Parse(ReadOnlyMemory<byte>(exact "creationCore"))
+        use r = JsonDocument.Parse(ReadOnlyMemory<byte>(exact "reservation"))
+        let core = c.RootElement
+        let reservation = r.RootElement
+        let time key = DateTimeOffset.Parse(reservation.GetProperty(key: string).GetString(), Globalization.CultureInfo.InvariantCulture)
+        let ticks key = Int64.Parse(reservation.GetProperty(key: string).GetString(), Globalization.CultureInfo.InvariantCulture) |> TimeSpan.FromTicks
+        let pinned: PortableHostReservation =
+            { Binding = { HostFixtures.binding with Command = state.Original.Command; QualifiedImage = state.Original.QualifiedImage }
+              AdmittedAt = time "admitted_at"; HostLeaseExpiresAt = time "host_lease_expires_at"
+              MaximumRuntime = ticks "maximum_runtime_ticks"; ExportReserve = ticks "export_reserve_ticks"
+              CleanupReserve = ticks "cleanup_reserve_ticks"; Selection = NoSelectedOutputs }
+        let event = exact "genesisEvent"
+        let at = doc.RootElement.GetProperty(if kind = SupplierCreation then "creation" else "genesis").GetProperty("collectedAt").GetString()
+        { Kind = kind; IntentDigest = state.Original.IntentDigest; TrustPolicyDigest = state.Original.TrustPolicyDigest
+          ChallengeDigest = exchange.Challenge.Digest; Purpose = exchange.Challenge.Purpose; OriginalReservation = pinned
+          Identity = { Issuer = "controlled-source-only"; ContainerId = core.GetProperty("cid").GetString()
+                       AllocationDevice = UInt64.Parse(core.GetProperty("allocation_device").GetString())
+                       AllocationInode = UInt64.Parse(core.GetProperty("allocation_inode").GetString()) }
+          OuterImageId = core.GetProperty("image_id").GetString(); SupplierSourceRevision = state.Original.SupplierSourceRevision
+          CreationBase64 = exact "creationCore" |> Convert.ToBase64String
+          CreationReceiptBase64 = exact "creationReceipt" |> Convert.ToBase64String
+          ReservationBase64 = exact "reservation" |> Convert.ToBase64String; ResponseBase64 = exchange.EvidenceBase64
+          EventsBase64 = if kind = SupplierCreation then [] else [Convert.ToBase64String event]
+          FromHead = None; ToHead = if kind = SupplierCreation then None else Some(domain "signed-envelope" event)
+          Sequence = 0UL; CollectedAt = DateTimeOffset.Parse(at, Globalization.CultureInfo.InvariantCulture) }
+    let verifyControlled kind exchange state =
+        let value = observation kind exchange state
+        let adapter = { new IPortableSupplierTranscriptAuthenticator with member _.Authenticate _ = Ok value }
+        PortableSupplierAdmission.verify adapter value.CollectedAt 2L state (Convert.FromBase64String exchange.EvidenceBase64) |> ok
+    let pinCreation (state: PortableSupplierAdmissionState) =
+        let pair = exchange "creation" state
+        let pending = PortableSupplierAdmission.issueChallenge pair.Challenge state |> ok
+        let verified = verifyControlled SupplierCreation pair pending
+        match PortableSupplierAdmission.pinCreationV4 verified pair pending.Original pending.Revision pending.CheckpointCustody.Value.StoreFence pending |> ok with
+        | SupplierCheckpointData value -> value
+        | SupplierCheckpointHeld _ -> failwith "controlled creation held"
+    let acceptGenesis (state: PortableSupplierAdmissionState) =
+        let pair = exchange "genesis" state
+        let pending = PortableSupplierAdmission.issueChallenge pair.Challenge state |> ok
+        let verified = verifyControlled SupplierGenesis pair pending
+        match PortableSupplierAdmission.acceptWireV4 verified pair pending.Original pending.Revision pending.CheckpointCustody.Value.StoreFence pending |> ok with
+        | SupplierCheckpointData value -> value
+        | SupplierCheckpointHeld _ -> failwith "controlled genesis held"
+
 type PortableHostAllocationTests_ReceiverCheckpointSource() =
     [<Fact>]
     member _.``fresh v4 retains original bytes and separate fence without creating a witness``() =
@@ -913,3 +985,60 @@ type PortableHostAllocationTests_ReceiverCheckpointSource() =
         Assert.True(PortableSupplierAdmission.abandonChallenge (Guid.NewGuid()) initial |> Result.isError)
         Assert.True(PortableSupplierAdmission.issueSelectedNativeProofChallengeV4 initial.Original initial.Revision 1UL
                         (Guid.NewGuid()) DateTimeOffset.UtcNow (DateTimeOffset.UtcNow.AddSeconds 1.) 1L 2L initial |> Result.isError)
+
+/// Lexical receipt controls are separate from authenticated prefix/output acceptance.
+type PortableHostAllocationTests_NativeReceiptCodec() =
+    [<Fact>]
+    member _.``native receipt exact closed codecs preserve structural classification and immutable bytes``() =
+        let rec find (directory: DirectoryInfo) =
+            if isNull directory then failwith "native receipt corpus missing"
+            let path = Path.Combine(directory.FullName, "contracts", "portable-workspace", "v1", "native-receipt-v1-vectors.json")
+            if File.Exists path then File.ReadAllBytes path else find directory.Parent
+        use doc = find (DirectoryInfo(AppContext.BaseDirectory)) |> fun raw -> JsonDocument.Parse(ReadOnlyMemory<byte>(raw))
+        Assert.False(doc.RootElement.GetProperty("authentication").GetBoolean())
+        Assert.False(doc.RootElement.GetProperty("nativeAcceptance").GetBoolean())
+        Assert.False(doc.RootElement.GetProperty("semanticJourney").GetBoolean())
+        for row in doc.RootElement.GetProperty("cases").EnumerateArray() do
+            let bytes = row.GetProperty("bytes").GetString() |> Encoding.ASCII.GetBytes
+            let expected = row.GetProperty("structuralAccept").GetBoolean()
+            let parsed = PortableSupplierNativeReceipt.parse bytes
+            Assert.True((Result.isOk parsed = expected), row.GetProperty("name").GetString())
+            match parsed with
+            | Ok receipt ->
+                Assert.True(bytes = PortableSupplierNativeReceipt.serialize receipt)
+                Assert.Equal(row.GetProperty("sha256").GetString(), PortableSupplierNativeReceipt.rawSha256 receipt)
+                bytes.[0] <- 0uy
+                let copy = PortableSupplierNativeReceipt.serialize receipt
+                copy.[0] <- 0uy
+                Assert.Equal(123uy, (PortableSupplierNativeReceipt.serialize receipt).[0])
+            | _ -> ()
+
+/// Full retained structural originals/pairs, still using an explicitly controlled test adapter.
+type PortableHostAllocationTests_ReceiverCheckpointControlledJourney() =
+    [<Fact>]
+    member _.``controlled genesis caller retains full paired bytes and recomputes checkpoint on cold validation``() =
+        use doc = SupplierCheckpointFixtures.journey ()
+        Assert.False(doc.RootElement.GetProperty("authentication").GetBoolean())
+        Assert.False(doc.RootElement.GetProperty("durability").GetBoolean())
+        let initial = SupplierCheckpointFixtures.initial ()
+        let creation = SupplierCheckpointFixtures.pinCreation initial
+        Assert.Equal(3UL, creation.Revision)
+        let genesis = SupplierCheckpointFixtures.acceptGenesis creation
+        Assert.Equal(5UL, genesis.Revision)
+        Assert.Equal(5UL, genesis.CheckpointCustody.Value.StoreFence)
+        Assert.True(genesis.CheckpointCustody.Value.GenesisCheckpointBase64.IsSome)
+        Assert.True(genesis.CheckpointCustody.Value.OutputCheckpointBase64.IsNone)
+        Assert.Equal(genesis, PortableSupplierAdmission.validate genesis |> SupplierCheckpointFixtures.ok)
+        let checkpoint = Convert.FromBase64String genesis.CheckpointCustody.Value.GenesisCheckpointBase64.Value |> PortableSupplierCheckpoint.parseGenesis |> SupplierCheckpointFixtures.ok
+        Assert.Equal(genesis.Head.Value, (PortableSupplierCheckpoint.genesisCommon checkpoint).ObservedHead)
+        Assert.Equal(0UL, (PortableSupplierCheckpoint.genesisCommon checkpoint).AcceptedSequence)
+        let custody = genesis.CheckpointCustody.Value
+        for invalid in
+            [ { genesis with EventsBase64 = [] }
+              { genesis with CheckpointCustody = Some { custody with CreationExchange = None } }
+              { genesis with CheckpointCustody = Some { custody with WireExchanges = [] } }
+              { genesis with CheckpointCustody = Some { custody with GenesisCheckpointBase64 = None } }
+              { genesis with CheckpointCustody = Some { custody with StoreFence = 4UL } } ] do
+            Assert.True(PortableSupplierAdmission.validate invalid |> Result.isError)
+        Assert.True(PortableSupplierAdmission.prepareAck genesis |> Result.isError)
+        Assert.True(PortableSupplierAdmission.reserveHost genesis |> Result.isError)

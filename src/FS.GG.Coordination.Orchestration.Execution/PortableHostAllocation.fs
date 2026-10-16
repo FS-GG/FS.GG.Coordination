@@ -2018,6 +2018,97 @@ module private PortableSupplierWireShape =
 
 /// Immutable structural checkpoint fields, all recomputed by the retained-exchange caller.
 /// A parsed instance is neither an authenticated candidate nor a commit witness.
+/// Native receipt data only. Parsing never proves a filesystem observation or signature.
+type PortableSupplierNativeReceipt = private | StructuralNativeReceipt of string
+
+[<RequireQualifiedAccess>]
+module PortableSupplierNativeReceipt =
+    open System.Text.Json
+    open PortableSupplierC1
+    [<Literal>]
+    let MaximumBytes = 32768
+    let private root (row: JsonElement) =
+        fields ["device"; "inode"; "filesystem_uuid"] row
+        for key in ["device"; "inode"] do row.GetProperty(key) |> u64 |> ignore
+        row.GetProperty("filesystem_uuid") |> uuid |> ignore
+    let private path (row: JsonElement) =
+        let value = row |> text 128
+        PortableSupplierManifest.create [{ Path = value; Bytes = 0UL; Sha256 = String.replicate 64 "0" }]
+        |> Result.defaultWith invalidOp |> ignore
+        value
+    let private orderedPaths (rows: JsonElement list) =
+        let paths = rows |> List.map (fun row -> path (row.GetProperty("path")))
+        if paths |> List.pairwise |> List.exists (fun (a,b) -> StringComparer.Ordinal.Compare(a,b) >= 0) then fail ()
+        if (paths |> List.map _.ToUpperInvariant() |> Set.ofList |> Set.count) <> paths.Length then fail ()
+        paths
+    let private fileIdentity (row: JsonElement) =
+        for key in ["device"; "inode"; "uid"; "gid"; "nlink"] do row.GetProperty(key) |> u64 |> ignore
+        if row.GetProperty("nlink").GetString() <> "1" then fail ()
+    let private decode (value: JsonElement) =
+        let common =
+            ["schema"; "profile"; "operation_id"; "intent_digest"; "creation_core_digest"; "reservation_digest"
+             "selection_digest"; "scope_policy_digest"; "source_root"; "observed_at"; "clock_snapshot_sha256"]
+        let schema = value.GetProperty("schema") |> text 64
+        let selected = schema = "fsgg.v3.native-export-readback/1"
+        let extra =
+            if selected then
+                ["manifest_bytes"; "manifest_digest"; "manifest_sha256"; "member_count"; "total_bytes"
+                 "destination_policy_digest"; "destination_root"; "readback_members"]
+            elif schema = "fsgg.v3.native-zero-census/1" then ["selected_member_count"; "selected_total_bytes"; "inventory"]
+            else fail ()
+        fields (common @ extra) value
+        if value.GetProperty("profile").GetString() <> "signed-hold-v1" then fail ()
+        value.GetProperty("operation_id") |> uuid |> ignore
+        for key in ["intent_digest"; "creation_core_digest"; "reservation_digest"; "selection_digest"; "scope_policy_digest"; "clock_snapshot_sha256"] do
+            value.GetProperty(key) |> digest |> ignore
+        value.GetProperty("source_root") |> root
+        value.GetProperty("observed_at") |> utc |> ignore
+        if selected then
+            value.GetProperty("destination_root") |> root
+            value.GetProperty("destination_policy_digest") |> digest |> ignore
+            let exact = value.GetProperty("manifest_bytes") |> b64url 6000
+            let manifest = PortableSupplierManifest.parse exact |> Result.defaultWith invalidOp
+            let summary = PortableSupplierManifest.summary manifest
+            if (value.GetProperty("manifest_digest") |> digest) <> summary.Digest
+               || (value.GetProperty("manifest_sha256") |> digest) <> hash exact
+               || (value.GetProperty("member_count") |> u64) <> summary.MemberCount
+               || (value.GetProperty("total_bytes") |> u64) <> summary.TotalBytes then fail ()
+            let array = value.GetProperty("readback_members")
+            if array.ValueKind <> JsonValueKind.Array || array.GetArrayLength() > 16 then fail ()
+            let rows = array.EnumerateArray() |> Seq.toList
+            orderedPaths rows |> ignore
+            let actual =
+                rows |> List.map (fun row ->
+                    fields ["path"; "bytes"; "sha256"; "device"; "inode"; "uid"; "gid"; "nlink"] row
+                    fileIdentity row
+                    { Path = path (row.GetProperty("path")); Bytes = row.GetProperty("bytes") |> u64
+                      Sha256 = row.GetProperty("sha256") |> digest })
+            if actual <> PortableSupplierManifest.members manifest then fail ()
+        else
+            if value.GetProperty("selected_member_count").GetString() <> "0"
+               || value.GetProperty("selected_total_bytes").GetString() <> "0" then fail ()
+            let array = value.GetProperty("inventory")
+            if array.ValueKind <> JsonValueKind.Array || array.GetArrayLength() > 64 then fail ()
+            let rows = array.EnumerateArray() |> Seq.toList
+            orderedPaths rows |> ignore
+            for row in rows do
+                match row.GetProperty("kind").GetString() with
+                | "regular-file" ->
+                    fields ["path"; "kind"; "scope_class"; "device"; "inode"; "uid"; "gid"; "nlink"; "bytes"; "sha256"] row
+                    fileIdentity row
+                    row.GetProperty("bytes") |> u64 |> ignore
+                    row.GetProperty("sha256") |> digest |> ignore
+                    if row.GetProperty("scope_class").GetString() <> "excluded-engine" then fail ()
+                | "directory" ->
+                    fields ["path"; "kind"; "scope_class"; "device"; "inode"; "uid"; "gid"] row
+                    for key in ["device"; "inode"; "uid"; "gid"] do row.GetProperty(key) |> u64 |> ignore
+                    if row.GetProperty("scope_class").GetString() <> "structural" then fail ()
+                | _ -> fail ()
+        StructuralNativeReceipt(System.Text.Encoding.ASCII.GetString(objectBytes (value.EnumerateObject() |> Seq.map (fun p -> p.Name,canonical p.Value) |> Seq.toList)))
+    let parse bytes = PortableSupplierC1.parse MaximumBytes bytes decode
+    let serialize (StructuralNativeReceipt value) = System.Text.Encoding.ASCII.GetBytes value
+    let rawSha256 receipt = serialize receipt |> hash
+
 type PortableSupplierCheckpointCommon =
     { Provenance: string
       JournalKeySha256: string
@@ -2822,6 +2913,96 @@ module PortableSupplierAdmission =
           ExpectedCurrentHead = state.Head |> Option.defaultWith PortableSupplierC1.fail
           ExpectedCurrentSequence = state.Sequence }
 
+    let private sourceNativePair (state: PortableSupplierAdmissionState) (e: PortableSupplierRetainedNativeAcquisition) =
+        let original,operation,reservation,proofHead,expectedReceipt,epoch,id,challengeDigest,challengeBytes,issued,notAfter,selected =
+            match e.Challenge with
+            | WireV1 _ -> PortableSupplierC1.fail ()
+            | NativeProofV1 challenge ->
+                if not (validNative state.Original challenge) then PortableSupplierC1.fail ()
+                let c = challenge.Context
+                c.Original,c.OperationId,c.ReservationDigest,c.ProofEventHead,Some c.NativeReceiptSha256,
+                challenge.ReceiverEpoch,challenge.ChallengeId,challenge.Digest,challenge.BytesBase64,challenge.IssuedAt,challenge.NotAfter,false
+            | NativeSelectedProofV2 challenge ->
+                if not (validSelectedNative state.Original challenge) || challenge.Context <> selectedProofContext state then PortableSupplierC1.fail ()
+                let c = challenge.Context
+                c.Original,c.OperationId,c.ReservationDigest,c.ProofEventHead,None,
+                challenge.ReceiverEpoch,challenge.ChallengeId,challenge.Digest,challenge.BytesBase64,challenge.IssuedAt,challenge.NotAfter,true
+        let _,core,reservationRow,coreBytes,_,reservationBytes = sourceOriginals state
+        if original <> state.Original || operation <> (core.GetProperty("operation_id") |> PortableSupplierC1.uuid)
+           || reservation <> domain "reservation" reservationBytes then PortableSupplierC1.fail ()
+        let proof =
+            state.EventsBase64 |> List.skip 1 |> List.map (fun encoded -> raw 26761 encoded |> Result.defaultWith invalidOp)
+            |> List.filter (fun exact -> domain "signed-envelope" exact = proofHead)
+        let proofEnvelope = match proof with [one] -> one | _ -> PortableSupplierC1.fail ()
+        let proofPayload,proofEvent = PortableSupplierC1.payload 26761 12000 proofEnvelope
+        let proofBody = proofEvent.GetProperty("body")
+        if proofEvent.GetProperty("kind").GetString() <> (if selected then "export-manifest" else "zero-selection-census") then PortableSupplierC1.fail ()
+        let selection = sourceSelection (reservationRow.GetProperty("selection"))
+        match selected,selection with true,SelectedOutputs _ | false,NoSelectedOutputs -> () | _ -> PortableSupplierC1.fail ()
+        let request = raw 65536 e.RequestBase64 |> Result.defaultWith invalidOp
+        let result = raw 4096 e.ResultBase64 |> Result.defaultWith invalidOp
+        let proof = raw 65536 e.ProofEnvelopeBase64 |> Result.defaultWith invalidOp
+        let receipt = raw 32768 e.ReceiptBase64 |> Result.defaultWith invalidOp
+        PortableSupplierNativeReceipt.parse receipt |> Result.defaultWith invalidOp |> ignore
+        let receiptRow = PortableSupplierC1.document 32768 receipt
+        let proofReceipt,_ = PortableSupplierC1.payload 65536 32768 proof
+        if receipt <> proofReceipt then PortableSupplierC1.fail ()
+        let _,command = PortableSupplierC1.payload 65536 45000 request
+        let _,response = PortableSupplierC1.payload 4096 896 result
+        PortableSupplierC1.fields ["schema"; "profile"; "request_id"; "kind"; "receiver_policy_digest"; "receiver_epoch"; "body"] command
+        PortableSupplierC1.fields ["schema"; "request_digest"; "operation_id"; "result"; "reason"; "checkpoint_digest"; "evidence_kind"; "evidence_digest"; "challenge_digest"; "collected_at"] response
+        if command.GetProperty("schema").GetString() <> (if selected then "fsgg.v3.host-command/2" else "fsgg.v3.host-command/1")
+           || command.GetProperty("profile").GetString() <> "signed-hold-v1" || command.GetProperty("kind").GetString() <> "read-native-proof"
+           || (command.GetProperty("receiver_epoch") |> PortableSupplierC1.uuid) <> epoch
+           || response.GetProperty("schema").GetString() <> "fsgg.v3.host-command-result/1"
+           || response.GetProperty("result").GetString() <> "observed" || response.GetProperty("reason").GetString() <> "ok"
+           || response.GetProperty("evidence_kind").GetString() <> "native-proof"
+           || response.GetProperty("evidence_digest").GetString() <> digestBytes proof
+           || response.GetProperty("request_digest").GetString() <> digestBytes request
+           || response.GetProperty("challenge_digest").GetString() <> challengeDigest
+           || (response.GetProperty("operation_id") |> PortableSupplierC1.uuid) <> operation then PortableSupplierC1.fail ()
+        command.GetProperty("request_id") |> PortableSupplierC1.uuid |> ignore
+        response.GetProperty("checkpoint_digest") |> PortableSupplierC1.digest |> ignore
+        let collected = response.GetProperty("collected_at") |> PortableSupplierC1.utc
+        if collected < issued || collected >= notAfter then PortableSupplierC1.fail ()
+        let body = command.GetProperty("body")
+        PortableSupplierC1.fields
+            (["operation_id"; "intent_digest"; "reservation_digest"; "proof_event_head"; "challenge"]
+             @ [if selected then "proof_kind" else "native_receipt_sha256"]) body
+        if (body.GetProperty("operation_id") |> PortableSupplierC1.uuid) <> operation
+           || body.GetProperty("intent_digest").GetString() <> original.IntentDigest
+           || body.GetProperty("reservation_digest").GetString() <> reservation
+           || body.GetProperty("proof_event_head").GetString() <> proofHead
+           || PortableSupplierC1.nestedBytes (body.GetProperty("challenge")) <> (raw 45000 challengeBytes |> Result.defaultWith invalidOp) then PortableSupplierC1.fail ()
+        if selected then
+            if body.GetProperty("proof_kind").GetString() <> "selected" then PortableSupplierC1.fail ()
+        else
+            if Some(body.GetProperty("native_receipt_sha256") |> PortableSupplierC1.digest) <> expectedReceipt
+               || Some(proofBody.GetProperty("receipt_digest") |> PortableSupplierC1.digest) <> expectedReceipt
+               || Some(digestBytes receipt) <> expectedReceipt then PortableSupplierC1.fail ()
+        let observations = bundleCoverage true e.ControllerBundleBase64
+                                ["receiver-command",request,"raw-sha256"; "host-command-result",result,"raw-sha256"; "native-proof",proof,"raw-sha256"]
+        let requestObservation = observations.GetProperty("observations").EnumerateArray() |> Seq.find (fun row -> row.GetProperty("role").GetString() = "receiver-command")
+        if (command.GetProperty("receiver_policy_digest") |> PortableSupplierC1.digest) <> requestObservation.GetProperty("policy_digest").GetString()
+           || (receiptRow.GetProperty("operation_id") |> PortableSupplierC1.uuid) <> operation
+           || receiptRow.GetProperty("intent_digest").GetString() <> original.IntentDigest
+           || receiptRow.GetProperty("creation_core_digest").GetString() <> domain "creation" coreBytes
+           || receiptRow.GetProperty("reservation_digest").GetString() <> reservation
+           || receiptRow.GetProperty("selection_digest").GetString() <> domain "selection" (PortableSupplierC1.nestedBytes (reservationRow.GetProperty("selection"))) then PortableSupplierC1.fail ()
+        let observed = receiptRow.GetProperty("observed_at") |> PortableSupplierC1.utc
+        if observed < state.Pinned.Value.OriginalReservation.AdmittedAt || observed > collected
+           || observed >= original.Command.Deadline || observed >= state.Pinned.Value.OriginalReservation.HostLeaseExpiresAt
+           || observed <> (proofBody.GetProperty("observed_at") |> PortableSupplierC1.utc) then PortableSupplierC1.fail ()
+        if selected then
+            let creationBody =
+                let _,creationRequest = raw 65536 state.CheckpointCustody.Value.CreationExchange.Value.RequestBase64 |> Result.defaultWith invalidOp |> PortableSupplierC1.payload 65536 45000
+                creationRequest.GetProperty("body")
+            let exactManifest = creationBody.GetProperty("selection_manifest") |> PortableSupplierC1.b64url 6000
+            if (receiptRow.GetProperty("manifest_bytes") |> PortableSupplierC1.b64url 6000) <> exactManifest then PortableSupplierC1.fail ()
+            for key in ["manifest_digest"; "member_count"; "total_bytes"] do
+                if receiptRow.GetProperty(key).GetString() <> proofBody.GetProperty(key).GetString() then PortableSupplierC1.fail ()
+        receiptRow,proofEnvelope,proofPayload,id,epoch
+
     let private validateCustodyReferences (state: PortableSupplierAdmissionState) (c: PortableSupplierCheckpointCustody) =
         sourceOriginal state.Original c.OriginalIntentEnvelopeBase64 |> ignore
         if state.CheckpointBase64.IsSome || state.AckDraftBase64.IsSome then PortableSupplierC1.fail ()
@@ -2857,6 +3038,11 @@ module PortableSupplierAdmission =
             let mutable head = None
             let mutable sequence = 0UL
             let mutable retained = []
+            let mutable seenStart = false
+            let mutable previousLease: byte array option = None
+            let mutable leaseExpiry = core.GetProperty("host_lease_expires_at") |> PortableSupplierC1.utc
+            let admitted = reservation.GetProperty("admitted_at") |> PortableSupplierC1.utc
+            let originalLimit = min state.Original.Command.Deadline state.Pinned.Value.OriginalReservation.HostLeaseExpiresAt
             let mutable priorRevision = c.CreationExchange.Value.AcceptedRevision
             for exchange in c.WireExchanges do
                 if exchange.AcceptedRevision <= priorRevision then PortableSupplierC1.fail ()
@@ -2903,6 +3089,43 @@ module PortableSupplierAdmission =
                            || (event.GetProperty("sequence") |> PortableSupplierC1.u64) <> sequence + 1UL
                            || event.GetProperty("operation_id").GetString() <> core.GetProperty("operation_id").GetString()
                            || event.GetProperty("reservation_digest").GetString() <> domain "reservation" reservationBytes then PortableSupplierC1.fail ()
+                        let kind = event.GetProperty("kind").GetString()
+                        let body = event.GetProperty("body")
+                        let occurred = event.GetProperty("occurred_at") |> PortableSupplierC1.utc
+                        if occurred < admitted || occurred > collected || occurred >= originalLimit then PortableSupplierC1.fail ()
+                        if List.contains kind ["launch-intent"; "start-invoked"] then
+                            for field,originalField in ["original_cid","cid"; "original_image_id","image_id"; "original_inode","allocation_inode"] do
+                                if body.GetProperty(field).GetString() <> core.GetProperty(originalField).GetString() then PortableSupplierC1.fail ()
+                        if List.contains kind ["termination"; "inner-cleanup-intent"; "inner-cleanup-observed"; "outer-retire-intent"; "outer-retire-observed"]
+                           && body.GetProperty("cid").GetString() <> core.GetProperty("cid").GetString() then PortableSupplierC1.fail ()
+                        if kind = "workload-exit" && body.GetProperty("command_id").GetString() <> state.Original.Command.CommandId.ToString("D") then PortableSupplierC1.fail ()
+                        if kind = "unit-activation-observed" then
+                            if not seenStart then PortableSupplierC1.fail ()
+                            for field in ["unit_name"; "boot_id"; "cid"] do
+                                if body.GetProperty(field).GetString() <> core.GetProperty(field).GetString() then PortableSupplierC1.fail ()
+                        if kind = "start-invoked" then seenStart <- true
+                        if kind = "zero-selection-census" then
+                            if sourceSelection (reservation.GetProperty("selection")) <> NoSelectedOutputs
+                               || body.GetProperty("selection_digest").GetString() <> domain "selection" (PortableSupplierC1.nestedBytes (reservation.GetProperty("selection"))) then PortableSupplierC1.fail ()
+                        if kind = "export-manifest" then
+                            match sourceSelection (reservation.GetProperty("selection")) with
+                            | NoSelectedOutputs -> PortableSupplierC1.fail ()
+                            | SelectedOutputs manifest ->
+                                if body.GetProperty("manifest_digest").GetString() <> manifest.Digest
+                                   || (body.GetProperty("member_count") |> PortableSupplierC1.u64) <> manifest.MemberCount
+                                   || (body.GetProperty("total_bytes") |> PortableSupplierC1.u64) <> manifest.TotalBytes then PortableSupplierC1.fail ()
+                        if kind = "lease-amendment" then
+                            let expectedKind,expectedDigest =
+                                match previousLease with
+                                | None -> "creation-receipt", domain "creation-receipt" receiptBytes
+                                | Some previous -> "lease-amendment", domain "lease-amendment" previous
+                            let newExpiry = body.GetProperty("new_expiry") |> PortableSupplierC1.utc
+                            if body.GetProperty("previous_lease_kind").GetString() <> expectedKind
+                               || body.GetProperty("previous_lease_digest").GetString() <> expectedDigest
+                               || (body.GetProperty("old_expiry") |> PortableSupplierC1.utc) <> leaseExpiry
+                               || newExpiry <= leaseExpiry then PortableSupplierC1.fail ()
+                            previousLease <- Some bytes
+                            leaseExpiry <- newExpiry
                         sequence <- sequence + 1UL
                     head <- Some(domain "signed-envelope" exact)
                     retained <- retained @ [exact]
@@ -2927,7 +3150,8 @@ module PortableSupplierAdmission =
                 if PortableSupplierCheckpoint.serializeGenesis expected <> bytes || state.Phase <> SupplierGenesisAccepted then PortableSupplierC1.fail ()
             | _ -> PortableSupplierC1.fail ()
         elif not c.WireExchanges.IsEmpty || c.GenesisCheckpointBase64.IsSome || state.Phase <> SupplierIntentStored then PortableSupplierC1.fail ()
-        // Native acceptance and its output checkpoint are validated by the next closed join.
+        for acquisition in c.NativeAcquisitions do sourceNativePair state acquisition |> ignore
+        // Native acceptance remains held until the independent original policy snapshot join.
         if not c.NativeAcquisitions.IsEmpty || c.OutputCheckpointBase64.IsSome then PortableSupplierC1.fail ()
 
     let private transcriptBytes (state: PortableSupplierAdmissionState) =

@@ -1044,3 +1044,37 @@ type PortableHostExecutorTests_SupplierJournalV4() =
         Assert.Equal(0, fixture.Runner.Runs)
         Assert.Equal(0, fixture.Runner.Cleans)
         Assert.Equal(0, fixture.Runner.Recoveries)
+
+    [<Fact>]
+    member _.``controlled genesis commits each revision through same store and reopens exact checkpoint bytes``() =
+        use fixture = new HostExecutorFixture()
+        let initial = SupplierCheckpointFixtures.initial ()
+        let journal = PortableWorkspaceExecutor.SupplierAdmissionJournal fixture.Policy.Runtime.StateRoot
+        let stage state expected =
+            let fence = expected
+            match journal.StageV4(state, expected, fence) with
+            | SupplierSourceReadback actual -> Assert.Equal(state, actual)
+            | other -> failwithf "%A" other
+            let cold, durability = journal.Read state.Original.Command |> SupplierCheckpointFixtures.ok
+            Assert.Equal(state, cold)
+            match durability with EvidenceUnknown _ -> () | _ -> failwith "source cannot prove durability"
+        stage initial None
+        let creationPair = SupplierCheckpointFixtures.exchange "creation" initial
+        let pendingCreation = PortableSupplierAdmission.issueChallenge creationPair.Challenge initial |> SupplierCheckpointFixtures.ok
+        stage pendingCreation (Some 1UL)
+        let creation = SupplierCheckpointFixtures.pinCreation initial
+        stage creation (Some 2UL)
+        let genesisPair = SupplierCheckpointFixtures.exchange "genesis" creation
+        let pendingGenesis = PortableSupplierAdmission.issueChallenge genesisPair.Challenge creation |> SupplierCheckpointFixtures.ok
+        stage pendingGenesis (Some 3UL)
+        let genesis = SupplierCheckpointFixtures.acceptGenesis creation
+        stage genesis (Some 4UL)
+        let reopened = PortableWorkspaceExecutor.SupplierAdmissionJournal fixture.Policy.Runtime.StateRoot
+        let cold, _ = reopened.Read genesis.Original.Command |> SupplierCheckpointFixtures.ok
+        Assert.Equal(genesis.CheckpointCustody.Value.GenesisCheckpointBase64, cold.CheckpointCustody.Value.GenesisCheckpointBase64)
+        Assert.Equal(SupplierSourceConflict, reopened.StageV4(genesis, Some 4UL, Some 4UL))
+        Assert.True(PortableSupplierAdmission.prepareAck cold |> Result.isError)
+        Assert.True(PortableSupplierAdmission.reserveHost cold |> Result.isError)
+        Assert.Equal(0, fixture.Runner.Runs)
+        Assert.Equal(0, fixture.Runner.Cleans)
+        Assert.Equal(0, fixture.Runner.Recoveries)
