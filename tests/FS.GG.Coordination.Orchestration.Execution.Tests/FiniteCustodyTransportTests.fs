@@ -561,10 +561,10 @@ module FiniteCustodyTransportTests =
     let ``closed source public preparation refuses unavailable provider and profile substitutions`` () =
         let source = Environment.GetEnvironmentVariable "FSGG_UTEL_CALLBACK_SOURCE"
         let profile = System.IO.File.ReadAllBytes(System.IO.Path.Combine(source + "-closed", "tests/release-successor-authentication/closed-source-profile.json"))
-        let canonical = ReadOnlyMemory<byte>(profile, 0, profile.Length - 1)
+        let canonical = profile[0..profile.Length - 2]
         Assert.Equal(Error "closed-source-provider-unavailable", FiniteCustodyClosedSource.Prepare canonical)
-        for bytes in [ Array.empty<byte>; profile; Array.zeroCreate<byte> 65537; Encoding.ASCII.GetBytes "{}" ] do
-            Assert.Equal(Error "closed-source-profile-refused", FiniteCustodyClosedSource.Prepare(ReadOnlyMemory<byte> bytes))
+        for bytes in [ null; Array.empty<byte>; profile; Array.zeroCreate<byte> 65537; Encoding.ASCII.GetBytes "{}" ] do
+            Assert.Equal(Error "closed-source-profile-refused", FiniteCustodyClosedSource.Prepare bytes)
 
     [<Fact>]
     let ``closed source owns the maintained adapter journey and consumes original construction`` () =

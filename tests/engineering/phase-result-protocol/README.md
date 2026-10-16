@@ -330,10 +330,11 @@ nine-file closed manifest. The maintained callback qualifier acquires and verifi
 that separate source checkout beside the existing `/2` and `/3` fixtures; it does
 not repin them or introduce a wire version.
 
-The public `Prepare(ReadOnlyMemory<byte>)` accepts only the exact canonical
+The public `Prepare(byte array)` accepts only the exact canonical
 profile digest and refuses with `closed-source-provider-unavailable`. Unknown,
 noncanonical, duplicate-key, changed or oversized profile bytes refuse by exact
-digest and the 65,536-byte input ceiling. No caller clock, stream, binding, writer,
+digest and the 65,536-byte input ceiling. A sealed byte-array input avoids caller-supplied `MemoryManager` callbacks. No
+caller clock, stream, binding, writer,
 runtime, endpoint, evidence path or activation flag is accepted. Actual provider,
 authenticated role/original/generation/clock/endpoint enrollment, durable receipt
 and physical accounting remain null. Public preparation performs no file lookup,

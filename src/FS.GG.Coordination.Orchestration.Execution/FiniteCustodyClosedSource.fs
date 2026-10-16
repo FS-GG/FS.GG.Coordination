@@ -216,8 +216,8 @@ type FiniteCustodyClosedSource private (adapter: FiniteCustodySessionAdapter, co
                 FiniteCustodyClosedSourceStatus.Refused
     /// Exact shipped profile only. Provider/enrollment/accounting remain null;
     /// no clock, file lookup, callback, reservation or process is touched here.
-    static member Prepare(profile: ReadOnlyMemory<byte>): Result<FiniteCustodyClosedSource, string> =
-        if not (ClosedSourceConstruction.profileMatches profile) then Error "closed-source-profile-refused"
+    static member Prepare(profile: byte array): Result<FiniteCustodyClosedSource, string> =
+        if isNull profile || not (ClosedSourceConstruction.profileMatches(ReadOnlyMemory<byte> profile)) then Error "closed-source-profile-refused"
         else Error "closed-source-provider-unavailable"
     /// Test population only; no caller streams, callbacks, runtime, binding or path.
     static member internal PrepareFixture(admission: ClosedSourceFixtureAdmission, cut: ClosedSourceFixtureCut) =
