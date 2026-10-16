@@ -102,8 +102,8 @@
       "fs.gg.execution.processes": {
         "type": "Project",
         "dependencies": {
-          "FSharp.Core": "[10.1.302, )",
-          "FS.GG.Execution.Contracts": "[1.0.0, )"
+          "FS.GG.Execution.Contracts": "[0.3.0, )",
+          "FSharp.Core": "[10.1.302, )"
         }
       }
     }

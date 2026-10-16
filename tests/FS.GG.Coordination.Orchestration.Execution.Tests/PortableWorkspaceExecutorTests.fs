@@ -1695,7 +1695,7 @@ else:
                     Directory.Delete(temporary, true)
 
 module private CapsuleFixtures =
-    let create () =
+    let create () : IsolatedFixture * CapsulePreparation =
         let root = Path.Combine(Path.GetTempPath(), "fsgg-assembled-capsule-" + Guid.NewGuid().ToString("N"))
         Directory.CreateDirectory root |> ignore
         let files =
@@ -1705,7 +1705,7 @@ module private CapsuleFixtures =
               "check.py", "import sys,json,unittest\nif sys.argv[1]=='imports':\n import stock_entry\n names=['stock_entry','capture_custody']\nelse:\n def ids(s):\n  for t in s:\n   if isinstance(t,unittest.TestSuite): yield from ids(t)\n   else: yield t.id()\n names=list(ids(unittest.defaultTestLoader.discover('.',pattern='test_*.py')))\nprint(json.dumps({'schema':'fsgg.capsule-observation/1','checkId':sys.argv[1],'discovered':names}))\n" ]
         files |> List.iter (fun (path, text) -> File.WriteAllText(Path.Combine(root,path),text))
         let python = FileInfo("/usr/bin/python3").ResolveLinkTarget(true).FullName
-        let spec =
+        let spec: CapsulePreparation =
             { Root = root; Inputs = files |> List.map fst |> List.sort
               Checks =
                 [ { Id = "imports"; Kind = CapsuleCheckKind.Import; Executable = python
@@ -1716,10 +1716,10 @@ module private CapsuleFixtures =
               MaximumInputBytes = 65536UL; MaximumOutputBytes = 4096UL; MaximumCheckSeconds = 2 }
         new IsolatedFixture(root), spec
 
-    let prepare spec = PreparedAttempt.prepareAsync "runner-argv-config-source" (DateTimeOffset.UtcNow.AddSeconds 10.) spec CancellationToken.None
+    let prepare (spec: CapsulePreparation) = PreparedAttempt.prepareAsync "runner-argv-config-source" (DateTimeOffset.UtcNow.AddSeconds 10.) spec CancellationToken.None
     let valid result = match result with Ok value -> value | Error reason -> failwith reason
 
-    let executor spec (fake: FakeRunner) =
+    let executor (spec: CapsulePreparation) (fake: FakeRunner) =
         let selectedProfile = profile "fs-gg/checked-capsule" [fixtureComponent "app" "python" "python" "cpython" "3.14.0" "python-build" "python-test"]
         let op = operation "python-build" "build" (Some "app") "python" ["cpython","3.14.0"] "python3" ["build.py"] "python-bytecode-v1"
         let policy =
@@ -2070,7 +2070,7 @@ type PreparationDiagnosticsTests() =
     let declarations (spec: CapsulePreparation) =
         spec.Checks |> List.map (fun check ->
             { CheckId = check.Id; DependsOn = []; SharedStateScopes = [] })
-    let detailed spec selected =
+    let detailed (spec: CapsulePreparation) selected =
         PreparedAttempt.prepareDetailedAsync "runner-argv-config-source" (DateTimeOffset.UtcNow.AddSeconds 10.) spec selected CancellationToken.None
     let findings (report: PreparationReport) = report.Findings |> List.filter (fun finding -> finding.Stage = "check")
 
