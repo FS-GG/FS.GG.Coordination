@@ -1440,13 +1440,24 @@ module private ControlledGenesisSourceExport =
         requireExactFile partial bytes
         File.Move(partial,Path.Combine(output,"receipt.json"),false)
 
-    let run () =
+    let private commandFrom (expected: System.Text.Json.JsonElement) =
+        let commandRow = expected.GetProperty("expectedCommand")
+        let command: PortableWorkspaceCommand =
+            { CommandId = Guid.ParseExact(text commandRow "command_id","D"); IdempotencyId = text commandRow "idempotency_id"
+              WorkspaceScope = text commandRow "workspace_scope"; ProfileId = text commandRow "profile_id"
+              ProfileRevision = unsigned commandRow "profile_revision"; SourceRevision = text commandRow "source_revision"
+              ExpectedWorkflowRevision = unsigned commandRow "expected_workflow_revision"; FenceGeneration = unsigned commandRow "fence_generation"
+              CausationId = optionText commandRow "causation_id"
+              Deadline = date (text commandRow "deadline"); Operation = text commandRow "operation"
+              ComponentId = optionText commandRow "component_id" }
+        command
+
+    let runExplicit (input: string) (hash: string) (output: string) (draftedAt: string) =
         let mutable stage = "configuration"
         let mutable ownedOutput: string option = None
         let mutable expectedHash = "unselected"
         try
-            let values = variables |> List.map (fun name ->
-                let value = Environment.GetEnvironmentVariable name
+            let values = [input;hash;output;draftedAt] |> List.map (fun value ->
                 if String.IsNullOrEmpty value then refuse "all-export-inputs-required"
                 value)
             let input,hash,output,draftedAt =
@@ -1485,15 +1496,7 @@ module private ControlledGenesisSourceExport =
                 for name in ["publicRolePins"] do
                     if (root.GetProperty(name).EnumerateObject() |> Seq.map _.Name |> Set.ofSeq) <> expectedNames then refuse "nine-role-pins"
                 if (expected.GetProperty("policyRoles").EnumerateObject() |> Seq.map _.Name |> Set.ofSeq) <> expectedNames then refuse "nine-role-policies"
-                let commandRow = expected.GetProperty("expectedCommand")
-                let command: PortableWorkspaceCommand =
-                    { CommandId = Guid.ParseExact(text commandRow "command_id","D"); IdempotencyId = text commandRow "idempotency_id"
-                      WorkspaceScope = text commandRow "workspace_scope"; ProfileId = text commandRow "profile_id"
-                      ProfileRevision = unsigned commandRow "profile_revision"; SourceRevision = text commandRow "source_revision"
-                      ExpectedWorkflowRevision = unsigned commandRow "expected_workflow_revision"; FenceGeneration = unsigned commandRow "fence_generation"
-                      CausationId = optionText commandRow "causation_id"
-                      Deadline = date (text commandRow "deadline"); Operation = text commandRow "operation"
-                      ComponentId = optionText commandRow "component_id" }
+                let command = commandFrom expected
                 let exact (key: string) = text row key |> SupplierCheckpointFixtures.urlBytes
                 let original: PortableSupplierAdmissionOriginal =
                     { Command = command; QualifiedImage = text expected "qualifiedImage"
@@ -1604,6 +1607,150 @@ module private ControlledGenesisSourceExport =
             try Console.Error.WriteLine(Encoding.UTF8.GetString bytes) with _ -> ()
             reraise ()
 
+    let run () =
+        // Fixed external ABI only; normal regression calls the same explicit core without
+        // mutating process-wide environment or replacing any verifier/store dependency.
+        match variables |> List.map Environment.GetEnvironmentVariable with
+        | [input;hash;output;draftedAt] -> runExplicit input hash output draftedAt
+        | _ -> refuse "export-configuration"
+
+    let assertPublicRegression (original: byte array) =
+        Assert.Equal("f647882aa4b1949f03df81255812e731dfa71077a717760f8df4e49bfe3ecd9d",SupplierCheckpointFixtures.hash original)
+        let owned = Path.Combine(Path.GetTempPath(),"fsgg-explicit-source-export-" + Guid.NewGuid().ToString("N"))
+        Directory.CreateDirectory(owned,UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute) |> ignore
+        let mutable completed = false
+        try
+            use originalDocument = System.Text.Json.JsonDocument.Parse(ReadOnlyMemory<byte>(original))
+            let expected = oneZero (originalDocument.RootElement.GetProperty("controlledSelections"))
+            let command = commandFrom expected
+            let draftedAt = "2026-01-01T00:00:09.000000Z"
+            let inputCopy (variant: string) =
+                let node = System.Text.Json.Nodes.JsonNode.Parse(Encoding.UTF8.GetString original)
+                let selected =
+                    node["controlledSelections"].AsArray()
+                    |> Seq.filter (fun item -> item["name"].GetValue<string>() = "zero")
+                    |> Seq.exactlyOne |> fun item -> item.AsObject()
+                selected["exchangeReceiverMonotonicBounds"] <-
+                    System.Text.Json.Nodes.JsonNode.Parse("""{"creation":{"issuedMonotonic":"0","deadlineMonotonic":"3"},"genesis":{"issuedMonotonic":"1","deadlineMonotonic":"4"}}""")
+                let bounds = selected["exchangeReceiverMonotonicBounds"].AsObject()
+                let creationBounds = bounds["creation"].AsObject()
+                let genesisBounds = bounds["genesis"].AsObject()
+                match variant with
+                | "valid" -> ()
+                | "missing-bound" -> creationBounds.Remove("issuedMonotonic") |> ignore
+                | "noncanonical-bound" -> genesisBounds["deadlineMonotonic"] <- System.Text.Json.Nodes.JsonValue.Create<string>("04")
+                | "expired-monotonic" -> creationBounds["deadlineMonotonic"] <- System.Text.Json.Nodes.JsonValue.Create<string>("2")
+                | "foreign-operation" -> selected["expectedOperationId"] <- System.Text.Json.Nodes.JsonValue.Create<string>("99999999-9999-4999-8999-999999999999")
+                | _ -> failwith "unknown public export input variant"
+                // Only unsigned independent selection metadata changes. Every signed original,
+                // public key/policy preimage and recorded signature stays byte-identical.
+                let baseline = System.Text.Json.Nodes.JsonNode.Parse(Encoding.UTF8.GetString original)
+                for field in ["outputJourneys";"publicRolePins";"signatures"] do
+                    Assert.True(System.Text.Json.Nodes.JsonNode.DeepEquals(baseline[field],node[field]))
+                let bytes = Encoding.UTF8.GetBytes(node.ToJsonString())
+                let path = Path.Combine(owned,variant + ".json")
+                File.WriteAllBytes(path,bytes)
+                path,SupplierCheckpointFixtures.hash bytes
+            let input,inputHash = inputCopy "valid"
+            let output = Path.Combine(owned,"success")
+            runExplicit input inputHash output draftedAt
+            let checkpointBytes = File.ReadAllBytes(Path.Combine(output,"genesis-checkpoint.c1"))
+            let ackBytes = File.ReadAllBytes(Path.Combine(output,"genesis-ack-payload.c1"))
+            use receipt = System.Text.Json.JsonDocument.Parse(File.ReadAllText(Path.Combine(output,"receipt.json")))
+            let row = receipt.RootElement
+            Assert.Equal("success",text row "outcome")
+            for flag in ["sourceOnly";"durabilityUnknown";"noProduction"] do Assert.True(row.GetProperty(flag).GetBoolean())
+            Assert.Equal("controlled-test",text row "provenance")
+            Assert.Equal(inputHash,text row "inputSha256")
+            Assert.Equal(draftedAt,text row "draftedAt")
+            Assert.Equal(checkpointBytes.Length,row.GetProperty("checkpointBytes").GetInt32())
+            Assert.Equal(ackBytes.Length,row.GetProperty("ackPayloadBytes").GetInt32())
+            Assert.Equal(SupplierCheckpointFixtures.hash checkpointBytes,text row "checkpointSha256")
+            Assert.Equal(SupplierCheckpointFixtures.hash ackBytes,text row "ackPayloadSha256")
+            let checkpoint = PortableSupplierCheckpoint.parseGenesis checkpointBytes |> ok
+            Assert.True((checkpointBytes = PortableSupplierCheckpoint.serializeGenesis checkpoint))
+            let common = PortableSupplierCheckpoint.genesisCommon checkpoint
+            Assert.Equal("controlled-test",common.Provenance)
+            Assert.Equal(text expected "originalIntentDigest",common.IntentDigest)
+            Assert.Equal(Guid.ParseExact(text expected "expectedOperationId","D"),common.OperationId)
+            Assert.Equal(text row "journalKeySha256",common.JournalKeySha256)
+            Assert.Equal(text expected "initialReceiverEpoch",text row "originalReceiverEpoch")
+            Assert.Equal(common.JournalRevision,row.GetProperty("journalRevision").GetUInt64())
+            Assert.Equal(common.StoreFence,row.GetProperty("storeFence").GetUInt64())
+            use ack = System.Text.Json.JsonDocument.Parse(ReadOnlyMemory<byte>(ackBytes))
+            let payload = ack.RootElement
+            Assert.Equal<Set<string>>(Set.ofList ["schema";"kind";"accepted_at";"correlation_id";"genesis_head";"intent_digest";"operation_id";"receiver_journal_digest";"reservation_digest"],
+                                      payload.EnumerateObject() |> Seq.map _.Name |> Set.ofSeq)
+            Assert.Equal("fsgg.v3.receiver-acceptance/1",text payload "schema")
+            Assert.Equal("original-genesis-accepted",text payload "kind")
+            Assert.Equal(draftedAt,text payload "accepted_at")
+            Assert.Equal(common.ObservedHead,text payload "genesis_head")
+            Assert.Equal(common.IntentDigest,text payload "intent_digest")
+            Assert.Equal(common.OperationId.ToString("D"),text payload "operation_id")
+            Assert.Equal(common.ReservationDigest,text payload "reservation_digest")
+            Assert.Equal(SupplierCheckpointFixtures.hash checkpointBytes,text payload "receiver_journal_digest")
+            let journal = PortableWorkspaceExecutor.SupplierAdmissionJournal(Path.Combine(output,"source-journal"))
+            let retained,durability = journal.Read command |> ok
+            match durability with EvidenceUnknown _ -> () | _ -> failwith "public export cannot qualify durability"
+            Assert.True((checkpointBytes = Convert.FromBase64String retained.CheckpointCustody.Value.GenesisCheckpointBase64.Value))
+            Assert.True(retained.CheckpointCustody.Value.OutputCheckpointBase64.IsNone)
+            Assert.Equal(retained.Revision,row.GetProperty("journalRevision").GetUInt64())
+            Assert.Equal(retained.CheckpointCustody.Value.StoreFence,row.GetProperty("storeFence").GetUInt64())
+            Assert.True(PortableSupplierAdmission.prepareAck retained |> Result.isError)
+            Assert.True(PortableSupplierAdmission.reserveHost retained |> Result.isError)
+            Assert.Equal<Set<string>>(Set.ofList ["genesis-checkpoint.c1";"genesis-ack-payload.c1"],
+                                      Directory.GetFiles(output,"*.c1") |> Seq.map (fun (path: string) -> Path.GetFileName path) |> Set.ofSeq)
+            Assert.False(File.Exists(Path.Combine(output,"failure-receipt.json")))
+            Assert.False(File.Exists(Path.Combine(output,"receipt.partial")))
+            let refuseCase (name: string) (caseInput: string) (caseHash: string) (at: string)
+                           (stage: string) (errorType: string) (cause: string) =
+                let target = Path.Combine(owned,name)
+                let error = Assert.ThrowsAny<Exception>(Action(fun () -> runExplicit caseInput caseHash target at))
+                Assert.Equal(errorType,error.GetType().Name)
+                let code = if error.Message.StartsWith("genesis-source-export-",StringComparison.Ordinal) then error.Message else error.GetType().Name
+                Assert.Equal(cause,code)
+                Assert.False(File.Exists(Path.Combine(target,"receipt.json")))
+                Assert.False(File.Exists(Path.Combine(target,"genesis-checkpoint.c1")))
+                Assert.False(File.Exists(Path.Combine(target,"genesis-ack-payload.c1")))
+                if stage = "configuration" then Assert.False(Directory.Exists target)
+                else
+                    use failure = System.Text.Json.JsonDocument.Parse(File.ReadAllText(Path.Combine(target,"failure-receipt.json")))
+                    let failed = failure.RootElement
+                    Assert.Equal("failure",text failed "outcome")
+                    Assert.Equal(stage,text failed "firstCauseStage")
+                    Assert.Equal(errorType,text failed "firstCauseType")
+                    Assert.Equal(cause,text failed "firstCauseCode")
+                    Assert.Equal(caseHash,text failed "inputSha256")
+                    for flag in ["sourceOnly";"durabilityUnknown";"noProduction"] do Assert.True(failed.GetProperty(flag).GetBoolean())
+                    if stage = "freeze-input" then Assert.False(Directory.Exists(Path.Combine(target,"source-journal")))
+            // Nine refused invocations, including a repeated successful destination below.
+            refuseCase "missing-setting" null inputHash draftedAt "configuration" "InvalidOperationException" "genesis-source-export-all-export-inputs-required"
+            refuseCase "wrong-hash" input (String.replicate 64 "0") draftedAt "freeze-input" "InvalidOperationException" "genesis-source-export-input-sha256"
+            let oversized = Path.Combine(owned,"oversized.json")
+            File.WriteAllBytes(oversized,Array.zeroCreate<byte> (PortableSupplierAdmission.MaximumRecordBytes + 1))
+            refuseCase "oversized" oversized inputHash draftedAt "freeze-input" "InvalidOperationException" "genesis-source-export-input-byte-bound"
+            for variant,stage,errorType,cause in
+                [ "missing-bound","creation-challenge","KeyNotFoundException","KeyNotFoundException"
+                  "noncanonical-bound","genesis-challenge","InvalidOperationException","genesis-source-export-signed"
+                  "expired-monotonic","creation-real-verification","InvalidOperationException","genesis-source-export-held-source"
+                  "foreign-operation","creation-real-verification","InvalidOperationException","genesis-source-export-held-source" ] do
+                let changed,changedHash = inputCopy variant
+                refuseCase ("refused-" + variant) changed changedHash draftedAt stage errorType cause
+            refuseCase "draft-deadline" input inputHash (text (expected.GetProperty("expectedCommand")) "deadline")
+                "locked-cold-read" "InvalidOperationException" "genesis-source-export-draft-original-window"
+            // An already published receipt is preserved, not counted as new success.
+            let before = Directory.GetFiles(output,"*",SearchOption.AllDirectories) |> Array.map (fun path -> path,File.ReadAllBytes path)
+            let repeated = Assert.Throws<InvalidOperationException>(Action(fun () -> runExplicit input inputHash output draftedAt))
+            Assert.Equal("genesis-source-export-output-already-exists",repeated.Message)
+            for path,bytes in before do Assert.True((bytes = File.ReadAllBytes path))
+            Assert.False(File.Exists(Path.Combine(output,"failure-receipt.json")))
+            Assert.Equal("f647882aa4b1949f03df81255812e731dfa71077a717760f8df4e49bfe3ecd9d",SupplierCheckpointFixtures.hash original)
+            completed <- true
+        finally
+            // Preserve failed public-control files and its first exception; cleanup follows
+            // only complete assertions, and a cleanup failure then fails the test honestly.
+            if completed then Directory.Delete(owned,true)
+
 /// Real OpenSSH fixture signatures feed the maintained paired factory and existing owned store.
 /// Every selected policy/clock/root remains explicitly controlled TEST data.
 type PortableHostExecutorTests_ControlledAuthenticatedSource() =
@@ -1617,7 +1764,8 @@ type PortableHostExecutorTests_ControlledAuthenticatedSource() =
             if isNull directory then failwith "joined signed source fixture inputs missing"
             let path = Path.Combine(directory.FullName,"contracts","portable-workspace","v1","receiver-checkpoint-v2-signed-source-journeys.json")
             if File.Exists path then File.ReadAllBytes path else find directory.Parent
-        use corpus = find (DirectoryInfo(AppContext.BaseDirectory)) |> fun bytes -> System.Text.Json.JsonDocument.Parse(ReadOnlyMemory<byte>(bytes))
+        let publicBytes = find (DirectoryInfo(AppContext.BaseDirectory))
+        use corpus = System.Text.Json.JsonDocument.Parse(ReadOnlyMemory<byte>(publicBytes))
         let root = corpus.RootElement
         Assert.False(root.GetProperty("productionEnrollment").GetBoolean())
         Assert.False(root.GetProperty("nativeAcceptance").GetBoolean())
@@ -1963,3 +2111,5 @@ type PortableHostExecutorTests_ControlledAuthenticatedSource() =
             Assert.Equal(0,fixture.Runner.Runs)
             Assert.Equal(0,fixture.Runner.Cleans)
             Assert.Equal(0,fixture.Runner.Recoveries)
+
+        ControlledGenesisSourceExport.assertPublicRegression publicBytes
