@@ -1356,3 +1356,83 @@ type PortableHostExecutorTests_SupplierJournalV4() =
             Assert.Equal(0,fixture.Runner.Runs)
             Assert.Equal(0,fixture.Runner.Cleans)
             Assert.Equal(0,fixture.Runner.Recoveries)
+
+/// Real OpenSSH fixture signatures feed the maintained paired factory and existing owned store.
+/// Every selected policy/clock/root remains explicitly controlled TEST data.
+type PortableHostExecutorTests_ControlledAuthenticatedSource() =
+    [<Fact>]
+    member _.``real signed creation and genesis use controlled independent selection and cold reverify without an arbitrary authenticator``() =
+        let rec find (directory: DirectoryInfo) =
+            if isNull directory then failwith "joined signed source fixture inputs missing"
+            let path = Path.Combine(directory.FullName,"contracts","portable-workspace","v1","receiver-checkpoint-v2-signed-source-journeys.json")
+            if File.Exists path then File.ReadAllBytes path else find directory.Parent
+        use corpus = find (DirectoryInfo(AppContext.BaseDirectory)) |> fun bytes -> System.Text.Json.JsonDocument.Parse(ReadOnlyMemory<byte>(bytes))
+        let root = corpus.RootElement
+        Assert.False(root.GetProperty("productionEnrollment").GetBoolean())
+        Assert.False(root.GetProperty("nativeAcceptance").GetBoolean())
+        let roles =
+            ["original-intent",OriginalIntentSignature;"create-effect-grant",EffectGrantSignature;"receiver-command",ReceiverCommandSignature
+             "host-command-result",HostCommandResultSignature;"native-proof",NativeProofSignature;"creation",SupplierCreationSignature
+             "genesis",SupplierGenesisSignature;"supplier-event",SupplierEventSignature;"supplier-response",SupplierResponseSignature]
+        let date (value: string) = DateTimeOffset.Parse(value,Globalization.CultureInfo.InvariantCulture)
+        for row in root.GetProperty("outputJourneys").EnumerateArray() do
+            use fixture = new HostExecutorFixture()
+            let journal = PortableWorkspaceExecutor.SupplierAdmissionJournal fixture.Policy.Runtime.StateRoot
+            let initial = SupplierCheckpointFixtures.initialFrom row
+            let expected = root.GetProperty("controlledSelections").EnumerateArray() |> Seq.find (fun value -> value.GetProperty("name").GetString() = row.GetProperty("name").GetString())
+            Assert.Equal(expected.GetProperty("originalIntentDigest").GetString(),initial.Original.IntentDigest)
+            Assert.Equal(expected.GetProperty("signaturePolicyDigest").GetString(),initial.Original.TrustPolicyDigest)
+            let binding =
+                { Command = initial.Original.Command; QualifiedImage = initial.Original.QualifiedImage
+                  AllocationId = expected.GetProperty("hostBinding").GetProperty("allocationId").GetString()
+                  WorkerId = expected.GetProperty("hostBinding").GetProperty("workerId").GetString()
+                  AllocationReceiptDigest = expected.GetProperty("hostBinding").GetProperty("allocationReceiptDigest").GetString() }
+            let selection at revoke =
+                let at = date at
+                let policies =
+                    roles |> List.map (fun (name,role) ->
+                        let selected = expected.GetProperty("policyRoles").GetProperty(name)
+                        let pin = root.GetProperty("publicRolePins").GetProperty(name).GetProperty("publicKeyBlobBase64").GetString() |> Convert.FromBase64String
+                        { Role = role; PublicKeyBlob = pin; Principal = selected.GetProperty("principal").GetString()
+                          PolicyBytes = selected.GetProperty("policyBytesBase64").GetString() |> Convert.FromBase64String
+                          ExpectedPolicySha256 = selected.GetProperty("policySha256").GetString(); PolicyRevision = selected.GetProperty("policyRevision").GetString()
+                          ValidFrom = date (selected.GetProperty("policyValidFrom").GetString()); ValidUntil = date (selected.GetProperty("policyValidUntil").GetString())
+                          RevocationCheckedAt = at; Revocation = if revoke && role = SupplierCreationSignature then ControlledRevoked else ControlledNotRevoked })
+                let domain = Guid.Parse(expected.GetProperty("receiverClockDomain").GetString())
+                let current =
+                    { VerifiedAt = at; SelectionObservedAt = at; SelectionValidUntil = date (expected.GetProperty("selectionValidUntil").GetString())
+                      MaximumObservationAge = TimeSpan.FromTicks(Int64.Parse(expected.GetProperty("maximumObservationAgeTicks").GetString()))
+                      ReceiverMonotonic = 2L; IssuedReceiverClockDomain = domain; CurrentReceiverClockDomain = domain
+                      HostClock = PortableSupplierOriginalNativeConfiguration.clock initial.CheckpointCustody.Value.NativeConfiguration }
+                PortableSupplierAdmission.createControlledSourceSelection initial.Original (expected.GetProperty("originalIntentEnvelopeSha256").GetString())
+                    (Guid.Parse(expected.GetProperty("expectedOperationId").GetString())) binding initial.CheckpointCustody.Value.NativeConfiguration policies current
+                |> SupplierCheckpointFixtures.ok
+            match journal.StageV4(initial,None,None) with SupplierSourceReadback _ -> () | other -> failwithf "%A" other
+            let mutable state = initial
+            for name in ["creation";"genesis"] do
+                let pair = SupplierCheckpointFixtures.exchangeFrom row name state
+                let pending = PortableSupplierAdmission.issueChallenge pair.Challenge state |> SupplierCheckpointFixtures.ok
+                match journal.StageV4(pending,Some state.Revision,Some state.CheckpointCustody.Value.StoreFence) with
+                | SupplierSourceReadback _ -> () | other -> failwithf "%A" other
+                let bytes key = row.GetProperty(name).GetProperty(key: string).GetString() |> SupplierCheckpointFixtures.urlBytes
+                let exchange =
+                    if name = "creation" then ControlledCreationExchange(bytes "request",[bytes "result";bytes "evidence"],row.GetProperty("reservation").GetString() |> SupplierCheckpointFixtures.urlBytes)
+                    else ControlledGenesisExchange(bytes "request",[bytes "result";bytes "evidence"])
+                let at = expected.GetProperty("warmVerificationTimes").GetProperty(name).GetString()
+                let accepted = PortableSupplierAdmission.verifyAndAcceptControlledV4 (selection at false) pending.Original pending.Revision pending.CheckpointCustody.Value.StoreFence pending exchange |> SupplierCheckpointFixtures.ok
+                let transition = match accepted with AuthenticatedControlledSource value -> value | HeldControlledSource value -> failwithf "signed source held: %A" value.FirstFailure
+                match journal.StageControlledV4 transition with SupplierSourceReadback _ -> () | other -> failwithf "%A" other
+                Assert.Equal(SupplierSourceConflict,journal.StageControlledV4 transition)
+                state <- transition.State
+            let cold,durability = journal.Read state.Original.Command |> SupplierCheckpointFixtures.ok
+            Assert.Equal(state,cold)
+            match durability with EvidenceUnknown _ -> () | _ -> failwith "controlled authentication cannot qualify durability"
+            let at = expected.GetProperty("coldVerificationTime").GetString()
+            let readback = PortableSupplierAdmission.reverifyControlledSourceV4 (selection at false) cold |> SupplierCheckpointFixtures.ok
+            Assert.Equal(cold,readback.State)
+            Assert.True(PortableSupplierAdmission.reverifyControlledSourceV4 (selection at true) cold |> Result.isError)
+            Assert.True(PortableSupplierAdmission.prepareAck readback.State |> Result.isError)
+            Assert.True(PortableSupplierAdmission.reserveHost readback.State |> Result.isError)
+            Assert.Equal(0,fixture.Runner.Runs)
+            Assert.Equal(0,fixture.Runner.Cleans)
+            Assert.Equal(0,fixture.Runner.Recoveries)

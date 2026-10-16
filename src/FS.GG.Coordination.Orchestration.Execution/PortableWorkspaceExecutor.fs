@@ -1216,6 +1216,17 @@ module PortableWorkspaceExecutor =
                 | Error "supplier-source-conflict" -> SupplierSourceConflict
                 | Error _ -> SupplierSourceCommitUnknown
 
+        /// Consume only the immutable state bound by the real controlled-source verifier.
+        /// StageV4 computes the exact existing record bytes and checks fresh readback under its owner lock.
+        /// This returns source readback only; it cannot recreate signature or directory-durability capabilities.
+        member this.StageControlledV4(transition: PortableSupplierAuthenticatedSourceTransition) =
+            let state = transition.State
+            if transition.ExpectedRevision = UInt64.MaxValue || transition.ExpectedFence = UInt64.MaxValue
+               || state.Original <> transition.Original || state.Revision <> transition.ExpectedRevision + 1UL
+               || (state.CheckpointCustody |> Option.exists (fun custody -> custody.StoreFence <> transition.ExpectedFence + 1UL)) then
+                SupplierSourceConflict
+            else this.StageV4(state,Some transition.ExpectedRevision,Some transition.ExpectedFence)
+
     let private error code message retryable details =
         Some
             {
