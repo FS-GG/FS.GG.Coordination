@@ -718,9 +718,8 @@ module PortableWorkspaceExecutor =
             let context =
                 { Original = { original with ReceiverEpoch = epoch }; OperationId = operation; ReservationDigest = reservation
                   ProofEventHead = proofHead; NativeReceiptSha256 = receipt; HostLeaseNotAfter = lease }
-            { Context = context
-                            ChallengeId = id; Digest = digest; BytesBase64 = bytes; ReceiverEpoch = epoch
-                            IssuedAt = issued; NotAfter = deadline; IssuedMonotonic = monotonic; DeadlineMonotonic = bound }
+            { Context = context; ChallengeId = id; Digest = digest; BytesBase64 = bytes; ReceiverEpoch = epoch
+              IssuedAt = issued; NotAfter = deadline; IssuedMonotonic = monotonic; DeadlineMonotonic = bound }
         let selectedNative () : PortableSupplierSelectedNativeProofChallenge =
             if version <> SupplierJournalV4 then invalidOp "supplier-selected-native-generation"
             let operation = guid ()
