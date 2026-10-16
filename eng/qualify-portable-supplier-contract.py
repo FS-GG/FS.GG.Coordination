@@ -501,17 +501,89 @@ def qualify_manifest(corpus):
     return len(corpus['cases'])
 
 
+CHECKPOINT_COMMON = '''schema profile provenance journal_key_sha256 journal_schema original_receiver_epoch receiver_epoch operation_id intent_digest command_digest original_intent_envelope_sha256 creation_core_digest creation_receipt_digest reservation_digest selection_digest trust_policy_digest receiver_source_revision supplier_source_revision supplier_source_digest command_fence_generation expected_journal_revision journal_revision expected_store_fence store_fence predecessor_checkpoint_sha256 previous_head observed_head accepted_sequence accepted_request_envelope_sha256 accepted_result_envelope_sha256 accepted_response_envelope_sha256 accepted_challenge_digest accepted_challenge_id accepted_challenge_purpose verification_bundle_sha256 controller_verification_bundle_sha256'''.split()
+CHECKPOINT_GENESIS = ['genesis_head', 'genesis_payload_digest']
+CHECKPOINT_OUTPUT = '''genesis_checkpoint_sha256 proof_kind proof_signed_envelope_sha256 proof_payload_digest manifest_sha256 manifest_digest member_count total_bytes native_receipt_sha256 native_proof_envelope_sha256 native_request_envelope_sha256 native_result_envelope_sha256 native_challenge_digest native_challenge_id native_receiver_epoch native_controller_verification_bundle_sha256'''.split()
+
+
+def checkpoint_payload(raw, kind):
+    if len(raw) > 16384 or kind not in ('genesis', 'output'):
+        raise WireRefused('checkpoint-size-kind')
+    value = wire_decode(raw)
+    specific = CHECKPOINT_GENESIS if kind == 'genesis' else CHECKPOINT_OUTPUT
+    if set(value) != set(CHECKPOINT_COMMON + specific):
+        raise WireRefused('checkpoint-fields')
+    if value['schema'] != 'fsgg.v3.receiver-' + kind + '-checkpoint/2' or value['profile'] != 'signed-hold-v1' or value['journal_schema'] != 'fsgg.portable-execution-supplier-journal/4' or value['provenance'] not in ('controlled-test', 'qualified-production'):
+        raise WireRefused('checkpoint-schema')
+    uuids = {'original_receiver_epoch', 'receiver_epoch', 'operation_id', 'accepted_challenge_id', 'native_challenge_id', 'native_receiver_epoch'}
+    numbers = {'command_fence_generation', 'expected_journal_revision', 'journal_revision', 'expected_store_fence', 'store_fence', 'accepted_sequence', 'member_count', 'total_bytes'}
+    skip = {'schema', 'profile', 'provenance', 'journal_schema', 'accepted_challenge_purpose', 'proof_kind'}
+    nullable = {'previous_head', 'predecessor_checkpoint_sha256'}
+    if kind == 'output' and value['proof_kind'] == 'none':
+        nullable |= {'manifest_sha256', 'manifest_digest', 'member_count', 'total_bytes'}
+    for key, item in value.items():
+        if key in skip:
+            continue
+        if key in nullable and item is None:
+            continue
+        if key in numbers:
+            if type(item) is not str or re.fullmatch(r'0|[1-9][0-9]*', item) is None or int(item) > 2**64 - 1:
+                raise WireRefused('checkpoint-u64')
+        elif key in uuids:
+            if type(item) is not str or re.fullmatch(r'[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}', item) is None or item == '00000000-0000-0000-0000-000000000000':
+                raise WireRefused('checkpoint-uuid')
+        elif key.endswith('source_revision'):
+            if type(item) is not str or re.fullmatch(r'[A-Za-z0-9_-]{1,128}', item) is None:
+                raise WireRefused('checkpoint-source')
+        elif type(item) is not str or re.fullmatch('[0-9a-f]{64}', item) is None:
+            raise WireRefused('checkpoint-digest')
+    for old, new in (('expected_journal_revision', 'journal_revision'), ('expected_store_fence', 'store_fence')):
+        if not 0 < int(value[old]) < 2**64 - 1 or int(value[new]) != int(value[old]) + 1:
+            raise WireRefused('checkpoint-transition')
+    if kind == 'genesis':
+        if value['previous_head'] is not None or value['predecessor_checkpoint_sha256'] is not None or value['accepted_sequence'] != '0' or value['accepted_challenge_purpose'] != 'genesis-readback' or value['observed_head'] != value['genesis_head']:
+            raise WireRefused('checkpoint-genesis')
+    else:
+        if value['predecessor_checkpoint_sha256'] != value['genesis_checkpoint_sha256'] or value['previous_head'] is None or value['accepted_challenge_purpose'] not in ('state-readback', 'retirement-readback') or value['native_receiver_epoch'] != value['receiver_epoch']:
+            raise WireRefused('checkpoint-output')
+        if value['proof_kind'] == 'none':
+            if any(value[k] is not None for k in ('manifest_sha256', 'manifest_digest', 'member_count', 'total_bytes')):
+                raise WireRefused('checkpoint-none')
+        elif value['proof_kind'] != 'selected' or not 0 < int(value['member_count']) <= 16:
+            raise WireRefused('checkpoint-selected')
+    return value
+
+
+def qualify_checkpoint(corpus):
+    assert corpus['authentication'] is False and corpus['qualification'] == 'structural-codec-only'
+    for row in corpus['cases']:
+        raw = row['bytes'].encode('ascii')
+        try:
+            value = checkpoint_payload(raw, row['kind'])
+            assert hashlib.sha256(raw).hexdigest() == row['sha256'], row['name']
+            accepted = True
+        except WireRefused:
+            accepted = False
+        assert accepted == row['structuralAccept'], row['name']
+    return len(corpus['cases'])
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--vectors', type=Path, default=Path(__file__).resolve().parents[1] / 'contracts/portable-workspace/v1/supplier-evidence-sizing-vectors.json')
     parser.add_argument('--wire-vectors', type=Path)
     parser.add_argument('--wire-schema', type=Path)
     parser.add_argument('--manifest-vectors', type=Path, help='explicit opt-in selected-manifest/1 qualification')
+    parser.add_argument('--checkpoint-vectors', type=Path, help='explicit structural checkpoint /2 codec qualification')
     parser.add_argument('--native', action='store_true')
     args = parser.parse_args()
     if args.native:
         print(json.dumps({'outcome': 'held', 'reason': 'native-unavailable: supplier verifier, durable replay admission and isolated host profile are not implemented'}))
         return 2
+    if args.checkpoint_vectors:
+        count = qualify_checkpoint(json.loads(args.checkpoint_vectors.read_text()))
+        print(json.dumps({'outcome': 'passed', 'checkpointVectors': count, 'authentication': False, 'nativeAcceptance': False}))
+        return 0
     if args.manifest_vectors:
         count = qualify_manifest(json.loads(args.manifest_vectors.read_text()))
         print(json.dumps({'outcome': 'passed', 'manifestVectors': count, 'authentication': False, 'nativeAcceptance': False}))

@@ -774,3 +774,69 @@ type PortableHostAllocationTests_SelectedManifest() =
         let original = SupplierAdmissionFixtures.initial ()
         Assert.True(PortableSupplierAdmission.prepareAck original |> Result.isError)
         Assert.True(PortableSupplierAdmission.reserveHost original |> Result.isError)
+
+/// Closed lexical controls only. Complete authenticated caller/store journeys are separate tests.
+type PortableHostAllocationTests_ReceiverCheckpointCodec() =
+    let ok = function Ok value -> value | Error error -> failwith error
+    let corpus () =
+        let rec find (directory: DirectoryInfo) =
+            if isNull directory then failwith "checkpoint corpus missing"
+            let path = Path.Combine(directory.FullName, "contracts", "portable-workspace", "v1", "receiver-checkpoint-v2-vectors.json")
+            if File.Exists path then File.ReadAllBytes path else find directory.Parent
+        find (DirectoryInfo(AppContext.BaseDirectory)) |> fun raw -> JsonDocument.Parse(ReadOnlyMemory<byte>(raw))
+    let hash bytes = SHA256.HashData(bytes: byte array) |> Convert.ToHexString |> _.ToLowerInvariant()
+
+    [<Fact>]
+    member _.``checkpoint v2 exact lexical vectors retain structural classification``() =
+        use doc = corpus ()
+        Assert.False(doc.RootElement.GetProperty("authentication").GetBoolean())
+        Assert.False(doc.RootElement.GetProperty("semanticJourney").GetBoolean())
+        for row in doc.RootElement.GetProperty("cases").EnumerateArray() do
+            let raw = row.GetProperty("bytes").GetString() |> Encoding.ASCII.GetBytes
+            let expected = row.GetProperty("structuralAccept").GetBoolean()
+            let name = row.GetProperty("name").GetString()
+            if row.GetProperty("kind").GetString() = "genesis" then
+                let parsed = PortableSupplierCheckpoint.parseGenesis raw
+                Assert.True((Result.isOk parsed = expected), name)
+                match parsed with
+                | Ok value ->
+                    Assert.True((raw = PortableSupplierCheckpoint.serializeGenesis value), name)
+                    Assert.Equal(row.GetProperty("sha256").GetString(), PortableSupplierCheckpoint.genesisHash value)
+                    raw.[0] <- 0uy
+                    let returned = PortableSupplierCheckpoint.serializeGenesis value
+                    returned.[0] <- 0uy
+                    Assert.Equal(123uy, (PortableSupplierCheckpoint.serializeGenesis value).[0])
+                    Assert.Equal("controlled-test", (PortableSupplierCheckpoint.genesisCommon value).Provenance)
+                | _ -> ()
+            else
+                let parsed = PortableSupplierCheckpoint.parseOutput raw
+                Assert.True((Result.isOk parsed = expected), name)
+                match parsed with
+                | Ok value ->
+                    Assert.True((raw = PortableSupplierCheckpoint.serializeOutput value), name)
+                    Assert.Equal(row.GetProperty("sha256").GetString(), PortableSupplierCheckpoint.outputHash value)
+                    raw.[0] <- 0uy
+                    Assert.Equal(123uy, (PortableSupplierCheckpoint.serializeOutput value).[0])
+                | _ -> ()
+
+    [<Fact>]
+    member _.``checkpoint commitments distinguish exact raw and existing domain preimages``() =
+        use doc = corpus ()
+        let rows = doc.RootElement.GetProperty("cases").EnumerateArray() |> Seq.toArray
+        let raw = rows.[0].GetProperty("bytes").GetString() |> Encoding.ASCII.GetBytes
+        let parsed = PortableSupplierCheckpoint.parseGenesis raw |> ok
+        let common = PortableSupplierCheckpoint.genesisCommon parsed
+        let preimages = doc.RootElement.GetProperty("preimages")
+        let exact key = preimages.GetProperty(key: string).GetString() |> Convert.FromBase64String
+        let domain name raw = Array.append (Encoding.ASCII.GetBytes("fsgg.v3." + name + "/1\000")) raw |> hash
+        Assert.Equal(domain "intent" (exact "originalIntent"), common.IntentDigest)
+        Assert.Equal(domain "creation" (exact "creationCore"), common.CreationCoreDigest)
+        Assert.Equal(domain "creation-receipt" (exact "creationReceipt"), common.CreationReceiptDigest)
+        Assert.Equal(domain "reservation" (exact "reservation"), common.ReservationDigest)
+        Assert.Equal(hash (exact "originalIntentEnvelope"), common.OriginalIntentEnvelopeSha256)
+        Assert.Equal(hash (exact "request"), common.AcceptedRequestEnvelopeSha256)
+        Assert.Equal(hash (exact "result"), common.AcceptedResultEnvelopeSha256)
+        Assert.Equal(hash (exact "response"), common.AcceptedResponseEnvelopeSha256)
+        Assert.NotEqual(hash (exact "originalIntent"), common.IntentDigest)
+        Assert.True(PortableSupplierAdmission.prepareAck (SupplierAdmissionFixtures.initial ()) |> Result.isError)
+        Assert.True(PortableSupplierAdmission.reserveHost (SupplierAdmissionFixtures.initial ()) |> Result.isError)

@@ -560,6 +560,338 @@ module PortableSupplierEffectPolicy =
         | SignedHoldV1Profile -> Ok "stop and observe only; retain allocation and selected data"
         | LegacyInstalledProfile -> Error "legacy profile excluded; preserve its installed source and behavior"
 
+/// Closed canonical companion primitives. These helpers create data, never verified capabilities.
+module private PortableSupplierC1 =
+    open System.Text.Json
+    let fail () = invalidOp "supplier-companion-refused"
+    let hash (raw: byte array) = Convert.ToHexString(SHA256.HashData raw).ToLowerInvariant()
+    let domain name raw = Array.append (System.Text.Encoding.ASCII.GetBytes("fsgg.v3." + name + "/1\000")) raw |> hash
+    let quoted (value: string) =
+        if isNull value then fail ()
+        let text = System.Text.StringBuilder("\"")
+        for c in value do
+            match c with
+            | '"' -> text.Append("\\\"") |> ignore
+            | '\\' -> text.Append("\\\\") |> ignore
+            | c when int c >= 32 && int c <= 126 -> text.Append c |> ignore
+            | _ -> fail ()
+        text.Append('"').ToString()
+    let objectBytes (fields: (string * string) list) =
+        let ordered = fields |> List.sortWith (fun (a,_) (b,_) -> StringComparer.Ordinal.Compare(a,b))
+        if (ordered |> List.map fst |> Set.ofList |> Set.count) <> ordered.Length then fail ()
+        System.Text.Encoding.ASCII.GetBytes("{" + (ordered |> List.map (fun (k,v) -> quoted k + ":" + v) |> String.concat ",") + "}\n")
+    let rec canonical (value: JsonElement) =
+        match value.ValueKind with
+        | JsonValueKind.Object ->
+            objectBytes (value.EnumerateObject() |> Seq.map (fun p -> p.Name, canonical p.Value) |> Seq.toList)
+            |> System.Text.Encoding.ASCII.GetString |> fun s -> s.TrimEnd('\n')
+        | JsonValueKind.Array -> "[" + (value.EnumerateArray() |> Seq.map canonical |> String.concat ",") + "]"
+        | JsonValueKind.String -> quoted (value.GetString())
+        | JsonValueKind.Null -> "null"
+        | _ -> fail ()
+    let parse maximum (input: byte array) decode =
+        try
+            if isNull input || input.Length = 0 || input.Length > maximum then fail ()
+            let snapshot = Array.copy input
+            if snapshot |> Array.exists (fun b -> b > 127uy) then fail ()
+            use doc = JsonDocument.Parse(ReadOnlyMemory<byte>(snapshot), JsonDocumentOptions(MaxDepth = 16))
+            if System.Text.Encoding.ASCII.GetBytes(canonical doc.RootElement + "\n") <> snapshot then fail ()
+            Ok(decode doc.RootElement)
+        with _ -> Error "supplier-companion-refused"
+    let fields names (value: JsonElement) =
+        if value.ValueKind <> JsonValueKind.Object then fail ()
+        let actual = value.EnumerateObject() |> Seq.map _.Name |> Seq.toList
+        if List.sort actual <> List.sort names then fail ()
+    let text maximum (value: JsonElement) =
+        if value.ValueKind <> JsonValueKind.String then fail ()
+        let s = value.GetString()
+        if s.Length = 0 || s.Length > maximum || (s |> Seq.exists (fun c -> int c < 32 || int c > 126)) then fail ()
+        s
+    let digest value =
+        let s = text 64 value
+        if s.Length <> 64 || (s |> Seq.exists (fun c -> not ("0123456789abcdef".Contains c))) then fail ()
+        s
+    let u64 value =
+        let s = text 20 value
+        let mutable n = 0UL
+        if not (System.Text.RegularExpressions.Regex.IsMatch(s, "\\A(0|[1-9][0-9]*)\\z"))
+           || not (UInt64.TryParse(s, Globalization.NumberStyles.None, Globalization.CultureInfo.InvariantCulture, &n)) then fail ()
+        n
+    let uuid value =
+        let s = text 36 value
+        let g = Guid.ParseExact(s, "D")
+        if g = Guid.Empty || g.ToString("D") <> s then fail ()
+        g
+    let utc value =
+        let s = text 27 value
+        let t = DateTimeOffset.ParseExact(s, "yyyy-MM-dd'T'HH:mm:ss.ffffff'Z'", Globalization.CultureInfo.InvariantCulture, Globalization.DateTimeStyles.AssumeUniversal)
+        if t.Offset <> TimeSpan.Zero || t.ToString("yyyy-MM-dd'T'HH:mm:ss.ffffff'Z'", Globalization.CultureInfo.InvariantCulture) <> s then fail ()
+        t
+    let optional decode (value: JsonElement) = if value.ValueKind = JsonValueKind.Null then None else Some(decode value)
+    let number (value: uint64) = quoted (value.ToString(Globalization.CultureInfo.InvariantCulture))
+    let option encode = function None -> "null" | Some v -> encode v
+
+/// Immutable structural checkpoint fields, all recomputed by the retained-exchange caller.
+/// A parsed instance is neither an authenticated candidate nor a commit witness.
+type PortableSupplierCheckpointCommon =
+    { Provenance: string
+      JournalKeySha256: string
+      OriginalReceiverEpoch: Guid
+      ReceiverEpoch: Guid
+      OperationId: Guid
+      IntentDigest: string
+      CommandDigest: string
+      OriginalIntentEnvelopeSha256: string
+      CreationCoreDigest: string
+      CreationReceiptDigest: string
+      ReservationDigest: string
+      SelectionDigest: string
+      TrustPolicyDigest: string
+      ReceiverSourceRevision: string
+      SupplierSourceRevision: string
+      SupplierSourceDigest: string
+      CommandFenceGeneration: uint64
+      ExpectedJournalRevision: uint64
+      JournalRevision: uint64
+      ExpectedStoreFence: uint64
+      StoreFence: uint64
+      PredecessorCheckpointSha256: string option
+      PreviousHead: string option
+      ObservedHead: string
+      AcceptedSequence: uint64
+      AcceptedRequestEnvelopeSha256: string
+      AcceptedResultEnvelopeSha256: string
+      AcceptedResponseEnvelopeSha256: string
+      AcceptedChallengeDigest: string
+      AcceptedChallengeId: Guid
+      AcceptedChallengePurpose: string
+      VerificationBundleSha256: string
+      ControllerVerificationBundleSha256: string }
+
+type PortableSupplierCheckpointSelection =
+    | CheckpointNone
+    | CheckpointSelected of manifestSha256: string * manifest: PortableHostExportManifest
+
+type PortableSupplierCheckpointOutput =
+    { GenesisCheckpointSha256: string
+      Selection: PortableSupplierCheckpointSelection
+      ProofSignedEnvelopeSha256: string
+      ProofPayloadDigest: string
+      NativeReceiptSha256: string
+      NativeProofEnvelopeSha256: string
+      NativeRequestEnvelopeSha256: string
+      NativeResultEnvelopeSha256: string
+      NativeChallengeDigest: string
+      NativeChallengeId: Guid
+      NativeReceiverEpoch: Guid
+      NativeControllerVerificationBundleSha256: string }
+
+type PortableSupplierGenesisCheckpoint =
+    private | StructuralGenesisCheckpoint of PortableSupplierCheckpointCommon * string * string
+
+type PortableSupplierOutputCheckpoint =
+    private | StructuralOutputCheckpoint of PortableSupplierCheckpointCommon * PortableSupplierCheckpointOutput
+
+[<RequireQualifiedAccess>]
+module PortableSupplierCheckpoint =
+    open PortableSupplierC1
+    [<Literal>]
+    let MaximumBytes = 16384
+    let private commonFields c =
+        [ "schema", quoted "" // replaced by the closed variant
+          "profile", quoted "signed-hold-v1"
+          "provenance", quoted c.Provenance
+          "journal_key_sha256", quoted c.JournalKeySha256
+          "journal_schema", quoted "fsgg.portable-execution-supplier-journal/4"
+          "original_receiver_epoch", quoted (c.OriginalReceiverEpoch.ToString("D"))
+          "receiver_epoch", quoted (c.ReceiverEpoch.ToString("D"))
+          "operation_id", quoted (c.OperationId.ToString("D"))
+          "intent_digest", quoted c.IntentDigest
+          "command_digest", quoted c.CommandDigest
+          "original_intent_envelope_sha256", quoted c.OriginalIntentEnvelopeSha256
+          "creation_core_digest", quoted c.CreationCoreDigest
+          "creation_receipt_digest", quoted c.CreationReceiptDigest
+          "reservation_digest", quoted c.ReservationDigest
+          "selection_digest", quoted c.SelectionDigest
+          "trust_policy_digest", quoted c.TrustPolicyDigest
+          "receiver_source_revision", quoted c.ReceiverSourceRevision
+          "supplier_source_revision", quoted c.SupplierSourceRevision
+          "supplier_source_digest", quoted c.SupplierSourceDigest
+          "command_fence_generation", number c.CommandFenceGeneration
+          "expected_journal_revision", number c.ExpectedJournalRevision
+          "journal_revision", number c.JournalRevision
+          "expected_store_fence", number c.ExpectedStoreFence
+          "store_fence", number c.StoreFence
+          "predecessor_checkpoint_sha256", option quoted c.PredecessorCheckpointSha256
+          "previous_head", option quoted c.PreviousHead
+          "observed_head", quoted c.ObservedHead
+          "accepted_sequence", number c.AcceptedSequence
+          "accepted_request_envelope_sha256", quoted c.AcceptedRequestEnvelopeSha256
+          "accepted_result_envelope_sha256", quoted c.AcceptedResultEnvelopeSha256
+          "accepted_response_envelope_sha256", quoted c.AcceptedResponseEnvelopeSha256
+          "accepted_challenge_digest", quoted c.AcceptedChallengeDigest
+          "accepted_challenge_id", quoted (c.AcceptedChallengeId.ToString("D"))
+          "accepted_challenge_purpose", quoted c.AcceptedChallengePurpose
+          "verification_bundle_sha256", quoted c.VerificationBundleSha256
+          "controller_verification_bundle_sha256", quoted c.ControllerVerificationBundleSha256 ]
+    let private encode schema common extra =
+        (commonFields common |> List.filter (fun (k,_) -> k <> "schema")) @ ["schema", quoted schema] @ extra |> objectBytes
+    let serializeGenesis (StructuralGenesisCheckpoint(c,head,payload)) =
+        encode "fsgg.v3.receiver-genesis-checkpoint/2" c ["genesis_head", quoted head; "genesis_payload_digest", quoted payload]
+    let serializeOutput (StructuralOutputCheckpoint(c,o)) =
+        let selected = match o.Selection with
+                       | CheckpointNone -> ["proof_kind", quoted "none"; "manifest_sha256", "null"; "manifest_digest", "null"; "member_count", "null"; "total_bytes", "null"]
+                       | CheckpointSelected(raw,m) -> ["proof_kind", quoted "selected"; "manifest_sha256", quoted raw; "manifest_digest", quoted m.Digest; "member_count", number m.MemberCount; "total_bytes", number m.TotalBytes]
+        encode "fsgg.v3.receiver-output-checkpoint/2" c
+            (["genesis_checkpoint_sha256", quoted o.GenesisCheckpointSha256
+              "proof_signed_envelope_sha256", quoted o.ProofSignedEnvelopeSha256
+              "proof_payload_digest", quoted o.ProofPayloadDigest
+              "native_receipt_sha256", quoted o.NativeReceiptSha256
+              "native_proof_envelope_sha256", quoted o.NativeProofEnvelopeSha256
+              "native_request_envelope_sha256", quoted o.NativeRequestEnvelopeSha256
+              "native_result_envelope_sha256", quoted o.NativeResultEnvelopeSha256
+              "native_challenge_digest", quoted o.NativeChallengeDigest
+              "native_challenge_id", quoted (o.NativeChallengeId.ToString("D"))
+              "native_receiver_epoch", quoted (o.NativeReceiverEpoch.ToString("D"))
+              "native_controller_verification_bundle_sha256", quoted o.NativeControllerVerificationBundleSha256] @ selected)
+    let private readCommon (root: System.Text.Json.JsonElement) =
+        let get (name: string) = root.GetProperty name
+        let str name = get name |> text 128
+        let dig name = get name |> digest
+        let num name = get name |> u64
+        let uid name = get name |> uuid
+        if str "profile" <> "signed-hold-v1" || str "journal_schema" <> "fsgg.portable-execution-supplier-journal/4"
+           || not (List.contains (str "provenance") ["controlled-test"; "qualified-production"]) then fail ()
+        for key in ["receiver_source_revision"; "supplier_source_revision"] do
+            if not (System.Text.RegularExpressions.Regex.IsMatch(str key, "\\A[A-Za-z0-9_-]{1,128}\\z")) then fail ()
+        let c =
+            { Provenance = str "provenance"; JournalKeySha256 = dig "journal_key_sha256"
+              OriginalReceiverEpoch = uid "original_receiver_epoch"; ReceiverEpoch = uid "receiver_epoch"; OperationId = uid "operation_id"
+              IntentDigest = dig "intent_digest"; CommandDigest = dig "command_digest"; OriginalIntentEnvelopeSha256 = dig "original_intent_envelope_sha256"
+              CreationCoreDigest = dig "creation_core_digest"; CreationReceiptDigest = dig "creation_receipt_digest"
+              ReservationDigest = dig "reservation_digest"; SelectionDigest = dig "selection_digest"; TrustPolicyDigest = dig "trust_policy_digest"
+              ReceiverSourceRevision = str "receiver_source_revision"; SupplierSourceRevision = str "supplier_source_revision"; SupplierSourceDigest = dig "supplier_source_digest"
+              CommandFenceGeneration = num "command_fence_generation"; ExpectedJournalRevision = num "expected_journal_revision"; JournalRevision = num "journal_revision"
+              ExpectedStoreFence = num "expected_store_fence"; StoreFence = num "store_fence"
+              PredecessorCheckpointSha256 = get "predecessor_checkpoint_sha256" |> optional digest; PreviousHead = get "previous_head" |> optional digest
+              ObservedHead = dig "observed_head"; AcceptedSequence = num "accepted_sequence"
+              AcceptedRequestEnvelopeSha256 = dig "accepted_request_envelope_sha256"; AcceptedResultEnvelopeSha256 = dig "accepted_result_envelope_sha256"
+              AcceptedResponseEnvelopeSha256 = dig "accepted_response_envelope_sha256"; AcceptedChallengeDigest = dig "accepted_challenge_digest"
+              AcceptedChallengeId = uid "accepted_challenge_id"; AcceptedChallengePurpose = str "accepted_challenge_purpose"
+              VerificationBundleSha256 = dig "verification_bundle_sha256"; ControllerVerificationBundleSha256 = dig "controller_verification_bundle_sha256" }
+        if c.ExpectedJournalRevision = UInt64.MaxValue || c.JournalRevision <> c.ExpectedJournalRevision + 1UL
+           || c.ExpectedStoreFence = UInt64.MaxValue || c.StoreFence <> c.ExpectedStoreFence + 1UL
+           || c.ExpectedJournalRevision = 0UL || c.ExpectedStoreFence = 0UL then fail ()
+        c
+    let parseGenesis raw =
+        parse MaximumBytes raw (fun root ->
+            let c = readCommon root
+            let head = root.GetProperty("genesis_head") |> digest
+            let payload = root.GetProperty("genesis_payload_digest") |> digest
+            let value = StructuralGenesisCheckpoint(c,head,payload)
+            fields ((commonFields c |> List.map fst) @ ["genesis_head"; "genesis_payload_digest"]) root
+            if root.GetProperty("schema").GetString() <> "fsgg.v3.receiver-genesis-checkpoint/2"
+               || c.PreviousHead.IsSome || c.PredecessorCheckpointSha256.IsSome || c.AcceptedSequence <> 0UL
+               || c.AcceptedChallengePurpose <> "genesis-readback" || c.ObservedHead <> head || serializeGenesis value <> raw then fail ()
+            value)
+    let parseOutput raw =
+        parse MaximumBytes raw (fun root ->
+            let c = readCommon root
+            let dig (key: string) = root.GetProperty(key) |> digest
+            let kind = root.GetProperty("proof_kind") |> text 8
+            let selection =
+                match kind with
+                | "none" ->
+                    for key in ["manifest_sha256"; "manifest_digest"; "member_count"; "total_bytes"] do
+                        if root.GetProperty(key).ValueKind <> System.Text.Json.JsonValueKind.Null then fail ()
+                    CheckpointNone
+                | "selected" ->
+                    let m = { Digest = dig "manifest_digest"; MemberCount = root.GetProperty("member_count") |> u64; TotalBytes = root.GetProperty("total_bytes") |> u64 }
+                    if m.MemberCount = 0UL || m.MemberCount > 16UL then fail ()
+                    CheckpointSelected(dig "manifest_sha256",m)
+                | _ -> fail ()
+            let o =
+                { GenesisCheckpointSha256 = dig "genesis_checkpoint_sha256"; Selection = selection
+                  ProofSignedEnvelopeSha256 = dig "proof_signed_envelope_sha256"; ProofPayloadDigest = dig "proof_payload_digest"
+                  NativeReceiptSha256 = dig "native_receipt_sha256"; NativeProofEnvelopeSha256 = dig "native_proof_envelope_sha256"
+                  NativeRequestEnvelopeSha256 = dig "native_request_envelope_sha256"; NativeResultEnvelopeSha256 = dig "native_result_envelope_sha256"
+                  NativeChallengeDigest = dig "native_challenge_digest"; NativeChallengeId = root.GetProperty("native_challenge_id") |> uuid
+                  NativeReceiverEpoch = root.GetProperty("native_receiver_epoch") |> uuid
+                  NativeControllerVerificationBundleSha256 = dig "native_controller_verification_bundle_sha256" }
+            let value = StructuralOutputCheckpoint(c,o)
+            let specific = ["genesis_checkpoint_sha256"; "proof_kind"; "proof_signed_envelope_sha256"; "proof_payload_digest"; "manifest_sha256"; "manifest_digest"; "member_count"; "total_bytes"; "native_receipt_sha256"; "native_proof_envelope_sha256"; "native_request_envelope_sha256"; "native_result_envelope_sha256"; "native_challenge_digest"; "native_challenge_id"; "native_receiver_epoch"; "native_controller_verification_bundle_sha256"]
+            fields ((commonFields c |> List.map fst) @ specific) root
+            if root.GetProperty("schema").GetString() <> "fsgg.v3.receiver-output-checkpoint/2"
+               || c.PredecessorCheckpointSha256 <> Some o.GenesisCheckpointSha256 || c.PreviousHead.IsNone
+               || not (List.contains c.AcceptedChallengePurpose ["state-readback"; "retirement-readback"])
+               || c.ReceiverEpoch <> o.NativeReceiverEpoch || serializeOutput value <> raw then fail ()
+            value)
+    /// Structural constructors still perform the same closed decode. They grant no authority.
+    let createGenesis common head payload =
+        try serializeGenesis (StructuralGenesisCheckpoint(common,head,payload)) |> parseGenesis
+        with _ -> Error "supplier-companion-refused"
+    let createOutput common output =
+        try serializeOutput (StructuralOutputCheckpoint(common,output)) |> parseOutput
+        with _ -> Error "supplier-companion-refused"
+    let genesisCommon (StructuralGenesisCheckpoint(c,_,_)) = c
+    let outputCommon (StructuralOutputCheckpoint(c,_)) = c
+    let output (StructuralOutputCheckpoint(_,o)) = o
+    let genesisHash value = serializeGenesis value |> hash
+    let outputHash value = serializeOutput value |> hash
+
+/// Structural retained bundle bytes. Deserialization never rehydrates an authenticated observation.
+type PortableSupplierReceiverVerificationBundle = private | StructuralReceiverBundle of string
+type PortableSupplierControllerVerificationBundle = private | StructuralControllerBundle of string
+
+[<RequireQualifiedAccess>]
+module PortableSupplierVerificationBundle =
+    open PortableSupplierC1
+    let private observationFields discriminator =
+        ["role"; "envelope_sha256"; discriminator; "payload_digest"; "policy_digest"; "policy_revision"
+         "issuer_principal"; "public_key_fingerprint"; "namespace"; "key_algorithm"; "message_hash_algorithm"
+         "verifier_binary_digest"; "verifier_profile_digest"; "verified_at"; "policy_valid_from"
+         "policy_valid_until"; "revocation_checked_at"; "revocation_status"]
+    let private receiverRoles =
+        ["creation", "creation"; "genesis", "genesis"; "supplier-event", "event"; "supplier-response", "response"]
+    let private controllerRoles =
+        ["receiver-command", "raw-sha256"; "create-effect-grant", "raw-sha256"; "start-effect-grant", "raw-sha256"
+         "retire-effect-grant", "raw-sha256"; "receiver-genesis-ack", "domain-receiver-acceptance"
+         "receiver-export-readback", "domain-export-readback"; "host-command-result", "raw-sha256"
+         "original-intent", "raw-sha256"; "native-proof", "raw-sha256"]
+    let private decode (schema: string) (maximumCount: int) (discriminator: string) (roles: (string * string) list) (root: System.Text.Json.JsonElement) =
+        fields ["schema"; "provenance"; "observations"] root
+        if root.GetProperty("schema").GetString() <> schema
+           || not (List.contains (root.GetProperty("provenance") |> text 20) ["controlled-test"; "qualified-production"])
+           || root.GetProperty("observations").ValueKind <> System.Text.Json.JsonValueKind.Array then fail ()
+        let observations = root.GetProperty("observations").EnumerateArray() |> Seq.toList
+        if observations.Length = 0 || observations.Length > maximumCount then fail ()
+        let keys =
+            observations |> List.map (fun row ->
+                fields (observationFields discriminator) row
+                let role = row.GetProperty("role") |> text 32
+                let payload = row.GetProperty(discriminator) |> text 32
+                if List.tryFind (fun (name,_) -> name = role) roles <> Some(role,payload) then fail ()
+                for key in ["envelope_sha256"; "payload_digest"; "policy_digest"; "verifier_binary_digest"; "verifier_profile_digest"] do
+                    row.GetProperty(key) |> digest |> ignore
+                for key,maximum in ["policy_revision",128; "issuer_principal",256; "public_key_fingerprint",128; "namespace",128; "key_algorithm",64; "message_hash_algorithm",64] do
+                    row.GetProperty(key) |> text maximum |> ignore
+                for key in ["verified_at"; "policy_valid_from"; "policy_valid_until"; "revocation_checked_at"] do
+                    row.GetProperty(key) |> utc |> ignore
+                if row.GetProperty("revocation_status").GetString() <> "not-revoked" then fail ()
+                role, row.GetProperty("envelope_sha256").GetString())
+        if keys |> List.pairwise |> List.exists (fun ((a,b),(c,d)) ->
+            let order = StringComparer.Ordinal.Compare(a,c)
+            order > 0 || (order = 0 && StringComparer.Ordinal.Compare(b,d) >= 0)) then fail ()
+        System.Text.Encoding.ASCII.GetString(objectBytes ["schema", quoted schema; "provenance", canonical (root.GetProperty("provenance")); "observations", canonical (root.GetProperty("observations"))])
+    /// Preserve the existing four-role /1 data codec; policy facts remain untrusted here.
+    let parseReceiver raw =
+        parse 32768 raw (fun root -> StructuralReceiverBundle(decode "fsgg.v3.receiver-verification-bundle/1" 18 "payload_domain" receiverRoles root))
+    /// Explicit /2 adds original-intent/native-proof to the seven companion roles.
+    let parseController raw =
+        parse 8192 raw (fun root -> StructuralControllerBundle(decode "fsgg.v3.controller-verification-bundle/2" 4 "payload_digest_kind" controllerRoles root))
+    let serializeReceiver (StructuralReceiverBundle raw) = System.Text.Encoding.ASCII.GetBytes raw
+    let serializeController (StructuralControllerBundle raw) = System.Text.Encoding.ASCII.GetBytes raw
+
 /// Source-only receiver admission. These snapshots cannot authorize a runner, ACK or host effect.
 type PortableSupplierAdmissionPhase =
     | SupplierIntentStored | SupplierCreationPinned | SupplierAwaitingGenesis
