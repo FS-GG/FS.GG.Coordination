@@ -1078,3 +1078,51 @@ type PortableHostExecutorTests_SupplierJournalV4() =
         Assert.Equal(0, fixture.Runner.Runs)
         Assert.Equal(0, fixture.Runner.Cleans)
         Assert.Equal(0, fixture.Runner.Recoveries)
+
+    [<Fact>]
+    member _.``v4 CAS requires exact persisted issuance and current accepted stamps despite self consistent checkpoint bytes``() =
+        let restamp acceptedRevision currentRevision (state: PortableSupplierAdmissionState) =
+            let custody = state.CheckpointCustody.Value
+            let checkpoint = Convert.FromBase64String custody.GenesisCheckpointBase64.Value |> PortableSupplierCheckpoint.parseGenesis |> SupplierCheckpointFixtures.ok
+            let originalCommon = PortableSupplierCheckpoint.genesisCommon checkpoint
+            let common =
+                { originalCommon with
+                    ExpectedJournalRevision = acceptedRevision - 1UL; JournalRevision = acceptedRevision
+                    ExpectedStoreFence = acceptedRevision - 1UL; StoreFence = acceptedRevision }
+            use doc = SupplierCheckpointFixtures.journey ()
+            let event = doc.RootElement.GetProperty("genesisEvent").GetString() |> SupplierCheckpointFixtures.urlBytes
+            use envelope = System.Text.Json.JsonDocument.Parse(ReadOnlyMemory<byte>(event))
+            let payload = envelope.RootElement.GetProperty("payload").GetString() |> SupplierCheckpointFixtures.urlBytes
+            let changed = PortableSupplierCheckpoint.createGenesis common common.ObservedHead (SupplierCheckpointFixtures.domain "genesis" payload) |> SupplierCheckpointFixtures.ok
+            { state with Revision = currentRevision
+                         CheckpointCustody = Some { custody with StoreFence = currentRevision
+                                                                 WireExchanges = custody.WireExchanges |> List.map (fun e -> { e with AcceptedRevision = acceptedRevision; AcceptedStoreFence = acceptedRevision })
+                                                                 GenesisCheckpointBase64 = Some(PortableSupplierCheckpoint.serializeGenesis changed |> Convert.ToBase64String) } }
+        for skippedIssuance in [true;false] do
+            use fixture = new HostExecutorFixture()
+            let journal = PortableWorkspaceExecutor.SupplierAdmissionJournal fixture.Policy.Runtime.StateRoot
+            let stage state expected =
+                match journal.StageV4(state,expected,expected) with SupplierSourceReadback _ -> () | other -> failwithf "%A" other
+            let initial = SupplierCheckpointFixtures.initial ()
+            stage initial None
+            let creationPair = SupplierCheckpointFixtures.exchange "creation" initial
+            let pendingCreation = PortableSupplierAdmission.issueChallenge creationPair.Challenge initial |> SupplierCheckpointFixtures.ok
+            stage pendingCreation (Some 1UL)
+            let creation = SupplierCheckpointFixtures.pinCreation initial
+            stage creation (Some 2UL)
+            let expected,unchanged =
+                if skippedIssuance then 3UL,creation
+                else
+                    let pair = SupplierCheckpointFixtures.exchange "genesis" creation
+                    let pending = PortableSupplierAdmission.issueChallenge pair.Challenge creation |> SupplierCheckpointFixtures.ok
+                    stage pending (Some 3UL)
+                    4UL,pending
+            let admitted = SupplierCheckpointFixtures.acceptGenesis creation
+            let forged = restamp 4UL (expected + 1UL) admitted
+            Assert.True(PortableSupplierAdmission.validate forged |> Result.isOk)
+            Assert.Equal(SupplierSourceConflict,journal.StageV4(forged,Some expected,Some expected))
+            let cold,_ = journal.Read initial.Original.Command |> SupplierCheckpointFixtures.ok
+            Assert.Equal(unchanged,cold)
+            Assert.Equal(0,fixture.Runner.Runs)
+            Assert.Equal(0,fixture.Runner.Cleans)
+            Assert.Equal(0,fixture.Runner.Recoveries)

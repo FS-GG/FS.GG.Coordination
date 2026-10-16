@@ -822,6 +822,48 @@ module PortableWorkspaceExecutor =
         if memory.Length > int64 PortableSupplierAdmission.MaximumSupplierBytes then invalidOp "supplier-journal-size"
         memory.ToArray()
 
+    let private supplierV4Transition (previous: PortableSupplierAdmissionState) (current: PortableSupplierAdmissionState) =
+        let before = previous.CheckpointCustody.Value
+        let after = current.CheckpointCustody.Value
+        let created =
+            match before.CreationExchange,after.CreationExchange with
+            | None,Some e -> [WireV1 e.Challenge,e.AcceptedRevision,e.AcceptedStoreFence,None]
+            | _ -> []
+        let additions =
+            created
+            @ (after.WireExchanges |> List.skip before.WireExchanges.Length |> List.map (fun e -> WireV1 e.Challenge,e.AcceptedRevision,e.AcceptedStoreFence,None))
+            @ (after.NativeAcquisitions |> List.skip before.NativeAcquisitions.Length |> List.map (fun e -> e.Challenge,e.AcceptedRevision,e.AcceptedStoreFence,None))
+        let abandoned = after.AbandonedChallenges |> List.skip before.AbandonedChallenges.Length
+        let originalPinned = previous.Pinned |> Option.forall (fun pinned -> current.Pinned = Some pinned)
+        match previous.Challenge,current.Challenge with
+        | None,Some pending ->
+            let phase =
+                match pending,previous.Phase with
+                | WireV1 _,SupplierCreationPinned -> SupplierAwaitingGenesis
+                | _ -> previous.Phase
+            let expected =
+                { previous with Revision = current.Revision; Challenge = Some pending; Phase = phase
+                                CheckpointCustody = Some { before with StoreFence = after.StoreFence } }
+            additions.IsEmpty && abandoned.IsEmpty && current = expected
+        | Some pending,None ->
+            match additions,abandoned,current.ChallengeLedger with
+            | [(challenge,revision,fence,_anchor)],[],(kind,id,digest,"consumed")::ledger ->
+                originalPinned && challenge = pending && revision = current.Revision && fence = after.StoreFence
+                && (kind,id,digest) = (pending.Kind,pending.ChallengeId,pending.Digest)
+                && ledger = previous.ChallengeLedger && current.Original = previous.Original
+            | [],[abandoned],(kind,id,digest,"abandoned")::ledger ->
+                let expected =
+                    { previous with Revision = current.Revision; Challenge = None; Original = current.Original
+                                    ChallengeLedger = current.ChallengeLedger
+                                    CheckpointCustody = Some { before with StoreFence = after.StoreFence
+                                                                         AbandonedChallenges = before.AbandonedChallenges @ [pending] } }
+                abandoned = pending && current.Original.ReceiverEpoch <> previous.Original.ReceiverEpoch
+                && { previous.Original with ReceiverEpoch = current.Original.ReceiverEpoch } = current.Original
+                && (kind,id,digest) = (pending.Kind,pending.ChallengeId,pending.Digest)
+                && ledger = previous.ChallengeLedger && current = expected
+            | _ -> false
+        | _ -> false
+
     type private DurableJournal(stateRoot: string) =
         let journalRoot = Path.Combine(stateRoot, "journal-v1")
 
@@ -997,6 +1039,7 @@ module PortableWorkspaceExecutor =
                                 && current.CreationBase64 = pinned.CreationBase64
                                 && current.CreationReceiptBase64 = pinned.CreationReceiptBase64
                                 && current.ReservationBase64 = pinned.ReservationBase64)))
+                        && (state.JournalVersion <> SupplierJournalV4 || supplierV4Transition previous state)
                     | _ -> false
                 if not eligible then
                     if state.JournalVersion = SupplierJournalV4 then raise SupplierSourceConflictException

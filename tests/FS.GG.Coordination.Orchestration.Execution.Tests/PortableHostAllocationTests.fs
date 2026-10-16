@@ -887,9 +887,8 @@ module SupplierCheckpointFixtures =
             if File.Exists path then File.ReadAllBytes path else find directory.Parent
         find (DirectoryInfo(AppContext.BaseDirectory)) |> fun raw -> JsonDocument.Parse(ReadOnlyMemory<byte>(raw))
     let urlBytes (text: string) = Convert.FromBase64String(text.Replace('-', '+').Replace('_', '/') + String.replicate ((4 - text.Length % 4) % 4) "=")
-    let exchange (name: string) (state: PortableSupplierAdmissionState) =
-        use doc = journey ()
-        let row = doc.RootElement.GetProperty name
+    let exchangeFrom (root: JsonElement) (name: string) (state: PortableSupplierAdmissionState) =
+        let row = root.GetProperty name
         let exact key = row.GetProperty(key: string).GetString() |> urlBytes
         let challengeBytes = exact "challenge"
         use challengeDoc = JsonDocument.Parse(ReadOnlyMemory<byte>(challengeBytes))
@@ -905,9 +904,8 @@ module SupplierCheckpointFixtures =
           EvidenceBase64 = exact "evidence" |> Convert.ToBase64String
           ReceiverBundleBase64 = exact "receiverBundle" |> Convert.ToBase64String
           ControllerBundleBase64 = exact "controllerBundle" |> Convert.ToBase64String }
-    let observation kind (exchange: PortableSupplierRetainedWireExchange) (state: PortableSupplierAdmissionState) =
-        use doc = journey ()
-        let exact key = doc.RootElement.GetProperty(key: string).GetString() |> urlBytes
+    let observationFrom (root: JsonElement) kind (exchange: PortableSupplierRetainedWireExchange) (state: PortableSupplierAdmissionState) =
+        let exact key = root.GetProperty(key: string).GetString() |> urlBytes
         use c = JsonDocument.Parse(ReadOnlyMemory<byte>(exact "creationCore"))
         use r = JsonDocument.Parse(ReadOnlyMemory<byte>(exact "reservation"))
         let core = c.RootElement
@@ -920,7 +918,7 @@ module SupplierCheckpointFixtures =
               MaximumRuntime = ticks "maximum_runtime_ticks"; ExportReserve = ticks "export_reserve_ticks"
               CleanupReserve = ticks "cleanup_reserve_ticks"; Selection = NoSelectedOutputs }
         let event = exact "genesisEvent"
-        let at = doc.RootElement.GetProperty(if kind = SupplierCreation then "creation" else "genesis").GetProperty("collectedAt").GetString()
+        let at = root.GetProperty(if kind = SupplierCreation then "creation" else "genesis").GetProperty("collectedAt").GetString()
         { Kind = kind; IntentDigest = state.Original.IntentDigest; TrustPolicyDigest = state.Original.TrustPolicyDigest
           ChallengeDigest = exchange.Challenge.Digest; Purpose = exchange.Challenge.Purpose; OriginalReservation = pinned
           Identity = { Issuer = "controlled-source-only"; ContainerId = core.GetProperty("cid").GetString()
@@ -933,24 +931,34 @@ module SupplierCheckpointFixtures =
           EventsBase64 = if kind = SupplierCreation then [] else [Convert.ToBase64String event]
           FromHead = None; ToHead = if kind = SupplierCreation then None else Some(domain "signed-envelope" event)
           Sequence = 0UL; CollectedAt = DateTimeOffset.Parse(at, Globalization.CultureInfo.InvariantCulture) }
-    let verifyControlled kind exchange state =
-        let value = observation kind exchange state
+    let verifyControlledFrom root kind exchange state =
+        let value = observationFrom root kind exchange state
         let adapter = { new IPortableSupplierTranscriptAuthenticator with member _.Authenticate _ = Ok value }
         PortableSupplierAdmission.verify adapter value.CollectedAt 2L state (Convert.FromBase64String exchange.EvidenceBase64) |> ok
-    let pinCreation (state: PortableSupplierAdmissionState) =
-        let pair = exchange "creation" state
+    let pinCreationFrom root (state: PortableSupplierAdmissionState) =
+        let pair = exchangeFrom root "creation" state
         let pending = PortableSupplierAdmission.issueChallenge pair.Challenge state |> ok
-        let verified = verifyControlled SupplierCreation pair pending
+        let verified = verifyControlledFrom root SupplierCreation pair pending
         match PortableSupplierAdmission.pinCreationV4 verified pair pending.Original pending.Revision pending.CheckpointCustody.Value.StoreFence pending |> ok with
         | SupplierCheckpointData value -> value
         | SupplierCheckpointHeld _ -> failwith "controlled creation held"
-    let acceptGenesis (state: PortableSupplierAdmissionState) =
-        let pair = exchange "genesis" state
+    let acceptGenesisFrom root (state: PortableSupplierAdmissionState) =
+        let pair = exchangeFrom root "genesis" state
         let pending = PortableSupplierAdmission.issueChallenge pair.Challenge state |> ok
-        let verified = verifyControlled SupplierGenesis pair pending
+        let verified = verifyControlledFrom root SupplierGenesis pair pending
         match PortableSupplierAdmission.acceptWireV4 verified pair pending.Original pending.Revision pending.CheckpointCustody.Value.StoreFence pending |> ok with
         | SupplierCheckpointData value -> value
         | SupplierCheckpointHeld _ -> failwith "controlled genesis held"
+
+    let exchange name state =
+        use doc = journey ()
+        exchangeFrom doc.RootElement name state
+    let pinCreation state =
+        use doc = journey ()
+        pinCreationFrom doc.RootElement state
+    let acceptGenesis state =
+        use doc = journey ()
+        acceptGenesisFrom doc.RootElement state
 
 type PortableHostAllocationTests_ReceiverCheckpointSource() =
     [<Fact>]
@@ -975,6 +983,12 @@ type PortableHostAllocationTests_ReceiverCheckpointSource() =
         let initial = SupplierCheckpointFixtures.initial ()
         let invalid =
             [ { initial with CheckpointCustody = None }
+              { initial with Head = Some(String.replicate 64 "f") }
+              { initial with Sequence = 1UL }
+              { initial with EventsBase64 = [initial.Original.IntentBase64] }
+              { initial with ResponsesBase64 = [initial.Original.IntentBase64] }
+              { initial with CheckpointCustody = Some { initial.CheckpointCustody.Value with OriginalReceiverEpoch = Guid.NewGuid() } }
+              { initial with Challenge = Some(WireV1(SupplierCheckpointFixtures.challenge initial)) }
               { initial with CheckpointCustody = Some { initial.CheckpointCustody.Value with StoreFence = 2UL } }
               { initial with Original = { initial.Original with IntentDigest = String.replicate 64 "f" } }
               { initial with JournalVersion = SupplierJournalV3 }
@@ -1042,3 +1056,17 @@ type PortableHostAllocationTests_ReceiverCheckpointControlledJourney() =
             Assert.True(PortableSupplierAdmission.validate invalid |> Result.isError)
         Assert.True(PortableSupplierAdmission.prepareAck genesis |> Result.isError)
         Assert.True(PortableSupplierAdmission.reserveHost genesis |> Result.isError)
+
+    [<Fact>]
+    member _.``rehash complete paired original and temporal mutations refuse the actual controlled caller``() =
+        use doc = SupplierCheckpointFixtures.journey ()
+        for row in doc.RootElement.GetProperty("negativeJourneys").EnumerateArray() do
+            Assert.False(row.GetProperty("expectedSourceAccept").GetBoolean())
+            let accepted =
+                try
+                    SupplierCheckpointFixtures.initial ()
+                    |> SupplierCheckpointFixtures.pinCreationFrom row
+                    |> SupplierCheckpointFixtures.acceptGenesisFrom row
+                    |> PortableSupplierAdmission.validate |> Result.isOk
+                with _ -> false
+            Assert.False(accepted, row.GetProperty("caseName").GetString())

@@ -2780,7 +2780,8 @@ module PortableSupplierAdmission =
             if not (List.contains (response.GetProperty("result").GetString()) ["observed"; "committed"])
                || response.GetProperty("evidence_kind").GetString() <> "supplier-response"
                || body.GetProperty("intent_digest").GetString() <> state.Original.IntentDigest
-               || body.GetProperty("operation_id").GetString() <> challengeRow.GetProperty("operation_id").GetString() then PortableSupplierC1.fail ()
+               || body.GetProperty("operation_id").GetString() <> challengeRow.GetProperty("operation_id").GetString()
+               || response.GetProperty("operation_id").GetString() <> challengeRow.GetProperty("operation_id").GetString() then PortableSupplierC1.fail ()
             if e.Challenge.Purpose = "genesis-readback" && kind <> "bind-original" && kind <> "collect" then PortableSupplierC1.fail ()
         command, response
 
@@ -2824,6 +2825,7 @@ module PortableSupplierAdmission =
         let count key = reservation.GetProperty(key: string) |> PortableSupplierC1.u64
         let original = pinned.OriginalReservation
         if original.AdmittedAt <> date "admitted_at" || original.HostLeaseExpiresAt <> date "host_lease_expires_at"
+           || original.Binding.Command.Deadline <> date "original_deadline"
            || original.Selection <> sourceSelection (reservation.GetProperty("selection"))
            || original.MaximumRuntime.Ticks < 0L || uint64 original.MaximumRuntime.Ticks <> count "maximum_runtime_ticks"
            || original.ExportReserve.Ticks < 0L || uint64 original.ExportReserve.Ticks <> count "export_reserve_ticks"
@@ -2848,6 +2850,11 @@ module PortableSupplierAdmission =
            || count "export_reserve_ticks" < (core.GetProperty("host_min_export_reserve_ticks") |> PortableSupplierC1.u64)
            || count "cleanup_reserve_ticks" < (core.GetProperty("host_min_cleanup_reserve_ticks") |> PortableSupplierC1.u64) then PortableSupplierC1.fail ()
         let request, result = sourceWirePair state creation
+        let creationCollected = result.GetProperty("collected_at") |> PortableSupplierC1.utc
+        if (core.GetProperty("stopped_at") |> PortableSupplierC1.utc) > creationCollected
+           || pinned.Kind <> SupplierCreation || pinned.ChallengeDigest <> creation.Challenge.Digest || pinned.Purpose <> "creation"
+           || pinned.ResponseBase64 <> creation.EvidenceBase64 || not pinned.EventsBase64.IsEmpty
+           || pinned.FromHead.IsSome || pinned.ToHead.IsSome || pinned.Sequence <> 0UL || pinned.CollectedAt <> creationCollected then PortableSupplierC1.fail ()
         let manifest = request.GetProperty("body").GetProperty("selection_manifest") |> PortableSupplierC1.optional (PortableSupplierC1.b64url 6000)
         PortableSupplierManifest.validateSelection original.Selection manifest |> Result.defaultWith invalidOp |> ignore
         if result.GetProperty("operation_id").GetString() <> core.GetProperty("operation_id").GetString() then PortableSupplierC1.fail ()
@@ -3081,6 +3088,8 @@ module PortableSupplierAdmission =
                            || event.GetProperty("creation_core_digest").GetString() <> domain "creation" (PortableSupplierC1.nestedBytes (event.GetProperty("creation_core")))
                            || event.GetProperty("creation_receipt_digest").GetString() <> domain "creation-receipt" receiptBytes
                            || event.GetProperty("reservation_digest").GetString() <> domain "reservation" reservationBytes then PortableSupplierC1.fail ()
+                        let observed = event.GetProperty("observed_at") |> PortableSupplierC1.utc
+                        if observed < admitted || observed > collected || observed >= originalLimit then PortableSupplierC1.fail ()
                         sequence <- 0UL
                     else
                         PortableSupplierWireShape.check_supplier_event event
@@ -3149,7 +3158,11 @@ module PortableSupplierAdmission =
                 let expected = PortableSupplierCheckpoint.createGenesis common (domain "signed-envelope" eg) (domain "genesis" g) |> Result.defaultWith invalidOp
                 if PortableSupplierCheckpoint.serializeGenesis expected <> bytes || state.Phase <> SupplierGenesisAccepted then PortableSupplierC1.fail ()
             | _ -> PortableSupplierC1.fail ()
-        elif not c.WireExchanges.IsEmpty || c.GenesisCheckpointBase64.IsSome || state.Phase <> SupplierIntentStored then PortableSupplierC1.fail ()
+        elif not c.WireExchanges.IsEmpty || c.GenesisCheckpointBase64.IsSome || state.Phase <> SupplierIntentStored
+             || state.Head.IsSome || state.Sequence <> 0UL || not state.EventsBase64.IsEmpty || not state.ResponsesBase64.IsEmpty then PortableSupplierC1.fail ()
+        if state.Revision = 1UL && (state.Original.ReceiverEpoch <> c.OriginalReceiverEpoch || state.Challenge.IsSome
+                                   || not state.ChallengeLedger.IsEmpty || not c.AbandonedChallenges.IsEmpty
+                                   || state.FirstFailure.IsSome || not state.Conflicts.IsEmpty) then PortableSupplierC1.fail ()
         for acquisition in c.NativeAcquisitions do sourceNativePair state acquisition |> ignore
         // Native acceptance remains held until the independent original policy snapshot join.
         if not c.NativeAcquisitions.IsEmpty || c.OutputCheckpointBase64.IsSome then PortableSupplierC1.fail ()
