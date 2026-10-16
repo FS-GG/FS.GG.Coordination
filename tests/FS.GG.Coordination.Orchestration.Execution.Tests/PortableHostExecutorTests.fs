@@ -1392,7 +1392,7 @@ type PortableHostExecutorTests_ControlledAuthenticatedSource() =
                   AllocationId = expected.GetProperty("hostBinding").GetProperty("allocationId").GetString()
                   WorkerId = expected.GetProperty("hostBinding").GetProperty("workerId").GetString()
                   AllocationReceiptDigest = expected.GetProperty("hostBinding").GetProperty("allocationReceiptDigest").GetString() }
-            let selection at revoke =
+            let selectionWith changePolicies changeCurrent at revoke =
                 let at = date at
                 let policies =
                     roles |> List.map (fun (name,role) ->
@@ -1409,9 +1409,16 @@ type PortableHostExecutorTests_ControlledAuthenticatedSource() =
                       MaximumObservationAge = TimeSpan.FromTicks(Int64.Parse(expected.GetProperty("maximumObservationAgeTicks").GetString()))
                       ReceiverMonotonic = 2L; IssuedReceiverClockDomain = domain; CurrentReceiverClockDomain = domain
                       HostClock = PortableSupplierOriginalNativeConfiguration.clock initial.CheckpointCustody.Value.NativeConfiguration }
-                PortableSupplierAdmission.createControlledSourceSelection initial.Original (expected.GetProperty("originalIntentEnvelopeSha256").GetString())
-                    (Guid.Parse(expected.GetProperty("expectedOperationId").GetString())) binding initial.CheckpointCustody.Value.NativeConfiguration policies current
-                |> SupplierCheckpointFixtures.ok
+                let captured =
+                    PortableSupplierAdmission.createControlledSourceSelection initial.Original (expected.GetProperty("originalIntentEnvelopeSha256").GetString())
+                        (Guid.Parse(expected.GetProperty("expectedOperationId").GetString())) binding initial.CheckpointCustody.Value.NativeConfiguration (changePolicies policies) (changeCurrent current)
+                    |> SupplierCheckpointFixtures.ok
+                // Every successful journey also proves mutable caller arrays were copied at selection capture.
+                for policy in policies do
+                    Array.fill policy.PublicKeyBlob 0 policy.PublicKeyBlob.Length 0uy
+                    Array.fill policy.PolicyBytes 0 policy.PolicyBytes.Length 0uy
+                captured
+            let selection at revoke = selectionWith id id at revoke
             match journal.StageV4(initial,None,None) with SupplierSourceReadback _ -> () | other -> failwithf "%A" other
             let mutable state = initial
             for name in ["creation";"genesis"] do
@@ -1535,6 +1542,19 @@ type PortableHostExecutorTests_ControlledAuthenticatedSource() =
                 Assert.True(PortableSupplierAdmission.validate structural |> Result.isOk)
                 Assert.True(PortableSupplierAdmission.reverifyControlledSourceV4 (selection at false) structural |> Result.isError)
             Assert.True(PortableSupplierAdmission.reverifyControlledSourceV4 (selection at true) cold |> Result.isError)
+            let observations: (PortableSupplierControlledCurrentObservation -> PortableSupplierControlledCurrentObservation) list =
+                [ (fun current -> { current with SelectionObservedAt = current.VerifiedAt.AddTicks 10L })
+                  (fun current -> { current with SelectionObservedAt = current.VerifiedAt.AddSeconds(-31.) })
+                  (fun current -> { current with SelectionValidUntil = current.VerifiedAt })
+                  (fun current -> { current with CurrentReceiverClockDomain = Guid.Empty })
+                  (fun current -> { current with ReceiverMonotonic = -1L })
+                  (fun current -> { current with HostClock = { current.HostClock with Revision = current.HostClock.Revision + 1UL } }) ]
+            for observation in observations do
+                Assert.True(PortableSupplierAdmission.reverifyControlledSourceV4 (selectionWith id observation at false) cold |> Result.isError)
+            for policyChange in
+                [ List.filter (fun (policy: PortableSupplierControlledRolePolicy) -> policy.Role <> NativeProofSignature)
+                  List.map (fun (policy: PortableSupplierControlledRolePolicy) -> if policy.Role = NativeProofSignature then { policy with Revocation = ControlledRevocationUnavailable } else policy) ] do
+                Assert.True(PortableSupplierAdmission.reverifyControlledSourceV4 (selectionWith policyChange id at false) cold |> Result.isError)
             Assert.True(PortableSupplierAdmission.prepareAck readback.State |> Result.isError)
             Assert.True(PortableSupplierAdmission.reserveHost readback.State |> Result.isError)
             Assert.Equal(0,fixture.Runner.Runs)
