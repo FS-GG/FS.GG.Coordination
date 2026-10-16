@@ -1038,6 +1038,7 @@ type PortableHostAllocationTests_ReceiverCheckpointControlledJourney() =
         let creation = SupplierCheckpointFixtures.pinCreation initial
         Assert.Equal(3UL, creation.Revision)
         let genesis = SupplierCheckpointFixtures.acceptGenesis creation
+        Assert.Equal(creation.Pinned,genesis.Pinned)
         Assert.Equal(5UL, genesis.Revision)
         Assert.Equal(5UL, genesis.CheckpointCustody.Value.StoreFence)
         Assert.True(genesis.CheckpointCustody.Value.GenesisCheckpointBase64.IsSome)
@@ -1060,13 +1061,20 @@ type PortableHostAllocationTests_ReceiverCheckpointControlledJourney() =
     [<Fact>]
     member _.``rehash complete paired original and temporal mutations refuse the actual controlled caller``() =
         use doc = SupplierCheckpointFixtures.journey ()
+        let positive = SupplierCheckpointFixtures.initial () |> SupplierCheckpointFixtures.pinCreationFrom doc.RootElement |> SupplierCheckpointFixtures.acceptGenesisFrom doc.RootElement
+        Assert.Equal(SupplierGenesisAccepted,positive.Phase)
+        Assert.True(PortableSupplierAdmission.validate positive |> Result.isOk)
         for row in doc.RootElement.GetProperty("negativeJourneys").EnumerateArray() do
             Assert.False(row.GetProperty("expectedSourceAccept").GetBoolean())
-            let accepted =
-                try
-                    SupplierCheckpointFixtures.initial ()
-                    |> SupplierCheckpointFixtures.pinCreationFrom row
-                    |> SupplierCheckpointFixtures.acceptGenesisFrom row
-                    |> PortableSupplierAdmission.validate |> Result.isOk
-                with _ -> false
-            Assert.False(accepted, row.GetProperty("caseName").GetString())
+            let creation =
+                try Ok(SupplierCheckpointFixtures.initial () |> SupplierCheckpointFixtures.pinCreationFrom row)
+                with error -> Error error.Message
+            let name = row.GetProperty("caseName").GetString()
+            if name = "creation-stopped-after-paired-collection" || name = "reservation-deadline-not-original-command" then
+                Assert.True(Result.isError creation,name)
+            else
+                let pinned = creation |> SupplierCheckpointFixtures.ok
+                let genesis =
+                    try Ok(SupplierCheckpointFixtures.acceptGenesisFrom row pinned)
+                    with error -> Error error.Message
+                Assert.True(Result.isError genesis,name)

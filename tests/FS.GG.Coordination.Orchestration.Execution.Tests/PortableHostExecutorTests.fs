@@ -1095,8 +1095,8 @@ type PortableHostExecutorTests_SupplierJournalV4() =
             let payload = envelope.RootElement.GetProperty("payload").GetString() |> SupplierCheckpointFixtures.urlBytes
             let changed = PortableSupplierCheckpoint.createGenesis common common.ObservedHead (SupplierCheckpointFixtures.domain "genesis" payload) |> SupplierCheckpointFixtures.ok
             { state with Revision = currentRevision
-                         CheckpointCustody = Some { custody with StoreFence = currentRevision
-                                                                 WireExchanges = custody.WireExchanges |> List.map (fun e -> { e with AcceptedRevision = acceptedRevision; AcceptedStoreFence = acceptedRevision })
+                         CheckpointCustody = Some { custody with StoreFence = currentRevision;
+                                                                 WireExchanges = custody.WireExchanges |> List.map (fun e -> { e with AcceptedRevision = acceptedRevision; AcceptedStoreFence = acceptedRevision });
                                                                  GenesisCheckpointBase64 = Some(PortableSupplierCheckpoint.serializeGenesis changed |> Convert.ToBase64String) } }
         for skippedIssuance in [true;false] do
             use fixture = new HostExecutorFixture()
@@ -1126,3 +1126,51 @@ type PortableHostExecutorTests_SupplierJournalV4() =
             Assert.Equal(0,fixture.Runner.Runs)
             Assert.Equal(0,fixture.Runner.Cleans)
             Assert.Equal(0,fixture.Runner.Recoveries)
+
+    [<Fact>]
+    member _.``v4 sticky held transition persists original pending and first cause through reopen and explicit abandonment``() =
+        use fixture = new HostExecutorFixture()
+        let journal = PortableWorkspaceExecutor.SupplierAdmissionJournal fixture.Policy.Runtime.StateRoot
+        let stage state expected =
+            match journal.StageV4(state,expected,expected) with SupplierSourceReadback _ -> () | other -> failwithf "%A" other
+        let initial = SupplierCheckpointFixtures.initial ()
+        stage initial None
+        let creationPair = SupplierCheckpointFixtures.exchange "creation" initial
+        let pendingCreation = PortableSupplierAdmission.issueChallenge creationPair.Challenge initial |> SupplierCheckpointFixtures.ok
+        stage pendingCreation (Some 1UL)
+        let creation = SupplierCheckpointFixtures.pinCreation initial
+        stage creation (Some 2UL)
+        let pair = SupplierCheckpointFixtures.exchange "genesis" creation
+        let pending = PortableSupplierAdmission.issueChallenge pair.Challenge creation |> SupplierCheckpointFixtures.ok
+        stage pending (Some 3UL)
+        use doc = SupplierCheckpointFixtures.journey ()
+        let original = SupplierCheckpointFixtures.observationFrom doc.RootElement SupplierGenesis pair pending
+        let changed = { original with Identity = { original.Identity with ContainerId = String.replicate 64 "f" } }
+        let controlled = { new IPortableSupplierTranscriptAuthenticator with member _.Authenticate _ = Ok changed }
+        let verified = PortableSupplierAdmission.verify controlled changed.CollectedAt 2L pending (Convert.FromBase64String pair.EvidenceBase64) |> SupplierCheckpointFixtures.ok
+        let held =
+            match PortableSupplierAdmission.acceptWireV4 verified pair pending.Original pending.Revision pending.CheckpointCustody.Value.StoreFence pending |> SupplierCheckpointFixtures.ok with
+            | SupplierCheckpointHeld state -> state
+            | _ -> failwith "changed original must remain held"
+        Assert.True(held.FirstFailure.IsSome)
+        Assert.Equal(pending.Challenge,held.Challenge)
+        Assert.Equal(pending.ChallengeLedger,held.ChallengeLedger)
+        Assert.Equal(pending.Pinned,held.Pinned)
+        stage held (Some 4UL)
+        let cold,_ = journal.Read initial.Original.Command |> SupplierCheckpointFixtures.ok
+        Assert.Equal(held,cold)
+        let cleared = { held with Revision = 6UL; FirstFailure = None; Conflicts = Set.empty; CheckpointCustody = Some { held.CheckpointCustody.Value with StoreFence = 6UL } }
+        Assert.Equal(SupplierSourceConflict,journal.StageV4(cleared,Some 5UL,Some 5UL))
+        let abandoned = PortableSupplierAdmission.abandonChallenge (Guid.NewGuid()) cold |> SupplierCheckpointFixtures.ok
+        Assert.Equal(held.FirstFailure,abandoned.FirstFailure)
+        Assert.Equal(held.Conflicts,abandoned.Conflicts)
+        Assert.True(abandoned.Challenge.IsNone)
+        Assert.Contains((SupplierWireV1,pair.Challenge.ChallengeId,pair.Challenge.Digest,"abandoned"),abandoned.ChallengeLedger)
+        stage abandoned (Some 5UL)
+        let reopened,_ = journal.Read initial.Original.Command |> SupplierCheckpointFixtures.ok
+        Assert.Equal(abandoned,reopened)
+        Assert.True(PortableSupplierAdmission.prepareAck reopened |> Result.isError)
+        Assert.True(PortableSupplierAdmission.reserveHost reopened |> Result.isError)
+        Assert.Equal(0,fixture.Runner.Runs)
+        Assert.Equal(0,fixture.Runner.Cleans)
+        Assert.Equal(0,fixture.Runner.Recoveries)

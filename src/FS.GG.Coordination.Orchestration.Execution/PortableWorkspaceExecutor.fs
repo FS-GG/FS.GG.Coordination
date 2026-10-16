@@ -827,36 +827,40 @@ module PortableWorkspaceExecutor =
         let after = current.CheckpointCustody.Value
         let created =
             match before.CreationExchange,after.CreationExchange with
-            | None,Some e -> [WireV1 e.Challenge,e.AcceptedRevision,e.AcceptedStoreFence,None]
+            | None,Some e -> [WireV1 e.Challenge,e.AcceptedRevision,e.AcceptedStoreFence]
             | _ -> []
         let additions =
             created
-            @ (after.WireExchanges |> List.skip before.WireExchanges.Length |> List.map (fun e -> WireV1 e.Challenge,e.AcceptedRevision,e.AcceptedStoreFence,None))
-            @ (after.NativeAcquisitions |> List.skip before.NativeAcquisitions.Length |> List.map (fun e -> e.Challenge,e.AcceptedRevision,e.AcceptedStoreFence,None))
+            @ (after.WireExchanges |> List.skip before.WireExchanges.Length |> List.map (fun e -> WireV1 e.Challenge,e.AcceptedRevision,e.AcceptedStoreFence))
+            @ (after.NativeAcquisitions |> List.skip before.NativeAcquisitions.Length |> List.map (fun e -> e.Challenge,e.AcceptedRevision,e.AcceptedStoreFence))
         let abandoned = after.AbandonedChallenges |> List.skip before.AbandonedChallenges.Length
         let originalPinned = previous.Pinned |> Option.forall (fun pinned -> current.Pinned = Some pinned)
+        let previouslyReady = previous.FirstFailure.IsNone && previous.Conflicts.IsEmpty
         match previous.Challenge,current.Challenge with
         | None,Some pending ->
             let phase =
                 match pending,previous.Phase with
                 | WireV1 _,SupplierCreationPinned -> SupplierAwaitingGenesis
                 | _ -> previous.Phase
-            let expected =
-                { previous with Revision = current.Revision; Challenge = Some pending; Phase = phase
-                                CheckpointCustody = Some { before with StoreFence = after.StoreFence } }
-            additions.IsEmpty && abandoned.IsEmpty && current = expected
+            let expectedCustody = { before with StoreFence = after.StoreFence }
+            let expected = { previous with Revision = current.Revision; Challenge = Some pending; Phase = phase; CheckpointCustody = Some expectedCustody }
+            previouslyReady && additions.IsEmpty && abandoned.IsEmpty && current = expected
+        | Some pending,Some retained when retained = pending ->
+            let exactRejected = true
+            let expectedCustody = { before with StoreFence = after.StoreFence }
+            let expected = { previous with Revision = current.Revision; FirstFailure = current.FirstFailure; Conflicts = current.Conflicts; CheckpointCustody = Some expectedCustody }
+            previouslyReady && current.FirstFailure.IsSome && not current.Conflicts.IsEmpty
+            && additions.IsEmpty && abandoned.IsEmpty && exactRejected && current = expected
         | Some pending,None ->
             match additions,abandoned,current.ChallengeLedger with
-            | [(challenge,revision,fence,_anchor)],[],(kind,id,digest,"consumed")::ledger ->
-                originalPinned && challenge = pending && revision = current.Revision && fence = after.StoreFence
+            | [(challenge,revision,fence)],[],(kind,id,digest,"consumed")::ledger ->
+                previouslyReady && current.FirstFailure.IsNone && current.Conflicts.IsEmpty
+                && originalPinned && challenge = pending && revision = current.Revision && fence = after.StoreFence
                 && (kind,id,digest) = (pending.Kind,pending.ChallengeId,pending.Digest)
                 && ledger = previous.ChallengeLedger && current.Original = previous.Original
             | [],[abandoned],(kind,id,digest,"abandoned")::ledger ->
-                let expected =
-                    { previous with Revision = current.Revision; Challenge = None; Original = current.Original
-                                    ChallengeLedger = current.ChallengeLedger
-                                    CheckpointCustody = Some { before with StoreFence = after.StoreFence
-                                                                         AbandonedChallenges = before.AbandonedChallenges @ [pending] } }
+                let expectedCustody = { before with StoreFence = after.StoreFence; AbandonedChallenges = before.AbandonedChallenges @ [pending] }
+                let expected = { previous with Revision = current.Revision; Challenge = None; Original = current.Original; ChallengeLedger = current.ChallengeLedger; CheckpointCustody = Some expectedCustody }
                 abandoned = pending && current.Original.ReceiverEpoch <> previous.Original.ReceiverEpoch
                 && { previous.Original with ReceiverEpoch = current.Original.ReceiverEpoch } = current.Original
                 && (kind,id,digest) = (pending.Kind,pending.ChallengeId,pending.Digest)

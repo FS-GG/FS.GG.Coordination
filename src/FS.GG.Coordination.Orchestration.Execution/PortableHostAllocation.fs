@@ -3348,8 +3348,11 @@ module PortableSupplierAdmission =
                 else
                     let consumed = (SupplierWireV1, challenge.ChallengeId, challenge.Digest, "consumed") :: state.ChallengeLedger
                     let candidate phase head sequence events =
+                        let pinned =
+                            if state.JournalVersion = SupplierJournalV4 then state.Pinned |> Option.orElse (Some value)
+                            else Some value
                         let proposed = next { state with Phase = phase; Challenge = None; ChallengeLedger = consumed
-                                                         Pinned = Some value; Head = head; Sequence = sequence; EventsBase64 = events
+                                                         Pinned = pinned; Head = head; Sequence = sequence; EventsBase64 = events
                                                          ResponsesBase64 = (if value.Kind = SupplierCreation then state.ResponsesBase64 else state.ResponsesBase64 @ [value.ResponseBase64]) }
                         if state.JournalVersion = SupplierJournalV4 then proposed else proposed |> Result.bind validate
                     match value.Kind, state.Phase with
