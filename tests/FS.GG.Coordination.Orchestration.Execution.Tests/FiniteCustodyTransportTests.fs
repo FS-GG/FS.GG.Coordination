@@ -556,3 +556,39 @@ module FiniteCustodyTransportTests =
     [<Fact>]
     let ``hosted slot callback pair confirms terminal response and six exact controlled slots without input EOF`` () =
         hostedCallbackPair true
+
+    [<Fact>]
+    let ``closed source public preparation refuses unavailable provider and profile substitutions`` () =
+        let source = Environment.GetEnvironmentVariable "FSGG_UTEL_CALLBACK_SOURCE"
+        let profile = System.IO.File.ReadAllBytes(System.IO.Path.Combine(source + "-closed", "tests/release-successor-authentication/closed-source-profile.json"))
+        let canonical = profile[0..profile.Length - 2]
+        Assert.Equal(Error "closed-source-provider-unavailable", FiniteCustodyClosedSource.Prepare canonical)
+        for bytes in [ null; Array.empty<byte>; profile; Array.zeroCreate<byte> 65537; Encoding.ASCII.GetBytes "{}" ] do
+            Assert.Equal(Error "closed-source-profile-refused", FiniteCustodyClosedSource.Prepare bytes)
+
+    [<Fact>]
+    let ``closed source owns the maintained adapter journey and consumes original construction`` () =
+        let admission = ClosedSourceFixtureAdmission()
+        let subject = FiniteCustodyClosedSource.PrepareFixture(admission, NoCut) |> Result.defaultWith failwith
+        Assert.Equal(FiniteCustodyClosedSourceStatus.Complete, subject.Run())
+        Assert.Equal(FiniteCustodyClosedSourceStatus.Refused, subject.Run())
+        Assert.True(FiniteCustodyClosedSource.PrepareFixture(admission, NoCut) |> Result.isError)
+
+    [<Fact>]
+    let ``closed source failure cuts refuse without opening a replacement original`` () =
+        for cut in [RequestWrite; TruncatedReply; ChildControl] do
+            let admission = ClosedSourceFixtureAdmission()
+            let subject = FiniteCustodyClosedSource.PrepareFixture(admission, cut) |> Result.defaultWith failwith
+            Assert.Equal(FiniteCustodyClosedSourceStatus.Refused, subject.Run())
+            Assert.True(FiniteCustodyClosedSource.PrepareFixture(admission, NoCut) |> Result.isError)
+
+    [<Fact>]
+    let ``closed source facade returns completion only with no public capture surface`` () =
+        let flags = System.Reflection.BindingFlags.Public ||| System.Reflection.BindingFlags.Instance ||| System.Reflection.BindingFlags.DeclaredOnly
+        Assert.Empty(typeof<FiniteCustodyClosedSource>.GetProperties(flags))
+        Assert.Empty(typeof<FiniteCustodyClosedSource>.GetConstructors())
+        let methods = typeof<FiniteCustodyClosedSource>.GetMethods(flags)
+        Assert.Single(methods) |> ignore
+        Assert.Equal("Run", methods[0].Name)
+        Assert.Equal(typeof<FiniteCustodyClosedSourceStatus>, methods[0].ReturnType)
+        Assert.Empty(methods[0].GetParameters())

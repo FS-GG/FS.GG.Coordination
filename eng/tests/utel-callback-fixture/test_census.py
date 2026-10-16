@@ -172,5 +172,54 @@ class PairControls(unittest.TestCase):
                     with self.assertRaises(RuntimeError): helper['validate_pair'](pin, owner)
 
 
+class ClosedSourcePinControls(unittest.TestCase):
+    def fixture(self, root):
+        profile = {'schema': 'fsgg.utel-closed-source/1', 'admission': False,
+                   'production': {'provider': None, 'enrollment': None, 'physicalUpperBound': None}}
+        for name in helper['CLOSED_ROLES']:
+            path = root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(json.dumps(profile).encode() if name == helper['CLOSED_PROFILE_PATH'] else ('controlled-source:' + name).encode())
+        manifest = {'schema': 'fsgg.utel-closed-source-manifest/1', 'qualification': 'synthetic control only',
+                    'files': [{'path': name, 'sha256': helper['digest'](root / name)} for name in helper['CLOSED_ROLES']]}
+        (root / helper['CLOSED_MANIFEST_PATH']).write_text(json.dumps(manifest))
+        (root / helper['SLOT_VECTORS_PATH']).write_text('{}')
+        pin = {'schema': 'fsgg.utel-closed-callback-source/1', 'profile': profile['schema'],
+               'repository': 'FS-GG/.github', 'revision': 'a' * 40, 'qualification': 'synthetic control only',
+               'manifestSha256': helper['digest'](root / helper['CLOSED_MANIFEST_PATH']),
+               'profileSha256': helper['digest'](root / helper['CLOSED_PROFILE_PATH']),
+               'vectorsSha256': helper['digest'](root / helper['SLOT_VECTORS_PATH'])}
+        return pin, manifest
+
+    def test_closed_source_pin_and_exact_ordered_closure(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary); pin, manifest = self.fixture(root)
+            self.assertEqual(helper['validate_closed'](pin, root), manifest)
+            for mutation in ('missing', 'duplicate', 'foreign', 'order'):
+                changed = json.loads(json.dumps(manifest))
+                if mutation == 'missing': changed['files'].pop()
+                elif mutation == 'duplicate': changed['files'][0] = changed['files'][1]
+                elif mutation == 'foreign': changed['files'][0]['path'] = '../foreign'
+                else: changed['files'].reverse()
+                (root / helper['CLOSED_MANIFEST_PATH']).write_text(json.dumps(changed))
+                changed_pin = dict(pin, manifestSha256=helper['digest'](root / helper['CLOSED_MANIFEST_PATH']))
+                with self.subTest(mutation=mutation), self.assertRaises(RuntimeError): helper['validate_closed'](changed_pin, root)
+
+    def test_closed_source_pin_refuses_changed_source_profile_and_expanded_authority(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary); pin, _ = self.fixture(root)
+            for field, value in (('schema', 'fsgg.utel-callback-source/3'), ('profile', 'native'),
+                                 ('repository', 'foreign/repo'), ('revision', 'not-a-sha'), ('manifestSha256', '0' * 64)):
+                with self.subTest(field=field), self.assertRaises(RuntimeError): helper['validate_closed'](dict(pin, **{field: value}), root)
+            extra = dict(pin, provider='caller-supplied')
+            with self.assertRaises(RuntimeError): helper['validate_closed'](extra, root)
+            path = root / helper['CLOSED_ROLES'][0]; original = path.read_bytes(); path.write_bytes(original + b'x')
+            with self.assertRaises(RuntimeError): helper['validate_closed'](pin, root)
+            path.write_bytes(original)
+            profile_path = root / helper['CLOSED_PROFILE_PATH']; profile = json.loads(profile_path.read_bytes()); profile['admission'] = True
+            profile_path.write_text(json.dumps(profile))
+            with self.assertRaises(RuntimeError): helper['validate_closed'](pin, root)
+
+
 if __name__ == '__main__':
     unittest.main()

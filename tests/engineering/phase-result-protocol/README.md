@@ -320,3 +320,72 @@ cleanup remain required. These additional roots do not establish complete
 physical population, reclamation or fit. The earlier ACK/child-read cut
 remains separate. Closed-profile admission, installed custody, native ACK,
 original `.103` replay/effects and `.104` remain held.
+
+### Additive closed managed source facade
+
+`FiniteCustodyClosedSource` selects `fsgg.utel-closed-source/1` without editing
+`FiniteCustodySessionAdapter.fs` or either frozen producer manifest. The separate
+`eng/utel-closed-callback-source.json` pins protected producer `ed58ca52` and its
+nine-file closed manifest. The maintained callback qualifier acquires and verifies
+that separate source checkout beside the existing `/2` and `/3` fixtures; it does
+not repin them or introduce a wire version.
+
+The public `Prepare(byte array)` accepts only the exact canonical
+profile digest and refuses with `closed-source-provider-unavailable`. Unknown,
+noncanonical, duplicate-key, changed or oversized profile bytes refuse by exact
+digest and the 65,536-byte input ceiling. A sealed byte-array input avoids caller-supplied `MemoryManager` callbacks. No
+caller clock, stream, binding, writer,
+runtime, endpoint, evidence path or activation flag is accepted. Actual provider,
+authenticated role/original/generation/clock/endpoint enrollment, durable receipt
+and physical accounting remain null. Public preparation performs no file lookup,
+reservation, process launch, signer, credential or network operation.
+
+The internal friend-test constructor consumes its original admission before any
+fixture lookup or construction. It builds every descriptor, binding, clock,
+stream, termination observation and retirement callback itself, then calls the
+maintained `FiniteCustodySessionAdapter.Prepare`. Its returned legacy handle and
+retained tasks stay private. The facade returns a fixed completion enum from
+`Run`; it exposes no legacy capture, task array, snapshot, raw byte or endpoint
+accessor. API-surface reflection occurs only in the excluded test population,
+never as an implementation technique.
+
+Owned fixed fixture endpoints compare all thirteen requests to the pinned frozen
+transcript and deliver its exact responses. Six phases and three ACKs traverse
+the actual maintained adapter/decoder/bridge/composition path. Child ingress waits
+for the adapter's confirmed ACK ordinal. Frame, aggregate, exchange, read-call,
+write-call and ACK-wait reservations are cumulative, including failed calls;
+construction and Run cannot be repeated with the same original admission. The
+source maxima are six phase frames of at most 2,048 bytes/16,384 aggregate,
+thirteen callback requests of at most 4,096 bytes/40,960 aggregate and replies of
+at most 512 bytes. Endpoint reads reserve at most `frames * maximumFrameBytes + 1`
+call tasks; ACK gating reserves at most 4,096 delay calls across the original.
+Fixed owned queues are bounded to their original frame counts. The owned synthetic
+clock advances on every sample, so even stalled fixture supervision reaches the
+original total cutoff; it authenticates no host time. These counts do
+not supply object/header/allocator/kernel/runtime physical upper bounds.
+
+Request-write failure, truncated response and child-control failure close the
+same maintained path; retirement finishes owned inputs and original construction
+stays consumed. Successful source Run waits internally for retained managed tasks
+but infers no GC, physical release, durable settlement or renewed capacity.
+Required first/late-cause and cleanup semantics remain in the maintained adapter;
+this facade supplies no operational receipt or replacement owner.
+
+This is **managed fixed-endpoint source/refusal qualification**, with no live
+Python callback process in the new route. Python's accepted closed core owns a
+preloaded transcript and its public constructor refuses; it currently has no live
+closed provider endpoint or CLI. The existing generic paired Python journey
+continues separately and cannot establish concurrent closed-parent/provider
+acceptance. A future provider join needs a source-owned constructor/provider ABI,
+authenticated transport transfer, durable original reservations and commit/readback
+receipts, retained signed diagnostic evidence and enrolled recipient custody.
+Those missing supplier capabilities are not filled by these fixture responses.
+
+The existing compiler gate prepares this opt-in pin, executes the transport module
+and checks its expanded exact census. Relevant pure pin/census controls run first.
+Under the current resource hold, local CLR execution is prohibited: managed
+compilation and focused transport tests must pass through maintained hosted
+qualification for the exact candidate. Full coherent and required CI remain
+mandatory. Production availability/admission remain false, physical bound null,
+fit unproved and cap 65,536. Original `.103` remains attempted-unknown/unreplayed;
+`.104`, credentials, deployment, native execution and unknown reservations remain held.

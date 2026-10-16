@@ -111,6 +111,75 @@ def validate_pair(pin, destination):
     return manifest
 
 
+
+CLOSED_PIN_PATH = 'eng/utel-closed-callback-source.json'
+CLOSED_MANIFEST_PATH = 'tests/release-successor-authentication/closed-source-manifest.json'
+CLOSED_PROFILE_PATH = 'tests/release-successor-authentication/closed-source-profile.json'
+CLOSED_ROLES = (
+    'scripts/fsgg_feed.py',
+    'scripts/release_successor_auth_consumer.py',
+    'scripts/release_successor_closed_callback.py',
+    'scripts/release_successor_execution.py',
+    'scripts/release_successor_provider.py',
+    'tests/release-successor-authentication/domain_contract.py',
+    'tests/release-successor-authentication/inert_phase_slot_sink.py',
+    'tests/release-successor-authentication/domain-max-vectors.json',
+    CLOSED_PROFILE_PATH,
+)
+
+
+def validate_closed(pin, destination):
+    fields = {'schema', 'profile', 'repository', 'revision', 'manifestSha256',
+              'profileSha256', 'vectorsSha256', 'qualification'}
+    require(type(pin) is dict and set(pin) == fields, 'closed pin fields differ')
+    require(pin['schema'] == 'fsgg.utel-closed-callback-source/1'
+            and pin['profile'] == 'fsgg.utel-closed-source/1'
+            and pin['repository'] == 'FS-GG/.github', 'closed pin profile differs')
+    require(type(pin['revision']) is str and re.fullmatch('[0-9a-f]{40}', pin['revision']), 'closed revision differs')
+    for key in ('manifestSha256', 'profileSha256', 'vectorsSha256'):
+        require(type(pin[key]) is str and re.fullmatch('[0-9a-f]{64}', pin[key]), 'closed digest differs')
+    for name, key in ((CLOSED_MANIFEST_PATH, 'manifestSha256'),
+                      (CLOSED_PROFILE_PATH, 'profileSha256'), (SLOT_VECTORS_PATH, 'vectorsSha256')):
+        path = destination / name
+        require(path.is_file() and not path.is_symlink() and digest(path) == pin[key], 'closed artifact differs')
+    manifest = json.loads((destination / CLOSED_MANIFEST_PATH).read_bytes())
+    require(set(manifest) == {'schema', 'qualification', 'files'}
+            and manifest['schema'] == 'fsgg.utel-closed-source-manifest/1', 'closed manifest differs')
+    rows = manifest['files']
+    require(type(rows) is list and [row.get('path') for row in rows] == list(CLOSED_ROLES)
+            and all(set(row) == {'path', 'sha256'} for row in rows), 'closed source roles differ')
+    for row in rows:
+        path = destination / row['path']
+        require(path.is_file() and not path.is_symlink() and digest(path) == row['sha256'], 'closed source differs')
+    profile = json.loads((destination / CLOSED_PROFILE_PATH).read_bytes())
+    require(profile['schema'] == pin['profile'] and profile['admission'] is False
+            and all(value is None for value in profile['production'].values()), 'closed unavailable profile differs')
+    return manifest
+
+
+def prepare_closed():
+    # Existing maintained acquisition route, separate immutable opt-in pin.
+    pin = json.loads((ROOT / CLOSED_PIN_PATH).read_bytes())
+    destination = pathlib.Path(os.environ['FSGG_UTEL_CALLBACK_SOURCE'] + '-closed')
+    require(destination.is_absolute() and not destination.exists(), 'fresh closed source directory required')
+    destination.mkdir(mode=0o700, parents=True)
+    def git(*arguments):
+        return subprocess.check_output(['git', '-C', str(destination), *arguments], stderr=subprocess.DEVNULL, timeout=60).decode().strip()
+    # Reject malformed identity before the authenticated public fetch.
+    require(pin.get('repository') == 'FS-GG/.github'
+            and type(pin.get('revision')) is str and re.fullmatch('[0-9a-f]{40}', pin['revision']), 'closed fetch identity differs')
+    git('init', '--quiet')
+    git('-c', 'credential.helper=', 'fetch', '--quiet', '--depth=1', 'https://github.com/FS-GG/.github.git', pin['revision'])
+    git('checkout', '--quiet', '--detach', 'FETCH_HEAD')
+    require(git('rev-parse', 'HEAD') == pin['revision'], 'closed source revision differs')
+    validate_closed(pin, destination)
+    evidence = pathlib.Path(os.environ['RUNNER_TEMP']) / 'compiler-and-tests'
+    evidence.mkdir(parents=True, exist_ok=True)
+    (evidence / 'closed-callback-source.json').write_text(json.dumps(dict(pin,
+        productionAvailable=False, concurrentClosedProviderJourney=False), sort_keys=True) + '\n')
+    print('Pinned closed SOURCE fixture prepared; provider remains unavailable')
+
+
 def prepare(slot=False):
     pin = json.loads((ROOT / ('eng/utel-slot-callback-source.json' if slot else 'eng/utel-callback-source.json')).read_bytes())
     validate_pin(pin)
@@ -169,6 +238,7 @@ if __name__ == '__main__':
         if operation == 'prepare' and len(sys.argv) == 2:
             prepare()
             prepare(slot=True)
+            prepare_closed()
         elif operation == 'prepare-slot' and len(sys.argv) == 2:
             prepare(slot=True)
         elif operation == 'census' and len(sys.argv) == 3:

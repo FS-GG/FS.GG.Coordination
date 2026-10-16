@@ -25,6 +25,10 @@
     "FS.GG.Coordination.Orchestration.Execution.Tests.FiniteCustodyTransportTests.composition preserves typed callback failure before its next supervisor sample",
     "FS.GG.Coordination.Orchestration.Execution.Tests.FiniteCustodyTransportTests.hosted callback pair uses actual Python sink with in memory child streams only",
     "FS.GG.Coordination.Orchestration.Execution.Tests.FiniteCustodyTransportTests.hosted slot callback pair confirms terminal response and six exact controlled slots without input EOF",
-    "FS.GG.Coordination.Orchestration.Execution.Tests.FiniteCustodyTransportTestsTerminalCutCorrelationTests.same execution holds Python sixth readback across managed request aliases and copies"
+    "FS.GG.Coordination.Orchestration.Execution.Tests.FiniteCustodyTransportTestsTerminalCutCorrelationTests.same execution holds Python sixth readback across managed request aliases and copies",
+    "FS.GG.Coordination.Orchestration.Execution.Tests.FiniteCustodyTransportTests.closed source public preparation refuses unavailable provider and profile substitutions",
+    "FS.GG.Coordination.Orchestration.Execution.Tests.FiniteCustodyTransportTests.closed source owns the maintained adapter journey and consumes original construction",
+    "FS.GG.Coordination.Orchestration.Execution.Tests.FiniteCustodyTransportTests.closed source failure cuts refuse without opening a replacement original",
+    "FS.GG.Coordination.Orchestration.Execution.Tests.FiniteCustodyTransportTests.closed source facade returns completion only with no public capture surface"
   ]
 }
