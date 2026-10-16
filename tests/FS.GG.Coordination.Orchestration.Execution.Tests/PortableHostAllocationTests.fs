@@ -1019,7 +1019,7 @@ type PortableHostAllocationTests_NativeReceiptCodec() =
             Assert.True((Result.isOk parsed = expected), row.GetProperty("name").GetString())
             match parsed with
             | Ok receipt ->
-                Assert.True(bytes = PortableSupplierNativeReceipt.serialize receipt)
+                Assert.True((bytes = PortableSupplierNativeReceipt.serialize receipt))
                 Assert.Equal(row.GetProperty("sha256").GetString(), PortableSupplierNativeReceipt.rawSha256 receipt)
                 bytes.[0] <- 0uy
                 let copy = PortableSupplierNativeReceipt.serialize receipt
