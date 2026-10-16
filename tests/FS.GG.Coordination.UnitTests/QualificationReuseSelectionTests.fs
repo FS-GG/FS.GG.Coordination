@@ -648,7 +648,7 @@ let ``coherent source prerequisite rejects actual job dominance mutations`` muta
         // mode. Prove the assembled fixture is valid before testing each mutation.
         let baselineCode, _, baselineError =
             BootstrapCi.execute [ "optimistic-projection"; "--root"; scratch.FullName ]
-        Assert.True(baselineCode = 0, baselineError)
+        Assert.True((baselineCode = 0), baselineError)
         let path = Path.Combine(scratch.FullName, ".github/workflows/optimistic-parallel-validation.yml")
         let original = File.ReadAllText path
         let source = "      - name: Run early source compile and focused tests\n        env:\n          FSGG_CANDIDATE_SHA: ${{ needs.prepare.outputs.candidate }}\n        run: bash eng/bootstrap-gates/source-preflight.sh\n"
