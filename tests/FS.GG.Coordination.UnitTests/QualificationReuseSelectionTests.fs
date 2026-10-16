@@ -485,7 +485,7 @@ let ``workflow recovery is paginated non mutating and never cancels coherent val
     Assert.Contains("scoped-aggregate-${{ needs.prepare.outputs.candidate }}", workflow)
     Assert.DoesNotContain("- { kind: formal, shard:", workflow)
     Assert.DoesNotContain("partition: [0, 1, 2, 3, 4, 5]", workflow)
-    Assert.Contains("shared-build:\n    # Cheap reuse classification is the admission boundary", workflow)
+    Assert.Contains("formal-prepare:\n    needs: [prepare, classify-reuse, shared-build]", workflow)
     Assert.Contains("needs: [prepare, classify-reuse]", workflow)
     Assert.Contains("optimistic-dispatch-recovery.sh", workflow)
     Assert.Contains("status=queued&per_page=1", dispatch)
@@ -637,10 +637,15 @@ let ``coherent source prerequisite rejects actual job dominance mutations`` muta
     let root = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../.."))
     let scratch = Directory.CreateTempSubdirectory("fsgg-preflight-projection-")
     try
-        for relative in [ "eng/optimistic-qualification-plan.json"; "eng/quint-qualification.json"; ".github/workflows/optimistic-parallel-validation.yml" ] do
+        for relative in [ "eng/bootstrap-qualification-plan.json"; "eng/optimistic-qualification-plan.json"; "eng/quint-qualification.json"; ".github/workflows/optimistic-parallel-validation.yml" ] do
             let destination = Path.Combine(scratch.FullName, relative)
             Directory.CreateDirectory(Path.GetDirectoryName destination) |> ignore
             File.Copy(Path.Combine(root, relative), destination)
+        // The real entry point loads its Bootstrap contract before selecting a
+        // mode. Prove the assembled fixture is valid before testing each mutation.
+        let baselineCode, _, baselineError =
+            BootstrapCi.execute [ "optimistic-projection"; "--root"; scratch.FullName ]
+        Assert.True(baselineCode = 0, baselineError)
         let path = Path.Combine(scratch.FullName, ".github/workflows/optimistic-parallel-validation.yml")
         let original = File.ReadAllText path
         let source = "      - name: Run early source compile and focused tests\n        env:\n          FSGG_CANDIDATE_SHA: ${{ needs.prepare.outputs.candidate }}\n        run: bash eng/bootstrap-gates/source-preflight.sh\n"
