@@ -2883,6 +2883,13 @@ type PortableSupplierAuthenticatedSourceReadback =
     private | ControlledSourceReadback of PortableSupplierAdmissionState
     member this.State = let (ControlledSourceReadback state) = this in state
 
+/// Unsigned payload data for controlled SOURCE assertions only; never an ACK or signing capability.
+/// Accessors return fresh copies and cannot modify the retained checkpoint commitment.
+type PortableSupplierControlledAckPayloadDrafts =
+    private | ControlledAckPayloadDrafts of genesisBase64: string * outputBase64: string option
+    member this.GenesisPayload = let (ControlledAckPayloadDrafts(genesis,_)) = this in Convert.FromBase64String genesis
+    member this.OutputPayload = let (ControlledAckPayloadDrafts(_,output)) = this in output |> Option.map Convert.FromBase64String
+
 [<RequireQualifiedAccess>]
 module PortableSupplierAdmission =
     [<Literal>]
@@ -4538,3 +4545,59 @@ module PortableSupplierAdmission =
     let reverifyControlledSourceV4 selection (state: PortableSupplierAdmissionState) =
         if state.Challenge.IsSome then Error "supplier-controlled-cold-pending-refused"
         else reverifyControlledHistory selection state |> Result.map (fun () -> ControlledSourceReadback state)
+
+    /// Pure unsigned TEST payload construction. draftedAt is explicit draft data, not a clock/durability observation.
+    /// Only retained checkpoint bytes supply receiver_journal_digest; no signer, store or live witness is invoked.
+    let draftControlledAckPayloadsV4 (readback: PortableSupplierAuthenticatedSourceReadback) (draftedAt: DateTimeOffset) =
+        try
+            if not (utcMicroseconds draftedAt) then PortableSupplierC1.fail ()
+            let state = readback.State
+            let custody = state.CheckpointCustody |> Option.defaultWith PortableSupplierC1.fail
+            let intent = sourceOriginal state.Original custody.OriginalIntentEnvelopeBase64
+            let genesisBytes = custody.GenesisCheckpointBase64 |> Option.defaultWith PortableSupplierC1.fail
+                               |> raw PortableSupplierCheckpoint.MaximumBytes |> Result.defaultWith invalidOp
+            let genesis = PortableSupplierCheckpoint.parseGenesis genesisBytes |> Result.defaultWith invalidOp
+            let common = PortableSupplierCheckpoint.genesisCommon genesis
+            let quoted = PortableSupplierC1.quoted
+            let timestamp = draftedAt.ToString("yyyy-MM-dd'T'HH:mm:ss.ffffff'Z'", Globalization.CultureInfo.InvariantCulture) |> quoted
+            let encode check fields =
+                let bytes = PortableSupplierC1.objectBytes fields
+                PortableSupplierC1.parse 6000 bytes check |> Result.defaultWith invalidOp
+                Convert.ToBase64String bytes
+            let genesisPayload =
+                [ "schema",quoted "fsgg.v3.receiver-acceptance/1"
+                  "kind",quoted "original-genesis-accepted"
+                  "accepted_at",timestamp
+                  "correlation_id",intent.GetProperty("correlation_id").GetString() |> quoted
+                  "genesis_head",quoted common.ObservedHead
+                  "intent_digest",quoted common.IntentDigest
+                  "operation_id",quoted (common.OperationId.ToString("D"))
+                  "receiver_journal_digest",quoted (digestBytes genesisBytes)
+                  "reservation_digest",quoted common.ReservationDigest ]
+                |> encode PortableSupplierWireShape.check_receiver_acceptance
+            let outputPayload =
+                custody.OutputCheckpointBase64 |> Option.map (fun encoded ->
+                    let checkpointBytes = raw PortableSupplierCheckpoint.MaximumBytes encoded |> Result.defaultWith invalidOp
+                    let checkpoint = PortableSupplierCheckpoint.parseOutput checkpointBytes |> Result.defaultWith invalidOp
+                    let common = PortableSupplierCheckpoint.outputCommon checkpoint
+                    let output = PortableSupplierCheckpoint.output checkpoint
+                    let selected =
+                        match output.Selection with
+                        | CheckpointNone ->
+                            [ "kind",quoted "zero-selection-census-accepted"
+                              "manifest_digest","null"; "member_count","null"; "total_bytes","null" ]
+                        | CheckpointSelected(_,manifest) ->
+                            [ "kind",quoted "durable-output-readback"
+                              "manifest_digest",quoted manifest.Digest
+                              "member_count",PortableSupplierC1.number manifest.MemberCount
+                              "total_bytes",PortableSupplierC1.number manifest.TotalBytes ]
+                    [ "schema",quoted "fsgg.v3.export-readback/1"
+                      "readback_at",timestamp
+                      "observed_head",quoted common.ObservedHead
+                      "operation_id",quoted (common.OperationId.ToString("D"))
+                      "receiver_journal_digest",quoted (digestBytes checkpointBytes)
+                      "reservation_digest",quoted common.ReservationDigest
+                      "selection_digest",quoted common.SelectionDigest ] @ selected
+                    |> encode PortableSupplierWireShape.check_export_readback)
+            Ok(ControlledAckPayloadDrafts(genesisPayload,outputPayload))
+        with _ -> Error "supplier-controlled-ack-draft-refused"

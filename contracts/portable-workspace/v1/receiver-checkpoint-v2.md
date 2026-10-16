@@ -73,6 +73,16 @@ private authenticated result. The returned value is a source snapshot, with
 durability Unknown; it reserves no later revision and supplies no live commit or
 ACK witness.
 
+`draftControlledAckPayloadsV4` is a pure unsigned draft builder for the private
+controlled source readback. It hashes the exact retained genesis/output checkpoint
+bytes for `receiver_journal_digest` and derives the original, head and selection
+fields from that snapshot. Its explicit draft timestamp is test data, not a fresh
+clock or native observation. Fresh payload copies cannot mutate the snapshot.
+The drafts use the existing payload schemas, including their durability-related
+literal names, solely to test the eventual commitment join. They invoke no signer
+or journal write and supply no ACK, live commit or production capability;
+`prepareAck` and `reserveHost` continue refusing.
+
 The SDK-generated `packages.lock.json` files retain NuGet package-content hashes.
 For signed packages that identity can differ from a raw archive SHA512: NuGet's
 [immutable package reader source](https://github.com/NuGet/NuGet.Client/blob/d3a633a04da7cd83900498334ec5e7650a52fa86/src/NuGet.Core/NuGet.Packaging/PackageArchiveReader.cs)
