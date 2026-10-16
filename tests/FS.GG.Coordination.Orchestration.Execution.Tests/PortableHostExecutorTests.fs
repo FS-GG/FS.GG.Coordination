@@ -1357,11 +1357,251 @@ type PortableHostExecutorTests_SupplierJournalV4() =
             Assert.Equal(0,fixture.Runner.Cleans)
             Assert.Equal(0,fixture.Runner.Recoveries)
 
+/// Explicit public fixture data only. This adapter never signs or constructs production authority.
+module private ControlledGenesisSourceExport =
+    let private variables =
+        [ "FSGG_V3_GENESIS_EXPORT_INPUT"; "FSGG_V3_GENESIS_EXPORT_SHA256"
+          "FSGG_V3_GENESIS_EXPORT_OUTPUT"; "FSGG_V3_GENESIS_EXPORT_DRAFTED_AT" ]
+    let requested () = variables |> List.exists (fun name -> not (isNull (Environment.GetEnvironmentVariable name)))
+    let private refuse code = invalidOp ("genesis-source-export-" + code)
+    let private ok (value: Result<'a,string>) : 'a =
+        match value with Ok result -> result | Error reason -> refuse (reason |> Seq.truncate 160 |> Seq.toArray |> String)
+    let private text (row: System.Text.Json.JsonElement) (name: string) =
+        let selected = match row.TryGetProperty name with true,value -> value | _ -> refuse ("missing-" + name)
+        let value = selected.GetString()
+        if String.IsNullOrEmpty value then refuse "missing-text"
+        value
+    let private date (value: string) =
+        let format = "yyyy-MM-dd'T'HH:mm:ss.ffffff'Z'"
+        let parsed = DateTimeOffset.ParseExact(value,format,Globalization.CultureInfo.InvariantCulture,
+                                              Globalization.DateTimeStyles.AssumeUniversal ||| Globalization.DateTimeStyles.AdjustToUniversal)
+        if parsed.ToString(format,Globalization.CultureInfo.InvariantCulture) <> value then refuse "timestamp"
+        parsed
+    let private unsigned (row: System.Text.Json.JsonElement) (name: string) =
+        let value = text row name
+        let parsed = UInt64.Parse(value,Globalization.NumberStyles.None,Globalization.CultureInfo.InvariantCulture)
+        if parsed.ToString(Globalization.CultureInfo.InvariantCulture) <> value then refuse "unsigned"
+        parsed
+    let private signed (row: System.Text.Json.JsonElement) (name: string) =
+        let value = text row name
+        let parsed = Int64.Parse(value,Globalization.NumberStyles.None,Globalization.CultureInfo.InvariantCulture)
+        if parsed.ToString(Globalization.CultureInfo.InvariantCulture) <> value then refuse "signed"
+        parsed
+    let private optionText (row: System.Text.Json.JsonElement) (name: string) =
+        if row.GetProperty(name).ValueKind = System.Text.Json.JsonValueKind.Null then None else Some(text row name)
+    let private absolute (value: string) =
+        if not (Path.IsPathFullyQualified value) || Path.GetFullPath value <> value then refuse "absolute-path"
+        value
+    let private roles =
+        [ "original-intent",OriginalIntentSignature; "create-effect-grant",EffectGrantSignature
+          "receiver-command",ReceiverCommandSignature; "host-command-result",HostCommandResultSignature
+          "native-proof",NativeProofSignature; "creation",SupplierCreationSignature; "genesis",SupplierGenesisSignature
+          "supplier-event",SupplierEventSignature; "supplier-response",SupplierResponseSignature ]
+    let private uniqueObjects (root: System.Text.Json.JsonElement) =
+        let rec visit (value: System.Text.Json.JsonElement) =
+            match value.ValueKind with
+            | System.Text.Json.JsonValueKind.Object ->
+                let mutable seen = Set.empty
+                for property in value.EnumerateObject() do
+                    if seen.Contains property.Name then refuse "duplicate-property"
+                    seen <- seen.Add property.Name
+                    visit property.Value
+            | System.Text.Json.JsonValueKind.Array -> for item in value.EnumerateArray() do visit item
+            | _ -> ()
+        visit root
+    let private oneZero (rows: System.Text.Json.JsonElement) =
+        match rows.EnumerateArray() |> Seq.filter (fun row -> text row "name" = "zero") |> Seq.toList with
+        | [row] -> row
+        | _ -> refuse "unique-zero-input"
+    let private writeNew (path: string) (bytes: byte array) =
+        use stream = new FileStream(path,FileMode.CreateNew,FileAccess.Write,FileShare.None)
+        File.SetUnixFileMode(path,UnixFileMode.UserRead ||| UnixFileMode.UserWrite)
+        stream.Write(bytes,0,bytes.Length)
+        stream.Flush(true)
+    let private requireExactFile (path: string) (expected: byte array) =
+        use stream = new FileStream(path,FileMode.Open,FileAccess.Read,FileShare.Read)
+        if stream.Length <> int64 expected.Length then refuse "output-length-readback"
+        let actual = Array.zeroCreate<byte> expected.Length
+        stream.ReadExactly(actual.AsSpan())
+        if stream.ReadByte() <> -1 || actual <> expected then refuse "output-byte-readback"
+    let private publishReceipt (output: string) (bytes: byte array) =
+        let partial = Path.Combine(output,"receipt.partial")
+        writeNew partial bytes
+        requireExactFile partial bytes
+        File.Move(partial,Path.Combine(output,"receipt.json"),false)
+
+    let run () =
+        let mutable stage = "configuration"
+        let mutable ownedOutput: string option = None
+        let mutable expectedHash = "unselected"
+        try
+            let values = variables |> List.map (fun name ->
+                let value = Environment.GetEnvironmentVariable name
+                if String.IsNullOrEmpty value then refuse "all-export-inputs-required"
+                value)
+            let input,hash,output,draftedAt =
+                match values with
+                | [input;hash;output;draftedAt] -> absolute input,hash,absolute output,date draftedAt
+                | _ -> refuse "export-configuration"
+            if hash.Length <> 64 || (hash |> Seq.exists (fun c -> not ((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')))) then refuse "sha256"
+            expectedHash <- hash
+            if OperatingSystem.IsWindows() then refuse "linux-private-output-required"
+            if File.Exists output || Directory.Exists output then refuse "output-already-exists"
+            // CreateNew also prevents two adapters from claiming the same requested output.
+            use claim = new FileStream(output + ".export-owner",FileMode.CreateNew,FileAccess.Write,FileShare.None)
+            File.SetUnixFileMode(output + ".export-owner",UnixFileMode.UserRead ||| UnixFileMode.UserWrite)
+            if File.Exists output || Directory.Exists output then refuse "output-race"
+            Directory.CreateDirectory(output,UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute) |> ignore
+            ownedOutput <- Some output
+            stage <- "freeze-input"
+            let frozen =
+                use stream = new FileStream(input,FileMode.Open,FileAccess.Read,FileShare.Read)
+                if stream.Length <= 0L || stream.Length > int64 PortableSupplierAdmission.MaximumRecordBytes then refuse "input-byte-bound"
+                let bytes = Array.zeroCreate<byte> (int stream.Length)
+                stream.ReadExactly(bytes.AsSpan())
+                if stream.ReadByte() <> -1 || SupplierCheckpointFixtures.hash bytes <> hash then refuse "input-sha256"
+                bytes
+            stage <- "explicit-selection"
+            let options = System.Text.Json.JsonDocumentOptions(MaxDepth = 32)
+            use document = System.Text.Json.JsonDocument.Parse(ReadOnlyMemory<byte>(frozen),options)
+            let root = document.RootElement
+            uniqueObjects root
+            if text root "schema" <> "fsgg.receiver-checkpoint-signed-source-journey-inputs/1"
+               || root.GetProperty("productionEnrollment").GetBoolean() || root.GetProperty("nativeAcceptance").GetBoolean() then refuse "source-input-kind"
+            let row = oneZero (root.GetProperty("outputJourneys"))
+            let expected = oneZero (root.GetProperty("controlledSelections"))
+            let expectedNames = roles |> List.map fst |> Set.ofList
+            for name in ["publicRolePins"] do
+                if (root.GetProperty(name).EnumerateObject() |> Seq.map _.Name |> Set.ofSeq) <> expectedNames then refuse "nine-role-pins"
+            if (expected.GetProperty("policyRoles").EnumerateObject() |> Seq.map _.Name |> Set.ofSeq) <> expectedNames then refuse "nine-role-policies"
+            let commandRow = expected.GetProperty("expectedCommand")
+            let command: PortableWorkspaceCommand =
+                { CommandId = Guid.ParseExact(text commandRow "command_id","D"); IdempotencyId = text commandRow "idempotency_id"
+                  WorkspaceScope = text commandRow "workspace_scope"; ProfileId = text commandRow "profile_id"
+                  ProfileRevision = unsigned commandRow "profile_revision"; SourceRevision = text commandRow "source_revision"
+                  ExpectedWorkflowRevision = unsigned commandRow "expected_workflow_revision"; FenceGeneration = unsigned commandRow "fence_generation"
+                  CausationId = optionText commandRow "causation_id"
+                  Deadline = date (text commandRow "deadline"); Operation = text commandRow "operation"
+                  ComponentId = optionText commandRow "component_id" }
+            let exact (key: string) = text row key |> SupplierCheckpointFixtures.urlBytes
+            let original: PortableSupplierAdmissionOriginal =
+                { Command = command; QualifiedImage = text expected "qualifiedImage"
+                  IntentBase64 = Convert.ToBase64String(exact "originalIntent"); IntentDigest = text expected "originalIntentDigest"
+                  TrustPolicyDigest = text expected "signaturePolicyDigest"; SupplierSourceRevision = text expected "supplierSourceRevision"
+                  ReceiverEpoch = Guid.ParseExact(text expected "initialReceiverEpoch","D") }
+            let config = expected.GetProperty("nativeConfiguration")
+            let configBytes (name: string) = text config name |> SupplierCheckpointFixtures.urlBytes
+            let destination =
+                if config.GetProperty("destination").ValueKind = System.Text.Json.JsonValueKind.Null then
+                    if config.GetProperty("destinationSha256").ValueKind <> System.Text.Json.JsonValueKind.Null then refuse "destination-pair"
+                    None
+                else Some(configBytes "destination",text config "destinationSha256")
+            let configuration = PortableSupplierOriginalNativeConfiguration.create original (unsigned expected "nativeConfigurationRevision")
+                                    (configBytes "scope") (text config "scopeSha256") (configBytes "clock") (text config "clockSha256") destination |> ok
+            let bindingRow = expected.GetProperty("hostBinding")
+            let binding: PortableHostBinding =
+                { Command = command; QualifiedImage = original.QualifiedImage; AllocationId = text bindingRow "allocationId"
+                  WorkerId = text bindingRow "workerId"; AllocationReceiptDigest = text bindingRow "allocationReceiptDigest" }
+            let selection (at: string) =
+                let at = date at
+                let policies: PortableSupplierControlledRolePolicy list =
+                    roles |> List.map (fun (name,role) ->
+                        let policy = expected.GetProperty("policyRoles").GetProperty(name)
+                        if text policy "role" <> name || text policy "revocation" <> "not-revoked" then refuse "role-selection"
+                        { Role = role; PublicKeyBlob = root.GetProperty("publicRolePins").GetProperty(name).GetProperty("publicKeyBlobBase64").GetString() |> Convert.FromBase64String
+                          Principal = text policy "principal"; PolicyBytes = text policy "policyBytesBase64" |> Convert.FromBase64String
+                          ExpectedPolicySha256 = text policy "policySha256"; PolicyRevision = text policy "policyRevision"
+                          ValidFrom = date (text policy "policyValidFrom"); ValidUntil = date (text policy "policyValidUntil")
+                          RevocationCheckedAt = at; Revocation = ControlledNotRevoked })
+                let domain = Guid.ParseExact(text expected "receiverClockDomain","D")
+                let current: PortableSupplierControlledCurrentObservation =
+                    { VerifiedAt = at; SelectionObservedAt = at; SelectionValidUntil = date (text expected "selectionValidUntil")
+                      MaximumObservationAge = TimeSpan.FromTicks(signed expected "maximumObservationAgeTicks")
+                      ReceiverMonotonic = signed expected "receiverMonotonic"; IssuedReceiverClockDomain = domain; CurrentReceiverClockDomain = domain
+                      HostClock = PortableSupplierOriginalNativeConfiguration.clock configuration }
+                PortableSupplierAdmission.createControlledSourceSelection original (text expected "originalIntentEnvelopeSha256")
+                    (Guid.ParseExact(text expected "expectedOperationId","D")) binding configuration policies current |> ok
+            stage <- "begin-original"
+            let journal = PortableWorkspaceExecutor.SupplierAdmissionJournal(Path.Combine(output,"source-journal"))
+            let mutable state = PortableSupplierAdmission.beginIntentV4 original (exact "originalIntentEnvelope") configuration |> ok
+            let requireStage = function SupplierSourceReadback _ -> () | _ -> refuse "stage-not-source-readback"
+            journal.StageV4(state,None,None) |> requireStage
+            for name in ["creation";"genesis"] do
+                stage <- name + "-challenge"
+                let fields = row.GetProperty(name)
+                let bytes (key: string) = text fields key |> SupplierCheckpointFixtures.urlBytes
+                let bounds = expected.GetProperty("exchangeReceiverMonotonicBounds").GetProperty(name)
+                let challenge = SupplierCheckpointFixtures.challengeFrom row name state
+                                    (signed bounds "issuedMonotonic") (signed bounds "deadlineMonotonic")
+                let pending = PortableSupplierAdmission.issueChallenge challenge state |> ok
+                journal.StageV4(pending,Some state.Revision,Some state.CheckpointCustody.Value.StoreFence) |> requireStage
+                let exchange = if name = "creation" then ControlledCreationExchange(bytes "request",[bytes "result";bytes "evidence"],exact "reservation")
+                               else ControlledGenesisExchange(bytes "request",[bytes "result";bytes "evidence"])
+                stage <- name + "-real-verification"
+                let current = selection (text (expected.GetProperty("warmVerificationTimes")) name)
+                let outcome = PortableSupplierAdmission.verifyAndAcceptControlledV4 current pending.Original pending.Revision
+                                    pending.CheckpointCustody.Value.StoreFence pending exchange |> ok
+                let transition = match outcome with AuthenticatedControlledSource value -> value | HeldControlledSource _ -> refuse "held-source"
+                journal.StageControlledV4 transition |> requireStage
+                state <- transition.State
+            stage <- "locked-cold-read"
+            let coldAt = date (text expected "coldVerificationTime")
+            let readback,durability = journal.ReadControlledV4(selection (text expected "coldVerificationTime"),state.Original,state.Revision,state.CheckpointCustody.Value.StoreFence) |> ok
+            match durability with EvidenceUnknown _ -> () | _ -> refuse "unexpected-durability"
+            let retained = readback.State
+            let reservation = retained.Pinned.Value.OriginalReservation
+            match reservation.Selection with NoSelectedOutputs -> () | _ -> refuse "zero-selection-required"
+            if draftedAt < coldAt || draftedAt < reservation.AdmittedAt || draftedAt >= reservation.HostLeaseExpiresAt
+               || draftedAt >= original.Command.Deadline || draftedAt >= date (text expected "selectionValidUntil") then refuse "draft-original-window"
+            let checkpointBytes = retained.CheckpointCustody.Value.GenesisCheckpointBase64.Value |> Convert.FromBase64String
+            let checkpoint = PortableSupplierCheckpoint.parseGenesis checkpointBytes |> ok
+            if PortableSupplierCheckpoint.serializeGenesis checkpoint <> checkpointBytes
+               || (PortableSupplierCheckpoint.genesisCommon checkpoint).Provenance <> "controlled-test" then refuse "checkpoint-byte-join"
+            let drafts = PortableSupplierAdmission.draftControlledAckPayloadsV4 readback draftedAt |> ok
+            let ackBytes = drafts.GenesisPayload
+            stage <- "write-exact-outputs"
+            let checkpointPath = Path.Combine(output,"genesis-checkpoint.c1")
+            let ackPath = Path.Combine(output,"genesis-ack-payload.c1")
+            writeNew checkpointPath checkpointBytes
+            writeNew ackPath ackBytes
+            requireExactFile checkpointPath checkpointBytes
+            requireExactFile ackPath ackBytes
+            let common = PortableSupplierCheckpoint.genesisCommon checkpoint
+            let receipt =
+                {| outcome = "success"; sourceOnly = true; durabilityUnknown = true; noProduction = true; provenance = "controlled-test"
+                   inputSha256 = hash; checkpointBytes = checkpointBytes.Length; checkpointSha256 = SupplierCheckpointFixtures.hash checkpointBytes
+                   ackPayloadBytes = ackBytes.Length; ackPayloadSha256 = SupplierCheckpointFixtures.hash ackBytes
+                   journalKeySha256 = common.JournalKeySha256; originalIntentDigest = original.IntentDigest
+                   originalReceiverEpoch = original.ReceiverEpoch.ToString("D"); journalRevision = retained.Revision
+                   storeFence = retained.CheckpointCustody.Value.StoreFence; draftedAt = draftedAt.ToString("yyyy-MM-dd'T'HH:mm:ss.ffffff'Z'",Globalization.CultureInfo.InvariantCulture) |}
+            stage <- "publish-success-receipt"
+            claim.Dispose()
+            System.Text.Json.JsonSerializer.SerializeToUtf8Bytes receipt |> publishReceipt output
+        with error ->
+            let cause =
+                if error.Message.StartsWith("genesis-source-export-",StringComparison.Ordinal) then
+                    error.Message.Substring(0,min 192 error.Message.Length)
+                else error.GetType().Name
+            let failure =
+                {| outcome = "failure"; sourceOnly = true; durabilityUnknown = true; noProduction = true
+                   inputSha256 = expectedHash; firstCauseStage = stage; firstCauseType = error.GetType().Name; firstCauseCode = cause |}
+            let bytes = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes failure
+            match ownedOutput with
+            | Some output ->
+                try writeNew (Path.Combine(output,"failure-receipt.json")) bytes with _ -> ()
+            | None -> ()
+            try Console.Error.WriteLine(Encoding.UTF8.GetString bytes) with _ -> ()
+            reraise ()
+
 /// Real OpenSSH fixture signatures feed the maintained paired factory and existing owned store.
 /// Every selected policy/clock/root remains explicitly controlled TEST data.
 type PortableHostExecutorTests_ControlledAuthenticatedSource() =
     [<Fact>]
-    member _.``real signed zero and selected output journeys use controlled independent selection and cold reverify without an arbitrary authenticator``() =
+    member this.``real signed zero and selected output journeys use controlled independent selection and cold reverify without an arbitrary authenticator``() =
+        if ControlledGenesisSourceExport.requested () then ControlledGenesisSourceExport.run ()
+        else this.RunMaintainedJourneys()
+
+    member private _.RunMaintainedJourneys() =
         let rec find (directory: DirectoryInfo) =
             if isNull directory then failwith "joined signed source fixture inputs missing"
             let path = Path.Combine(directory.FullName,"contracts","portable-workspace","v1","receiver-checkpoint-v2-signed-source-journeys.json")

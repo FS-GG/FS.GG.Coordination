@@ -904,7 +904,7 @@ module SupplierCheckpointFixtures =
                                 (bytes "scope") (config.GetProperty("scopeSha256").GetString())
                                 (bytes "clock") (config.GetProperty("clockSha256").GetString()) destination |> ok
         PortableSupplierAdmission.beginIntentV4 original (exact "originalIntentEnvelope") configuration |> ok
-    let exchangeFrom (root: JsonElement) (name: string) (state: PortableSupplierAdmissionState) =
+    let challengeFrom (root: JsonElement) (name: string) (state: PortableSupplierAdmissionState) (issuedMonotonic: int64) (deadlineMonotonic: int64) =
         let row = root.GetProperty name
         let exact key = row.GetProperty(key: string).GetString() |> urlBytes
         let challengeBytes = exact "challenge"
@@ -915,8 +915,12 @@ module SupplierCheckpointFixtures =
             { ChallengeId = Guid.Parse(value.GetProperty("challenge_id").GetString()); Digest = domain "challenge" challengeBytes
               BytesBase64 = Convert.ToBase64String challengeBytes; Purpose = row.GetProperty("purpose").GetString()
               ReceiverEpoch = state.Original.ReceiverEpoch; IssuedAt = date "issued_at"; NotAfter = date "not_after"
-              IssuedMonotonic = 1L; DeadlineMonotonic = 100L; ExpectedHead = state.Head }
-        { AcceptedRevision = 0UL; AcceptedStoreFence = 0UL; Challenge = challenge
+              IssuedMonotonic = issuedMonotonic; DeadlineMonotonic = deadlineMonotonic; ExpectedHead = state.Head }
+        challenge
+    let exchangeFrom (root: JsonElement) (name: string) (state: PortableSupplierAdmissionState) =
+        let row = root.GetProperty name
+        let exact key = row.GetProperty(key: string).GetString() |> urlBytes
+        { AcceptedRevision = 0UL; AcceptedStoreFence = 0UL; Challenge = challengeFrom root name state 1L 100L
           RequestBase64 = exact "request" |> Convert.ToBase64String; ResultBase64 = exact "result" |> Convert.ToBase64String
           EvidenceBase64 = exact "evidence" |> Convert.ToBase64String
           ReceiverBundleBase64 = exact "receiverBundle" |> Convert.ToBase64String
