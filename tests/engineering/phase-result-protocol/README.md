@@ -358,7 +358,9 @@ source maxima are six phase frames of at most 2,048 bytes/16,384 aggregate,
 thirteen callback requests of at most 4,096 bytes/40,960 aggregate and replies of
 at most 512 bytes. Endpoint reads reserve at most `frames * maximumFrameBytes + 1`
 call tasks; ACK gating reserves at most 4,096 delay calls across the original.
-Fixed owned queues are bounded to their original frame counts. These counts do
+Fixed owned queues are bounded to their original frame counts. The owned synthetic
+clock advances on every sample, so even stalled fixture supervision reaches the
+original total cutoff; it authenticates no host time. These counts do
 not supply object/header/allocator/kernel/runtime physical upper bounds.
 
 Request-write failure, truncated response and child-control failure close the

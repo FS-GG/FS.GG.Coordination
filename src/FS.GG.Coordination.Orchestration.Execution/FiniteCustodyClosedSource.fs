@@ -181,7 +181,10 @@ module private ClosedSourceConstruction =
         let channels: FiniteCustodyInertChannels =
             { ChildResults = child; ChildControl = control; OwnerResponses = replies; OwnerRequests = requestsOut
               RequestRetirement = stop; Termination = termination.Task }
-        let clock = { new IMonotonicClock with member _.Now() = at 1L }
+        // A source-owned monotone call clock bounds supervision even if a
+        // controlled endpoint stops progressing. It authenticates no host time.
+        let mutable clockReads = 0L
+        let clock = { new IMonotonicClock with member _.Now() = at (Interlocked.Increment(&clockReads)) }
         let adapter = FiniteCustodySessionAdapter.Prepare(FiniteCustodyInertAdmission(), descriptor, descriptor, clock, original,
                             ReadOnlyMemory<byte> binding, channels, CancellationToken.None) |> Result.defaultWith (fun _ -> invalidOp "closed-source-preparation-refused")
         confirmed <- fun () -> adapter.ConfirmedAckOrdinal
