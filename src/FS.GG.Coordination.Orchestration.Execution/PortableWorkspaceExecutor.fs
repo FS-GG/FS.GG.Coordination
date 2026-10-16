@@ -945,7 +945,17 @@ module PortableWorkspaceExecutor =
             | _ -> false
         | _ -> false
 
-    type private DurableJournal(stateRoot: string) =
+    /// Finite controlled TEST cuts in the current supplier source store; no effect capability.
+    type ControlledSupplierStoreFailurePoint =
+        | BeforeSourceWrite
+        | BeforeSourceFileFlush
+        | BeforeSourceReplacement
+        | AfterSourceReplacementBeforeReadback
+        | BeforeSourceColdReopen
+
+    type private DurableJournal(stateRoot: string, sourceFailure: ControlledSupplierStoreFailurePoint option) =
+        let failSourceAt point =
+            if sourceFailure = Some point then raise (IOException "controlled-supplier-store-failure")
         let journalRoot = Path.Combine(stateRoot, "journal-v1")
 
         let ensureRoot () =
@@ -1013,6 +1023,7 @@ module PortableWorkspaceExecutor =
             let temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp"
 
             try
+                if prepared.IsSome then failSourceAt BeforeSourceWrite
                 use stream =
                     new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None)
 
@@ -1040,6 +1051,7 @@ module PortableWorkspaceExecutor =
                       writeReceipt writer receipt
                   | PortableHost _ | PortableSupplierAdmissionDraft _ -> invalidOp "portable-journal-state-refused"
 
+                if prepared.IsSome then failSourceAt BeforeSourceFileFlush
                 writer.Flush()
                 stream.Flush true
                 if stream.Length > int64 PortableWorkspaceContract.maximumDocumentBytes * 4L then
@@ -1048,6 +1060,7 @@ module PortableWorkspaceExecutor =
                 | PortableSupplierAdmissionDraft _ when stream.Length > int64 PortableSupplierAdmission.MaximumSupplierBytes ->
                     invalidOp "supplier-journal-size"
                 | _ -> ()
+                if prepared.IsSome then failSourceAt BeforeSourceReplacement
                 File.Move(temporary, path, true)
             finally
                 if File.Exists temporary then
@@ -1133,6 +1146,7 @@ module PortableWorkspaceExecutor =
                 let expectedBytes = if state.JournalVersion = SupplierJournalV4 then Some(supplierSourceBytes state) else None
                 write path (PortableSupplierAdmissionDraft state)
                 expectedBytes |> Option.iter (fun expected ->
+                    failSourceAt AfterSourceReplacementBeforeReadback
                     // New descriptor, bounded exact bytes, still under the same owner lock.
                     use fresh = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read)
                     if fresh.Length <> int64 expected.Length then invalidOp "supplier-source-readback-size"
@@ -1140,6 +1154,7 @@ module PortableWorkspaceExecutor =
                     fresh.ReadExactly(actual.AsSpan())
                     if fresh.ReadByte() <> -1 || actual <> expected then invalidOp "supplier-source-readback-mismatch"
                     // Cold decoding invokes all structural checkpoint/reference checks again.
+                    failSourceAt BeforeSourceColdReopen
                     match read path with
                     | Some(PortableSupplierAdmissionDraft decoded) when decoded = state -> ()
                     | _ -> invalidOp "supplier-source-cold-readback-mismatch")
@@ -1193,8 +1208,12 @@ module PortableWorkspaceExecutor =
 
     /// Inactive source journal only: shares the existing key/lock, never a runner or transport.
     /// Every successful write is still durability-Unknown; no production ACK/handoff API exists.
-    type SupplierAdmissionJournal(stateRoot: string) =
-        let journal = DurableJournal(stateRoot)
+    type SupplierAdmissionJournal private (stateRoot: string, sourceFailure: ControlledSupplierStoreFailurePoint option) =
+        let journal = DurableJournal(stateRoot, sourceFailure)
+        new(stateRoot: string) = SupplierAdmissionJournal(stateRoot, None)
+        /// Test data selects one fixed current-source cut, never an arbitrary callback or alternate store.
+        static member CreateControlledFailureTest(stateRoot: string, point: ControlledSupplierStoreFailurePoint) =
+            SupplierAdmissionJournal(stateRoot, Some point)
         member _.Read(command: PortableWorkspaceCommand) : Result<PortableSupplierAdmissionState * PortableEvidence<unit>, string> =
             journal.Read(command.WorkspaceScope, command.IdempotencyId)
             |> Result.bind (function
@@ -1292,7 +1311,7 @@ module PortableWorkspaceExecutor =
         let clock = defaultArg clock (fun () ->
             let now = DateTimeOffset.UtcNow
             DateTimeOffset(now.Ticks - now.Ticks % 10L, TimeSpan.Zero))
-        let journal = DurableJournal policy.Runtime.StateRoot
+        let journal = DurableJournal(policy.Runtime.StateRoot, None)
         let prerequisites = defaultArg prerequisites Map.empty
         let evidenceCurrent () =
             try (defaultArg hostEvidenceCurrent (fun () -> true)) ()

@@ -1419,6 +1419,43 @@ type PortableHostExecutorTests_ControlledAuthenticatedSource() =
                     Array.fill policy.PolicyBytes 0 policy.PolicyBytes.Length 0uy
                 captured
             let selection at revoke = selectionWith id id at revoke
+            let exerciseStoreCuts (current: PortableSupplierControlledSourceSelection) (transition: PortableSupplierAuthenticatedSourceTransition) =
+                let pending,_ = journal.Read transition.Original.Command |> SupplierCheckpointFixtures.ok
+                // The failed Stage cannot manufacture readback. A later explicit fresh read may
+                // authenticate persisted source bytes, independently of commit/durability evidence.
+                for point in [PortableWorkspaceExecutor.BeforeSourceWrite; PortableWorkspaceExecutor.BeforeSourceFileFlush
+                              PortableWorkspaceExecutor.BeforeSourceReplacement; PortableWorkspaceExecutor.AfterSourceReplacementBeforeReadback
+                              PortableWorkspaceExecutor.BeforeSourceColdReopen] do
+                    use failedFixture = new HostExecutorFixture()
+                    let sourceDirectory = Path.Combine(fixture.Policy.Runtime.StateRoot,"journal-v1")
+                    let failedDirectory = Path.Combine(failedFixture.Policy.Runtime.StateRoot,"journal-v1")
+                    Directory.CreateDirectory failedDirectory |> ignore
+                    let sourcePath = Directory.GetFiles(sourceDirectory,"*.bin") |> Array.exactlyOne
+                    let failedPath = Path.Combine(failedDirectory,Path.GetFileName sourcePath)
+                    let before = File.ReadAllBytes sourcePath
+                    File.WriteAllBytes(failedPath,before)
+                    let failed = PortableWorkspaceExecutor.SupplierAdmissionJournal.CreateControlledFailureTest(failedFixture.Policy.Runtime.StateRoot,point)
+                    Assert.Equal(SupplierSourceCommitUnknown,failed.StageControlledV4 transition)
+                    let replaced = point = PortableWorkspaceExecutor.AfterSourceReplacementBeforeReadback || point = PortableWorkspaceExecutor.BeforeSourceColdReopen
+                    let fresh = PortableWorkspaceExecutor.SupplierAdmissionJournal failedFixture.Policy.Runtime.StateRoot
+                    let retained,durability = fresh.Read pending.Original.Command |> SupplierCheckpointFixtures.ok
+                    Assert.Equal((if replaced then transition.State else pending),retained)
+                    Assert.Equal(pending.Original,retained.Original)
+                    Assert.Equal(pending.FirstFailure,retained.FirstFailure)
+                    match durability with EvidenceUnknown _ -> () | _ -> failwith "failure cannot qualify directory durability"
+                    if replaced then
+                        let authenticated = PortableSupplierAdmission.reverifyControlledSourceV4 current retained |> SupplierCheckpointFixtures.ok
+                        Assert.Equal(retained,authenticated.State)
+                        Assert.Equal(SupplierSourceConflict,fresh.StageControlledV4 transition)
+                    else
+                        Assert.True((before = File.ReadAllBytes failedPath))
+                        Assert.True(PortableSupplierAdmission.reverifyControlledSourceV4 current retained |> Result.isError)
+                    Assert.True(PortableSupplierAdmission.prepareAck retained |> Result.isError)
+                    Assert.True(PortableSupplierAdmission.reserveHost retained |> Result.isError)
+                    Assert.Empty(Directory.GetFiles(failedDirectory,"*.tmp"))
+                    Assert.Equal(0,failedFixture.Runner.Runs)
+                    Assert.Equal(0,failedFixture.Runner.Cleans)
+                    Assert.Equal(0,failedFixture.Runner.Recoveries)
             match journal.StageV4(initial,None,None) with SupplierSourceReadback _ -> () | other -> failwithf "%A" other
             let mutable state = initial
             for name in ["creation";"genesis"] do
@@ -1451,12 +1488,14 @@ type PortableHostExecutorTests_ControlledAuthenticatedSource() =
                     match denied with HeldControlledSource _ -> () | _ -> failwith "valid fresh pair cannot authenticate an invalid retained result signature"
                 let accepted = PortableSupplierAdmission.verifyAndAcceptControlledV4 (selection at false) pending.Original pending.Revision pending.CheckpointCustody.Value.StoreFence pending exchange |> SupplierCheckpointFixtures.ok
                 let transition = match accepted with AuthenticatedControlledSource value -> value | HeldControlledSource value -> failwithf "signed source held: %A" value.FirstFailure
+                exerciseStoreCuts (selection at false) transition
                 match journal.StageControlledV4 transition with SupplierSourceReadback _ -> () | other -> failwithf "%A" other
                 Assert.Equal(SupplierSourceConflict,journal.StageControlledV4 transition)
                 state <- transition.State
             // Continue the same real signed DAG through output wire and native acquisition.
-            let stageTransition outcome =
+            let stageTransition current outcome =
                 let transition = match outcome with AuthenticatedControlledSource value -> value | HeldControlledSource held -> failwithf "signed output source held: %A" held.FirstFailure
+                exerciseStoreCuts current transition
                 match journal.StageControlledV4 transition with SupplierSourceReadback _ -> () | other -> failwithf "%A" other
                 Assert.Equal(SupplierSourceConflict,journal.StageControlledV4 transition)
                 let reopened,_ = journal.Read transition.State.Original.Command |> SupplierCheckpointFixtures.ok
@@ -1486,7 +1525,7 @@ type PortableHostExecutorTests_ControlledAuthenticatedSource() =
                     | HeldControlledSource held -> Assert.True(held.FirstFailure.IsSome)
                     | _ -> failwith "oversized event census authenticated"
                 state <- PortableSupplierAdmission.verifyAndAcceptControlledV4 current pending.Original pending.Revision pending.CheckpointCustody.Value.StoreFence pending input
-                         |> SupplierCheckpointFixtures.ok |> stageTransition
+                         |> SupplierCheckpointFixtures.ok |> stageTransition current
                 if name <> "append" then
                     Assert.Equal<string list>(before.EventsBase64,state.EventsBase64)
                     Assert.Equal(before.Head,state.Head)
@@ -1516,7 +1555,7 @@ type PortableHostExecutorTests_ControlledAuthenticatedSource() =
                 match again with HeldControlledSource sticky -> Assert.Equal(held,sticky) | _ -> failwith "held input acquired a success wrapper"
             | _ -> failwith "mismatched signed native pair authenticated"
             state <- PortableSupplierAdmission.verifyAndAcceptControlledV4 nativeSelection pending.Original pending.Revision pending.CheckpointCustody.Value.StoreFence pending nativeInput
-                     |> SupplierCheckpointFixtures.ok |> stageTransition
+                     |> SupplierCheckpointFixtures.ok |> stageTransition nativeSelection
             Assert.True(state.CheckpointCustody.Value.OutputCheckpointBase64.IsSome)
             Assert.Single(state.CheckpointCustody.Value.NativeAcquisitions) |> ignore
             let cold,durability = journal.Read state.Original.Command |> SupplierCheckpointFixtures.ok

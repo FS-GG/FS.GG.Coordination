@@ -56,6 +56,15 @@ only separate current-policy revalidation returns the private controlled-source
 readback. Durability remains Unknown, with ACK, host effects and provider/native
 qualification outside this source boundary.
 
+`CreateControlledFailureTest` selects one fixed test cut in this same current
+source store: before writing, before file flush, before replacement, after
+replacement before fresh readback, or before cold reopen. A failed Stage returns
+commit uncertainty, without a source readback or ACK. Earlier cuts retain the
+prior record; later cuts can leave the exact proposed record. A later explicit
+fresh read and current signature/policy verification can authenticate those
+persisted source bytes, while directory durability remains Unknown. The
+controls operate on current `/4` source records.
+
 The SDK-generated `packages.lock.json` files retain NuGet package-content hashes.
 For signed packages that identity can differ from a raw archive SHA512: NuGet's
 [immutable package reader source](https://github.com/NuGet/NuGet.Client/blob/d3a633a04da7cd83900498334ec5e7650a52fa86/src/NuGet.Core/NuGet.Packaging/PackageArchiveReader.cs)
