@@ -4311,6 +4311,66 @@ module PortableSupplierAdmission =
           EventsBase64 = events |> List.map Convert.ToBase64String; FromHead = head "from_head"; ToHead = head "to_head"
           Sequence = sequence; CollectedAt = result.GetProperty("collected_at") |> PortableSupplierC1.utc }
 
+    let private recheckControlledBundle selection controller encoded required collected notAfter =
+        let root = bundleCoverage controller encoded (required |> List.map (fun (name,_,bytes,kind) -> name,bytes,kind))
+        if root.GetProperty("provenance").GetString() <> "controlled-test" then PortableSupplierC1.fail ()
+        let binary,profile = controlledVerifierIdentity ()
+        for name,role,bytes,_ in required do
+            let policy,verified = controlledSignature selection role bytes
+            let row = root.GetProperty("observations").EnumerateArray() |> Seq.find (fun row -> row.GetProperty("role").GetString() = name && row.GetProperty("envelope_sha256").GetString() = digestBytes bytes)
+            let at = row.GetProperty("verified_at") |> PortableSupplierC1.utc
+            let checkedAt = row.GetProperty("revocation_checked_at") |> PortableSupplierC1.utc
+            if row.GetProperty("policy_digest").GetString() <> policy.PolicySha256
+               || row.GetProperty("policy_revision").GetString() <> policy.PolicyRevision
+               || row.GetProperty("issuer_principal").GetString() <> policy.Principal
+               || row.GetProperty("public_key_fingerprint").GetString() <> PortableSupplierSshsig.publicKeyFingerprint verified
+               || (row.GetProperty("policy_valid_from") |> PortableSupplierC1.utc) <> policy.ValidFrom
+               || (row.GetProperty("policy_valid_until") |> PortableSupplierC1.utc) <> policy.ValidUntil
+               || row.GetProperty("verifier_binary_digest").GetString() <> binary || row.GetProperty("verifier_profile_digest").GetString() <> profile
+               || at < policy.ValidFrom || at >= policy.ValidUntil || at > selection.Current.VerifiedAt
+               || at < collected || at >= notAfter
+               || checkedAt > at || at - checkedAt > selection.Current.MaximumObservationAge then PortableSupplierC1.fail ()
+
+    /// Reverify immutable historical source evidence against fresh controlled policy/clock observations.
+    /// Historical bundle/checkpoint bytes and their verification times are never rewritten.
+    let private reverifyControlledHistory selection (state: PortableSupplierAdmissionState) =
+        try
+            controlledSelectionCurrent selection state
+            let custody = state.CheckpointCustody.Value
+            if state.FirstFailure.IsSome || not state.Conflicts.IsEmpty
+               || not custody.NativeAcquisitions.IsEmpty || custody.OutputCheckpointBase64.IsSome
+               || custody.WireExchanges.Length > 1 then PortableSupplierC1.fail ()
+            let creation = custody.CreationExchange |> Option.defaultWith PortableSupplierC1.fail
+            let original = raw 65536 custody.OriginalIntentEnvelopeBase64 |> Result.defaultWith invalidOp
+            let rawRequest (exchange: PortableSupplierRetainedWireExchange) = raw 65536 exchange.RequestBase64 |> Result.defaultWith invalidOp
+            let rawResult (exchange: PortableSupplierRetainedWireExchange) = raw 4096 exchange.ResultBase64 |> Result.defaultWith invalidOp
+            let receipt = raw 18761 creation.EvidenceBase64 |> Result.defaultWith invalidOp
+            let _,core = PortableSupplierC1.payload 18761 6000 receipt
+            if (core.GetProperty("operation_id") |> PortableSupplierC1.uuid) <> selection.ExpectedOperationId then PortableSupplierC1.fail ()
+            controlledCreationGrant selection { state with Challenge = Some(WireV1 creation.Challenge) } (rawRequest creation) core
+            let reservation = state.Pinned |> Option.defaultWith PortableSupplierC1.fail |> fun pinned -> raw 6000 pinned.ReservationBase64 |> Result.defaultWith invalidOp
+            let expectedPinned = controlledObservation selection true reservation state creation
+            if state.Pinned <> Some expectedPinned then PortableSupplierC1.fail ()
+            for exchange in creation::custody.WireExchanges do
+                let _,result = rawResult exchange |> PortableSupplierC1.payload 4096 896
+                let collected = result.GetProperty("collected_at") |> PortableSupplierC1.utc
+                recheckControlledBundle selection true exchange.ControllerBundleBase64
+                    ["original-intent",OriginalIntentSignature,original,"raw-sha256"
+                     "receiver-command",ReceiverCommandSignature,rawRequest exchange,"raw-sha256"
+                     "host-command-result",HostCommandResultSignature,rawResult exchange,"raw-sha256"] collected exchange.Challenge.NotAfter
+                let required =
+                    if exchange = creation then ["creation",SupplierCreationSignature,receipt,"creation"]
+                    else
+                        let response = raw 65536 exchange.EvidenceBase64 |> Result.defaultWith invalidOp
+                        let _,row = PortableSupplierC1.payload 65536 45000 response
+                        let events = row.GetProperty("events").EnumerateArray() |> Seq.map (PortableSupplierC1.b64url 26761) |> Seq.toList
+                        match events with
+                        | [genesis] -> ["creation",SupplierCreationSignature,receipt,"creation"; "genesis",SupplierGenesisSignature,genesis,"genesis"; "supplier-response",SupplierResponseSignature,response,"response"]
+                        | _ -> PortableSupplierC1.fail ()
+                recheckControlledBundle selection false exchange.ReceiverBundleBase64 required collected exchange.Challenge.NotAfter
+            Ok ()
+        with _ -> Error "supplier-controlled-cold-reverification-refused"
+
     /// Real signatures and byte-derived observations under copied TEST selection; never calls the public transcript port.
     let verifyAndAcceptControlledV4 selection original revision fence (state: PortableSupplierAdmissionState) exchange =
         if not (expectedV4 original revision fence state) then Error "supplier-v4-original-revision-fence-refused"
@@ -4322,6 +4382,7 @@ module PortableSupplierAdmission =
                 | ControlledGenesisExchange(request,frames) -> false,request,frames,None
             try
                 if isNull requestInput || requestInput.Length = 0 || requestInput.Length > 65536
+                   || (reservationInput |> Option.exists (fun bytes -> isNull bytes || bytes.Length = 0 || bytes.Length > 6000))
                    || frameInputs.Length > 2 || (frameInputs |> List.exists (fun bytes -> isNull bytes || bytes.Length > 65536)) then PortableSupplierC1.fail ()
                 let request = Array.copy requestInput
                 let frames = frameInputs |> List.map Array.copy
@@ -4334,6 +4395,7 @@ module PortableSupplierAdmission =
                     let challenge = match state.Challenge with Some(WireV1 challenge) -> challenge | _ -> PortableSupplierC1.fail ()
                     if creation <> (challenge.Purpose = "creation") then PortableSupplierC1.fail ()
                     controlledSelectionCurrent selection state
+                    if not creation then reverifyControlledHistory selection state |> Result.defaultWith invalidOp |> ignore
                     let result,evidence = match frames with [result;evidence] when result.Length > 0 && evidence.Length > 0 && result.Length <= 4096 -> result,evidence | _ -> PortableSupplierC1.fail ()
                     let originalEnvelope = raw 65536 state.CheckpointCustody.Value.OriginalIntentEnvelopeBase64 |> Result.defaultWith invalidOp
                     let controller = controlledBundle selection true
@@ -4373,59 +4435,8 @@ module PortableSupplierAdmission =
                 with _ -> quarantine "supplier-authentication-refused"
             with _ -> Error "supplier-controlled-source-input-refused"
 
-    let private recheckControlledBundle selection controller encoded required collected notAfter =
-        let root = bundleCoverage controller encoded (required |> List.map (fun (name,_,bytes,kind) -> name,bytes,kind))
-        if root.GetProperty("provenance").GetString() <> "controlled-test" then PortableSupplierC1.fail ()
-        let binary,profile = controlledVerifierIdentity ()
-        for name,role,bytes,_ in required do
-            let policy,verified = controlledSignature selection role bytes
-            let row = root.GetProperty("observations").EnumerateArray() |> Seq.find (fun row -> row.GetProperty("role").GetString() = name && row.GetProperty("envelope_sha256").GetString() = digestBytes bytes)
-            let at = row.GetProperty("verified_at") |> PortableSupplierC1.utc
-            let checkedAt = row.GetProperty("revocation_checked_at") |> PortableSupplierC1.utc
-            if row.GetProperty("policy_digest").GetString() <> policy.PolicySha256
-               || row.GetProperty("policy_revision").GetString() <> policy.PolicyRevision
-               || row.GetProperty("issuer_principal").GetString() <> policy.Principal
-               || row.GetProperty("public_key_fingerprint").GetString() <> PortableSupplierSshsig.publicKeyFingerprint verified
-               || (row.GetProperty("policy_valid_from") |> PortableSupplierC1.utc) <> policy.ValidFrom
-               || (row.GetProperty("policy_valid_until") |> PortableSupplierC1.utc) <> policy.ValidUntil
-               || row.GetProperty("verifier_binary_digest").GetString() <> binary || row.GetProperty("verifier_profile_digest").GetString() <> profile
-               || at < policy.ValidFrom || at >= policy.ValidUntil || at > selection.Current.VerifiedAt
-               || at < collected || at >= notAfter
-               || checkedAt > at || at - checkedAt > selection.Current.MaximumObservationAge then PortableSupplierC1.fail ()
 
-    /// Reverify immutable historical source evidence against fresh controlled policy/clock observations.
-    /// Historical bundle/checkpoint bytes and their verification times are never rewritten.
+    /// A cold parse never supplies authentication; current selection and every retained signature are checked again.
     let reverifyControlledSourceV4 selection (state: PortableSupplierAdmissionState) =
-        try
-            controlledSelectionCurrent selection state
-            let custody = state.CheckpointCustody.Value
-            if state.FirstFailure.IsSome || not state.Conflicts.IsEmpty || state.Challenge.IsSome
-               || not custody.NativeAcquisitions.IsEmpty || custody.OutputCheckpointBase64.IsSome
-               || custody.WireExchanges.Length > 1 then PortableSupplierC1.fail ()
-            let creation = custody.CreationExchange |> Option.defaultWith PortableSupplierC1.fail
-            let original = raw 65536 custody.OriginalIntentEnvelopeBase64 |> Result.defaultWith invalidOp
-            let rawRequest (exchange: PortableSupplierRetainedWireExchange) = raw 65536 exchange.RequestBase64 |> Result.defaultWith invalidOp
-            let rawResult (exchange: PortableSupplierRetainedWireExchange) = raw 4096 exchange.ResultBase64 |> Result.defaultWith invalidOp
-            let receipt = raw 18761 creation.EvidenceBase64 |> Result.defaultWith invalidOp
-            let _,core = PortableSupplierC1.payload 18761 6000 receipt
-            if (core.GetProperty("operation_id") |> PortableSupplierC1.uuid) <> selection.ExpectedOperationId then PortableSupplierC1.fail ()
-            controlledCreationGrant selection { state with Challenge = Some(WireV1 creation.Challenge) } (rawRequest creation) core
-            for exchange in creation::custody.WireExchanges do
-                let _,result = rawResult exchange |> PortableSupplierC1.payload 4096 896
-                let collected = result.GetProperty("collected_at") |> PortableSupplierC1.utc
-                recheckControlledBundle selection true exchange.ControllerBundleBase64
-                    ["original-intent",OriginalIntentSignature,original,"raw-sha256"
-                     "receiver-command",ReceiverCommandSignature,rawRequest exchange,"raw-sha256"
-                     "host-command-result",HostCommandResultSignature,rawResult exchange,"raw-sha256"] collected exchange.Challenge.NotAfter
-                let required =
-                    if exchange = creation then ["creation",SupplierCreationSignature,receipt,"creation"]
-                    else
-                        let response = raw 65536 exchange.EvidenceBase64 |> Result.defaultWith invalidOp
-                        let _,row = PortableSupplierC1.payload 65536 45000 response
-                        let events = row.GetProperty("events").EnumerateArray() |> Seq.map (PortableSupplierC1.b64url 26761) |> Seq.toList
-                        match events with
-                        | [genesis] -> ["creation",SupplierCreationSignature,receipt,"creation"; "genesis",SupplierGenesisSignature,genesis,"genesis"; "supplier-response",SupplierResponseSignature,response,"response"]
-                        | _ -> PortableSupplierC1.fail ()
-                recheckControlledBundle selection false exchange.ReceiverBundleBase64 required collected exchange.Challenge.NotAfter
-            Ok(ControlledSourceReadback state)
-        with _ -> Error "supplier-controlled-cold-reverification-refused"
+        if state.Challenge.IsSome then Error "supplier-controlled-cold-pending-refused"
+        else reverifyControlledHistory selection state |> Result.map (fun () -> ControlledSourceReadback state)

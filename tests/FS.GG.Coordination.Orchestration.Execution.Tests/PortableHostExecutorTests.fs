@@ -1419,6 +1419,24 @@ type PortableHostExecutorTests_ControlledAuthenticatedSource() =
                     if name = "creation" then ControlledCreationExchange(bytes "request",[bytes "result";bytes "evidence"],row.GetProperty("reservation").GetString() |> SupplierCheckpointFixtures.urlBytes)
                     else ControlledGenesisExchange(bytes "request",[bytes "result";bytes "evidence"])
                 let at = expected.GetProperty("warmVerificationTimes").GetProperty(name).GetString()
+                if name = "creation" then
+                    for reservation in [null; [||]; Array.zeroCreate<byte> 6001] do
+                        let invalid = ControlledCreationExchange(bytes "request",[bytes "result";bytes "evidence"],reservation)
+                        Assert.True(PortableSupplierAdmission.verifyAndAcceptControlledV4 (selection at false) pending.Original pending.Revision pending.CheckpointCustody.Value.StoreFence pending invalid |> Result.isError)
+                if name = "genesis" then
+                    let custody = pending.CheckpointCustody.Value
+                    let creation = custody.CreationExchange.Value
+                    let originalResult = Convert.FromBase64String creation.ResultBase64
+                    use envelope = System.Text.Json.JsonDocument.Parse(ReadOnlyMemory<byte>(originalResult))
+                    let payload = envelope.RootElement.GetProperty("payload").GetString()
+                    let invalidResult = Encoding.ASCII.GetBytes("{\"payload\":\"" + payload + "\",\"signature\":\"b3BhcXVlLXN0cnVjdHVyYWwtb25seQ\"}\n")
+                    let bundle = Convert.FromBase64String creation.ControllerBundleBase64 |> Encoding.ASCII.GetString
+                    let changedBundle = bundle.Replace(SupplierCheckpointFixtures.hash originalResult,SupplierCheckpointFixtures.hash invalidResult) |> Encoding.ASCII.GetBytes
+                    let changedCreation = { creation with ResultBase64 = Convert.ToBase64String invalidResult; ControllerBundleBase64 = Convert.ToBase64String changedBundle }
+                    let structuralPredecessor = { pending with CheckpointCustody = Some { custody with CreationExchange = Some changedCreation } }
+                    Assert.True(PortableSupplierAdmission.validate structuralPredecessor |> Result.isOk)
+                    let denied = PortableSupplierAdmission.verifyAndAcceptControlledV4 (selection at false) structuralPredecessor.Original structuralPredecessor.Revision custody.StoreFence structuralPredecessor exchange |> SupplierCheckpointFixtures.ok
+                    match denied with HeldControlledSource _ -> () | _ -> failwith "valid fresh pair cannot authenticate an invalid retained result signature"
                 let accepted = PortableSupplierAdmission.verifyAndAcceptControlledV4 (selection at false) pending.Original pending.Revision pending.CheckpointCustody.Value.StoreFence pending exchange |> SupplierCheckpointFixtures.ok
                 let transition = match accepted with AuthenticatedControlledSource value -> value | HeldControlledSource value -> failwithf "signed source held: %A" value.FirstFailure
                 match journal.StageControlledV4 transition with SupplierSourceReadback _ -> () | other -> failwithf "%A" other
@@ -1430,6 +1448,16 @@ type PortableHostExecutorTests_ControlledAuthenticatedSource() =
             let at = expected.GetProperty("coldVerificationTime").GetString()
             let readback = PortableSupplierAdmission.reverifyControlledSourceV4 (selection at false) cold |> SupplierCheckpointFixtures.ok
             Assert.Equal(cold,readback.State)
+            let pinned = cold.Pinned.Value
+            let binding = pinned.OriginalReservation.Binding
+            for changed in
+                [ { pinned with Identity = { pinned.Identity with Issuer = "foreign-controlled-principal" } }
+                  { pinned with OriginalReservation = { pinned.OriginalReservation with Binding = { binding with AllocationId = "foreign-allocation" } } }
+                  { pinned with OriginalReservation = { pinned.OriginalReservation with Binding = { binding with WorkerId = "foreign-worker" } } }
+                  { pinned with OriginalReservation = { pinned.OriginalReservation with Binding = { binding with AllocationReceiptDigest = "foreign-receipt" } } } ] do
+                let structural = { cold with Pinned = Some changed }
+                Assert.True(PortableSupplierAdmission.validate structural |> Result.isOk)
+                Assert.True(PortableSupplierAdmission.reverifyControlledSourceV4 (selection at false) structural |> Result.isError)
             Assert.True(PortableSupplierAdmission.reverifyControlledSourceV4 (selection at true) cold |> Result.isError)
             Assert.True(PortableSupplierAdmission.prepareAck readback.State |> Result.isError)
             Assert.True(PortableSupplierAdmission.reserveHost readback.State |> Result.isError)
