@@ -322,7 +322,7 @@ let private loadContract root =
         <> {
                JobId = "reuse-decision"
                Artifact = "reuse-decision/decision.json"
-               TimeoutMinutes = 5
+               TimeoutMinutes = 10
                EntryPoint = "bash eng/bootstrap-gates/reuse-decision.sh"
                UploadName = "reuse-decision"
                WorkflowPath = ".github/workflows/bootstrap-qualification.yml"
@@ -593,6 +593,80 @@ let private isSha value =
     && value.Length = 40
     && value |> Seq.forall Uri.IsHexDigit
 
+// Independent launch-order requirements inspect the actual projected jobs. Exact
+// projection equality alone could approve a renderer and template changed together.
+let private sourcePreflightViolations bootstrap (workflow: string) =
+    let lines = workflow.Split('\n')
+    let isJobHeader (line: string) =
+        line.StartsWith("  ", StringComparison.Ordinal)
+        && not (line.StartsWith("   ", StringComparison.Ordinal))
+        && line.EndsWith(":", StringComparison.Ordinal)
+        && line.Length > 3
+        && (line.Substring(2, line.Length - 3)
+            |> Seq.forall (fun character -> Char.IsLower character || Char.IsDigit character || character = '-'))
+    let job name =
+        match lines |> Array.tryFindIndex ((=) ("  " + name + ":")) with
+        | None -> ""
+        | Some index ->
+            (lines |> Array.skip (index + 1) |> Array.takeWhile (isJobHeader >> not) |> String.concat "\n") + "\n"
+
+    let header (body: string) = body.Split([| "    steps:" |], StringSplitOptions.None)[0]
+    let preflightJob = job (if bootstrap then "reuse-decision" else "shared-build")
+    let parts = preflightJob.Split([| "      - " |], StringSplitOptions.None)
+    let sourceSteps = parts |> Array.filter (fun part -> part.Contains("run: bash eng/bootstrap-gates/source-preflight.sh"))
+    let sourceValid =
+        sourceSteps.Length = 1
+        && sourceSteps[0].StartsWith("name: Run early source compile and focused tests\n", StringComparison.Ordinal)
+        && not (sourceSteps[0].Contains("continue-on-error:"))
+        && (if bootstrap then
+                sourceSteps[0] = "name: Run early source compile and focused tests\n        if: ${{ steps.decide.outputs.route == 'execute' }}\n        run: bash eng/bootstrap-gates/source-preflight.sh\n"
+            else
+                sourceSteps[0] = "name: Run early source compile and focused tests\n        env:\n          FSGG_CANDIDATE_SHA: ${{ needs.prepare.outputs.candidate }}\n        run: bash eng/bootstrap-gates/source-preflight.sh\n")
+    [
+        if not sourceValid || not ((header preflightJob).Contains("    timeout-minutes: 10\n"))
+           || (header preflightJob).Contains("continue-on-error:") then
+            yield violation "source-preflight-success-dominance" "exact-candidate source preflight must succeed within the bounded prerequisite job"
+        if bootstrap then
+            let route = preflightJob.IndexOf("run: bash eng/bootstrap-gates/reuse-decision.sh", StringComparison.Ordinal)
+            let compile = preflightJob.IndexOf("run: bash eng/bootstrap-gates/source-preflight.sh", StringComparison.Ordinal)
+            if route < 0 || compile <= route then
+                yield violation "source-preflight-route-order" "route selection must precede compile"
+            for name in [ "canonical-quint-prepare"; "canonical-quint-semantic"; "canonical-quint-performance"; "deterministic-build"; "compiler-and-tests"; "dependency-and-security"; "package-install-smoke"; "orchestration-postgresql"; "orchestration-observer-postgresql"; "orchestration-pilot-postgresql"; "bootstrap-recovery" ] do
+                let dependencies = header (job name)
+                let prerequisiteNames =
+                    dependencies.Split('\n')
+                    |> Array.tryFind (fun line -> line.StartsWith("    needs: [", StringComparison.Ordinal) && line.EndsWith("]", StringComparison.Ordinal))
+                    |> Option.map (fun line -> line.Substring(12, line.Length - 13).Split(',') |> Array.map _.Trim())
+                    |> Option.defaultValue [||]
+                let allowedConditions =
+                    set [ "    if: ${{ needs.reuse-decision.outputs.route == 'execute' }}"
+                          "    if: ${{ needs.reuse-decision.outputs.route == 'execute' && needs.reuse-decision.outputs.formal-route == 'execute' }}"
+                          "    if: ${{ needs.canonical-quint-prepare.result == 'success' }}" ]
+                let conditions = dependencies.Split('\n') |> Array.filter (fun line -> line.StartsWith("    if:", StringComparison.Ordinal))
+                if not (prerequisiteNames |> Array.contains "reuse-decision")
+                   || conditions.Length <> 1 || not (Set.contains conditions[0] allowedConditions)
+                   || dependencies.Contains("continue-on-error:") then
+                    yield violation "source-preflight-fanout-dominance" name
+        else
+            let shared = header preflightJob
+            if not (shared.Contains("    needs: [prepare, classify-reuse]\n")) || shared.Contains("    if:") then
+                yield violation "source-preflight-build-dominance" "shared build requires successful preparation and classification"
+            let execution = header (job "run-partition")
+            if not (execution.Contains("    needs: [prepare, classify-reuse, shared-build, formal-prepare]\n"))
+               || not (execution.Contains("    if: ${{ always() && needs.shared-build.result == 'success' && needs.formal-prepare.result == 'success' }}\n"))
+               || execution.Contains("continue-on-error:") then
+                yield violation "source-preflight-execution-dominance" "coherent executions require successful build and formal preparation"
+            let formal = header (job "formal-prepare")
+            if not (formal.Contains("    needs: [prepare, classify-reuse, shared-build]\n"))
+               || formal.Contains("    if:") || formal.Contains("continue-on-error:") then
+                yield violation "source-preflight-formal-dominance" "formal preparation requires successful shared-build"
+            let uploads = parts |> Array.filter (fun part -> part.Contains("name: shared-build-${{ needs.prepare.outputs.candidate }}"))
+            if uploads.Length <> 1 || uploads[0].Contains("        if:") || uploads[0].Contains("continue-on-error:")
+               || preflightJob.IndexOf("name: shared-build-${{ needs.prepare.outputs.candidate }}", StringComparison.Ordinal)
+                  < preflightJob.IndexOf("run: bash eng/bootstrap-gates/source-preflight.sh", StringComparison.Ordinal) then
+                yield violation "source-preflight-artifact-dominance" "build artifact publication requires successful source preflight"
+    ]
+
 let private inspectOptimisticProjection root =
     let planPath = Path.Combine(root, "eng/optimistic-qualification-plan.json")
 
@@ -633,6 +707,7 @@ let private inspectOptimisticProjection root =
             let workflow = File.ReadAllText workflowPath
 
             [
+                yield! sourcePreflightViolations false workflow
                 if
                     stringProperty "schema" plan.RootElement
                     <> Some "fsgg.coordination.optimistic-qualification-plan/1"
@@ -757,6 +832,17 @@ let private renderWorkflow (contract: BootstrapContract) =
     line "      - name: Select the exact-head qualification route"
     line "        id: decide"
     line $"        run: %s{contract.Reuse.EntryPoint}"
+    line "      - name: Run early source compile and focused tests"
+    line "        if: ${{ steps.decide.outputs.route == 'execute' }}"
+    line "        run: bash eng/bootstrap-gates/source-preflight.sh"
+    line "      - name: Retain early source diagnostics"
+    line "        if: ${{ always() && steps.decide.outputs.route == 'execute' }}"
+    line $"        uses: actions/upload-artifact@%s{contract.Actions.UploadArtifact}"
+    line "        with:"
+    line "          name: bootstrap-source-preflight-${{ github.event.pull_request.head.sha || github.sha }}"
+    line "          path: ${{ runner.temp }}/source-preflight"
+    line "          if-no-files-found: ignore"
+    line "          retention-days: 7"
     line "      - name: Upload the qualification route receipt"
     line $"        uses: actions/upload-artifact@%s{contract.Actions.UploadArtifact}"
     line "        with:"
@@ -1100,14 +1186,14 @@ let private inspectWorkflow root (contract: BootstrapContract) =
     else
         let text = File.ReadAllText(path).Replace("\r\n", "\n")
 
-        if text = renderWorkflow contract then
-            []
-        else
-            [
-                violation
-                    "workflow-projection-stale"
-                    "workflow differs from the canonical qualification plan projection"
-            ]
+        [
+            yield! sourcePreflightViolations true text
+            if text <> renderWorkflow contract then
+                yield
+                    violation
+                        "workflow-projection-stale"
+                        "workflow differs from the canonical qualification plan projection"
+        ]
 
 let rec private vulnerabilityCounts (element: JsonElement) =
     seq {
