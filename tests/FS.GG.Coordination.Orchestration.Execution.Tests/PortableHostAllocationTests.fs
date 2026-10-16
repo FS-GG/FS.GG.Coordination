@@ -723,7 +723,7 @@ type PortableHostAllocationTests_SelectedManifest() =
     member _.``selected manifest matches immutable exact bytes and refusal corpus``() =
         use corpus = JsonDocument.Parse(File.ReadAllBytes(corpusPath ()))
         for row in corpus.RootElement.GetProperty("cases").EnumerateArray() do
-            let text key = row.GetProperty(key).GetString()
+            let text (key: string) = row.GetProperty(key).GetString()
             let raw =
                 if row.GetProperty("bytesBase64").ValueKind = JsonValueKind.Null then None
                 else Some (Convert.FromBase64String(text "bytesBase64"))
