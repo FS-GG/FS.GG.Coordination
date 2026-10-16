@@ -2,8 +2,8 @@
   "schema": "fsgg.utel-closed-callback-source/1",
   "profile": "fsgg.utel-closed-source/1",
   "repository": "FS-GG/.github",
-  "revision": "dff1248d1a3b57ee2643155e2e59e94d55331bd5",
-  "manifestSha256": "96d9bf0e8db7ab3b24749e813e9edb1e2f8087f2eb47b51e267e1374eea7fdd8",
+  "revision": "c9525d5f4afaadcbb69f8f71c25aee0939b32b7c",
+  "manifestSha256": "4745d629f15a50d5bb98b09015e49242717a68e384112139f752dca5fb695f53",
   "profileSha256": "5c13399a71a782e713e445b3da9a93687b00347ab02bf3112bddce3dc803b5ff",
   "vectorsSha256": "bf3b26495dab92cf57d3e3f77d74f270bc4346a7b7e4f0a06e0e55399f0095bb",
   "qualification": "managed fixed-endpoint source/refusal only; no concurrent closed Python provider journey, physical bound or operational authority"

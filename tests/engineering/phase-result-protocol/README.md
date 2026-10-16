@@ -326,8 +326,8 @@ original `.103` replay/effects and `.104` remain held.
 `FiniteCustodyClosedSource` selects `fsgg.utel-closed-source/1` without editing
 `FiniteCustodySessionAdapter.fs` or either frozen producer manifest. The separate
 `eng/utel-closed-callback-source.json` and the selected slot pin now coherently
-select protected producer `dff1248d` (public producer successor PR #4617). The
-nine-file closed manifest is `96d9bf0e…`; slot profile
+select protected producer `c9525d5f` (public endpoint-factoring PR #4619). The
+nine-file closed manifest is `4745d629…`; slot profile
 `inert-slot-callback-pair/2` selects bundle `6a932c24…` and vectors `bf3b2649…`.
 The qualifier requires the slot and closed pins to name the same revision and
 vectors before either selected checkout is acquired. It rejects historical `/1`
@@ -406,3 +406,11 @@ qualification for the exact candidate. Full coherent and required CI remain
 mandatory. Production availability/admission remain false, physical bound null,
 fit unproved and cap 65,536. Original `.103` remains attempted-unknown/unreplayed;
 `.104`, credentials, deployment, native execution and unknown reservations remain held.
+
+The endpoint-factoring producer selection preserves the complete slot `/2`
+manifest, bundle, vectors, profile and observer bytes. Only the closed source
+manifest changes, binding the common owned-endpoint initialization beneath the
+existing maintained core. Both consumer revisions and the terminal-cut provenance
+advance together. This pin adoption exercises public controlled fixtures; it does
+not invoke a private composer or establish concurrent pipe/provider qualification.
+Public preparation continues to refuse unavailable production requirements.
