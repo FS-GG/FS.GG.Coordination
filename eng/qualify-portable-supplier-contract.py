@@ -433,16 +433,89 @@ def qualify_wire(corpus, schema):
     return len(corpus['cases'])
 
 
+def manifest_decode(raw):
+    """Explicit opt-in companion. No authentication, filesystem or durable evidence."""
+    if not 0 < len(raw) <= 6000:
+        raise WireRefused('manifest-size')
+    value = wire_decode(raw)
+    if set(value) != {'members', 'schema'} or value['schema'] != 'fsgg.v3.selected-manifest/1':
+        raise WireRefused('manifest-fields')
+    members = value['members']
+    if not isinstance(members, list) or not 1 <= len(members) <= 16:
+        raise WireRefused('manifest-count')
+    paths, folded, total = [], set(), 0
+    for member in members:
+        if not isinstance(member, dict) or set(member) != {'bytes', 'path', 'sha256'}:
+            raise WireRefused('manifest-member-fields')
+        size, path, digest = member['bytes'], member['path'], member['sha256']
+        if not isinstance(size, str) or re.fullmatch(r'0|[1-9][0-9]*', size) is None or int(size) > 2**64-1:
+            raise WireRefused('manifest-size-scalar')
+        if not isinstance(path, str) or not 1 <= len(path) <= 128:
+            raise WireRefused('manifest-path')
+        segments = path.split('/')
+        if len(segments) > 8 or any(part in {'.', '..'} or re.fullmatch(r'[A-Za-z0-9._-]+', part) is None for part in segments):
+            raise WireRefused('manifest-path')
+        if not isinstance(digest, str) or re.fullmatch(r'[0-9a-f]{64}', digest) is None:
+            raise WireRefused('manifest-hash')
+        lower = path.lower()
+        if lower in folded or (paths and paths[-1] >= path):
+            raise WireRefused('manifest-order-alias')
+        if any(lower.startswith(old + '/') or old.startswith(lower + '/') for old in folded):
+            raise WireRefused('manifest-ancestor')
+        paths.append(path)
+        folded.add(lower)
+        total += int(size)
+        if total > 2**64-1:
+            raise WireRefused('manifest-total-overflow')
+    return {'digest': hashlib.sha256(b'fsgg.v3.manifest/1\0' + raw).hexdigest(),
+            'member_count': str(len(members)), 'total_bytes': str(total)}
+
+
+def manifest_selection(selection, raw):
+    if selection == {'kind': 'none'}:
+        if raw is not None:
+            raise WireRefused('none-with-manifest')
+        return None
+    if not isinstance(selection, dict) or set(selection) != {'kind', 'digest', 'member_count', 'total_bytes'} or selection['kind'] != 'selected' or raw is None:
+        raise WireRefused('selected-without-manifest')
+    summary = manifest_decode(raw)
+    if selection != {'kind': 'selected', **summary}:
+        raise WireRefused('manifest-selection-mismatch')
+    return summary
+
+
+def qualify_manifest(corpus):
+    for row in corpus['cases']:
+        raw = base64.b64decode(row['bytesBase64']) if row['bytesBase64'] is not None else None
+        if raw is not None:
+            assert hashlib.sha256(raw).hexdigest() == row['sha256'], row['name']
+            assert str(len(raw)) == row['byteCount'], row['name']
+        try:
+            result = manifest_selection(row['selection'], raw)
+            if result is not None:
+                assert result == row['summary'], row['name']
+            accepted = True
+        except WireRefused:
+            accepted = False
+        assert accepted == row['structuralAccept'], row['name']
+    return len(corpus['cases'])
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--vectors', type=Path, default=Path(__file__).resolve().parents[1] / 'contracts/portable-workspace/v1/supplier-evidence-sizing-vectors.json')
     parser.add_argument('--wire-vectors', type=Path)
     parser.add_argument('--wire-schema', type=Path)
+    parser.add_argument('--manifest-vectors', type=Path, help='explicit opt-in selected-manifest/1 qualification')
     parser.add_argument('--native', action='store_true')
     args = parser.parse_args()
     if args.native:
         print(json.dumps({'outcome': 'held', 'reason': 'native-unavailable: supplier verifier, durable replay admission and isolated host profile are not implemented'}))
         return 2
+    if args.manifest_vectors:
+        count = qualify_manifest(json.loads(args.manifest_vectors.read_text()))
+        print(json.dumps({'outcome': 'passed', 'manifestVectors': count, 'authentication': False, 'nativeAcceptance': False}))
+        return 0
     if args.wire_vectors:
         if not args.wire_schema:
             parser.error('--wire-vectors requires --wire-schema')

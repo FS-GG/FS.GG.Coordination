@@ -24,6 +24,124 @@ type PortableHostExportSelection =
     | NoSelectedOutputs
     | SelectedOutputs of PortableHostExportManifest
 
+/// Inert regular-file content commitment; it conveys no filesystem or authentication evidence.
+type PortableSupplierManifestMember =
+    { Bytes: uint64
+      Path: string
+      Sha256: string }
+
+/// Canonical opt-in companion only. Legacy scalar manifests are never upgraded by this type.
+type PortableSupplierManifest =
+    private | CanonicalSupplierManifest of PortableSupplierManifestMember list * PortableHostExportManifest
+
+[<RequireQualifiedAccess>]
+module PortableSupplierManifest =
+    [<Literal>]
+    let Schema = "fsgg.v3.selected-manifest/1"
+    [<Literal>]
+    let MaximumBytes = 6000
+
+    let private encode (members: PortableSupplierManifestMember list) =
+        let entries =
+            members |> List.map (fun m ->
+                "{\"bytes\":\"" + m.Bytes.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                + "\",\"path\":\"" + m.Path + "\",\"sha256\":\"" + m.Sha256 + "\"}")
+            |> String.concat ","
+        System.Text.Encoding.ASCII.GetBytes("{\"members\":[" + entries + "],\"schema\":\"" + Schema + "\"}\n")
+
+    /// Validate caller values without sorting, truncation or path normalization.
+    let create (members: PortableSupplierManifestMember list) =
+        let validPath (path: string) =
+            not (isNull path) && path.Length > 0 && path.Length <= 128
+            && (let segments = path.Split('/')
+                segments.Length <= 8
+                && (segments |> Array.forall (fun segment ->
+                    segment <> "." && segment <> ".."
+                    && System.Text.RegularExpressions.Regex.IsMatch(segment, "\\A[A-Za-z0-9._-]+\\z"))))
+        let validHash (value: string) =
+            not (isNull value) && System.Text.RegularExpressions.Regex.IsMatch(value, "\\A[0-9a-f]{64}\\z")
+        if isNull (box members) || members.Length < 1 || members.Length > 16 then Error "manifest-member-count"
+        elif members |> List.exists (fun m -> isNull (box m) || not (validPath m.Path) || not (validHash m.Sha256)) then
+            Error "manifest-member"
+        else
+            let paths = members |> List.map _.Path
+            let ordered = paths |> List.pairwise |> List.forall (fun (a,b) -> StringComparer.Ordinal.Compare(a,b) < 0)
+            let folded = paths |> List.map (fun path -> path.ToUpperInvariant())
+            let collision = (folded |> Set.ofList |> Set.count) <> folded.Length
+            let ancestor = paths |> List.exists (fun parent -> paths |> List.exists (fun child -> child.StartsWith(parent + "/", StringComparison.OrdinalIgnoreCase)))
+            let mutable total = 0UL
+            let mutable overflow = false
+            for m in members do
+                if UInt64.MaxValue - total < m.Bytes then overflow <- true
+                else total <- total + m.Bytes
+            if not ordered || collision || ancestor then Error "manifest-path-join"
+            elif overflow then Error "manifest-total-overflow"
+            else
+                let raw = encode members
+                if raw.Length > MaximumBytes then Error "manifest-size"
+                else
+                    let domain = System.Text.Encoding.ASCII.GetBytes("fsgg.v3.manifest/1\000")
+                    let digest = SHA256.HashData(Array.append domain raw) |> Convert.ToHexString |> _.ToLowerInvariant()
+                    Ok (CanonicalSupplierManifest(members, { Digest = digest; MemberCount = uint64 members.Length; TotalBytes = total }))
+
+    /// Returns a fresh buffer; caller mutation cannot change the validated value.
+    let serialize (CanonicalSupplierManifest(members, _)) = encode members
+    let summary (CanonicalSupplierManifest(_, value)) = value
+    let members (CanonicalSupplierManifest(values, _)) = values
+
+    /// Strict C1: exact compact sorted ASCII JSON and one LF, no alternate encodings.
+    let parse (input: byte array) =
+        if isNull input || input.Length < 1 || input.Length > MaximumBytes then Error "manifest-size"
+        else
+            let raw = Array.copy input
+            if raw |> Array.exists (fun b -> b > 127uy) then Error "manifest-ascii"
+            else
+                try
+                    use document = System.Text.Json.JsonDocument.Parse(ReadOnlyMemory<byte>(raw), System.Text.Json.JsonDocumentOptions(MaxDepth = 8))
+                    let fields names (value: System.Text.Json.JsonElement) =
+                        value.ValueKind = System.Text.Json.JsonValueKind.Object
+                        && (value.EnumerateObject() |> Seq.map _.Name |> Seq.toList |> List.sort) = List.sort names
+                    let root = document.RootElement
+                    if not (fields ["members"; "schema"] root)
+                       || root.GetProperty("schema").ValueKind <> System.Text.Json.JsonValueKind.String
+                       || root.GetProperty("schema").GetString() <> Schema
+                       || root.GetProperty("members").ValueKind <> System.Text.Json.JsonValueKind.Array then
+                        Error "manifest-fields"
+                    else
+                        let mutable invalid = false
+                        let values =
+                            root.GetProperty("members").EnumerateArray()
+                            |> Seq.map (fun value ->
+                                if not (fields ["bytes"; "path"; "sha256"] value)
+                                   || (["bytes"; "path"; "sha256"] |> List.exists (fun key -> value.GetProperty(key).ValueKind <> System.Text.Json.JsonValueKind.String)) then
+                                    invalid <- true
+                                    { Bytes = 0UL; Path = ""; Sha256 = "" }
+                                else
+                                    let text = value.GetProperty("bytes").GetString()
+                                    let mutable size = 0UL
+                                    if not (System.Text.RegularExpressions.Regex.IsMatch(text, "\\A(0|[1-9][0-9]*)\\z"))
+                                       || not (UInt64.TryParse(text, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, &size)) then invalid <- true
+                                    { Bytes = size; Path = value.GetProperty("path").GetString(); Sha256 = value.GetProperty("sha256").GetString() })
+                            |> Seq.toList
+                        if invalid then Error "manifest-member-fields"
+                        else
+                            create values |> Result.bind (fun value ->
+                                if serialize value = raw then Ok value else Error "manifest-noncanonical")
+                with
+                | :? System.Text.Json.JsonException -> Error "manifest-json"
+                | :? InvalidOperationException -> Error "manifest-fields"
+                | :? ArgumentException -> Error "manifest-fields"
+
+    /// Optional exact bytes join only: none supplies no census; selected supplies no durable readback.
+    let validateSelection selection raw =
+        match selection, raw with
+        | NoSelectedOutputs, None -> Ok None
+        | NoSelectedOutputs, Some _ -> Error "none-with-manifest"
+        | SelectedOutputs _, None -> Error "selected-without-manifest"
+        | SelectedOutputs expected, Some bytes ->
+            parse bytes |> Result.bind (fun value ->
+                if summary value = expected then Ok (Some value) else Error "manifest-selection-mismatch")
+
 /// An inert decision input. Receipt strings identify evidence; these types do not authenticate it.
 type PortableHostReservation =
     {
