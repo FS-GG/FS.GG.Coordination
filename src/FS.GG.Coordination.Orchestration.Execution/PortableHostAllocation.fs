@@ -4135,7 +4135,8 @@ module PortableSupplierAdmission =
         | SupplierResponseSignature -> "supplier-response"
 
     /// Capture independently fixed TEST selection. No production context or verification result is made here.
-    let createControlledSourceSelection original originalEnvelopeSha256 operationId binding configuration
+    let createControlledSourceSelection (original: PortableSupplierAdmissionOriginal) originalEnvelopeSha256 operationId
+                                        (binding: PortableHostBinding) (configuration: PortableSupplierOriginalNativeConfiguration)
                                         (policies: PortableSupplierControlledRolePolicy list)
                                         (current: PortableSupplierControlledCurrentObservation) =
         try
