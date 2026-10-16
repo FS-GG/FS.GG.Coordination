@@ -65,6 +65,14 @@ fresh read and current signature/policy verification can authenticate those
 persisted source bytes, while directory durability remains Unknown. The
 controls operate on current `/4` source records.
 
+`ReadControlledV4` checks the expected original, revision and fence against a fresh
+current `/4` record. It compares the complete canonical record bytes and verifies
+current controlled selection plus every retained signature while holding the same
+owner lock. Malformed or state-equivalent noncanonical bytes cannot produce its
+private authenticated result. The returned value is a source snapshot, with
+durability Unknown; it reserves no later revision and supplies no live commit or
+ACK witness.
+
 The SDK-generated `packages.lock.json` files retain NuGet package-content hashes.
 For signed packages that identity can differ from a raw archive SHA512: NuGet's
 [immutable package reader source](https://github.com/NuGet/NuGet.Client/blob/d3a633a04da7cd83900498334ec5e7650a52fa86/src/NuGet.Core/NuGet.Packaging/PackageArchiveReader.cs)
