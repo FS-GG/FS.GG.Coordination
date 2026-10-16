@@ -1370,6 +1370,11 @@ type PortableHostExecutorTests_ControlledAuthenticatedSource() =
         let root = corpus.RootElement
         Assert.False(root.GetProperty("productionEnrollment").GetBoolean())
         Assert.False(root.GetProperty("nativeAcceptance").GetBoolean())
+        Assert.Equal(2,root.GetProperty("outputJourneys").GetArrayLength())
+        Assert.Equal(2,root.GetProperty("controlledSelections").GetArrayLength())
+        Assert.Equal(32,root.GetProperty("signatures").GetArrayLength())
+        let names = root.GetProperty("outputJourneys").EnumerateArray() |> Seq.map (fun row -> row.GetProperty("name").GetString()) |> Set.ofSeq
+        Assert.Equal<Set<string>>(Set.ofList ["zero";"selected-sixteen"],names)
         let roles =
             ["original-intent",OriginalIntentSignature;"create-effect-grant",EffectGrantSignature;"receiver-command",ReceiverCommandSignature
              "host-command-result",HostCommandResultSignature;"native-proof",NativeProofSignature;"creation",SupplierCreationSignature
