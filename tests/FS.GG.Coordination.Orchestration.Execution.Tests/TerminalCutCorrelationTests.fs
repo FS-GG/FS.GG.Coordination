@@ -82,6 +82,37 @@ module FiniteCustodyTransportTestsTerminalCutCorrelationTests =
             lock gate (fun () -> call.Work <- Some work)
             ValueTask(work :> Task)
 
+    type private CallbackReadCall =
+        { Buffer: Memory<byte>; Token: CancellationToken; Underlying: Task<int>
+          mutable Work: Task<int> option }
+
+    // The actual supplied memory/token are forwarded once to the genuine stdout.
+    type private ObservingInput(target: Stream) =
+        inherit Stream()
+        let gate = obj()
+        let mutable pending: CallbackReadCall option = None
+        member _.Target = target
+        member _.PendingRead = lock gate (fun () -> pending)
+        override _.CanRead = target.CanRead
+        override _.CanSeek = false
+        override _.CanWrite = false
+        override _.Length = raise (NotSupportedException())
+        override _.Position with get () = raise (NotSupportedException()) and set _ = raise (NotSupportedException())
+        override _.Flush() = raise (NotSupportedException())
+        override _.Read(_, _, _) = raise (NotSupportedException())
+        override _.Seek(_, _) = raise (NotSupportedException())
+        override _.SetLength(_) = raise (NotSupportedException())
+        override _.Write(_, _, _) = raise (NotSupportedException())
+        override _.ReadAsync(buffer: Memory<byte>, token: CancellationToken) =
+            let underlying = target.ReadAsync(buffer, token).AsTask()
+            let call = { Buffer = buffer; Token = token; Underlying = underlying; Work = None }
+            lock gate (fun () -> Assert.True(pending.IsNone); pending <- Some call)
+            let work = task {
+                try return! underlying
+                finally lock gate (fun () -> pending <- None) }
+            lock gate (fun () -> call.Work <- Some work)
+            ValueTask<int>(work)
+
     type private CapturingOutput(target: Stream) =
         inherit Stream()
         let gate = obj()
@@ -228,6 +259,7 @@ module FiniteCustodyTransportTestsTerminalCutCorrelationTests =
         let capacity = scoped |> Seq.sumBy (fun value -> (value :?> byte array).Length)
         Assert.Equal(11353, capacity)
         printfn "terminal-cut-managed-source scopedObjects=%d backingCapacityBytes=%d snapshotCapacityBytes=5682 payloadSliceBytes=%d existingRequestAliases=%d unresolvedAckAndReaderRoots=true" scoped.Count capacity payloadSliceBytes aliases.Length
+        scoped
 
     let private ackReadCensus (session: FiniteCustodySessionAdapter) (child: PhaseStream) (control: ControlStream) binding digest (captures: (ReadOnlyMemory<byte> * byte array) array) =
         let read = child.PendingRead.Value
@@ -312,6 +344,81 @@ module FiniteCustodyTransportTestsTerminalCutCorrelationTests =
         Assert.False(write.Work.Value.IsCompleted)
         Assert.Equal(2, session.ConfirmedAckOrdinal)
         printfn "ack-read-managed-source writeCall=%d readCall=%d pendingAckOrdinal=4 confirmedAckOrdinal=2 ackBackingBytes=%d childReadBackingBytes=%d exactAwaiterJoins=true distinctFromResultParserAndEndpointArrays=true" write.Number read.Number ack.Array.Length ingress.Array.Length
+
+    // Exact named roots only. The two generated state names were observed in the
+    // genuine held-cut source test; runtime/compiler structure drift refuses.
+    let private callbackReadCensus (session: FiniteCustodySessionAdapter) (responses: ObservingInput) (stdout: Stream) (selected: HashSet<obj>) (captures: (ReadOnlyMemory<byte> * byte array) array) = task {
+        let field name (value: obj) =
+            Assert.NotNull value
+            let mutable kind = value.GetType()
+            let mutable found: FieldInfo = null
+            let mutable layers = 0
+            while isNull found && not (isNull kind) do
+                layers <- layers + 1
+                Assert.InRange(layers, 1, 8)
+                found <- kind.GetField(name, BindingFlags.Instance ||| BindingFlags.Public ||| BindingFlags.NonPublic ||| BindingFlags.DeclaredOnly)
+                kind <- kind.BaseType
+            Assert.NotNull found
+            found.GetValue value
+        let readyRead () =
+            match responses.PendingRead with
+            | Some read when read.Work.IsSome ->
+                not read.Work.Value.IsCompleted && not read.Underlying.IsCompleted
+                && not (isNull (field "m_continuationObject" read.Work.Value))
+                && not (isNull (field "m_continuationObject" read.Underlying))
+            | _ -> false
+        let wait = Stopwatch.StartNew()
+        while not (readyRead ()) && wait.Elapsed < limit do do! Task.Delay 1
+        Assert.True(readyRead (), "callback read must be pending with registered continuations")
+        let read = responses.PendingRead.Value
+        Assert.False(read.Work.Value.IsCompleted)
+        Assert.False(read.Underlying.IsCompleted)
+        Assert.NotSame(read.Work.Value, read.Underlying)
+        Assert.Equal(CancellationToken.None, read.Token)
+        Assert.Same(stdout, responses.Target)
+        let mutable backing = Unchecked.defaultof<ArraySegment<byte>>
+        Assert.True(MemoryMarshal.TryGetArray<byte>(Memory<byte>.op_Implicit read.Buffer, &backing))
+        Assert.Equal(1, read.Buffer.Length)
+        Assert.Equal(1, backing.Array.Length)
+        Assert.Equal(0, backing.Offset)
+        let continuation = field "m_continuationObject" read.Work.Value
+        let state = field "StateMachine" continuation
+        Assert.Equal(typeof<FiniteCustodySessionAdapter>.Assembly, state.GetType().Assembly)
+        Assert.Equal("work@88-2", state.GetType().Name)
+        let bridge = field "bridge" session
+        Assert.Same(bridge, field "this" state)
+        let channels = field "channels" bridge :?> FiniteCustodyInertChannels
+        Assert.Same(responses, channels.OwnerResponses)
+        Assert.Same(stdout, field "target" responses)
+        Assert.Same(backing.Array, field "buffer" state)
+        Assert.Same(read.Work.Value, field "m_task" (field "awaiter" state))
+        let underlyingContinuation = field "m_continuationObject" read.Underlying
+        let wrapperState = field "StateMachine" underlyingContinuation
+        Assert.Equal(typeof<ObservingInput>.Assembly, wrapperState.GetType().Assembly)
+        Assert.Equal("work@110-2", wrapperState.GetType().Name)
+        Assert.Same(responses, field "_" wrapperState)
+        Assert.Same(read.Underlying, field "underlying" wrapperState)
+        Assert.Same(read.Underlying, field "m_task" (field "awaiter" wrapperState))
+        let callbackReader = field "reader" bridge :?> Task option
+        Assert.True(callbackReader.IsSome)
+        Assert.False(callbackReader.Value.IsCompleted)
+        Assert.Contains(callbackReader.Value, session.RetainedTasks)
+        Assert.False((continuation :?> Task).IsCompleted)
+        Assert.False((underlyingContinuation :?> Task).IsCompleted)
+        Assert.Equal(11, selected.Count)
+        Assert.False(selected.Contains backing.Array)
+        let endpoints = HashSet<obj>(ReferenceEqualityComparer.Instance)
+        for alias, copy in captures do
+            let mutable request = Unchecked.defaultof<ArraySegment<byte>>
+            Assert.True(MemoryMarshal.TryGetArray<byte>(alias, &request))
+            Assert.True(endpoints.Add request.Array)
+            Assert.True(endpoints.Add copy)
+        Assert.Equal(26, endpoints.Count)
+        Assert.False(endpoints.Contains backing.Array)
+        Assert.Same(read, responses.PendingRead.Value)
+        Assert.False(read.Work.Value.IsCompleted)
+        Assert.False(read.Underlying.IsCompleted)
+        printfn "terminal-cut-callback-read-source backingCapacityBytes=%d memoryLength=%d offset=%d exactAwaiterJoins=true distinctFromSelected11AndEndpoint26=true" backing.Array.Length read.Buffer.Length backing.Offset }
 
     [<Fact>]
     let ``same execution holds Python sixth readback across managed request aliases and copies`` () = task {
@@ -406,8 +513,9 @@ module FiniteCustodyTransportTestsTerminalCutCorrelationTests =
                 | _ -> failwith "fixture-ack-order"
             | _ -> failwith "fixture-control-kind" } :> Task))
         use requests = new CapturingOutput(owner.StandardInput.BaseStream)
+        use responses = new ObservingInput(owner.StandardOutput.BaseStream)
         let channels: FiniteCustodyInertChannels =
-            { ChildResults = child; ChildControl = control; OwnerResponses = owner.StandardOutput.BaseStream; OwnerRequests = requests
+            { ChildResults = child; ChildControl = control; OwnerResponses = responses; OwnerRequests = requests
               RequestRetirement = fun () -> child.Abort(); termination.TrySetResult(Some true) |> ignore; Task.FromResult true
               Termination = termination.Task }
         let clock = { new FS.GG.Execution.Contracts.IMonotonicClock with member _.Now() = at (Interlocked.Read(&ticks)) }
@@ -454,7 +562,7 @@ module FiniteCustodyTransportTestsTerminalCutCorrelationTests =
             let lengths = rows |> Array.map (fun row -> row.Value[1].GetInt32())
             Assert.Equal(11660, Array.sum lengths) // Scoped Python source objects only.
             let requestDigest = captureDigest requests.Captures
-            managedCensus session requests.Captures
+            do! callbackReadCensus session responses owner.StandardOutput.BaseStream (managedCensus session requests.Captures) requests.Captures
             Assert.Equal(requestDigest, text cut "request")
             // The child remains inside its sixth readback stage while the managed
             // endpoint observes the actual supplied request memories and copies.
@@ -485,6 +593,7 @@ module FiniteCustodyTransportTestsTerminalCutCorrelationTests =
             Assert.Equal(None, outcome.StopReason)
             Assert.Equal(3, acknowledgments)
             Assert.Equal(FS.GG.Execution.Contracts.Settled, session.LocalTasks)
+            Assert.True(responses.PendingRead.IsNone, "settled callback observation must be cleared")
             use retained = readJson result
             let evidence = retained.RootElement
             Assert.Equal("fsgg.inert-slot-callback-test-evidence/1", text evidence "schema")
@@ -516,6 +625,7 @@ module FiniteCustodyTransportTestsTerminalCutCorrelationTests =
         cleanup "retained" (fun () -> Task.WhenAll(session.RetainedTasks).WaitAsync(limit).GetAwaiter().GetResult())
         cleanup "diagnostic" (fun () -> diagnostic.WaitAsync(limit).GetAwaiter().GetResult() |> ignore)
         cleanup "exit" (fun () -> observedExit.WaitAsync(limit).GetAwaiter().GetResult())
+        cleanup "callback-observation" (fun () -> Assert.True(responses.PendingRead.IsNone))
         if String.IsNullOrWhiteSpace evidence then
             cleanup "directory" (fun () -> Directory.Delete(root, true))
         if cleanupErrors.Count > 0 then
