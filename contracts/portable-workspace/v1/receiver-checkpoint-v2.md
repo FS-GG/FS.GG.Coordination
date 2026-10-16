@@ -59,7 +59,7 @@ qualification outside this source boundary.
 The SDK-generated `packages.lock.json` files retain NuGet package-content hashes.
 For signed packages that identity can differ from a raw archive SHA512: NuGet's
 [immutable package reader source](https://github.com/NuGet/NuGet.Client/blob/d3a633a04da7cd83900498334ec5e7650a52fa86/src/NuGet.Core/NuGet.Packaging/PackageArchiveReader.cs)
-separates `GetContentHash` and `GetArchiveHash`. Compare each hash with the same
+separates `GetContentHash` and `GetArchiveHashAsync`. Compare each hash with the same
 identity kind and retain original archive observations as archive evidence. A lock
 hash does not replace package-signature, dependency/security or executed-artifact
 qualification.
