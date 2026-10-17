@@ -1311,7 +1311,7 @@ class ParityDiagnosticControls(unittest.TestCase):
 
 
 class CommandInterfaceControls(unittest.TestCase):
-    def public_counterpart_fixture(self, scratch, lane='O2HostedWriterChoreoProviderBounded', attempt=1, accepted=False):
+    def public_counterpart_fixture(self, scratch, lane='O2HostedWriterChoreoProviderBounded', attempt=1, accepted=False, status=1):
         """Synthetic public metadata only; no command, pin or process is executed."""
         value,_ = self.startup_retry_fixture()
         spec = value['input']; stem=f'{lane}.log.attempt-{attempt}'
@@ -1323,16 +1323,17 @@ class CommandInterfaceControls(unittest.TestCase):
         spec['mutableScope'].update(cwd=str(scratch),tmpdir=str(scratch/'tmp'),
             javaToolOptions='-Djava.io.tmpdir='+str(scratch/'tmp'),
             denoDir=str(scratch/'cache/deno'),xdgCacheHome=str(scratch/'cache'))
-        cause={'type':'RuntimeError','message':'original public client failure'}
-        value.update(commandExit=0 if accepted else 1,commandAccepted=accepted,
+        cause={'type':'TimeoutError' if status==124 else 'RuntimeError','message':'original public client failure'}
+        value.update(commandExit=0 if accepted else -15 if status==124 else status,commandAccepted=accepted,
             firstCause=None if accepted else cause,diskSamples=[],omittedDiskSamples=0,
             limitation='Synthetic controlled metadata, not actual observed runtime evidence.')
-        owner=value['ownerReceipt']; owner.update(argv=spec['argv'],exit=0 if accepted else 1,
+        owner=value['ownerReceipt']; owner['leader']=dict(owner['leader'],ppid=100,rss=1024)
+        owner.update(argv=spec['argv'],exit=0 if accepted else 1,
             firstCause=None if accepted else 'RuntimeError: original public client failure',
             exitObservation={'code':0 if accepted else 1,'members':[],'omittedMembers':0},
             sampledPeakAggregateRss=1024,accountingScope='Synthetic public source control')
         value['endpointObservations']['entries']*=4
-        value['diskSamples']=[{'logical':i,'allocated':i,'objects':i,'links':0,
+        value['diskSamples']=[{'logicalBytes':i,'allocatedBytes':i,'objects':i,'fixtureSymlinks':0,'linkTraversal':False,
             'reportReserveBytes':393216,'observedAt':float(i)} for i in range(64)]
         paths={'command':scratch/(stem+'.command.json'),'input':scratch/(stem+'.input.json'),
                'owner':scratch/(stem+'.result.json'),'attempt':scratch/stem,'final':scratch/(lane+'.log')}
@@ -1344,18 +1345,18 @@ class CommandInterfaceControls(unittest.TestCase):
         return paths,value
 
     def test_public_verify_counterparts_preserve_exact_bytes_and_final_failure(self):
-        for superseded in (False,True):
-            with self.subTest(superseded=superseded),tempfile.TemporaryDirectory() as tmp:
+        for superseded,status in ((False,1),(True,2),(True,124)):
+            with self.subTest(superseded=superseded,status=status),tempfile.TemporaryDirectory() as tmp:
                 root=Path(tmp);scratch=root/'scratch';scratch.mkdir()
                 if superseded:
                     self.public_counterpart_fixture(scratch)
                     self.public_counterpart_fixture(scratch,attempt=2,accepted=True)
                 paths,value=self.public_counterpart_fixture(scratch,
-                    lane='O2HostedWriterChoreoRunnerBounded' if superseded else 'O2HostedWriterChoreoProviderBounded')
+                    lane='O2HostedWriterChoreoRunnerBounded' if superseded else 'O2HostedWriterChoreoProviderBounded',status=status)
                 originals={paths[key].name:paths[key].read_bytes() for key in ('command','input','owner')}
                 server=scratch/'_apalache-out/server/attempt';server.mkdir(parents=True)
                 (server/'detailed.log').write_text('public compiler server detail\n')
-                result=module.capture(scratch,root/'diagnostics',1,max_output=98304)
+                result=module.capture(scratch,root/'diagnostics',status,max_output=98304)
                 self.assertTrue(result['publicCommandEvidence']['complete'],result.get('publicCommandEvidence'))
                 shutil.rmtree(scratch)
                 evidence=result['publicCommandEvidence'];self.assertEqual(3,len(evidence['files']))
@@ -1368,13 +1369,14 @@ class CommandInterfaceControls(unittest.TestCase):
                 self.assertIn('observed-empty-group',text)
                 self.assertIn('public client stderr: error: error',text)
                 self.assertIn('public compiler server detail',text)
-                self.assertEqual(1,result['originalExitCode'])
+                self.assertEqual(status,result['originalExitCode'])
                 self.assertLessEqual((root/'diagnostics/failure.json').stat().st_size,98304)
 
     def test_public_verify_counterparts_fail_closed_on_missing_private_changed_inputs(self):
         cases=('missing-owner','input-mismatch','owner-mismatch','private-profile','unknown-result',
                'unknown-owner','escaped-sensitive','duplicate-key','malformed','final-log-mismatch',
-               'symlink-owner','command-cap','input-cap','owner-cap','ambiguous')
+               'symlink-owner','command-cap','input-cap','owner-cap','ambiguous',
+               'nested-disk','nested-owner','nested-failure','nested-endpoint','later-partial-same-log','wrong-final-status')
         for case in cases:
             with self.subTest(case=case),tempfile.TemporaryDirectory() as tmp:
                 root=Path(tmp);scratch=root/'scratch';scratch.mkdir();paths,value=self.public_counterpart_fixture(scratch)
@@ -1399,6 +1401,16 @@ class CommandInterfaceControls(unittest.TestCase):
                     target=root/'unselected';target.write_text('NEVER COPY');paths['owner'].unlink();paths['owner'].symlink_to(target)
                 elif case.endswith('-cap'):
                     key=case.split('-')[0];paths[key].write_bytes(b' '*((32768 if key=='command' else 8192)+1))
+                elif case.startswith('nested-'):
+                    if case=='nested-disk':value['diskSamples'][0]['capturedEnvironment']={'API_KEY':'NEVER COPY'}
+                    elif case=='nested-owner':value['ownerReceipt']['leader']['unselected']='NEVER COPY'
+                    elif case=='nested-failure':value['firstCause']['unselected']='NEVER COPY'
+                    else:value['endpointObservations']['entries'][0]['fdScans'][0]['unselected']='NEVER COPY'
+                    paths['command'].write_text(json.dumps(value));paths['owner'].write_text(json.dumps(value['ownerReceipt']))
+                elif case=='later-partial-same-log':
+                    (scratch/(paths['attempt'].name.replace('attempt-1','attempt-2'))).write_bytes(paths['attempt'].read_bytes())
+                elif case=='wrong-final-status':
+                    value['commandExit']=2;paths['command'].write_text(json.dumps(value))
                 elif case=='ambiguous':self.public_counterpart_fixture(scratch,lane='O2HostedWriterChoreoRunnerBounded')
                 with self.assertRaises((ValueError,OSError)):
                     module.public_command_evidence(scratch,1,time.monotonic()+2,time.monotonic,16,128)

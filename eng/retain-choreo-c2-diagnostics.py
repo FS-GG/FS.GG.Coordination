@@ -242,9 +242,10 @@ def lifecycle_summary(value):
 
 def public_command_evidence(scratch, status, end, clock, files_left, entries_left, known_names=()):
     """Optional exact public C2 metadata; never command or retry authority."""
-    # Four fixed candidate names plus four counterpart/log reads. Previously
+    # Four command names, at most twelve absent-command presence probes, and
+    # four counterpart/log reads. Previously
     # retained files count once; new files and all lookup operations are bounded.
-    if files_left < 0 or entries_left < 8:
+    if files_left < 0 or entries_left < 20:
         raise ValueError('public-counterparts-population-bound')
     if clock() >= end: raise ValueError('public-counterparts-deadline')
     def unique(pairs):
@@ -285,7 +286,17 @@ def public_command_evidence(scratch, status, end, clock, files_left, entries_lef
             for attempt in (1,2):
                 stem = f'{lane}.log.attempt-{attempt}'
                 try: raw = read(directory, stem+'.command.json', 32768)
-                except FileNotFoundError: continue
+                except FileNotFoundError:
+                    # Equal log bytes cannot identify a final attempt. Refuse
+                    # partial later reports instead of substituting an older one.
+                    for suffix in ('', '.input.json', '.result.json'):
+                        if clock() >= end: raise ValueError('public-counterparts-deadline')
+                        entries_left -= 1
+                        if entries_left < 0: raise ValueError('public-counterparts-population-bound')
+                        try: os.stat(stem+suffix, dir_fd=directory, follow_symlinks=False)
+                        except FileNotFoundError: continue
+                        raise ValueError('public-counterparts-incomplete-attempt')
+                    continue
                 value = parsed(raw)
                 if not isinstance(value,dict) or value.get('schema') != RESULT_SCHEMA:
                     raise ValueError('public-counterparts-result-schema')
@@ -309,8 +320,7 @@ def public_command_evidence(scratch, status, end, clock, files_left, entries_lef
                             '--server-endpoint', 'localhost:'+str(endpoint+attempt-1)]
                 if (spec['argv'] != expected or spec['endpoint'] != endpoint+attempt-1
                         or spec['mutableScope']['cwd'] != str(scratch)
-                        or type(value.get('commandExit')) is not int
-                        or (value['commandExit'] if value['commandExit'] > 0 else 1) != status):
+                        or type(value.get('commandExit')) is not int):
                     raise ValueError('public-counterparts-command-join')
                 latest[lane] = (lane,stem,raw,value)
         candidates = [value for value in latest.values() if value is not None]
@@ -341,6 +351,65 @@ def public_command_evidence(scratch, status, end, clock, files_left, entries_lef
                 or SENSITIVE.search(json.dumps(value,ensure_ascii=False))
                 or any(SENSITIVE.search(body.decode('utf-8')) for body in (raw,input_raw,owner_raw))):
             raise ValueError('public-counterparts-private-or-unknown-fields')
+        # Closed nested producer fields are a privacy check, not lifecycle or
+        # retry eligibility. Scalars cannot conceal arbitrary nested records.
+        scalar = None
+        identity = dict.fromkeys(('pid','start','pgid','state'))
+        process = dict.fromkeys(('pid','start','pgid','state','ppid','rss'))
+        birth = dict.fromkeys(('pid','start'))
+        failure = {'type':scalar,'message':scalar}
+        inode = {'values':[scalar],'omitted':scalar}
+        membership = {'members':[identity],'omittedMembers':scalar}
+        scan = {'before':identity,'disposition':scalar,'missingReadlinks':scalar,
+                'socketInodes':inode,'afterMismatchObserved':scalar,'afterMismatchBirth':identity}
+        endpoint = dict.fromkeys(('event','attempt','disposition'))
+        endpoint.update(beforeMembers=membership,afterMembers=membership,beforeInodes=inode,
+                        afterInodes=inode,matchedInodes=inode,failure=failure,fdScans=[scan])
+        denial = dict.fromkeys(('operation','terminalPollAttempted','terminalExit'))
+        denial.update(before=identity,freshBeforeTerminalPoll=identity,
+                      freshAfterTerminalPoll=identity,observationFailure=failure)
+        def closed(item, shape):
+            if item is None: return
+            if isinstance(shape,dict):
+                if not isinstance(item,dict) or set(item) != set(shape):
+                    raise ValueError('public-counterparts-nested-fields')
+                for key,child in shape.items(): closed(item[key],child)
+            elif isinstance(shape,list):
+                if not isinstance(item,list): raise ValueError('public-counterparts-nested-list')
+                for child in item: closed(child,shape[0])
+            elif type(item) not in (str,int,float,bool):
+                raise ValueError('public-counterparts-nested-scalar')
+        def closed_failure(item):
+            if item is None: return
+            if not isinstance(item,dict) or set(item) not in (set(failure),set(failure)|{'secondaryFailures'}):
+                raise ValueError('public-counterparts-failure-fields')
+            closed({k:item[k] for k in failure},failure)
+            if 'secondaryFailures' in item: closed(item['secondaryFailures'],[failure])
+        closed_failure(value['firstCause'])
+        if not isinstance(value['additionalFailures'],list): raise ValueError('public-counterparts-failure-list')
+        for item in value['additionalFailures']: closed_failure(item)
+        for key,shape in {'originalServerBirths':[birth],
+                'originalServerStopRequests':[dict.fromkeys(('pid','start','signal','disposition','at'))],
+                'exitMembers':[birth],'diskSamples':[dict.fromkeys(('objects','logicalBytes','allocatedBytes',
+                    'fixtureSymlinks','linkTraversal','reportReserveBytes','observedAt'))],
+                'fdDenialObservations':{'entries':[denial],'omitted':scalar},
+                'endpointObservations':{'entries':[endpoint],'omitted':scalar}}.items():
+            closed(value[key],shape)
+        for key in ('schema','commandExit','commandAccepted','omittedDiskSamples',
+                    'cleanupObservedAt','modelCheckingRequired','limitation'): closed(value[key],scalar)
+        owner_shape=dict.fromkeys(owner_fields)
+        owner_shape.update(argv=[scalar],leader=process,additionalFailures=[scalar],
+            exitObservation={'code':scalar,'members':[identity],'omittedMembers':scalar},
+            residual=[process],escapedDescendants=[process],escapedResidual=[process])
+        closed(owner,owner_shape)
+        input_shape=dict.fromkeys(spec)
+        input_shape.update(argv=[scalar],jvmArgs=[scalar],
+            pins=[dict.fromkeys(('path','bytes','sha256'))],aliases=[dict.fromkeys(('path','target'))],
+            mutableScope=dict.fromkeys(spec['mutableScope']),tlcConfig=dict.fromkeys(('maxHeap','stackSize','workers')))
+        closed(spec,input_shape)
+        # leader is the full /proc producer record; synthetic controls use it too.
+        expected_status = 124 if value['firstCause']['type']=='TimeoutError' else max(1,value['commandExit'])
+        if status != expected_status: raise ValueError('public-counterparts-final-status')
         files = [(stem+'.command.json',raw),(stem+'.input.json',input_raw),(stem+'.result.json',owner_raw)]
         evidence = {'scope':'public-canonical-verify-diagnostics-only','complete':True,
             'files':[{'name':name,'bytes':len(body),'sha256':hashlib.sha256(body).hexdigest(),
