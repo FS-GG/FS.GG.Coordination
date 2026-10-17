@@ -12,6 +12,7 @@ import time
 import hashlib
 import contextlib
 import io
+import base64
 import resource
 from unittest.mock import patch
 
@@ -1310,6 +1311,153 @@ class ParityDiagnosticControls(unittest.TestCase):
 
 
 class CommandInterfaceControls(unittest.TestCase):
+    def public_counterpart_fixture(self, scratch, lane='O2HostedWriterChoreoProviderBounded', attempt=1, accepted=False, status=1):
+        """Synthetic public metadata only; no command, pin or process is executed."""
+        value,_ = self.startup_retry_fixture()
+        spec = value['input']; stem=f'{lane}.log.attempt-{attempt}'
+        endpoint=(19820 if 'Provider' in lane else 19822)+attempt-1
+        spec['endpoint']=endpoint
+        spec['argv']=['/quint','verify',str(scratch/'choreo-c2-bounded.qnt'),'--main='+lane,
+            '--init=init','--step=step','--invariant=safety','--max-steps=20','--backend=tlc','--verbosity=3',
+            '--tlc-config='+str(scratch/(stem+'.tlc.json')),'--server-endpoint','localhost:'+str(endpoint)]
+        spec['mutableScope'].update(cwd=str(scratch),tmpdir=str(scratch/'tmp'),
+            javaToolOptions='-Djava.io.tmpdir='+str(scratch/'tmp'),
+            denoDir=str(scratch/'cache/deno'),xdgCacheHome=str(scratch/'cache'))
+        cause={'type':'TimeoutError' if status==124 else 'RuntimeError','message':'original public client failure'}
+        value.update(commandExit=0 if accepted else -15 if status==124 else status,commandAccepted=accepted,
+            firstCause=None if accepted else cause,diskSamples=[],omittedDiskSamples=0,
+            limitation='Synthetic controlled metadata, not actual observed runtime evidence.')
+        owner=value['ownerReceipt']; owner['leader']=dict(owner['leader'],ppid=100,rss=1024)
+        owner.update(argv=spec['argv'],exit=0 if accepted else 1,
+            firstCause=None if accepted else 'RuntimeError: original public client failure',
+            exitObservation={'code':0 if accepted else 1,'members':[],'omittedMembers':0},
+            sampledPeakAggregateRss=1024,accountingScope='Synthetic public source control')
+        value['endpointObservations']['entries']*=4
+        value['diskSamples']=[{'logicalBytes':i,'allocatedBytes':i,'objects':i,'fixtureSymlinks':0,'linkTraversal':False,
+            'reportReserveBytes':393216,'observedAt':float(i)} for i in range(64)]
+        paths={'command':scratch/(stem+'.command.json'),'input':scratch/(stem+'.input.json'),
+               'owner':scratch/(stem+'.result.json'),'attempt':scratch/stem,'final':scratch/(lane+'.log')}
+        for key,body in [('command',value),('input',spec),('owner',owner)]:
+            paths[key].write_text(json.dumps(body,indent=2)+'\n')
+        log=(f'public client stdout attempt={attempt} accepted={accepted}\n'+
+             ('public client completed\n' if accepted else 'public client stderr: error: error\n')).encode()
+        paths['attempt'].write_bytes(log);paths['final'].write_bytes(log)
+        return paths,value
+
+    def test_public_verify_counterparts_preserve_exact_bytes_and_final_failure(self):
+        for superseded,status in ((False,1),(True,2),(True,124)):
+            with self.subTest(superseded=superseded,status=status),tempfile.TemporaryDirectory() as tmp:
+                root=Path(tmp);scratch=root/'scratch';scratch.mkdir()
+                if superseded:
+                    self.public_counterpart_fixture(scratch)
+                    self.public_counterpart_fixture(scratch,attempt=2,accepted=True)
+                paths,value=self.public_counterpart_fixture(scratch,
+                    lane='O2HostedWriterChoreoRunnerBounded' if superseded else 'O2HostedWriterChoreoProviderBounded',status=status)
+                originals={paths[key].name:paths[key].read_bytes() for key in ('command','input','owner')}
+                server=scratch/'_apalache-out/server/attempt';server.mkdir(parents=True)
+                (server/'detailed.log').write_text('public compiler server detail\n')
+                result=module.capture(scratch,root/'diagnostics',status,max_output=98304)
+                self.assertTrue(result['publicCommandEvidence']['complete'],result.get('publicCommandEvidence'))
+                shutil.rmtree(scratch)
+                evidence=result['publicCommandEvidence'];self.assertEqual(3,len(evidence['files']))
+                for row in evidence['files']:
+                    body=base64.b64decode(row['base64'],validate=True)
+                    self.assertEqual(originals[row['name']],body);self.assertEqual(len(body),row['bytes'])
+                    self.assertEqual(hashlib.sha256(body).hexdigest(),row['sha256'])
+                text=json.dumps(result)
+                self.assertIn('original public client failure',text)
+                self.assertIn('observed-empty-group',text)
+                self.assertIn('public client stderr: error: error',text)
+                self.assertIn('public compiler server detail',text)
+                self.assertEqual(status,result['originalExitCode'])
+                self.assertLessEqual((root/'diagnostics/failure.json').stat().st_size,98304)
+
+    def test_public_verify_counterparts_fail_closed_on_missing_private_changed_inputs(self):
+        cases=('missing-owner','input-mismatch','owner-mismatch','private-profile','unknown-result',
+               'unknown-owner','escaped-sensitive','duplicate-key','malformed','final-log-mismatch',
+               'symlink-owner','command-cap','input-cap','owner-cap','ambiguous',
+               'nested-disk','nested-owner','nested-failure','nested-endpoint','later-partial-same-log','wrong-final-status')
+        for case in cases:
+            with self.subTest(case=case),tempfile.TemporaryDirectory() as tmp:
+                root=Path(tmp);scratch=root/'scratch';scratch.mkdir();paths,value=self.public_counterpart_fixture(scratch)
+                if case=='missing-owner':paths['owner'].unlink()
+                elif case=='input-mismatch':
+                    body=json.loads(paths['input'].read_text());body['endpoint']+=1;paths['input'].write_text(json.dumps(body))
+                elif case=='owner-mismatch':
+                    body=json.loads(paths['owner'].read_text());body['argv']=['foreign'];paths['owner'].write_text(json.dumps(body))
+                elif case=='private-profile':
+                    value['input']['profile']='proc-pair-private';paths['command'].write_text(json.dumps(value))
+                elif case=='unknown-result':value['environment']={'unselected':'NEVER COPY'};paths['command'].write_text(json.dumps(value))
+                elif case=='unknown-owner':
+                    value['ownerReceipt']['unselected']='NEVER COPY'
+                    paths['command'].write_text(json.dumps(value));paths['owner'].write_text(json.dumps(value['ownerReceipt']))
+                elif case=='escaped-sensitive':
+                    value['limitation']='password'
+                    paths['command'].write_text(json.dumps(value).replace('"password"','"'+''.join('\\u%04x'%ord(c) for c in 'password')+'"'))
+                elif case=='duplicate-key':paths['command'].write_text(paths['command'].read_text().rstrip()[:-1]+',"schema":"duplicate"}')
+                elif case=='malformed':paths['command'].write_text('[]')
+                elif case=='final-log-mismatch':paths['final'].write_text('different final attempt')
+                elif case=='symlink-owner':
+                    target=root/'unselected';target.write_text('NEVER COPY');paths['owner'].unlink();paths['owner'].symlink_to(target)
+                elif case.endswith('-cap'):
+                    key=case.split('-')[0];paths[key].write_bytes(b' '*((32768 if key=='command' else 8192)+1))
+                elif case.startswith('nested-'):
+                    if case=='nested-disk':value['diskSamples'][0]['capturedEnvironment']={'API_KEY':'NEVER COPY'}
+                    elif case=='nested-owner':value['ownerReceipt']['leader']['unselected']='NEVER COPY'
+                    elif case=='nested-failure':value['firstCause']['unselected']='NEVER COPY'
+                    else:value['endpointObservations']['entries'][0]['fdScans'][0]['unselected']='NEVER COPY'
+                    paths['command'].write_text(json.dumps(value));paths['owner'].write_text(json.dumps(value['ownerReceipt']))
+                elif case=='later-partial-same-log':
+                    (scratch/(paths['attempt'].name.replace('attempt-1','attempt-2'))).write_bytes(paths['attempt'].read_bytes())
+                elif case=='wrong-final-status':
+                    value['commandExit']=2;paths['command'].write_text(json.dumps(value))
+                elif case=='ambiguous':self.public_counterpart_fixture(scratch,lane='O2HostedWriterChoreoRunnerBounded')
+                with self.assertRaises((ValueError,OSError)):
+                    module.public_command_evidence(scratch,1,time.monotonic()+2,time.monotonic,16,128)
+                self.assertFalse((root/'diagnostics').exists())
+        with tempfile.TemporaryDirectory() as tmp:
+            from types import SimpleNamespace
+            scratch=Path(tmp);self.public_counterpart_fixture(scratch);actual=module.os.fstat;calls=0
+            def changed(fd):
+                nonlocal calls
+                row=actual(fd);calls+=1
+                if calls!=2:return row
+                values={key:getattr(row,key) for key in ('st_dev','st_ino','st_size','st_mtime_ns','st_ctime_ns','st_mode','st_uid','st_gid')}
+                values['st_ctime_ns']+=1;return SimpleNamespace(**values)
+            with patch.object(module.os,'fstat',side_effect=changed),self.assertRaisesRegex(ValueError,'changed'):
+                module.public_command_evidence(scratch,1,time.monotonic()+2,time.monotonic,16,128)
+
+    def test_public_verify_counterparts_budget_preserves_original_failure_logs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);scratch=root/'scratch';scratch.mkdir();self.public_counterpart_fixture(scratch)
+            server=scratch/'_apalache-out/server/attempt';server.mkdir(parents=True)
+            (server/'detailed.log').write_text('public compiler server detail\n')
+            result=module.capture(scratch,root/'diagnostics',1,max_output=16384)
+            self.assertFalse(result['publicCommandEvidence']['complete'])
+            self.assertEqual('public-counterparts-output-bound',result['publicCommandEvidence']['omitted'])
+            text=json.dumps(result)
+            for symptom in ('original public client failure','observed-empty-group',
+                            'public client stderr: error: error','public compiler server detail'):
+                self.assertIn(symptom,text)
+            before=(root/'diagnostics/failure.json').read_bytes()
+            with self.assertRaises(FileExistsError):module.capture(scratch,root/'diagnostics',1,max_output=16384)
+            self.assertEqual(before,(root/'diagnostics/failure.json').read_bytes())
+            self.assertEqual(1,result['originalExitCode']);self.assertLessEqual(len(before),16384)
+            for ordinal,message in enumerate(('secondary read failure','secondary close failure')):
+                with patch.object(module,'public_command_evidence',side_effect=OSError(message)):
+                    failed=module.capture(scratch,root/f'report-{ordinal}',1,max_output=16384)
+                self.assertFalse(failed['publicCommandEvidence']['complete'])
+                self.assertEqual(1,failed['originalExitCode'])
+                self.assertIn('original public client failure',json.dumps(failed))
+                self.assertIn('observed-empty-group',json.dumps(failed))
+            with patch.object(module.os,'open') as opened:
+                with self.assertRaisesRegex(ValueError,'deadline'):
+                    module.public_command_evidence(scratch,1,0,time.monotonic,16,128)
+                opened.assert_not_called()
+            for files,entries in ((7,128),(16,7)):
+                with self.assertRaisesRegex(ValueError,'population'):
+                    module.public_command_evidence(scratch,1,time.monotonic()+2,time.monotonic,files,entries)
+
     def startup_retry_fixture(self):
         """Synthetic complete current receipt, not reconstructed historical evidence."""
         leader={'pid':101,'start':20,'pgid':101,'state':'R'}

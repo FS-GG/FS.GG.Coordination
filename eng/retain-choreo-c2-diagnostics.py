@@ -14,6 +14,7 @@ import hashlib
 import importlib.util
 import signal
 import math
+import base64
 
 MAX_ENTRIES = 128
 MAX_FILES = 16
@@ -239,6 +240,188 @@ def lifecycle_summary(value):
             'ownerExitObservation':projected, 'stopRequests':projected_stops,
             'omittedStopRequests':None if stops is None else max(0,len(stops)-6)}
 
+def public_command_evidence(scratch, status, end, clock, files_left, entries_left, known_names=()):
+    """Optional exact public C2 metadata; never command or retry authority."""
+    # Four command names, at most twelve absent-command presence probes, and
+    # four counterpart/log reads. Previously
+    # retained files count once; new files and all lookup operations are bounded.
+    if files_left < 0 or entries_left < 20:
+        raise ValueError('public-counterparts-population-bound')
+    if clock() >= end: raise ValueError('public-counterparts-deadline')
+    def unique(pairs):
+        value = {}
+        for key, item in pairs:
+            if key in value: raise ValueError('public-counterparts-duplicate-key')
+            value[key] = item
+        return value
+    def constant(_): raise ValueError('public-counterparts-nonfinite')
+    def parsed(raw):
+        return json.loads(raw.decode('utf-8'), object_pairs_hook=unique, parse_constant=constant)
+    def read(directory, name, cap):
+        nonlocal files_left,entries_left
+        if clock() >= end: raise ValueError('public-counterparts-deadline')
+        entries_left -= 1
+        if name not in known_names: files_left -= 1
+        if entries_left < 0 or files_left < 0:
+            raise ValueError('public-counterparts-population-bound')
+        fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory)
+        try:
+            before = os.fstat(fd)
+            if not stat.S_ISREG(before.st_mode) or not 0 < before.st_size <= cap:
+                raise ValueError('public-counterparts-byte-or-file-bound')
+            body = os.read(fd, cap + 1)
+            after = os.fstat(fd)
+            identity = lambda row: (row.st_dev, row.st_ino, row.st_size, row.st_mtime_ns,
+                                    row.st_ctime_ns, row.st_mode, row.st_uid, row.st_gid)
+            if identity(before) != identity(after) or len(body) != before.st_size:
+                raise ValueError('public-counterparts-changed')
+            if clock() >= end: raise ValueError('public-counterparts-deadline')
+            return body
+        finally: os.close(fd)
+    directory = os.open(scratch, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        latest = {}
+        for lane, endpoint in (('O2HostedWriterChoreoProviderBounded',19820),
+                               ('O2HostedWriterChoreoRunnerBounded',19822)):
+            for attempt in (1,2):
+                stem = f'{lane}.log.attempt-{attempt}'
+                try: raw = read(directory, stem+'.command.json', 32768)
+                except FileNotFoundError:
+                    # Equal log bytes cannot identify a final attempt. Refuse
+                    # partial later reports instead of substituting an older one.
+                    for suffix in ('', '.input.json', '.result.json'):
+                        if clock() >= end: raise ValueError('public-counterparts-deadline')
+                        entries_left -= 1
+                        if entries_left < 0: raise ValueError('public-counterparts-population-bound')
+                        try: os.stat(stem+suffix, dir_fd=directory, follow_symlinks=False)
+                        except FileNotFoundError: continue
+                        raise ValueError('public-counterparts-incomplete-attempt')
+                    continue
+                value = parsed(raw)
+                if not isinstance(value,dict) or value.get('schema') != RESULT_SCHEMA:
+                    raise ValueError('public-counterparts-result-schema')
+                if value.get('commandAccepted') is True:
+                    latest[lane] = None
+                    continue
+                if value.get('commandAccepted') is not False or value.get('firstCause') is None:
+                    raise ValueError('public-counterparts-result-shape')
+                spec = value.get('input')
+                # Reject private/PROC and arbitrary inputs before using the
+                # existing pure public-profile validator. Recorded time is
+                # shape data here, not a fresh launch or eligibility check.
+                if (not isinstance(spec,dict) or 'profile' in spec
+                        or spec.get('schema') != COMMAND_SCHEMA or spec.get('role') != 'verify'):
+                    raise ValueError('public-counterparts-profile')
+                command_preflight(spec, now=spec['started'])
+                expected = [spec['argv'][0], 'verify', str(scratch/'choreo-c2-bounded.qnt'),
+                            '--main='+lane, '--init=init', '--step=step', '--invariant=safety',
+                            '--max-steps=20', '--backend=tlc', '--verbosity=3',
+                            '--tlc-config='+str(scratch/(stem+'.tlc.json')),
+                            '--server-endpoint', 'localhost:'+str(endpoint+attempt-1)]
+                if (spec['argv'] != expected or spec['endpoint'] != endpoint+attempt-1
+                        or spec['mutableScope']['cwd'] != str(scratch)
+                        or type(value.get('commandExit')) is not int):
+                    raise ValueError('public-counterparts-command-join')
+                latest[lane] = (lane,stem,raw,value)
+        candidates = [value for value in latest.values() if value is not None]
+        if not candidates: raise ValueError('public-counterparts-unavailable')
+        # Never silently choose an earlier failure that a later retry replaced.
+        # One final failing tuple is required; ambiguity is an explicit omission.
+        if len(candidates) != 1: raise ValueError('public-counterparts-ambiguous')
+        lane,stem,raw,value = candidates[0]
+        log = read(directory, lane+'.log', FILE_BYTES)
+        if log != read(directory, stem, FILE_BYTES):
+            raise ValueError('public-counterparts-final-log-join')
+        input_raw = read(directory, stem+'.input.json', 8192)
+        owner_raw = read(directory, stem+'.result.json', 8192)
+        spec,owner = parsed(input_raw),parsed(owner_raw)
+        if (spec != value['input'] or owner != value.get('ownerReceipt')
+                or not isinstance(owner,dict) or owner.get('argv') != spec['argv']):
+            raise ValueError('public-counterparts-cross-join')
+        # Exact bytes are never redacted and then labelled exact. Reject the
+        # whole optional tuple if it contains sensitive text or unknown fields.
+        result_fields = {'schema','commandExit','commandAccepted','firstCause','additionalFailures',
+            'ownerReceipt','originalServerBirths','originalServerStopRequests','fdDenialObservations',
+            'endpointObservations','exitMembers','diskSamples','omittedDiskSamples','input',
+            'cleanupObservedAt','modelCheckingRequired','limitation'}
+        owner_fields = {'argv','leader','ownedPopenPid','birthIdentityUnavailable','exit','exitObservation',
+            'firstCause','additionalFailures','cleanup','residual','escapedDescendants','escapedResidual',
+            'custody','sampledPeakAggregateRss','accountingScope'}
+        if (set(value) != result_fields or set(owner) != owner_fields
+                or SENSITIVE.search(json.dumps(value,ensure_ascii=False))
+                or any(SENSITIVE.search(body.decode('utf-8')) for body in (raw,input_raw,owner_raw))):
+            raise ValueError('public-counterparts-private-or-unknown-fields')
+        # Closed nested producer fields are a privacy check, not lifecycle or
+        # retry eligibility. Scalars cannot conceal arbitrary nested records.
+        scalar = None
+        identity = dict.fromkeys(('pid','start','pgid','state'))
+        process = dict.fromkeys(('pid','start','pgid','state','ppid','rss'))
+        birth = dict.fromkeys(('pid','start'))
+        failure = {'type':scalar,'message':scalar}
+        inode = {'values':[scalar],'omitted':scalar}
+        membership = {'members':[identity],'omittedMembers':scalar}
+        scan = {'before':identity,'disposition':scalar,'missingReadlinks':scalar,
+                'socketInodes':inode,'afterMismatchObserved':scalar,'afterMismatchBirth':identity}
+        endpoint = dict.fromkeys(('event','attempt','disposition'))
+        endpoint.update(beforeMembers=membership,afterMembers=membership,beforeInodes=inode,
+                        afterInodes=inode,matchedInodes=inode,failure=failure,fdScans=[scan])
+        denial = dict.fromkeys(('operation','terminalPollAttempted','terminalExit'))
+        denial.update(before=identity,freshBeforeTerminalPoll=identity,
+                      freshAfterTerminalPoll=identity,observationFailure=failure)
+        def closed(item, shape):
+            if item is None: return
+            if isinstance(shape,dict):
+                if not isinstance(item,dict) or set(item) != set(shape):
+                    raise ValueError('public-counterparts-nested-fields')
+                for key,child in shape.items(): closed(item[key],child)
+            elif isinstance(shape,list):
+                if not isinstance(item,list): raise ValueError('public-counterparts-nested-list')
+                for child in item: closed(child,shape[0])
+            elif type(item) not in (str,int,float,bool):
+                raise ValueError('public-counterparts-nested-scalar')
+        def closed_failure(item):
+            if item is None: return
+            if not isinstance(item,dict) or set(item) not in (set(failure),set(failure)|{'secondaryFailures'}):
+                raise ValueError('public-counterparts-failure-fields')
+            closed({k:item[k] for k in failure},failure)
+            if 'secondaryFailures' in item: closed(item['secondaryFailures'],[failure])
+        closed_failure(value['firstCause'])
+        if not isinstance(value['additionalFailures'],list): raise ValueError('public-counterparts-failure-list')
+        for item in value['additionalFailures']: closed_failure(item)
+        for key,shape in {'originalServerBirths':[birth],
+                'originalServerStopRequests':[dict.fromkeys(('pid','start','signal','disposition','at'))],
+                'exitMembers':[birth],'diskSamples':[dict.fromkeys(('objects','logicalBytes','allocatedBytes',
+                    'fixtureSymlinks','linkTraversal','reportReserveBytes','observedAt'))],
+                'fdDenialObservations':{'entries':[denial],'omitted':scalar},
+                'endpointObservations':{'entries':[endpoint],'omitted':scalar}}.items():
+            closed(value[key],shape)
+        for key in ('schema','commandExit','commandAccepted','omittedDiskSamples',
+                    'cleanupObservedAt','modelCheckingRequired','limitation'): closed(value[key],scalar)
+        owner_shape=dict.fromkeys(owner_fields)
+        owner_shape.update(argv=[scalar],leader=process,additionalFailures=[scalar],
+            exitObservation={'code':scalar,'members':[identity],'omittedMembers':scalar},
+            residual=[process],escapedDescendants=[process],escapedResidual=[process])
+        closed(owner,owner_shape)
+        input_shape=dict.fromkeys(spec)
+        input_shape.update(argv=[scalar],jvmArgs=[scalar],
+            pins=[dict.fromkeys(('path','bytes','sha256'))],aliases=[dict.fromkeys(('path','target'))],
+            mutableScope=dict.fromkeys(spec['mutableScope']),tlcConfig=dict.fromkeys(('maxHeap','stackSize','workers')))
+        closed(spec,input_shape)
+        # leader is the full /proc producer record; synthetic controls use it too.
+        expected_status = 124 if value['firstCause']['type']=='TimeoutError' else max(1,value['commandExit'])
+        if status != expected_status: raise ValueError('public-counterparts-final-status')
+        files = [(stem+'.command.json',raw),(stem+'.input.json',input_raw),(stem+'.result.json',owner_raw)]
+        evidence = {'scope':'public-canonical-verify-diagnostics-only','complete':True,
+            'files':[{'name':name,'bytes':len(body),'sha256':hashlib.sha256(body).hexdigest(),
+                      'base64':base64.b64encode(body).decode('ascii')} for name,body in files],
+            'finalLog':{'name':lane+'.log','bytes':len(log),'sha256':hashlib.sha256(log).hexdigest()}}
+        if len(json.dumps(evidence,ensure_ascii=True).encode()) > 69632:
+            raise ValueError('public-counterparts-frame-bound')
+        if clock() >= end: raise ValueError('public-counterparts-deadline')
+        return evidence
+    finally: os.close(directory)
+
+
 def capture(scratch, destination, status, *, clock=time.monotonic, max_output=MAX_OUTPUT):
     """Bound enumeration, nofollow reads, head/tail retention and output bytes."""
     if not 1024 <= max_output <= MAX_OUTPUT:
@@ -255,6 +438,7 @@ def capture(scratch, destination, status, *, clock=time.monotonic, max_output=MA
     if any(not stat.S_ISDIR(p.lstat().st_mode) for p in parents):
         raise ValueError('diagnostic parent is not a plain directory')
     records = []
+    retained_names = set()
     coverage = []
     pending = [(scratch, 0)]
     visited = 0
@@ -358,6 +542,7 @@ def capture(scratch, destination, status, *, clock=time.monotonic, max_output=MA
                                     'truncated': before.st_size > FILE_BYTES,
                                     'stable': stable,
                                     'text': filtered(first + (b'\n[head/tail omitted]\n' if not command_report and before.st_size > FILE_BYTES else b'') + last, scratch)})
+                    retained_names.add(str(relative))
         finally:
             os.close(fd)
     if not records:
@@ -366,7 +551,8 @@ def capture(scratch, destination, status, *, clock=time.monotonic, max_output=MA
         coverage.append('collection-bounded')
     document = {'schema': 'fsgg.choreo.failure-diagnostics/1', 'originalExitCode': status,
                 'outcome': 'failed', 'logs': records, 'omittedCoverage': sorted(set(coverage)),
-                'filter': 'sensitive-lines-omitted; textual-logs-only; no-environment-capture'}
+                'filter': 'sensitive-lines-omitted; closed-public-verify-metadata-only; no-environment-capture',
+                'publicCommandEvidence': {'complete':False,'omitted':'original-report-budget'}}
     raw = (json.dumps(document, ensure_ascii=True, indent=2) + '\n').encode()
     while len(raw) > max_output and records:
         records.pop()
@@ -374,6 +560,22 @@ def capture(scratch, destination, status, *, clock=time.monotonic, max_output=MA
         raw = (json.dumps(document, ensure_ascii=True, indent=2) + '\n').encode()
     if len(raw) > max_output:
         raise ValueError('diagnostic output bound')
+    # Existing original cause/cleanup and client/server text take priority. The
+    # optional complete tuple cannot evict them or renew the collection deadline.
+    try:
+        evidence = public_command_evidence(scratch, status, end, clock,
+                                           MAX_FILES-len(retained_names), MAX_ENTRIES-visited,retained_names)
+        candidate = dict(document, publicCommandEvidence=evidence)
+        complete = (json.dumps(candidate,ensure_ascii=True,indent=2)+'\n').encode()
+        if len(complete) > max_output: raise ValueError('public-counterparts-output-bound')
+        if clock() >= end: raise ValueError('public-counterparts-deadline')
+        document,raw = candidate,complete
+    except (OSError,ValueError,TypeError,KeyError,IndexError,AttributeError,RecursionError) as error:
+        omitted = dict(document, publicCommandEvidence={'complete':False,
+            'omitted':str(error) if isinstance(error,ValueError) else 'public-counterparts-unavailable'})
+        bounded = (json.dumps(omitted,ensure_ascii=True,indent=2)+'\n').encode()
+        # Even omission reporting cannot displace the original retained evidence.
+        if len(bounded) <= max_output: document,raw = omitted,bounded
     destination.mkdir(mode=0o700)
     f = os.open(destination / 'failure.json', os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
     with os.fdopen(f, 'wb') as output:
