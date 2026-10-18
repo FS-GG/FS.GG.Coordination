@@ -469,6 +469,21 @@ class Sc2Profile(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             SC2.fields({'selected': 1, 'override': 2}, 'selected')
 
+    def test_actual_isolated_cli_loader_does_not_dirty_helper_sources(self):
+        helper = self.root / 'helper'
+        helper.mkdir()
+        for name in ('portable-workspace-image.py', 'portable_workspace_sc2.py'):
+            shutil.copyfile(ROOT / 'eng' / name, helper / name)
+        result = subprocess.run([sys.executable, '-I', str(helper / 'portable-workspace-image.py'),
+            'check-inputs', '--profile=sc2-headless', '--source=' + str(helper),
+            '--expected-source-revision=' + 'a' * 40, '--state-dir=' + str(self.root),
+            '--root=' + str(self.root), '--runroot=' + str(self.root)],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10, check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(b'product source/revision required', result.stderr)
+        self.assertEqual(sorted(p.name for p in helper.iterdir()),
+                         ['portable-workspace-image.py', 'portable_workspace_sc2.py'])
+
     def test_symlink_and_hardlink_inputs_refuse_before_read(self):
         source = self.root / 'source'
         source.write_bytes(b'declared synthetic bytes')
@@ -534,6 +549,40 @@ class Sc2Profile(unittest.TestCase):
         with self.assertRaises(OSError):
             owner.record({'event': 'must-refuse'})
         self.assertEqual(foreign.read_bytes(), b'preserve')
+
+    def test_consumed_directory_and_journal_entries_are_durable_before_launch(self):
+        observed = []
+        actual_fsync = os.fsync
+        def observe(descriptor):
+            observed.append(str(Path('/proc/self/fd/' + str(descriptor)).resolve()))
+            return actual_fsync(descriptor)
+        with patch.object(SC2.os, 'fsync', side_effect=observe):
+            owner = self.owner('durable')
+            def launch(*args, **kwargs):
+                self.assertEqual(observed[:3], [str(self.root / 'durable'),
+                    str(owner.journal), str(owner.directory)])
+                events = [json.loads(line)['event'] for line in owner.journal.read_text().splitlines()]
+                self.assertEqual(events, ['run-start', 'command-intent'])
+                raise OSError('declared no-launch boundary')
+            with patch.object(IMAGE.subprocess, 'Popen', side_effect=launch):
+                with self.assertRaisesRegex(OSError, 'no-launch boundary'):
+                    owner.execute('one', [sys.executable, '-I', '-c', 'pass'], 5)
+        for fail_at in (1, 2, 3):
+            with self.subTest(fail_at=fail_at):
+                count = 0
+                def failed_sync(descriptor):
+                    nonlocal count
+                    count += 1
+                    if count == fail_at:
+                        raise OSError('declared durability gap')
+                    return actual_fsync(descriptor)
+                with patch.object(SC2.os, 'fsync', side_effect=failed_sync), \
+                     patch.object(IMAGE.subprocess, 'Popen') as spawned:
+                    with self.assertRaisesRegex(OSError, 'durability gap'):
+                        self.owner('sync-failure-' + str(fail_at))
+                    spawned.assert_not_called()
+                self.assertTrue((self.root / ('sync-failure-' + str(fail_at)) /
+                                 ('sync-failure-' + str(fail_at))).is_dir())
 
     def test_expired_original_stops_before_any_command_intent(self):
         owner = self.owner('expired')

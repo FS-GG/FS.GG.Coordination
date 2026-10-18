@@ -105,6 +105,10 @@ regular JSON/blob members. Neither earlier profile receives this exception.
 
 Intent precedes Popen. Actual PID/kernel birth, session/group/cgroup, available
 namespace observations, raw partial streams, EOF and wait are distinct records.
+The consumed operation-directory entry and journal entry are fsynced before
+the first intent; each intent is then fsynced before launch. Sync failure blocks
+launch and retains the consumed directory. Ordered fsync controls establish this
+source contract, not power-loss recovery or storage-device guarantees.
 Very short commands can lose namespace links before waitpid reports exit; that
 observation gap is retained, never invented as namespace proof. Kernel birth
 still binds the actual direct child. Failed calls retain their first cause and

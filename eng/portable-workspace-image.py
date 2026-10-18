@@ -2112,7 +2112,14 @@ def main() -> int:
         implementation = Path(__file__).with_name('portable_workspace_sc2.py')
         spec = importlib.util.spec_from_file_location('portable_workspace_sc2', implementation)
         profile = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(profile)
+        # Loading the internal implementation must not dirty the hash-bound
+        # helper checkout before its own exact source/cleanliness checks.
+        previous_bytecode = sys.dont_write_bytecode
+        try:
+            sys.dont_write_bytecode = True
+            spec.loader.exec_module(profile)
+        finally:
+            sys.dont_write_bytecode = previous_bytecode
         print(json.dumps(profile.main(args, globals()), sort_keys=True, separators=(',', ':')))
         return 0
     if args.operation_input is not None or args.expected_operation_input_sha256 is not None:

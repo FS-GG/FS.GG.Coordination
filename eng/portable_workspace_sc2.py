@@ -385,6 +385,17 @@ def directory_pin(value):
     return result
 
 
+def sync_directory(value, expected):
+    descriptor = os.open(value, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        info = os.fstat(descriptor)
+        require((info.st_dev, info.st_ino) == (expected['device'], expected['inode']),
+                'directory replaced before durable entry publication')
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
 def namespace(root, graphroot, runroot):
     """Pure closed child environment; never inherit the caller's credentials."""
     import pwd
@@ -561,15 +572,20 @@ class Lifetime:
         self.retirement_gaps = []
         self.work_guard()
         self.directory = checked['state'] / self.selection['operationId']
+        state_identity = directory_pin(checked['state'])
         # Exclusive creation is the consumed-original fence, not an enrollment
         # or grant. Never reopen a prior operation after interruption.
         self.directory.mkdir(mode=0o700)
         self.directory_identity = directory_pin(self.directory)
+        sync_directory(checked['state'], state_identity)
         self.journal = self.directory / 'journal.jsonl'
         with self.journal.open('xb') as stream:
             os.fchmod(stream.fileno(), 0o600)
             initial = os.fstat(stream.fileno())
             self.journal_identity = (initial.st_dev, initial.st_ino)
+            stream.flush()
+            os.fsync(stream.fileno())
+        sync_directory(self.directory, self.directory_identity)
         self.record({'event': 'run-start', 'profile': PROFILE,
                      'operationId': self.selection['operationId'],
                      'inputSha256': checked['inputSha256'],
