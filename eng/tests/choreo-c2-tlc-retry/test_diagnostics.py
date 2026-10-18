@@ -3015,4 +3015,125 @@ class FutureSourceClosureControls(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError,'context drift'):module.proc_future_source_context(spec,context)
             finally:store.close()
 
+
+class MutableTempCensusControls(unittest.TestCase):
+    """Injected filesystem races and owner receipts; no Quint/JVM/native qualification."""
+    def race(self, root, path, *, error=FileNotFoundError, replace=False):
+        original=Path.lstat;seen=[]
+        def lstat(item,*args,**kwargs):
+            if item==path and not seen:
+                seen.append(str(item))
+                if replace:
+                    (root/'tmp').rename(root/'old-tmp');(root/'tmp').mkdir()
+                raise error('inert transient entry')
+            return original(item,*args,**kwargs)
+        return patch.object(Path,'lstat',lstat),seen
+
+    def test_only_declared_tmp_descendant_enoent_is_observed_incomplete(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);tmp=root/'tmp';tmp.mkdir();entry=tmp/'TLC.tla';entry.write_bytes(b'inert')
+            (root/'retained').write_bytes(b'x'*100)
+            guard,seen=self.race(root,entry)
+            with guard:value=module.census(root,100,clock=lambda:1,mutable_tmp=tmp)
+            self.assertEqual([str(entry)],seen);self.assertEqual(1,value['vanishedEntries'])
+            self.assertEqual('observed-only',value['byteCoverage']);self.assertGreaterEqual(value['logicalBytes'],100)
+            self.assertFalse(value['linkTraversal'])
+            self.assertEqual('sampled',module.census(root,100,clock=lambda:1,mutable_tmp=tmp)['byteCoverage'])
+            self.assertNotIn('byteCoverage',module.census(root,100,clock=lambda:1))
+
+    def test_strict_default_other_paths_permissions_root_identity_and_original_bounds_refuse(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);tmp=root/'tmp';tmp.mkdir();entry=tmp/'TLC.tla';entry.touch()
+            other=root/'pinned';other.touch()
+            for target,kwargs,error in [(entry,{},FileNotFoundError),(other,{'mutable_tmp':tmp},FileNotFoundError),
+                                        (entry,{'mutable_tmp':tmp},PermissionError),(tmp,{'mutable_tmp':tmp},FileNotFoundError)]:
+                with self.subTest(target=target.name,kwargs=kwargs,error=error):
+                    guard,_=self.race(root,target,error=error)
+                    with guard,self.assertRaises(error):module.census(root,100,clock=lambda:1,**kwargs)
+            guard,_=self.race(root,entry,replace=True)
+            with guard,self.assertRaisesRegex(RuntimeError,'tmp-scope-retargeted'):
+                module.census(root,100,clock=lambda:1,mutable_tmp=tmp)
+            for kwargs,message in [({'limit':0},'disk-byte-cap'),({'deadline':1},'disk-budget')]:
+                args=dict(deadline=100,clock=lambda:1,mutable_tmp=tmp);args.update(kwargs)
+                with self.assertRaisesRegex(RuntimeError,message):module.census(root,**args)
+            original_iterdir=Path.iterdir
+            def crowded(path):return iter([entry]*25001) if path==tmp else original_iterdir(path)
+            with patch.object(Path,'iterdir',crowded),self.assertRaisesRegex(RuntimeError,'disk-population-cap'):
+                module.census(root,100,clock=lambda:1,mutable_tmp=tmp)
+            os.mkfifo(tmp/'special')
+            with self.assertRaisesRegex(RuntimeError,'disk-special-file'):module.census(root,100,clock=lambda:1,mutable_tmp=tmp)
+
+    def test_directory_iteration_disappearance_is_explicit_without_hiding_other_failures(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);tmp=root/'tmp';tmp.mkdir();gone=tmp/'subtree';gone.mkdir()
+            original=Path.iterdir
+            def iterdir(path):
+                if path==gone:raise FileNotFoundError('inert directory retirement')
+                return original(path)
+            with patch.object(Path,'iterdir',iterdir):
+                value=module.census(root,100,clock=lambda:1,mutable_tmp=tmp)
+                self.assertEqual(1,value['vanishedEntries']);self.assertEqual('observed-only',value['byteCoverage'])
+                with self.assertRaises(FileNotFoundError):module.census(root,100,clock=lambda:1)
+
+    def test_public_caller_records_vanished_temp_sample_and_retains_unrelated_first_cause(self):
+        import importlib.machinery
+        for mode in ('clean','unrelated','replace-tmp'):
+            unrelated=mode=='unrelated'
+            with self.subTest(mode=mode),tempfile.TemporaryDirectory() as directory:
+                root=Path(directory);tmp=root/'tmp';tmp.mkdir();entry=tmp/'TLC.tla';entry.touch()
+                java=root/'java/bin/java';jar=root/'quint/apalache-dist-0.56.1/apalache/lib/apalache.jar'
+                model=root/'model.qnt';quint=root/'quint-bin'
+                for file in (java,jar,model,quint):file.parent.mkdir(parents=True,exist_ok=True);file.write_text('inert source fixture')
+                log=root/'case.log';calls=[]
+                class Loader:
+                    def create_module(self,spec):return None
+                    def exec_module(self,owner):owner.run=run
+                def run(argv,cwd,env,deadline,cleanup,rss,out,cap,**kwargs):
+                    calls.append('owner');Path(out).write_text('inert model message, not acceptance\n')
+                    kwargs['control']('before-popen',None,None,{})
+                    leader={'pid':101,'pgid':101,'ppid':os.getpid(),'start':1,'state':'R','rss':0}
+                    receipt=dict(argv=argv,leader=leader,ownedPopenPid=101,birthIdentityUnavailable=False,exit=0,
+                        exitObservation=None,firstCause='RuntimeError: original unrelated failure' if unrelated else None,additionalFailures=[],cleanup='observed-empty-group',
+                        residual=[],escapedDescendants=[],escapedResidual=[],custody='observed-owned-group',
+                        sampledPeakAggregateRss=0,accountingScope='inert fixture')
+                    Path(out+'.result.json').write_text(json.dumps(receipt))
+                    if unrelated:raise RuntimeError('original unrelated failure')
+                    if mode=='replace-tmp':tmp.rename(root/'old-tmp');tmp.mkdir()
+                    return receipt
+                owner_spec=importlib.machinery.ModuleSpec('inert_owner',Loader())
+                guard,seen=self.race(root,entry);previous=Path.cwd();errors=io.StringIO()
+                try:
+                    os.chdir(root)
+                    with guard,patch.dict(os.environ,{'TMPDIR':str(tmp),'JAVA_HOME':str(root/'java'),'QUINT_HOME':str(root/'quint')},clear=True),patch.object(module.importlib.util,'spec_from_file_location',return_value=owner_spec),contextlib.redirect_stdout(io.StringIO()),contextlib.redirect_stderr(errors):
+                        status=module.execute_command(10,str(log),19820,[str(quint),'verify',str(model)])
+                finally:os.chdir(previous)
+                if mode=='replace-tmp':
+                    self.assertEqual(1,status);self.assertFalse(Path(str(log)+'.command.json').exists())
+                    failure=json.loads(errors.getvalue());self.assertEqual('tmp-scope-retargeted',failure['firstCause']['message'])
+                    self.assertEqual('observed-empty-group',json.loads(Path(str(log)+'.result.json').read_text())['cleanup'])
+                    continue
+                result=json.loads(Path(str(log)+'.command.json').read_text())
+                self.assertEqual(['owner'],calls);self.assertEqual([str(entry)],seen)
+                self.assertEqual(mode=='clean',result['commandAccepted'],result['firstCause']);self.assertEqual(0 if mode=='clean' else 1,status)
+                self.assertTrue(any(row['vanishedEntries']==1 and row['byteCoverage']=='observed-only' for row in result['diskSamples']))
+                expected='original unrelated failure' if unrelated else 'tmp-scope-retargeted' if mode=='replace-tmp' else None
+                self.assertEqual(expected,result['firstCause']['message'] if expected else result['firstCause'])
+                self.assertEqual('observed-empty-group',result['ownerReceipt']['cleanup'])
+
+    def test_public_closed_projection_accepts_legacy_and_explicit_coverage_only(self):
+        fixture=CommandInterfaceControls()
+        for mode in ('legacy','sampled','incomplete','bad-count','bad-coverage','private-field'):
+            with self.subTest(mode=mode),tempfile.TemporaryDirectory() as directory:
+                root=Path(directory);scratch=root/'scratch';scratch.mkdir()
+                paths,value=fixture.public_counterpart_fixture(scratch)
+                sample=value['diskSamples'][0]
+                if mode!='legacy':sample.update(vanishedEntries=1 if mode=='incomplete' else 0,byteCoverage='observed-only' if mode=='incomplete' else 'sampled')
+                if mode=='bad-count':sample['vanishedEntries']=-1
+                if mode=='bad-coverage':sample['byteCoverage']='complete'
+                if mode=='private-field':sample['arbitraryPrivateData']='NEVER COPY'
+                paths['command'].write_text(json.dumps(value,indent=2)+'\n')
+                result=module.capture(scratch,root/'diagnostics',1,max_output=98304)['publicCommandEvidence']
+                self.assertEqual(mode in ('legacy','sampled','incomplete'),result['complete'],result)
+                self.assertNotIn('NEVER COPY',json.dumps(result))
+
 if __name__ == '__main__': unittest.main()

@@ -187,3 +187,34 @@ Current raw maximum4 remains binding; its four consumed attempts cannot be reuse
 or extended by this source manifest. A different qualification admission requires
 the existing root-owned decision before any native launch. Publication, scoped-App
 observation and compatible installed FsQuint adoption retain their own gates.
+
+
+### Canonical public temporary-file census
+
+The first corrected hosted selector passed all 64 source controls at `6dabbf23`.
+A separate canonical base command then refused when TLC retired a temporary
+`TLC.tla` between directory enumeration and `lstat`. Its model's no-error message
+was not command acceptance: the original command retained `FileNotFoundError`,
+exit `-15`, `commandAccepted=false` and observed-empty-group cleanup. The overall
+Bootstrap run failed even though its six required contexts completed successfully.
+
+Only the public canonical command's declared `mutableScope.tmpdir` opts into
+advisory treatment of descendant `ENOENT` during a disk sample. The original TMP
+root's device/inode/mode/owner is fixed before launch and checked for every sample,
+before and after inventory, and when an entry disappears. A vanished descendant
+or subtree increments `vanishedEntries`; `byteCoverage=observed-only` explicitly
+means its unobserved bytes are unknown. A zero count reports `sampled`, never
+continuous or complete peak coverage. Existing observed byte/population/time caps
+still refuse, including a population cap on attempted entries. No unknown bytes
+are assigned zero or claimed to meet a complete disk bound.
+
+The default census remains strict for PROC and held namespaces. A missing TMP
+root, replacement, missing non-TMP entry, permission failure, special file, input
+pin drift or expired original deadline still refuses. The closed optional public
+diagnostic reader admits legacy samples and the explicit two-field extension;
+unknown fields or invalid coverage/counts remain omissions. Controls inject the
+original race through the actual public caller with an inert owner receipt,
+retain an unrelated original first cause and cleanup, and reject TMP replacement.
+They also exercise directory disappearance, strict census, caps, deadlines,
+permissions and exact legacy/new diagnostic projection. They do not rerun TLC,
+trace or qualify a native provider, and do not alter raw maximum4 or CLI refusal.

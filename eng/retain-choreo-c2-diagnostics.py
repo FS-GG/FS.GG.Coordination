@@ -390,11 +390,23 @@ def public_command_evidence(scratch, status, end, clock, files_left, entries_lef
         for item in value['additionalFailures']: closed_failure(item)
         for key,shape in {'originalServerBirths':[birth],
                 'originalServerStopRequests':[dict.fromkeys(('pid','start','signal','disposition','at'))],
-                'exitMembers':[birth],'diskSamples':[dict.fromkeys(('objects','logicalBytes','allocatedBytes',
-                    'fixtureSymlinks','linkTraversal','reportReserveBytes','observedAt'))],
+                'exitMembers':[birth],
                 'fdDenialObservations':{'entries':[denial],'omitted':scalar},
                 'endpointObservations':{'entries':[endpoint],'omitted':scalar}}.items():
             closed(value[key],shape)
+        # Retain legacy exact samples; new mutable-temp samples explicitly report
+        # incomplete observations without paths or arbitrary nested metadata.
+        disk_shape=dict.fromkeys(('objects','logicalBytes','allocatedBytes','fixtureSymlinks',
+                                 'linkTraversal','reportReserveBytes','observedAt'))
+        if not isinstance(value['diskSamples'],list): raise ValueError('public-counterparts-disk-list')
+        for sample in value['diskSamples']:
+            shape=disk_shape
+            if isinstance(sample,dict) and 'vanishedEntries' in sample:
+                shape=dict(disk_shape,vanishedEntries=None,byteCoverage=None)
+                if (type(sample['vanishedEntries']) is not int or not 0<=sample['vanishedEntries']<=25000
+                        or sample.get('byteCoverage') != ('observed-only' if sample['vanishedEntries'] else 'sampled')):
+                    raise ValueError('public-counterparts-disk-coverage')
+            closed(sample,shape)
         for key in ('schema','commandExit','commandAccepted','omittedDiskSamples',
                     'cleanupObservedAt','modelCheckingRequired','limitation'): closed(value[key],scalar)
         owner_shape=dict.fromkeys(owner_fields)
@@ -589,13 +601,42 @@ def require(ok, message):
     if not ok: raise RuntimeError(message)
 
 # Same non-following disk inventory as the qualified single-controller route.
-def census(root,deadline,limit=DISK_LIMIT,clock=time.monotonic,*,future_fifos=None):
-    logical=allocated=objects=links=0;stack=[root]
+def census(root,deadline,limit=DISK_LIMIT,clock=time.monotonic,*,future_fifos=None,mutable_tmp=None,expected_tmp_identity=None):
+    # Only the public canonical adapter opts into advisory observation of its
+    # declared temporary subtree. Strict held-namespace callers remain unchanged.
+    logical=allocated=objects=links=vanished=attempts=0;stack=[root]
+    def tmp_identity():
+        require(mutable_tmp.resolve(strict=True)==mutable_tmp,'tmp-scope-retargeted')
+        s=mutable_tmp.lstat()
+        require(stat.S_ISDIR(s.st_mode),'tmp-scope-retargeted')
+        return (s.st_dev,s.st_ino,s.st_mode,s.st_uid,s.st_gid)
+    if mutable_tmp is not None:
+        require(future_fifos is None and mutable_tmp.is_absolute()
+                and mutable_tmp!=root and mutable_tmp.is_relative_to(root),'tmp-scope-join')
+        original_tmp=tmp_identity()
+        require(expected_tmp_identity is None or original_tmp==expected_tmp_identity,
+                'tmp-scope-retargeted')
+    def vanished_tmp(path):
+        # Root/ancestor/pinned-source failures are never converted into samples.
+        if mutable_tmp is None or path==mutable_tmp or not path.is_relative_to(mutable_tmp):return False
+        require(tmp_identity()==original_tmp,'tmp-scope-retargeted')
+        return True
     while stack:
-        require(clock()<deadline,'disk-budget');path=stack.pop();s=path.lstat();objects+=1
+        require(clock()<deadline,'disk-budget');path=stack.pop()
+        if mutable_tmp is not None:
+            attempts+=1;require(attempts<=25000,'disk-population-cap')
+        try:s=path.lstat()
+        except FileNotFoundError:
+            if not vanished_tmp(path):raise
+            vanished+=1;continue
+        objects+=1
         require(objects<=25000,'disk-population-cap');logical+=s.st_size;allocated+=s.st_blocks*512
         require(max(logical,allocated)<=limit,'disk-byte-cap')
-        if stat.S_ISDIR(s.st_mode):stack.extend(path.iterdir())
+        if stat.S_ISDIR(s.st_mode):
+            try:stack.extend(path.iterdir())
+            except FileNotFoundError:
+                if not vanished_tmp(path):raise
+                vanished+=1
         elif stat.S_ISLNK(s.st_mode):links+=1
         elif stat.S_ISFIFO(s.st_mode) and future_fifos is not None:
             expected=future_fifos.get(str(path))
@@ -603,7 +644,11 @@ def census(root,deadline,limit=DISK_LIMIT,clock=time.monotonic,*,future_fifos=No
             require(expected is not None and tuple(expected)==observed and s.st_uid==os.geteuid()
                     and stat.S_IMODE(s.st_mode)==0o600 and s.st_nlink==1,'disk-special-file')
         else:require(stat.S_ISREG(s.st_mode),'disk-special-file')
-    return {'objects':objects,'logicalBytes':logical,'allocatedBytes':allocated,'fixtureSymlinks':links,'linkTraversal':False}
+    result={'objects':objects,'logicalBytes':logical,'allocatedBytes':allocated,'fixtureSymlinks':links,'linkTraversal':False}
+    if mutable_tmp is not None:
+        require(tmp_identity()==original_tmp,'tmp-scope-retargeted')
+        result.update(vanishedEntries=vanished,byteCoverage='observed-only' if vanished else 'sampled')
+    return result
 
 COMMAND_SCHEMA = 'fsgg.canonical.owned-command/1'
 RESULT_SCHEMA = 'fsgg.canonical.command-result/1'
@@ -3910,7 +3955,7 @@ def execute_command(seconds, log_path, endpoint, argv):
     server_handles = {}; stop_requests = []; disk_samples = []; disk_omitted = 0; last_disk = None
     fd_denials = {'entries':[], 'omitted':0}
     endpoint_observations = {'entries':[], 'omitted':0}
-    mutable_root = Path.cwd()
+    mutable_root = Path.cwd(); original_tmp_identity = None
     def sample_disk(cutoff, force=False):
         nonlocal last_disk, disk_omitted
         now = time.monotonic()
@@ -3918,7 +3963,8 @@ def execute_command(seconds, log_path, endpoint, argv):
             current_tmp = Path(spec['mutableScope']['tmpdir'])
             require(current_tmp.resolve(strict=True) == current_tmp and current_tmp.is_dir(), 'tmp-scope-retargeted')
         if force or last_disk is None or now - last_disk >= .5:
-            observed = census(mutable_root, min(cutoff, now + 1), limit=DISK_LIMIT - 384 * 1024)
+            observed = census(mutable_root, min(cutoff, now + 1), limit=DISK_LIMIT - 384 * 1024,
+                              mutable_tmp=current_tmp,expected_tmp_identity=original_tmp_identity)
             require(observed['objects'] < 25000, 'disk-report-entry-reserve')
             observed['reportReserveBytes'] = 384 * 1024
             observed['observedAt'] = time.monotonic()
@@ -3957,6 +4003,8 @@ def execute_command(seconds, log_path, endpoint, argv):
                 or Path(os.environ.get('TMPDIR','')).absolute() != tmpdir
                 or tmpdir.resolve(strict=True) != tmpdir or not tmpdir.is_dir()):
             raise ValueError('exclusive cwd/log/TMPDIR scope join')
+        tmp_stat=tmpdir.lstat()
+        original_tmp_identity=(tmp_stat.st_dev,tmp_stat.st_ino,tmp_stat.st_mode,tmp_stat.st_uid,tmp_stat.st_gid)
         if not hasattr(os, 'pidfd_open') or not hasattr(signal, 'pidfd_send_signal'):
             raise ValueError('original-server pidfd capability unavailable')
         model = Path(argv[2]); java = Path(os.environ['JAVA_HOME']) / 'bin/java'
