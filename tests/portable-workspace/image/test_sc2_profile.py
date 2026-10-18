@@ -24,6 +24,8 @@ import selectors
 import io
 import marshal
 import struct
+import errno
+from types import SimpleNamespace
 from unittest.mock import patch, Mock
 
 
@@ -87,14 +89,17 @@ class Sc2Profile(unittest.TestCase):
     def tearDown(self):
         self.temporary.cleanup()
 
-    def fixture(self):
+    def fixture(self, *, reserved=False):
         """Actual check-inputs contract with synthetic product and local Git only.
 
         No source fixture from the private product, no native engine execution.
         Support pins bind ONLY the declared inert native-port fixture.
         """
         home = self.root / 'home'; home.mkdir(mode=0o700)
-        allocation = self.root / 'allocation'; allocation.mkdir(mode=0o700)
+        volume = self.root / 'reserved' / ('d' * 32)
+        if reserved:
+            volume.mkdir(mode=0o700, parents=True)
+        allocation = (volume if reserved else self.root) / 'allocation'; allocation.mkdir(mode=0o700)
         helper, product = self.root / 'helper', allocation / 'context'
         helper.mkdir(mode=0o700); product.mkdir(mode=0o700)
         def write(target, data):
@@ -121,7 +126,7 @@ class Sc2Profile(unittest.TestCase):
         sources['product'].update(baseImage=TEST_BASE_IMAGE, localTag=TEST_LOCAL_TAG, exportName=TEST_EXPORT_NAME)
         state = allocation / 'state'; state.mkdir(mode=0o700)
         stores = {'build': {'root': str(allocation / 'build/graphroot'), 'runroot': str(allocation / 'build/runroot')},
-                  'load': {'root': str(home / '.local/share/fsgg/headless-images/sc2'),
+                  'load': {'root': str(volume / 'current-store' if reserved else home / '.local/share/fsgg/headless-images/sc2'),
                            'runroot': str(allocation / 'load/runroot')}}
         for key, store in stores.items():
             root, runtime = Path(store['root']), Path(store['runroot'])
@@ -175,6 +180,52 @@ class Sc2Profile(unittest.TestCase):
                                   engine_allocation=str(allocation), engine_scratch_dir=str(allocation / 'build/download-tmp'),
                                   podman=self.executable_paths['podman'], acquisition_dir=None, expected_acquired_inputs_sha256=None)
         return args, selection, home
+
+    def reserved_fixture(self):
+        # Synthetic replacement for the closed guest base; no actual reserved
+        # filesystem, host profile or execution authority is established here.
+        base = patch.object(SC2, 'RESERVED_GUEST_BASE', self.root / 'reserved')
+        base.start(); self.addCleanup(base.stop)
+        args, selection, home = self.fixture(reserved=True)
+        selection['operationId'] = 'd' * 32
+        root = Path(args.engine_allocation).parent
+        device = root.stat().st_dev
+        mount = {'namespaceInode': 101, 'mountId': 42,
+                 'device': f'{os.major(device)}:{os.minor(device)}', 'root': '/', 'filesystem': 'ext4',
+                 'options': ['nodev', 'nosuid', 'rw'], 'superOptions': ['nodiscard', 'rw']}
+        receipt = {'schema': 'fsgg.sc2.reserved-storage/1', 'operationId': selection['operationId'],
+                   'backend': 'preallocated-hdd-sibling-ext4', 'root': str(root),
+                   'rootIdentity': SC2.directory_pin(root), 'mount': mount,
+                   'filesystem': {'uuid': '12345678-1234-1234-1234-123456789abc',
+                                  'totalBytes': 240 * 1024**3, 'totalInodes': 2_097_152,
+                                  'minimumFreeInodes': 1_048_576},
+                   'backing': {'path': '/synthetic-host/reserved.img', 'device': 19, 'inode': 20,
+                               'ownerUid': 0, 'bytes': 256 * 1024**3, 'allocatedBytes': 256 * 1024**3,
+                               'evidenceSha256': 'a' * 64},
+                   'custody': {'owner': 'synthetic accepted owner, no real authority',
+                               'retention': 'until-explicit-disposition', 'reclaim': 'prohibited',
+                               'evidenceSha256': 'b' * 64}}
+        target = self.root / 'reservation.json'
+        target.write_bytes(SC2.canonical(receipt)); target.chmod(0o600)
+        selection['admission']['storageReservation'] = {'path': str(target), 'sha256': digest(target.read_bytes())}
+        selection['resourceDomain']['storageReservationSha256'] = digest(target.read_bytes())
+        disposition = Path(selection['admission']['resourceDisposition']['path'])
+        disposition.write_bytes(SC2.canonical({
+            'sharedHostReservedMemoryBytes': 12 * 1024**3, 'sharedHostReservedCpu': 6,
+            'unquantifiedResourceConflicts': [],
+            'diskDomain': {'reservationSha256': digest(target.read_bytes()), 'reservedBytes': 0,
+                           'retainedOutsideDiskConflicts': [{'id': 'synthetic-retained-original',
+                               'sourceDevice': 18, 'evidenceSha256': 'c' * 64}]}}))
+        selection['admission']['resourceDisposition']['sha256'] = digest(disposition.read_bytes())
+        self.rebind_selection(args, selection)
+        capacity = SimpleNamespace(f_blocks=240 * 1024**3 // 4096, f_frsize=4096,
+                                   f_files=2_097_152, f_bavail=160 * 1024**3 // 4096, f_favail=1_900_000)
+        return args, selection, home, receipt, capacity
+
+    def rebind_selection(self, args, selection):
+        target = Path(args.operation_input)
+        target.write_bytes(SC2.canonical(selection)); target.chmod(0o600)
+        args.expected_operation_input_sha256 = digest(target.read_bytes())
 
     def test_actual_check_inputs_is_inert_and_binds_complete_synthetic_sources(self):
         args, selection, home = self.fixture()
@@ -470,6 +521,174 @@ class Sc2Profile(unittest.TestCase):
                 SC2.strict_json(payload)
         with self.assertRaises(RuntimeError):
             SC2.fields({'selected': 1, 'override': 2}, 'selected')
+
+    def test_reserved_mount_requires_exact_filesystem_root_without_fallback(self):
+        root = Path('/synthetic reserved')
+        selected = '42 1 7:9 / /synthetic\\040reserved rw,nosuid,nodev - ext4 /dev/loop9 rw,nodiscard\n'
+        with patch.object(Path, 'read_text', return_value=selected):
+            observed = SC2.reserved_mount_observation(root)
+        self.assertEqual(observed['mountPoint'], str(root))
+        self.assertEqual(observed['device'], '7:9')
+        self.assertEqual(observed['root'], '/')
+        # A genuine bind of the entire ext4 root presents this same mountinfo
+        # shape. No mechanism-name ban substitutes for filesystem identity.
+        cases = (
+            ('1 0 0:1 / / rw - overlay overlay rw\n', 'absent'),
+            (selected + selected.replace('42 1', '43 1'), 'stacked'),
+            (selected + '43 42 0:5 / /synthetic\\040reserved/allocation rw - tmpfs tmpfs rw\n', 'nested'),
+        )
+        for payload, reason in cases:
+            with self.subTest(reason=reason), patch.object(Path, 'read_text', return_value=payload):
+                with self.assertRaisesRegex(RuntimeError, reason):
+                    SC2.reserved_mount_observation(root)
+        with self.assertRaisesRegex(RuntimeError, 'duplicate'):
+            SC2.reserved_mount_rows(selected + selected)
+
+    def test_reserved_receipt_checks_real_guest_correspondence_and_finite_capacity(self):
+        args, selection, home, receipt, capacity = self.reserved_fixture()
+        observed = {**receipt['mount'], 'mountPoint': receipt['root']}
+        directories = [Path(args.engine_allocation), Path(selection['load']['root'])]
+        target = Path(selection['admission']['storageReservation']['path'])
+        def select(value):
+            target.write_bytes(SC2.canonical(value))
+            selection['admission']['storageReservation']['sha256'] = digest(target.read_bytes())
+        with patch.object(SC2, 'reserved_mount_observation', return_value=observed), \
+             patch.object(os, 'statvfs', return_value=capacity):
+            self.assertEqual(SC2.reserved_storage(selection, directories), receipt)
+            cases = [
+                (('operationId',), 'different-operation', 'operation mismatch'),
+                (('backend',), 'ordinary-directory', 'unsupported'),
+                (('mount', 'root'), '/subdirectory', 'identity/type/root'),
+                (('mount', 'filesystem'), 'overlay', 'identity/type/root'),
+                (('mount', 'options'), ['discard', 'rw'], 'flags'),
+                (('backing', 'allocatedBytes'), 1, 'allocation/capacity'),
+                (('custody', 'reclaim'), 'on-expiry', 'custody'),
+                (('rootIdentity', 'uid'), True, 'integer'),
+            ]
+            for keys, value, reason in cases:
+                candidate = copy.deepcopy(receipt); row = candidate
+                for key in keys[:-1]:
+                    row = row[key]
+                row[keys[-1]] = value; select(candidate)
+                with self.subTest(keys=keys), self.assertRaisesRegex(RuntimeError, reason):
+                    SC2.reserved_storage(selection, directories)
+            select(receipt)
+            capacity.f_bavail = SC2.DISK_BYTES // capacity.f_frsize - 1
+            with self.assertRaisesRegex(RuntimeError, 'free byte'):
+                SC2.reserved_storage(selection, directories)
+            capacity.f_bavail = SC2.DISK_BYTES // capacity.f_frsize
+            capacity.f_favail = receipt['filesystem']['minimumFreeInodes'] - 1
+            with self.assertRaisesRegex(RuntimeError, 'free inode'):
+                SC2.reserved_storage(selection, directories)
+
+    def test_actual_reserved_qualify_uses_new_store_and_retains_outside_disk_unknown(self):
+        args, selection, home, receipt, capacity = self.reserved_fixture(); args.mode = 'qualify'
+        image = self.image_fixture(args)
+        spawn, calls, resources = self.native_ports(args, selection, image=image)
+        with patch.object(Path, 'home', return_value=home), \
+             patch.object(SC2, 'reserved_mount_observation', return_value={**receipt['mount'], 'mountPoint': receipt['root']}), \
+             patch.object(os, 'statvfs', return_value=capacity), \
+             patch.object(SC2, 'host_resources', return_value=resources), \
+             patch.object(SC2, 'disk_backing', return_value='synthetic disk'), \
+             patch.object(os, 'sched_setaffinity'), patch.object(os, 'sched_getaffinity', return_value={0, 1, 2, 3}), \
+             patch.object(IMAGE.subprocess, 'Popen', side_effect=spawn):
+            result = SC2.main(args, IMAGE.__dict__)
+        self.assertEqual(result['imageId'], image['id'])
+        self.assertTrue(any('load' in argv for argv in calls))
+        self.assertFalse((home / '.local/share/fsgg/headless-images/sc2').exists())
+        rows = [json.loads(line) for line in Path(result['journal']).read_bytes().splitlines()]
+        admissions = [row for row in rows if row.get('event') == 'resource-admission']
+        self.assertTrue(admissions)
+        self.assertEqual(admissions[-1]['sharedHostReservation']['sharedHostReservedMemoryBytes'], 12 * 1024**3)
+        self.assertEqual(admissions[-1]['sharedHostReservation']['sharedHostReservedCpu'], 6)
+        self.assertEqual(admissions[-1]['sharedHostReservation']['diskDomain']['retainedOutsideDiskConflicts'][0]['id'],
+                         'synthetic-retained-original')
+
+    def test_actual_reserved_admission_does_not_exclude_same_domain_or_memory_cpu_conflicts(self):
+        cases = ('same-disk', 'relevant-unknown', 'memory', 'cpu', 'receipt-join')
+        for case in cases:
+            with self.subTest(case=case), tempfile.TemporaryDirectory(dir=self.root) as temporary:
+                original = self.root; self.root = Path(temporary); self.root.chmod(0o700)
+                try:
+                    args, selection, home, receipt, capacity = self.reserved_fixture(); args.mode = 'preflight'
+                    spawn, calls, resources = self.native_ports(args, selection)
+                    target = Path(selection['admission']['resourceDisposition']['path'])
+                    value = json.loads(target.read_bytes())
+                    if case == 'same-disk':
+                        value['diskDomain']['retainedOutsideDiskConflicts'][0]['sourceDevice'] = receipt['backing']['device']
+                        reason = 'shares reserved backing'
+                    elif case == 'relevant-unknown':
+                        value['unquantifiedResourceConflicts'] = ['synthetic writer can consume selected backing']
+                        reason = 'unquantified relevant'
+                    elif case == 'memory':
+                        resources['hostMemoryAvailableBytes'] = 26 * 1024**3 - 1; reason = 'shared host memory'
+                    elif case == 'cpu':
+                        resources['hostLogicalCpus'] = 9; reason = 'shared host CPU'
+                    else:
+                        value['diskDomain']['reservationSha256'] = '0' * 64; reason = 'reservation mismatch'
+                    target.write_bytes(SC2.canonical(value))
+                    selection['admission']['resourceDisposition']['sha256'] = digest(target.read_bytes())
+                    self.rebind_selection(args, selection)
+                    with patch.object(Path, 'home', return_value=home), \
+                         patch.object(SC2, 'reserved_mount_observation', return_value={**receipt['mount'], 'mountPoint': receipt['root']}), \
+                         patch.object(os, 'statvfs', return_value=capacity), \
+                         patch.object(SC2, 'host_resources', return_value=resources), \
+                         patch.object(IMAGE.subprocess, 'Popen', side_effect=spawn):
+                        with self.assertRaisesRegex(RuntimeError, reason):
+                            SC2.main(args, IMAGE.__dict__)
+                    self.assertEqual(calls, [])
+                finally:
+                    self.root = original
+
+    def test_reserved_mount_drift_is_rechecked_by_actual_adjacent_guard(self):
+        args, selection, home, receipt, capacity = self.reserved_fixture()
+        observed = {**receipt['mount'], 'mountPoint': receipt['root']}
+        with patch.object(Path, 'home', return_value=home), \
+             patch.object(SC2, 'reserved_mount_observation', side_effect=lambda root: dict(observed)), \
+             patch.object(os, 'statvfs', return_value=capacity):
+            checked = SC2.check_inputs(args, IMAGE.__dict__)
+            owner = SC2.Lifetime(args, IMAGE.__dict__, checked)
+            owner.guard_objects()
+            for key in ('mountId', 'namespaceInode'):
+                observed[key] += 1
+                with self.subTest(key=key), self.assertRaisesRegex(RuntimeError, 'mount correspondence'):
+                    owner.guard_objects()
+                observed[key] -= 1
+            capacity.f_favail = receipt['filesystem']['minimumFreeInodes'] - 1
+            with self.assertRaisesRegex(RuntimeError, 'free inode'):
+                owner.guard_objects()
+            self.assertEqual(owner.commands, [])
+
+    def test_reserved_enospc_retains_original_failure_without_load_or_retry(self):
+        args, selection, home, receipt, capacity = self.reserved_fixture(); args.mode = 'qualify'
+        image = self.image_fixture(args)
+        spawn, calls, resources = self.native_ports(args, selection, image=image)
+        def full(argv, **kwargs):
+            if 'build' in argv:
+                calls.append(argv.copy())
+                raise OSError(errno.ENOSPC, 'synthetic reserved filesystem exhausted')
+            return spawn(argv, **kwargs)
+        with patch.object(Path, 'home', return_value=home), \
+             patch.object(SC2, 'reserved_mount_observation', return_value={**receipt['mount'], 'mountPoint': receipt['root']}), \
+             patch.object(os, 'statvfs', return_value=capacity), \
+             patch.object(SC2, 'host_resources', return_value=resources), \
+             patch.object(SC2, 'disk_backing', return_value='synthetic disk'), \
+             patch.object(os, 'sched_setaffinity'), patch.object(os, 'sched_getaffinity', return_value={0, 1, 2, 3}), \
+             patch.object(IMAGE.subprocess, 'Popen', side_effect=full):
+            with self.assertRaises(OSError) as failure:
+                SC2.main(args, IMAGE.__dict__)
+            self.assertEqual(failure.exception.errno, errno.ENOSPC)
+            count = len(calls)
+            with self.assertRaises(FileExistsError):
+                SC2.main(args, IMAGE.__dict__)
+            self.assertEqual(len(calls), count)
+        self.assertEqual(sum('build' in argv for argv in calls), 1)
+        self.assertFalse(any('load' in argv or 'tag' in argv for argv in calls))
+        rows = [json.loads(line) for line in
+                (Path(args.state_dir) / selection['operationId'] / 'journal.jsonl').read_bytes().splitlines()]
+        self.assertEqual(rows[-1]['outcome'], 'failed')
+        self.assertIn('filesystem exhausted', rows[-1]['firstCause'])
+        self.assertTrue(Path(receipt['root']).exists())
 
     def test_actual_isolated_cli_loader_does_not_dirty_helper_sources(self):
         helper = self.root / 'helper'
