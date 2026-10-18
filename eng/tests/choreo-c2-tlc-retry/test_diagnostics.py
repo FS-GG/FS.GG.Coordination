@@ -2347,4 +2347,111 @@ class CommandInterfaceControls(unittest.TestCase):
         self.assertNotIn('synthetic-secret',module.failure_record(ValueError('Authorization: Bearer synthetic-secret'))['message'])
 
 
+
+class LosslessSourcePrototypeControls(unittest.TestCase):
+    """Synthetic FD/codec controls; no strace/client/qualification process."""
+    def prototype(self, **kwargs):
+        return module.ProcLosslessSourcePrototype('source-feasibility-only',time.monotonic()+5,**kwargs)
+
+    def output(self, root, name):
+        fd=os.open(root/name,os.O_RDWR|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)
+        self.addCleanup(os.close,fd);return fd
+
+    def capture(self, proto, root, phase, raw):
+        read,write=os.pipe2(os.O_NONBLOCK)
+        self.addCleanup(os.close,read)
+        try:self.assertEqual(len(raw),os.write(write,raw))
+        finally:os.close(write)
+        output=self.output(root,phase+'.gz')
+        row=proto.capture(phase,read,output);return output,row
+
+    def test_three_actual_pipe_captures_roundtrip_and_manifest_census(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);proto=self.prototype();total=0
+            for phase in ('controller','session','normal'):
+                raw=(phase+' synthetic trace record\n').encode()*7
+                output,row=self.capture(proto,root,phase,raw);total+=len(raw)
+                os.lseek(output,0,os.SEEK_SET);chunks=[]
+                decoded=proto.read(output,row,chunks.append)
+                self.assertEqual(raw,b''.join(chunks));self.assertEqual(len(raw),decoded['bytes'])
+            manifest=self.output(root,'manifest.json');body=proto.finish(manifest)
+            self.assertEqual(3,len(json.loads(body)['rows']))
+            self.assertFalse(json.loads(body)['completeTraceQualified'])
+            self.assertEqual(total,proto.captured);self.assertEqual(total,proto.decoded)
+            self.assertEqual(sum(p.stat().st_size for p in root.iterdir()),proto.stored)
+            with self.assertRaisesRegex(ValueError,'consumed'):proto.finish(manifest)
+
+    def test_unselected_expired_and_increased_limits_refuse(self):
+        for selection in (None,'gzip','production'):
+            with self.assertRaisesRegex(ValueError,'not selected'):
+                module.ProcLosslessSourcePrototype(selection,time.monotonic()+5)
+        with self.assertRaisesRegex(ValueError,'deadline'):
+            module.ProcLosslessSourcePrototype('source-feasibility-only',time.monotonic()-1)
+        with self.assertRaisesRegex(ValueError,'resource'):
+            self.prototype(stored_cap=8*1024**2+1)
+
+    def test_capture_incompressible_stored_overflow_consumes_without_retry(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);proto=self.prototype(stored_cap=16384+256)
+            with self.assertRaisesRegex(ValueError,'stored bound'):
+                self.capture(proto,root,'normal',os.urandom(4096))
+            self.assertTrue(proto.failed);self.assertLessEqual(proto.stored,256)
+            with self.assertRaisesRegex(ValueError,'consumed'):
+                proto.finish(self.output(root,'manifest.json'))
+
+    def test_capture_shared_expanded_cap_preserves_first_phase(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);proto=self.prototype(expanded_cap=64)
+            self.capture(proto,root,'controller',b'A'*40)
+            retained=(root/'controller.gz').read_bytes()
+            with self.assertRaisesRegex(ValueError,'captured bound'):
+                self.capture(proto,root,'session',b'B'*40)
+            self.assertEqual(retained,(root/'controller.gz').read_bytes())
+            self.assertLessEqual(proto.captured,64)
+
+    def test_strict_reader_corrupt_truncated_trailing_and_second_member_refuse(self):
+        import zlib
+        valid=zlib.compress(b'synthetic complete bytes',wbits=31)
+        corrupt=bytearray(valid);corrupt[-8]^=1
+        for bad in (bytes(corrupt),valid[:-1],valid+b'x',valid+valid):
+            with self.subTest(kind=len(bad)),tempfile.TemporaryDirectory() as directory:
+                root=Path(directory);proto=self.prototype();fd=self.output(root,'input.gz');os.write(fd,bad);os.lseek(fd,0,os.SEEK_SET)
+                expected={'bytes':24,'sha256':hashlib.sha256(b'synthetic complete bytes').hexdigest()}
+                with self.assertRaises((ValueError,zlib.error)):proto.read(fd,expected,lambda _:None)
+                self.assertTrue(proto.failed)
+
+    def test_reader_expansion_aggregate_and_decoded_identity_refuse(self):
+        import zlib
+        for limit,expected in [(16,{'bytes':64,'sha256':'0'*64}),(128,{'bytes':64,'sha256':'0'*64})]:
+            with tempfile.TemporaryDirectory() as directory:
+                root=Path(directory);proto=self.prototype(expanded_cap=limit);fd=self.output(root,'input.gz')
+                os.write(fd,zlib.compress(b'A'*64,wbits=31));os.lseek(fd,0,os.SEEK_SET)
+                with self.assertRaises(ValueError):proto.read(fd,expected,lambda _:None)
+                self.assertLessEqual(proto.decoded,limit)
+
+    def test_callback_first_failure_consumes_without_retry_or_fd_close(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);proto=self.prototype();fd,row=self.capture(proto,root,'normal',b'synthetic')
+            os.lseek(fd,0,os.SEEK_SET);calls=[]
+            def refuse(raw):calls.append(raw);raise RuntimeError('original consumer failure')
+            with self.assertRaisesRegex(RuntimeError,'original consumer failure'):proto.read(fd,row,refuse)
+            self.assertEqual(1,len(calls));self.assertTrue(proto.failed);self.assertGreater(os.fstat(fd).st_size,0)
+
+    def test_missing_phase_manifest_and_occupied_output_refuse(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);proto=self.prototype()
+            with self.assertRaisesRegex(ValueError,'phase census'):proto.finish(self.output(root,'manifest.json'))
+            other=self.prototype();fd=self.output(root,'occupied');os.write(fd,b'held')
+            with self.assertRaisesRegex(ValueError,'fresh private'):other.finish(fd)
+
+    def test_actual_waiting_pipe_obeys_original_clock(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);proto=module.ProcLosslessSourcePrototype('source-feasibility-only',time.monotonic()+.03)
+            read,write=os.pipe2(os.O_NONBLOCK)
+            try:
+                with self.assertRaisesRegex(TimeoutError,'original work deadline'):
+                    proto.capture('normal',read,self.output(root,'normal.gz'))
+                self.assertTrue(proto.failed)
+            finally:os.close(read);os.close(write)
+
 if __name__ == '__main__': unittest.main()

@@ -2007,6 +2007,150 @@ def proc_private_record(path,value,deadline,*,exclusive=False,expected=None,cap=
     return raw
 
 
+
+class ProcLosslessSourcePrototype:
+    """Inert FD/codec feasibility only; never selected by a command profile.
+
+    Existing traced command execution does not call this type. Selection here is
+    source-control opt-in, not root admission or a source/read-closure assertion.
+    The owner supplies exclusively held fresh output FDs and a nonblocking FIFO;
+    this codec adds no process, source lookup, deadline or caller FD ownership.
+    """
+    STORED_CAP = 8 * 1024**2
+    EXPANDED_CAP = 32 * 1024**2
+    MANIFEST_RESERVE = 16384
+
+    def __init__(self, selection, work_end, *, stored_cap=STORED_CAP, expanded_cap=EXPANDED_CAP):
+        if selection != 'source-feasibility-only':
+            raise ValueError('PROC lossless encoding is not selected')
+        if (type(work_end) not in (int,float) or not math.isfinite(work_end)
+                or work_end <= time.monotonic()):
+            raise ValueError('PROC lossless original work deadline unavailable')
+        if (type(stored_cap) is not int or not self.MANIFEST_RESERVE < stored_cap <= self.STORED_CAP
+                or type(expanded_cap) is not int or not 0 < expanded_cap <= self.EXPANDED_CAP):
+            raise ValueError('PROC lossless fixed resource bounds')
+        self.work_end=work_end;self.stored_cap=stored_cap;self.expanded_cap=expanded_cap
+        self.stored=0;self.captured=0;self.decoded=0;self.failed=False;self.rows=[];self.finished=False
+
+    def _tick(self):
+        if self.failed or self.finished:raise ValueError('PROC lossless consumed source prototype')
+        if time.monotonic() >= self.work_end:raise TimeoutError('PROC lossless original work deadline')
+
+    @staticmethod
+    def _identity(fd):
+        s=os.fstat(fd)
+        return (s.st_dev,s.st_ino,s.st_uid,s.st_mode,s.st_nlink,s.st_size,s.st_mtime_ns,s.st_ctime_ns)
+
+    def _fresh_output(self, fd):
+        observed=self._identity(fd)
+        if (not stat.S_ISREG(observed[3]) or observed[2]!=os.geteuid()
+                or stat.S_IMODE(observed[3])!=0o600 or observed[4]!=1
+                or observed[5]!=0 or os.lseek(fd,0,os.SEEK_CUR)!=0):
+            raise ValueError('PROC lossless output must be exclusively held fresh private regular FD')
+        return observed
+
+    def _write(self, fd, data, *, manifest=False):
+        limit=self.stored_cap if manifest else self.stored_cap-self.MANIFEST_RESERVE
+        self._tick()
+        if self.stored+len(data)>limit:raise ValueError('PROC lossless aggregate stored bound')
+        offset=0
+        while offset<len(data):
+            self._tick();count=os.write(fd,data[offset:])
+            if count<=0:raise OSError('PROC lossless short output write')
+            offset+=count;self.stored+=count
+
+    def capture(self, phase, source_fd, output_fd):
+        """Drain a finite nonblocking source pipe through one lossless gzip member.
+
+        Caller closes its FDs independently. On any failure this whole prototype
+        is consumed; partial bytes remain held, and no retry/manifest follows.
+        """
+        import select
+        import zlib
+        import fcntl
+        try:
+            self._tick()
+            if phase not in ('controller','session','normal') or phase in {r['phase'] for r in self.rows}:
+                raise ValueError('PROC lossless phase population/replay')
+            if not stat.S_ISFIFO(os.fstat(source_fd).st_mode) or not fcntl.fcntl(source_fd,fcntl.F_GETFL)&os.O_NONBLOCK:
+                raise ValueError('PROC lossless source must be a nonblocking pipe')
+            original=self._fresh_output(output_fd);codec=zlib.compressobj(6,zlib.DEFLATED,31)
+            digest=hashlib.sha256();count=0;start_stored=self.stored
+            while True:
+                self._tick()
+                readable,_,_=select.select([source_fd],[],[],min(.02,self.work_end-time.monotonic()))
+                if not readable:continue
+                # At saturation refuse conservatively without materializing an
+                # extra byte. EOF already observed is the only completion proof.
+                room=self.expanded_cap-self.captured
+                if room<=0:raise ValueError('PROC lossless aggregate captured bound')
+                try:raw=os.read(source_fd,min(65536,room))
+                except BlockingIOError:continue
+                if not raw:break
+                self.captured+=len(raw);count+=len(raw);digest.update(raw)
+                self._write(output_fd,codec.compress(raw))
+            self._write(output_fd,codec.flush())
+            current=self._identity(output_fd)
+            if (current[:5]!=original[:5] or current[5]!=self.stored-start_stored
+                    or os.lseek(output_fd,0,os.SEEK_CUR)!=current[5]):
+                raise ValueError('PROC lossless output FD identity/size drift')
+            row={'phase':phase,'bytes':count,'sha256':digest.hexdigest(),'storedBytes':current[5]}
+            self.rows.append(row);return dict(row)
+        except BaseException:
+            self.failed=True;raise
+
+    def read(self, source_fd, expected, consume):
+        """Strict single-member bounded read; callbacks do not confer acceptance.
+
+        All decoded bytes are delivered in order, including final fragments.
+        Extra members/trailing bytes, CRC failure and missing EOF refuse. A
+        callback failure consumes the prototype without another callback/retry.
+        """
+        import zlib
+        try:
+            self._tick();identity=self._identity(source_fd)
+            if (not stat.S_ISREG(identity[3]) or identity[2]!=os.geteuid()
+                    or stat.S_IMODE(identity[3])!=0o600 or identity[4]!=1
+                    or not 0<identity[5]<=self.stored_cap-self.MANIFEST_RESERVE
+                    or os.lseek(source_fd,0,os.SEEK_CUR)!=0):
+                raise ValueError('PROC lossless encoded input custody/bound')
+            codec=zlib.decompressobj(31);digest=hashlib.sha256();count=0;encoded=0
+            while True:
+                self._tick();chunk=os.read(source_fd,4096);encoded+=len(chunk)
+                if encoded>identity[5]:raise ValueError('PROC lossless encoded input grew')
+                if not chunk:break
+                if codec.eof:raise ValueError('PROC lossless trailing data/member')
+                tail=chunk
+                while tail:
+                    self._tick();room=self.expanded_cap-self.decoded
+                    if room<=0:raise ValueError('PROC lossless aggregate expanded bound')
+                    raw=codec.decompress(tail,min(65536,room));tail=codec.unconsumed_tail
+                    self.decoded+=len(raw);count+=len(raw);digest.update(raw)
+                    if raw:consume(raw)
+                    if codec.unused_data:raise ValueError('PROC lossless trailing data/member')
+            if not codec.eof or self._identity(source_fd)!=identity or encoded!=identity[5]:
+                raise ValueError('PROC lossless truncated/drifting input')
+            if count!=expected['bytes'] or digest.hexdigest()!=expected['sha256']:
+                raise ValueError('PROC lossless complete decoded identity differs')
+            return {'bytes':count,'sha256':digest.hexdigest()}
+        except BaseException:
+            self.failed=True;raise
+
+    def finish(self, output_fd):
+        """Bounded manifest reserves storage; never a native/complete-trace receipt."""
+        try:
+            self._tick();self._fresh_output(output_fd)
+            if {r['phase'] for r in self.rows}!={'controller','session','normal'}:
+                raise ValueError('PROC lossless incomplete phase census')
+            body=json.dumps({'schema':'fsgg.proc.lossless-source-prototype/1',
+                'nativeAccepted':False,'completeTraceQualified':False,'rows':self.rows,
+                'storedBytesBeforeManifest':self.stored,'expandedBytes':self.captured},sort_keys=True).encode()+b'\n'
+            if len(body)>self.MANIFEST_RESERVE:raise ValueError('PROC lossless manifest reserve')
+            self._write(output_fd,body,manifest=True);self.finished=True;return body
+        except BaseException:
+            self.failed=True;raise
+
+
 def proc_trace_argv(spec,slot,descriptor,authority_path,authority_sha,handshake_fd,phase):
     if spec['role']!='qualification' or phase not in ('normal','controller','session') or type(handshake_fd) is not int or not 3<=handshake_fd<=1024:
         raise ValueError('PROC closed measurement role/handshake')
