@@ -2886,7 +2886,9 @@ class FutureTraceJoinedControls(unittest.TestCase):
 
     def test_actual_measurement_bounds_keeps_fresh_guards_and_exact_fifo_census(self):
         with tempfile.TemporaryDirectory() as directory:
-            root=Path(directory);spec,store=self.store(root,cpuAffinity=[1],diskBytes=16*1024**2,rssBytes=512*1024**2,
+            # This unit fixture observes its own test-runner allocation. It does
+            # not select or widen the separate native qualification profile.
+            root=Path(directory);spec,store=self.store(root,cpuAffinity=sorted(os.sched_getaffinity(0)),diskBytes=16*1024**2,rssBytes=512*1024**2,
                 transport={'tracer':str(root/'inert-tracer'),'client':str(root/'inert-client')})
             store.begin('controller');app=os.getpid();namespaces={'pid':'pid:[inert]','mnt':'mnt:[inert]','user':'user:[inert]'}
             actor={'pid':app,'ppid':1,'start':1,'uid':os.geteuid(),'namespaces':namespaces,'tgid':app,'rss':4096,'state':'R'}
@@ -2902,6 +2904,10 @@ class FutureTraceJoinedControls(unittest.TestCase):
                 with self.assertRaisesRegex(Exception,'disk-special-file'):
                     module.proc_measurement_bounds(spec,{}, {'capacity':{}},root,{},None,False,trace_store=store)
                 self.assertEqual(2,capacity.call_count);self.assertEqual(2,drift.call_count)
+                with patch.object(module.os,'sched_getaffinity',return_value=set()):
+                    with self.assertRaisesRegex(ValueError,'actual affinity drift'):
+                        module.proc_measurement_bounds(spec,{}, {'capacity':{}},root,{},None,False,trace_store=store)
+                self.assertEqual(3,capacity.call_count);self.assertEqual(3,drift.call_count)
 
     def test_current_cli_refuses_future_profile_before_any_launch_or_namespace(self):
         with tempfile.TemporaryDirectory() as directory:

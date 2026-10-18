@@ -173,6 +173,9 @@ The existing required `compiler-and-tests` runner selects both
 unittest invocation, with verbose case names for readback. This adds the 24
 focused assertions to the maintained gate; actual hosted results remain a
 separate exact-head observation.
+The measurement-bound unit fixture uses its test runner's observed allocation
+and separately verifies real mismatched-affinity refusal; a fixture's allocation
+does not select or widen the native qualification profile.
 
 The source owner can derive the prospective manifest from the retained historical
 inventory without altering any original. A future supplier must still provide a
