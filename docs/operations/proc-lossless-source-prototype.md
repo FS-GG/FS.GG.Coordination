@@ -168,6 +168,11 @@ digest changes, refusal before store/launch, and actual caller/handshake downgra
 refusal. Existing actual FIFO, shared parser, first-cause, independent cleanup and
 WORK/TOTAL controls remain. These are synthetic source controls without a real
 tracer, client, native provider or credential operation.
+The existing required `compiler-and-tests` runner selects both
+`FutureSourceClosureControls` and `FutureTraceJoinedControls` through its actual
+unittest invocation, with verbose case names for readback. This adds the 24
+focused assertions to the maintained gate; actual hosted results remain a
+separate exact-head observation.
 
 The source owner can derive the prospective manifest from the retained historical
 inventory without altering any original. A future supplier must still provide a
