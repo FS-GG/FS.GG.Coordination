@@ -1,92 +1,111 @@
-# PROC lossless source feasibility
+# Prospective PROC lossless trace source
 
-Status: **source codec prototype; live integration rejected pending the joined
-producer/consumer design below**. This does not select an encoding for any command
-profile, extend a qualification ordinal, or accept a trace/runtime. The existing
-raw trace contract remains unchanged.
+Status: **joined source implementation with inert controls; runtime admission
+refused**. The current raw 8 MiB contract, profiles and maximum qualification
+ordinal 4 remain unchanged. No command-line profile selects this representation.
+The explicit helper profile is a source-control input, not an execution grant.
 
-`ProcLosslessSourcePrototype` in `eng/retain-choreo-c2-diagnostics.py` is callable
-only as an explicitly selected source-feasibility helper. Existing command
-execution never calls it. Its selection string is not a root grant. The source
-prototype drains an already nonblocking pipe into a fresh private regular output
-FD and performs strict single-member gzip decoding. It preserves raw bytes and
-uses caller-supplied original monotonic deadlines without renewing them. It adds
-no process, shell, pathname lookup for trace inputs, or metadata observation cache.
-The caller owns and independently closes all FDs. A failure consumes the codec
-object; partial output remains held and no retry or successful manifest follows.
+## Producer and lifetime
 
-The fixed upper limits are 8 MiB of codec-owned stored bytes, including a reserved
-16 KiB manifest allowance, and 32 MiB of captured/decoded bytes across phases.
-Tests may select smaller limits, never larger ones. Input saturation can refuse
-conservatively before a further read, rather than allocate a byte past the cap to
-probe EOF. Decoding refuses CRC failure, truncation, trailing bytes, another gzip
-member, expanded overflow and decoded byte/hash mismatch. Decoded callbacks are
-**provisional**: only complete successful return establishes decoded identity;
-callbacks cannot grant trace or effect acceptance. The manifest explicitly says
-`nativeAccepted=false` and `completeTraceQualified=false`.
+`proc_qualification_apparatus(..., trace_profile=...)` joins the prospective store
+to the existing three-phase measurement apparatus. It requires the exact
+`PROC_FUTURE_TRACE_SOURCE_PROFILE` in both caller and authority, qualification
+role and `nativeGet=false`. A missing, widened or crossed selection refuses.
+`execute_proc_command` refuses a future selection without the authenticated
+measured context before claiming or modifying the existing operation slot.
 
-The focused synthetic controls exercise real nonblocking pipes, the actual codec
-methods, all three phases, exact ordered roundtrip bytes, manifest accounting,
-incompressible storage overflow, aggregate expansion, corrupt/truncated/trailing
-and multi-member streams, decoded identity, missing phases, occupied outputs,
-unselected encoding, original-clock expiry, and a first consumer failure without
-retry or closing caller FDs. Existing read-drift controls remain unchanged. These
-are source controls, not an actual tracer/client qualification.
+The prospective producer changes `strace -ff -o PREFIX` to `-f -o FIXED_FIFO`.
+The apparatus exclusively creates one 0600 named FIFO per phase under a fresh
+0700 `lossless-traces` directory and opens its nonblocking reader before starting
+the existing tracer. Only the existing one-use handshake FD is inherited through
+`Popen`; no trace-output FD, shell or compressor actor is added. The tracer opens
+its own named output. In the reviewed tracer source, its shared output is closed
+in the tracee and its retained stream descriptor has close-on-exec semantics.
+This source design is not proof of behavior in a real tracer run.
 
-## Concrete producer obstruction
+The existing monitor drains at most four 64 KiB chunks per turn before performing
+its existing readiness, capacity, per-use read-drift, affinity, actor and lifetime
+checks. Initial FIFO EOF does not establish completion. Observed output followed
+by EOF cannot reopen. Producer terminal observation and drained EOF are both
+required to seal a gzip member. A monitor or producer error retains the original
+first cause; sibling stream, FD, artifact and reporting cleanup remain independent
+and their errors remain secondary. Unknown producer settlement leaves partial
+private artifacts and cannot produce a successful manifest.
 
-The current `proc_trace_argv` selects `strace -ff` and a pathname prefix. The tracer
-opens one file for each actual PID/thread itself. `proc_measure_once` currently
-passes only its one-use handshake FD into the tracer and sends stdout/stderr to a
-separate log. Its loop observes readiness, accounting and terminal state; it does
-not drain a trace pipe. The complete normal parser reads per-PID files and joins
-forks, chronological cwd/dirfd/FD provenance, semantic reads and exact terminal
-records. Negative-control traces are intentionally incomplete and remain separate.
+The original WORK deadline governs operation and draining. After terminal
+observation, the original TOTAL deadline funds seal, verification, parsing and
+reporting. The codec's temporary retirement clock is restored in `finally`.
+Neither deadline is renewed. Store close failures make the prospective result
+failed-or-unknown even when a manifest was already retained. All prospective
+results retain `rootAccepted=false`, `qualificationAccepted=false` and
+`publicationAuthorized=false`.
 
-A post-hoc gzip pass cannot prevent the raw live aggregate limit from being
-exceeded. Deleting or replacing raw files to obtain space would lose original
-custody and is not selected. An output-pipe shell or compressor process would add
-an undeclared executable, actor, inherited-FD and retirement boundary. A switch
-from `-ff` per-PID files to one `-f` stream changes PID framing and output semantics;
-it cannot be treated as an interchangeable filename change.
+## Bytes, custody and parsing
 
-## Required joined source design before live support
+The store holds the namespace directory and every FIFO, gzip and manifest FD.
+It observes fresh FD/path identity, owner, type, link count and mode, complete
+fixed-name census and prior-artifact hashes. FIFO I/O timestamps are not mistaken
+for replacement; FIFO device/inode/owner/mode/link/size are checked anew. The
+ordinary disk census accepts a FIFO only through its exact authenticated
+capability; raw operation census still refuses special files.
 
-1. Define one exact prospective producer contract: pinned tracer options, selected
-   syscalls/full string detail, framing including PID and timestamps, inherited
-   trace-only write FD, authenticated root subject/fork graph and read/config closure.
-   No generic command, shell or compressor process is implied. A source-owned
-   in-process codec can avoid another actor only if the existing apparatus becomes
-   the sole bounded pipe reader.
-2. Multiplex trace draining with the existing handshake/readiness/accounting and
-   original work/cleanup clocks. Specify pipe EOF, backpressure, tracer/subject
-   failures and kill/retirement ordering. A blocking drain or delayed accounting
-   is not equivalent. Complete normal EOF/terminal evidence is mandatory; partial
-   negative controls retain their original limited meaning. No event filtering,
-   case omission or change to any per-use drift observation is selected.
-3. Bind a fresh private namespace and complete manifest/file census to retained
-   directory and file capabilities. The current codec checks supplied FD metadata;
-   it does not authenticate namespace path bindings, hold every prior artifact FD,
-   detect later mutation of an earlier artifact at manifest time, or inventory
-   unrelated files. Thus its byte counter is a codec-owned-output bound, **not yet
-   proof of the aggregate physical namespace contract**. Those checks must cover
-   every phase, partial artifact, manifest, diagnostic, stream close and first cause.
-4. Feed the exact decoded complete stream into the existing strict semantic parser
-   without dropping records or conflating PID framing/continuations. The prototype
-   verifies byte identity but does not perform this parser join. Reader inputs need
-   canonical schema/name/phase/inventory/custody binding; caller-supplied checksums
-   are not trusted-source authentication.
-5. Declare gzip/zlib/interpreter/extension imports and any inherited output path in
-   the prospective source/runtime closure. Imports are local to the unused helper,
-   so current profiles acquire no new import behavior. A future caller does acquire
-   those dependencies. Reconcile derived source pins, the owning plan and Atlas;
-   preserve current default refusal and ordinal maximum 4. Source delivery itself
-   supplies no machine admission or new runtime slot.
+The aggregate stored-byte cap is 8 MiB across all three gzip members, partial
+outputs and manifest, with 16 KiB reserved for the manifest. This is a file-size
+bound, not an 8 MiB physical allocation guarantee; the existing separate disk
+census still accounts for logical and allocated bytes. Aggregate captured bytes
+and aggregate decoded bytes each have a strict 32 MiB cap across all phases.
+Conservative saturation refusal is allowed before an additional EOF probe.
+No raw original is compacted, replaced or deleted. No event is filtered to fit.
 
-The missing supplier is the existing Execution/PROC source owner for this joined
-capture/parser/custody implementation, with root selecting its material contract.
-No external operator, new credential, native probe or repeated qualification can
-substitute for it. Until that join is designed and reviewed, reject promotion of
-this prototype to a production trace representation. A retained incomplete sample
-cannot establish complete-path storage, full normal-stream fit, hidden-read
-exclusion, transient actor/RSS safety or native acceptance.
+The strict reader checks one complete gzip member, CRC, encoded and decoded
+identity, count, metadata, EOF and complete census. Truncation, corruption,
+trailing bytes, additional members and expansion overflow refuse. Decoded
+callbacks remain provisional until the complete reader succeeds.
+
+Combined trace bytes remain the physical artifact. PID/timestamp framing creates
+sorted per-PID projections for the same semantic engine as raw files; per-PID
+hashes are explicitly derived projections. Existing fork, chronological cwd,
+dirfd, FD, source-read, continuation and terminal checks remain. Equal-time event
+ordering preserves the original sorted-PID/per-PID serial rule. Complete normal
+traces reject incomplete final lines. Aborted control tails remain in the encoded
+artifact with their count/hash and never establish complete trace or read closure.
+Future namespace metadata access does not authorize reading its gzip/FIFO content.
+
+Projection allows at most 32 PIDs and 64 KiB per physical line. The future semantic
+parser decodes one line at a time, avoiding whole-file Unicode/split copies. It
+refuses above 131072 physical records or a 128 MiB conservative retained-object
+budget: four times each actual line-string allocation plus 4096 bytes per retained
+event for derived argument/path/FD/provenance/read objects. These are refusal and
+planning bounds, not a hard RSS proof. Captured/decoded byte caps do not by
+themselves bound Python object overhead. The separately sampled aggregate
+apparatus/tracer/subject RSS guard remains necessary for eventual runtime admission.
+
+## Source evidence and remaining admission
+
+The synthetic controls exercise actual FIFO/store/codec functions, strict reader
+failures, original WORK/TOTAL separation, complete namespace drift, prior-artifact
+mutation, exact raw/future parser agreement and hidden-read refusal. They invoke
+the real `proc_measure_once` and one-use handshake with inert process/kernel
+adapters, preserving original monitor plus independent close/report failures and
+unknown settlement. Separate controls invoke the actual negative-control
+retirement helper, actual capacity/read-drift/census joining, and the full
+qualification apparatus's parser/manifest/result finalization. A cleanup-only
+failure stays failed-or-unknown; a self-reported successful subject cannot grant
+root or qualification acceptance. Current CLI refusal is checked by its exact
+refusal cause, with no process launch or operation-slot change.
+
+These fixtures do not execute a tracer, client, native provider, scoped App or
+credential operation. They do not establish full normal-stream fit, tracer FIFO
+framing/backpressure behavior, kernel no-birth safety, observational equivalence
+or machine resource conformance. Original failed/unknown qualification evidence
+and all holds remain. A retained incomplete sample fitting gzip proves none of
+those outcomes.
+
+Before any future runtime profile is selected, the existing PROC owner/root must
+reconcile its exact tracer/interpreter/zlib Python and extension/library source
+closure, bootstrap capacity, directory/negative lookup inventory, original finite
+clocks and stored/expanded budgets. The existing immutable instrumentation and
+current raw bootstrap contract do not implicitly cover new codec imports or the
+new producer grammar. A separate reviewed profile and explicit native admission
+would be necessary; this source delivery supplies neither and creates no fifth
+qualification ordinal.
