@@ -39,6 +39,11 @@ by its internal `portable_workspace_sc2.py` module. It has no second executable
 entrypoint. This source preparation does not qualify the current native engines,
 image, product journeys, hard containment or cleanup after loss of the caller.
 The historical image and small Buildah pilot are not current qualification.
+Shared storage preflight rejects known global-store scope before filesystem
+observation, then retains symlink, resolved-alias and disjointness checks. The
+first hosted aggregate exposed Python 3.12 raising PermissionError for those
+forbidden paths before the intended refusal; the corrected source does not need
+permission to inspect a store it already refuses to use.
 
 The externally selected, private `--operation-input` and
 `--expected-operation-input-sha256` bind exact helper/product revisions, trees and

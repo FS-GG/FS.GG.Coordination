@@ -79,6 +79,16 @@ class StoragePreflight(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "symlink component"):
                 self.validate()
 
+    def test_known_global_scope_refuses_before_inaccessible_path_observation(self):
+        for selected in ('/var/lib/containers/storage', '/var/lib/containers/storage/a-run',
+                         '/run/containers/storage', '/run/containers/storage/a-run'):
+            with self.subTest(selected=selected):
+                self.args.root = selected
+                with patch.object(Path, 'is_symlink', side_effect=PermissionError('declared inaccessible global store')) as observed:
+                    with self.assertRaisesRegex(RuntimeError, 'global container store'):
+                        self.validate()
+                    observed.assert_not_called()
+
     def test_parent_traversal_is_refused_before_normalization(self):
         self.args.root = str(self.base / "alias/../graphroot")
         with self.assertRaisesRegex(RuntimeError, "parent traversal"):

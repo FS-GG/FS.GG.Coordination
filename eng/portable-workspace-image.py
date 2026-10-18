@@ -278,17 +278,27 @@ def podman_prefix(args: argparse.Namespace) -> list[str]:
 
 def require_storage_paths(args: argparse.Namespace, source: Path, state: Path) -> None:
     """Check declared paths without allocating storage or invoking the engine."""
+    def overlaps(left: Path, right: Path) -> bool:
+        return left == right or left in right.parents or right in left.parents
+
+    home = Path.home()
+    global_stores = [home / ".local/share/containers", Path("/var/lib/containers/storage"),
+                     Path(f"/run/user/{os.getuid()}/containers"), Path("/run/containers/storage")]
+    if os.environ.get("XDG_DATA_HOME"):
+        global_stores.append(Path(os.environ["XDG_DATA_HOME"]) / "containers")
     paths = {}
     for name, value in (("graphroot", args.root), ("runroot", args.runroot), ("state", args.state_dir)):
         if ".." in Path(value).parts:
             raise RuntimeError(f"portable storage {name} contains parent traversal")
         path = Path(os.path.abspath(value))
+        # Refuse known global scopes before asking the unprivileged caller to
+        # traverse them. Python versions differ in is_symlink's handling of an
+        # inaccessible ancestor; neither result grants global-store access.
+        if any(overlaps(path, Path(os.path.abspath(store))) for store in global_stores):
+            raise RuntimeError(f"portable storage {name} overlaps a global container store")
         if any(part.is_symlink() for part in (path, *path.parents)):
             raise RuntimeError(f"portable storage {name} has a symlink component")
         paths[name] = path
-
-    def overlaps(left: Path, right: Path) -> bool:
-        return left == right or left in right.parents or right in left.parents
 
     source = source.resolve()
     for name, path in paths.items():
@@ -297,11 +307,6 @@ def require_storage_paths(args: argparse.Namespace, source: Path, state: Path) -
     for left, right in (("graphroot", "runroot"), ("graphroot", "state"), ("runroot", "state")):
         if overlaps(paths[left], paths[right]):
             raise RuntimeError(f"portable storage {left} overlaps {right}")
-    home = Path.home()
-    global_stores = [home / ".local/share/containers", Path("/var/lib/containers/storage"),
-                     Path(f"/run/user/{os.getuid()}/containers"), Path("/run/containers/storage")]
-    if os.environ.get("XDG_DATA_HOME"):
-        global_stores.append(Path(os.environ["XDG_DATA_HOME"]) / "containers")
     for name, path in paths.items():
         if any(overlaps(path, store.resolve()) for store in global_stores):
             raise RuntimeError(f"portable storage {name} overlaps a global container store")
