@@ -2116,7 +2116,7 @@ type PortableHostExecutorTests_ControlledAuthenticatedSource() =
 
 
 /// Actual prospective codec controls. No transport, CLR child, Podman or filesystem effect port.
-type PortableHostExportSourceTests(output: Xunit.Abstractions.ITestOutputHelper) =
+type PortableHostExecutorTests_PortableHostExportSourceTests(output: Xunit.Abstractions.ITestOutputHelper) =
     let ok = HostExecutorAssertions.ok
     let context (fixture: HostExecutorFixture) =
         let manifest = PortableSupplierManifest.create [{ Path = "result.txt"; Bytes = 0UL; Sha256 = String.replicate 64 "a" }] |> ok
