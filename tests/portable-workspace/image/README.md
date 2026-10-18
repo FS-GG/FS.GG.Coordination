@@ -52,6 +52,9 @@ the selected output tag is local-store-only. The native builder must report the
 supported1.43.1 family in addition to matching its externally selected file pin.
 Private source revisions, pins and admission evidence stay in the restricted
 selection; public controls use independently committed synthetic repositories.
+The internal implementation is compiled from bounded regular source bytes,
+bypassing bytecode cache reads and writes. Its captured source digest must match
+the external selection before dispatch; source checks do not run cached code first.
 Unknown/duplicate fields, other-profile acquisition flags, external Git pointers,
 dirty/ignored output, source substitutions and changed config/support objects
 refuse. The complete tracked product tree is independently checked, including

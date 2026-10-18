@@ -22,6 +22,8 @@ import subprocess
 import tarfile
 import selectors
 import io
+import marshal
+import struct
 from unittest.mock import patch, Mock
 
 
@@ -483,6 +485,42 @@ class Sc2Profile(unittest.TestCase):
         self.assertIn(b'product source/revision required', result.stderr)
         self.assertEqual(sorted(p.name for p in helper.iterdir()),
                          ['portable-workspace-image.py', 'portable_workspace_sc2.py'])
+
+    def test_actual_cli_bypasses_valid_timestamp_cached_code_before_source_checks(self):
+        helper = self.root / 'helper'
+        helper.mkdir()
+        for name in ('portable-workspace-image.py', 'portable_workspace_sc2.py'):
+            shutil.copyfile(ROOT / 'eng' / name, helper / name)
+        implementation = helper / 'portable_workspace_sc2.py'
+        cache = Path(importlib.util.cache_from_source(str(implementation)))
+        cache.parent.mkdir()
+        info = implementation.stat()
+        poisoned = (importlib.util.MAGIC_NUMBER + struct.pack('<III', 0, int(info.st_mtime), info.st_size)
+                    + marshal.dumps(compile('raise RuntimeError("cached code executed")', str(implementation), 'exec')))
+        cache.write_bytes(poisoned)
+        # Prove the mutant is accepted by Python's actual timestamp-cache
+        # reader; the maintained CLI must bypass this otherwise usable code.
+        cached = importlib.machinery.SourceFileLoader('cached_profile', str(implementation))
+        with self.assertRaisesRegex(RuntimeError, 'cached code executed'):
+            exec(cached.get_code('cached_profile'), {})
+        result = subprocess.run([sys.executable, '-I', str(helper / 'portable-workspace-image.py'),
+            'check-inputs', '--profile=sc2-headless', '--source=' + str(helper),
+            '--expected-source-revision=' + 'a' * 40, '--state-dir=' + str(self.root),
+            '--root=' + str(self.root), '--runroot=' + str(self.root)],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10, check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(b'product source/revision required', result.stderr)
+        self.assertNotIn(b'cached code executed', result.stderr)
+        self.assertEqual(cache.read_bytes(), poisoned)
+
+    def test_bootstrap_captured_source_must_match_external_selection_before_dispatch(self):
+        args, selection, home = self.fixture()
+        with patch.object(Path, 'home', return_value=home), \
+             patch.dict(SC2.__dict__, {'_BOOTSTRAP_SOURCE_SHA256': 'f' * 64}), \
+             patch.object(IMAGE.subprocess, 'Popen') as spawned:
+            with self.assertRaisesRegex(RuntimeError, 'captured at bootstrap differs'):
+                SC2.main(args, IMAGE.__dict__)
+            spawned.assert_not_called()
 
     def test_symlink_and_hardlink_inputs_refuse_before_read(self):
         source = self.root / 'source'

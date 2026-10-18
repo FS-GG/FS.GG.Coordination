@@ -2109,17 +2109,28 @@ def main() -> int:
         if sys.platform != 'linux':
             parser.error('sc2-headless requires the selected Linux profile')
         import importlib.util
+        import stat
         implementation = Path(__file__).with_name('portable_workspace_sc2.py')
         spec = importlib.util.spec_from_file_location('portable_workspace_sc2', implementation)
         profile = importlib.util.module_from_spec(spec)
-        # Loading the internal implementation must not dirty the hash-bound
-        # helper checkout before its own exact source/cleanliness checks.
-        previous_bytecode = sys.dont_write_bytecode
+        # Compile captured regular source, never read/write a sibling pyc before
+        # the profile's independent source/cleanliness checks. This bootstrap
+        # correspondence is not permission for an operation.
+        descriptor = os.open(implementation, os.O_RDONLY | os.O_NOFOLLOW)
         try:
-            sys.dont_write_bytecode = True
-            spec.loader.exec_module(profile)
+            with os.fdopen(descriptor, 'rb') as stream:
+                descriptor = None
+                info = os.fstat(stream.fileno())
+                if not stat.S_ISREG(info.st_mode) or info.st_size > 1048576:
+                    raise RuntimeError('internal profile regular source byte bound exceeded')
+                profile_source = stream.read(1048577)
+                if len(profile_source) != info.st_size:
+                    raise RuntimeError('internal profile source changed during capture')
+            exec(compile(profile_source, str(implementation), 'exec'), profile.__dict__)
+            profile.__dict__['_BOOTSTRAP_SOURCE_SHA256'] = hashlib.sha256(profile_source).hexdigest()
         finally:
-            sys.dont_write_bytecode = previous_bytecode
+            if descriptor is not None:
+                os.close(descriptor)
         print(json.dumps(profile.main(args, globals()), sort_keys=True, separators=(',', ':')))
         return 0
     if args.operation_input is not None or args.expected_operation_input_sha256 is not None:

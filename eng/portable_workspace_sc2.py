@@ -459,6 +459,10 @@ def check_namespace(root, graphroot, runroot):
 
 def check_inputs(args, api, *, command=None, skip_source_commands=False):
     selection, input_object = selected_input(args)
+    captured_source = globals().get('_BOOTSTRAP_SOURCE_SHA256')
+    require(captured_source is None or captured_source ==
+            selection['helper']['files']['eng/portable_workspace_sc2.py'],
+            'internal source captured at bootstrap differs from selected source')
     require(args.expected_source_revision == selection['helper']['revision']
             and args.expected_image_source_revision == selection['product']['revision'],
             'CLI/source selection mismatch')
