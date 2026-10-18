@@ -589,7 +589,7 @@ def require(ok, message):
     if not ok: raise RuntimeError(message)
 
 # Same non-following disk inventory as the qualified single-controller route.
-def census(root,deadline,limit=DISK_LIMIT,clock=time.monotonic):
+def census(root,deadline,limit=DISK_LIMIT,clock=time.monotonic,*,future_fifos=None):
     logical=allocated=objects=links=0;stack=[root]
     while stack:
         require(clock()<deadline,'disk-budget');path=stack.pop();s=path.lstat();objects+=1
@@ -597,6 +597,11 @@ def census(root,deadline,limit=DISK_LIMIT,clock=time.monotonic):
         require(max(logical,allocated)<=limit,'disk-byte-cap')
         if stat.S_ISDIR(s.st_mode):stack.extend(path.iterdir())
         elif stat.S_ISLNK(s.st_mode):links+=1
+        elif stat.S_ISFIFO(s.st_mode) and future_fifos is not None:
+            expected=future_fifos.get(str(path))
+            observed=(s.st_dev,s.st_ino,s.st_uid,s.st_gid,s.st_mode,s.st_nlink,s.st_size)
+            require(expected is not None and tuple(expected)==observed and s.st_uid==os.geteuid()
+                    and stat.S_IMODE(s.st_mode)==0o600 and s.st_nlink==1,'disk-special-file')
         else:require(stat.S_ISREG(s.st_mode),'disk-special-file')
     return {'objects':objects,'logicalBytes':logical,'allocatedBytes':allocated,'fixtureSymlinks':links,'linkTraversal':False}
 
@@ -1350,22 +1355,64 @@ def proc_generated_path(spec,path,authority_path):
     return candidate.parent in directories and (candidate.name in files or re.fullmatch(r'qualification\.trace\.[1-9][0-9]*',candidate.name) is not None)
 
 
-def proc_trace_evidence(spec, slot, authority_path, tracer_pid=None, *, killed=False, apparatus_pid=None):
+def proc_trace_evidence(spec, slot, authority_path, tracer_pid=None, *, killed=False, apparatus_pid=None, trace_store=None):
     """Whole fork graph and chronological cwd/dirfd evidence; unknowns refuse."""
-    traces=sorted(Path(slot).glob('qualification.trace.*'))
-    if not traces or len(traces)>32:raise ValueError('PROC trace process/thread population incomplete')
+    if trace_store is None:
+        traces=sorted(Path(slot).glob('qualification.trace.*'))
+        if not traces or len(traces)>32:raise ValueError('PROC trace process/thread population incomplete')
+        def source_records():
+            total=0
+            for trace in traces:
+                raw=trace.read_bytes();total+=len(raw)
+                if trace.is_symlink() or total>8*1024**2 or not raw.endswith(b'\n'):
+                    raise ValueError('PROC private trace bound/completeness')
+                yield int(trace.name.rsplit('.',1)[1]),raw
+        return proc_trace_semantics(spec,slot,authority_path,source_records(),tracer_pid,
+                                    killed=killed,apparatus_pid=apparatus_pid)
+    if type(trace_store) is not ProcFutureTraceStore or trace_store.spec is not spec:
+        raise ValueError('PROC unselected future trace input')
+    projected,physical=trace_store.project('normal')
+    result=proc_trace_semantics(spec,slot,authority_path,projected,tracer_pid,killed=killed,
+                                apparatus_pid=apparatus_pid,future_context=trace_store.context(retirement=True))
+    trace_store._check(retirement=True)
+    result['representation']={'encoding':'gzip-pid-stream/1','physicalArtifact':physical,
+                              'processHashesAre':'derived-per-pid-projections','sourceOnly':True}
+    return result
+
+
+def proc_future_trace_lines(raw):
+    """Bound one decoded line, rather than duplicate the expanded Unicode file."""
+    offset=0
+    while offset<len(raw):
+        end=raw.find(b'\n',offset)
+        if end<0 or end+1-offset>65536:raise ValueError('PROC future trace line bound')
+        yield raw[offset:end].decode('utf-8','strict')
+        offset=end+1
+
+
+PROC_FUTURE_PARSER_RETAINED_BYTES=128*1024**2
+
+
+def proc_trace_semantics(spec,slot,authority_path,source_records,tracer_pid=None,*,killed=False,apparatus_pid=None,future_context=None):
+    """One semantic engine for original raw traces and future strict projections."""
+    future_fifos=proc_future_source_context(spec,future_context)
     read=spec['readEvidence'];files=set(spec['sourceReadAllowlist'])
     directories={row['path'] for row in read['directories']};aliases={row['path'] for row in read['aliases']}
-    absent={row['path'] for row in read['absences']};events=[];records={};total=0;clocked=True;births={};birth_times={};serial=0
-    for trace in traces:
-        raw=trace.read_bytes();total+=len(raw)
-        if trace.is_symlink() or total>8*1024**2 or not raw.endswith(b'\n'):raise ValueError('PROC private trace bound/completeness')
-        pid=int(trace.name.rsplit('.',1)[1]);lines=[];pending=None
-        for original in raw.decode('utf-8','strict').splitlines():
+    absent={row['path'] for row in read['absences']};events=[];records={};total=0;clocked=True;births={};birth_times={};serial=0;retained=0
+    for pid,raw in source_records:
+        total+=len(raw)
+        if total>(32*1024**2 if future_context is not None else 8*1024**2) or not raw.endswith(b'\n'):
+            raise ValueError('PROC private trace bound/completeness')
+        if pid in records or len(records)>=32:raise ValueError('PROC trace process/thread population incomplete')
+        lines=[];pending=None
+        for original in (proc_future_trace_lines(raw) if future_context is not None else raw.decode('utf-8','strict').splitlines()):
             stamp=re.match(r'([0-9]+\.[0-9]+) (.*)$',original)
             if stamp:when=float(stamp.group(1));line=stamp.group(2)
             else:clocked=False;when=float(serial);line=original
             serial+=1
+            if future_context is not None:
+                if time.monotonic()>=spec['totalDeadline']:raise TimeoutError('PROC future parser original total clock')
+                if serial>131072:raise ValueError('PROC future trace record population bound')
             if '<unfinished ...>' in line:
                 if pending is not None:raise ValueError('PROC ambiguous trace continuation')
                 pending=(when,line.split('<unfinished ...>')[0],line.split('(',1)[0]);continue
@@ -1375,6 +1422,13 @@ def proc_trace_evidence(spec, slot, authority_path, tracer_pid=None, *, killed=F
                 when,prior,call=pending
                 if resumed is None or resumed.group(1)!=call:raise ValueError('PROC mismatched resumed syscall name')
                 line=prior+line.split(' resumed>',1)[1];pending=None
+            if future_context is not None:
+                # Charge retained text plus up to three derived semantic
+                # copies (argv/path/FD provenance), and fixed event/index/read
+                # object overhead. This is a refusal budget, not hard RSS.
+                retained+=4*sys.getsizeof(line)+4096
+                if retained>PROC_FUTURE_PARSER_RETAINED_BYTES:
+                    raise ValueError('PROC future parser retained-object planning bound')
             lines.append(line);events.append((when,serial,pid,line))
             born=re.match(r'(?:clone3?|fork|vfork)\(.*\)\s+= ([0-9]+)$',line)
             if born:
@@ -1407,8 +1461,21 @@ def proc_trace_evidence(spec, slot, authority_path, tracer_pid=None, *, killed=F
              'futex','rseq','rt_sigaction','rt_sigprocmask','rt_sigreturn','sigaltstack',
              'socket','accept','accept4','socketpair','pipe','pipe2','eventfd','eventfd2',
              'epoll_create','epoll_create1','timerfd_create','signalfd','signalfd4','inotify_init','inotify_init1','memfd_create','pidfd_open'}
+    future_namespace=Path(spec['operationRoot'])/'lossless-traces'
+    future_artifacts={str(future_namespace/(phase+suffix)) for phase in ('controller','session','normal') for suffix in ('.fifo','.gz')}|{str(future_namespace/'manifest.json')}
+    def generated(path):
+        if proc_generated_path(spec,path,authority_path):return True
+        if future_context is None:return False
+        metadata={'stat','lstat','stat64','lstat64','newfstatat','statx','access','faccessat','faccessat2',
+                  'fstat','fstat64','fstatfs','fstatfs64','statfs','close'}
+        if path in future_artifacts:return name in metadata
+        if path==str(future_namespace):
+            return (name in metadata|{'getdents64'} or name in ('open','openat','openat2') and 'O_DIRECTORY' in line
+                    and not any(flag in line for flag in ('O_WRONLY','O_RDWR','O_TRUNC','O_CREAT')))
+        return False
     semantic_reads=[]
     for _,_,pid,line in sorted(events):
+        if future_context is not None and time.monotonic()>=spec['totalDeadline']:raise TimeoutError('PROC future parser original total clock')
         if pid not in states:raise ValueError('PROC child event precedes authenticated fork/cwd lineage')
         state=states[pid]
         if line.startswith(('+++','---')):continue
@@ -1446,17 +1513,17 @@ def proc_trace_evidence(spec, slot, authority_path, tracer_pid=None, *, killed=F
             if killed and Path(path).name in ('authorization.header','storage-url.conf'):
                 raise ValueError('PROC token-free kernel control accessed semantic credential input')
             mutation=name in ('truncate','truncate64','chmod','fchmodat','chown','lchown','utime','utimes','unlink','unlinkat','rename','renameat','renameat2','mkdir','mkdirat','rmdir') or name in ('open','openat','openat2') and any(flag in line for flag in ('O_WRONLY','O_RDWR','O_TRUNC','O_CREAT'))
-            if mutation and not proc_generated_path(spec,path,authority_path):raise ValueError('PROC write/metadata mutation outside fixed generated artifact lifecycle')
+            if mutation and not generated(path):raise ValueError('PROC write/metadata mutation outside fixed generated artifact lifecycle')
             if '(deleted)' in path:raise ValueError('PROC deleted source/descriptor provenance unknown')
             kernel=proc_kernel_data_read(path,line,pid,actors,tracer_pid,state['controller'],kernel_inputs)
-            if path not in files|directories|aliases|{'/dev/null'} and not proc_generated_path(spec,path,authority_path) and not kernel:
+            if path not in files|directories|aliases|{'/dev/null'} and not generated(path) and not kernel:
                 if 'ENOENT' not in result or path not in absent:raise ValueError('PROC observed source/mapping/negative lookup outside bootstrap inventory')
             records[pid]['observed'].add(path)
         if name in ('readlink','readlinkat') and success and paths:
             returned=re.findall(r'"((?:[^"\\]|\\.)*)"',line)
             if len(returned)>=2 and re.search(r'/proc/(?:self|thread-self|[0-9]+)/(?:(?:task/[0-9]+/)?fd/[0-9]+|exe)$',paths[0]):
                 target=json.loads('"'+returned[1]+'"')
-                if target.startswith('/') and target not in files|aliases|{'/dev/null'} and not proc_generated_path(spec,target,authority_path):
+                if target.startswith('/') and target not in files|aliases|{'/dev/null'} and not generated(target):
                     raise ValueError('PROC ordinary executable/FD target outside source/lifecycle closure')
                 if not target.startswith('/') and not re.fullmatch(r'(?:socket|pipe|anon_inode):\[[^\]]+\]',target):raise ValueError('PROC unknown kernel FD label')
         if name in ('execve','execveat') and success:
@@ -2007,13 +2074,419 @@ def proc_private_record(path,value,deadline,*,exclusive=False,expected=None,cap=
     return raw
 
 
-def proc_trace_argv(spec,slot,descriptor,authority_path,authority_sha,handshake_fd,phase):
+
+class ProcLosslessSourcePrototype:
+    """Inert FD/codec feasibility only; never selected by a command profile.
+
+    Existing traced command execution does not call this type. Selection here is
+    source-control opt-in, not root admission or a source/read-closure assertion.
+    The owner supplies exclusively held fresh output FDs and a nonblocking FIFO;
+    this codec adds no process, source lookup, deadline or caller FD ownership.
+    """
+    STORED_CAP = 8 * 1024**2
+    EXPANDED_CAP = 32 * 1024**2
+    MANIFEST_RESERVE = 16384
+
+    def __init__(self, selection, work_end, *, stored_cap=STORED_CAP, expanded_cap=EXPANDED_CAP):
+        if selection != 'source-feasibility-only':
+            raise ValueError('PROC lossless encoding is not selected')
+        if (type(work_end) not in (int,float) or not math.isfinite(work_end)
+                or work_end <= time.monotonic()):
+            raise ValueError('PROC lossless original work deadline unavailable')
+        if (type(stored_cap) is not int or not self.MANIFEST_RESERVE < stored_cap <= self.STORED_CAP
+                or type(expanded_cap) is not int or not 0 < expanded_cap <= self.EXPANDED_CAP):
+            raise ValueError('PROC lossless fixed resource bounds')
+        self.work_end=work_end;self.stored_cap=stored_cap;self.expanded_cap=expanded_cap
+        self.stored=0;self.captured=0;self.decoded=0;self.failed=False;self.rows=[];self.finished=False
+
+    def _tick(self):
+        if self.failed or self.finished:raise ValueError('PROC lossless consumed source prototype')
+        if time.monotonic() >= self.work_end:raise TimeoutError('PROC lossless original work deadline')
+
+    @staticmethod
+    def _identity(fd):
+        s=os.fstat(fd)
+        return (s.st_dev,s.st_ino,s.st_uid,s.st_mode,s.st_nlink,s.st_size,s.st_mtime_ns,s.st_ctime_ns)
+
+    def _fresh_output(self, fd):
+        observed=self._identity(fd)
+        if (not stat.S_ISREG(observed[3]) or observed[2]!=os.geteuid()
+                or stat.S_IMODE(observed[3])!=0o600 or observed[4]!=1
+                or observed[5]!=0 or os.lseek(fd,0,os.SEEK_CUR)!=0):
+            raise ValueError('PROC lossless output must be exclusively held fresh private regular FD')
+        return observed
+
+    def _write(self, fd, data, *, manifest=False):
+        limit=self.stored_cap if manifest else self.stored_cap-self.MANIFEST_RESERVE
+        self._tick()
+        if self.stored+len(data)>limit:raise ValueError('PROC lossless aggregate stored bound')
+        offset=0
+        while offset<len(data):
+            self._tick();count=os.write(fd,data[offset:])
+            if count<=0:raise OSError('PROC lossless short output write')
+            offset+=count;self.stored+=count
+
+    def capture(self, phase, source_fd, output_fd):
+        """Drain a finite nonblocking source pipe through one lossless gzip member.
+
+        Caller closes its FDs independently. On any failure this whole prototype
+        is consumed; partial bytes remain held, and no retry/manifest follows.
+        """
+        import select
+        import zlib
+        import fcntl
+        try:
+            self._tick()
+            if phase not in ('controller','session','normal') or phase in {r['phase'] for r in self.rows}:
+                raise ValueError('PROC lossless phase population/replay')
+            if not stat.S_ISFIFO(os.fstat(source_fd).st_mode) or not fcntl.fcntl(source_fd,fcntl.F_GETFL)&os.O_NONBLOCK:
+                raise ValueError('PROC lossless source must be a nonblocking pipe')
+            original=self._fresh_output(output_fd);codec=zlib.compressobj(6,zlib.DEFLATED,31)
+            digest=hashlib.sha256();count=0;start_stored=self.stored
+            while True:
+                self._tick()
+                readable,_,_=select.select([source_fd],[],[],min(.02,self.work_end-time.monotonic()))
+                if not readable:continue
+                # At saturation refuse conservatively without materializing an
+                # extra byte. EOF already observed is the only completion proof.
+                room=self.expanded_cap-self.captured
+                if room<=0:raise ValueError('PROC lossless aggregate captured bound')
+                try:raw=os.read(source_fd,min(65536,room))
+                except BlockingIOError:continue
+                if not raw:break
+                self.captured+=len(raw);count+=len(raw);digest.update(raw)
+                self._write(output_fd,codec.compress(raw))
+            self._write(output_fd,codec.flush())
+            current=self._identity(output_fd)
+            if (current[:5]!=original[:5] or current[5]!=self.stored-start_stored
+                    or os.lseek(output_fd,0,os.SEEK_CUR)!=current[5]):
+                raise ValueError('PROC lossless output FD identity/size drift')
+            row={'phase':phase,'bytes':count,'sha256':digest.hexdigest(),'storedBytes':current[5]}
+            self.rows.append(row);return dict(row)
+        except BaseException:
+            self.failed=True;raise
+
+    def read(self, source_fd, expected, consume):
+        """Strict single-member bounded read; callbacks do not confer acceptance.
+
+        All decoded bytes are delivered in order, including final fragments.
+        Extra members/trailing bytes, CRC failure and missing EOF refuse. A
+        callback failure consumes the prototype without another callback/retry.
+        """
+        import zlib
+        try:
+            self._tick();identity=self._identity(source_fd)
+            if (not stat.S_ISREG(identity[3]) or identity[2]!=os.geteuid()
+                    or stat.S_IMODE(identity[3])!=0o600 or identity[4]!=1
+                    or not 0<identity[5]<=self.stored_cap-self.MANIFEST_RESERVE
+                    or os.lseek(source_fd,0,os.SEEK_CUR)!=0):
+                raise ValueError('PROC lossless encoded input custody/bound')
+            codec=zlib.decompressobj(31);digest=hashlib.sha256();count=0;encoded=0
+            while True:
+                self._tick();chunk=os.read(source_fd,4096);encoded+=len(chunk)
+                if encoded>identity[5]:raise ValueError('PROC lossless encoded input grew')
+                if not chunk:break
+                if codec.eof:raise ValueError('PROC lossless trailing data/member')
+                tail=chunk
+                while tail:
+                    self._tick();room=self.expanded_cap-self.decoded
+                    if room<=0:raise ValueError('PROC lossless aggregate expanded bound')
+                    raw=codec.decompress(tail,min(65536,room));tail=codec.unconsumed_tail
+                    self.decoded+=len(raw);count+=len(raw);digest.update(raw)
+                    if raw:consume(raw)
+                    if codec.unused_data:raise ValueError('PROC lossless trailing data/member')
+            if not codec.eof or self._identity(source_fd)!=identity or encoded!=identity[5]:
+                raise ValueError('PROC lossless truncated/drifting input')
+            if count!=expected['bytes'] or digest.hexdigest()!=expected['sha256']:
+                raise ValueError('PROC lossless complete decoded identity differs')
+            return {'bytes':count,'sha256':digest.hexdigest()}
+        except BaseException:
+            self.failed=True;raise
+
+    def finish(self, output_fd):
+        """Bounded manifest reserves storage; never a native/complete-trace receipt."""
+        try:
+            self._tick();self._fresh_output(output_fd)
+            if {r['phase'] for r in self.rows}!={'controller','session','normal'}:
+                raise ValueError('PROC lossless incomplete phase census')
+            body=json.dumps({'schema':'fsgg.proc.lossless-source-prototype/1',
+                'nativeAccepted':False,'completeTraceQualified':False,'rows':self.rows,
+                'storedBytesBeforeManifest':self.stored,'expandedBytes':self.captured},sort_keys=True).encode()+b'\n'
+            if len(body)>self.MANIFEST_RESERVE:raise ValueError('PROC lossless manifest reserve')
+            self._write(output_fd,body,manifest=True);self.finished=True;return body
+        except BaseException:
+            self.failed=True;raise
+
+
+
+# A source-control profile is deliberately not a command descriptor/profile. No
+# CLI or production command selects it; an eventual runtime profile needs its
+# separately reviewed source/read closure and machine admission.
+PROC_FUTURE_TRACE_SOURCE_PROFILE = {
+    'schema':'fsgg.proc.future-trace-source-profile/1',
+    'encoding':'gzip-pid-stream/1','sourceOnly':True,
+    'storedBytes':8*1024**2,'expandedBytes':32*1024**2}
+
+
+def proc_future_source_profile(profile):
+    if profile is None:return False
+    if (type(profile) is not dict or set(profile)!=set(PROC_FUTURE_TRACE_SOURCE_PROFILE)
+            or any(type(profile[key]) is not type(value) or profile[key]!=value
+                   for key,value in PROC_FUTURE_TRACE_SOURCE_PROFILE.items())):
+        raise ValueError('PROC future trace source profile not separately selected')
+    return True
+
+
+def proc_future_source_context(spec, context):
+    """Validate the exact prospective capability, never infer one from a name."""
+    if context is None:return None
+    if (type(context) is not dict or set(context)!={'profile','namespaceIdentity','fifos'}
+            or not proc_future_source_profile(context['profile'])
+            or spec.get('role')!='qualification' or spec.get('request',{}).get('nativeGet') is not False):
+        raise ValueError('PROC future trace context outside selected source profile')
+    root=Path(spec['operationRoot'])/'lossless-traces'
+    if proc_directory_identity(root)!=context['namespaceIdentity']:
+        raise ValueError('PROC future trace namespace capability drift')
+    fifos=context['fifos']
+    if (type(fifos) is not dict or not 1<=len(fifos)<=3
+            or any(path not in {str(root/(phase+'.fifo')) for phase in ('controller','session','normal')}
+                   for path in fifos)):
+        raise ValueError('PROC future trace fixed FIFO capability census')
+    for path,row in fifos.items():
+        if (type(row) not in (list,tuple) or len(row)!=7 or any(type(n) is not int for n in row)
+                or row[2]!=os.geteuid() or row[4]!=(stat.S_IFIFO|0o600) or row[5:] not in ([1,0],(1,0))):
+            raise ValueError('PROC future trace FIFO capability shape')
+        observed=os.lstat(path)
+        actual=(observed.st_dev,observed.st_ino,observed.st_uid,observed.st_gid,observed.st_mode,observed.st_nlink,observed.st_size)
+        if actual!=tuple(row):raise ValueError('PROC future trace FIFO identity drift')
+    return fifos
+
+
+class ProcFutureTraceStore:
+    """Fixed prospective trace namespace, held capabilities and monitor drain.
+
+    The retained codec proof is reused without a shell or additional actor.
+    This source-only route never confers normal/native qualification acceptance.
+    """
+    PHASES=('controller','session','normal')
+    NAMESPACE='lossless-traces'
+
+    def __init__(self, spec, profile):
+        if (not proc_future_source_profile(profile) or spec.get('role')!='qualification'
+                or spec.get('request',{}).get('nativeGet') is not False):
+            raise ValueError('PROC future trace source profile not separately selected')
+        self.spec=spec;self.root=Path(spec['operationRoot'])/self.NAMESPACE
+        self.work_end=spec['workDeadline'];self.total_end=spec['totalDeadline']
+        if (not all(type(x) in (int,float) and math.isfinite(x) for x in (self.work_end,self.total_end))
+                or not time.monotonic()<self.work_end<self.total_end):
+            raise ValueError('PROC future trace original clocks')
+        self.root.mkdir(mode=0o700)
+        self.root_identity=proc_directory_identity(self.root)
+        self.directory=os.open(self.root,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)
+        try:
+            self.codec=ProcLosslessSourcePrototype('source-feasibility-only',self.work_end)
+            self.reader=ProcLosslessSourcePrototype('source-feasibility-only',self.work_end)
+        except BaseException as first:
+            try:os.close(self.directory)
+            except BaseException as close_error:first.proc_measurement_additional=[failure_record(close_error)]
+            raise
+        self.objects={};self.phases={};self.failed=False;self.closed=False;self.manifest=None
+
+    @staticmethod
+    def identity(s):
+        return (s.st_dev,s.st_ino,s.st_uid,s.st_gid,s.st_mode,s.st_nlink,s.st_size,s.st_mtime_ns,s.st_ctime_ns)
+
+    def _check(self, *, retirement=False):
+        if self.closed:raise ValueError('PROC future trace store already closed')
+        if time.monotonic()>=(self.total_end if retirement else self.work_end):
+            raise TimeoutError('PROC future trace original clock')
+        if proc_directory_identity(self.root)!=self.root_identity:
+            raise ValueError('PROC future trace namespace path binding drift')
+        directory=os.fstat(self.directory)
+        if (directory.st_dev,directory.st_ino)!=(self.root_identity['device'],self.root_identity['inode']):
+            raise ValueError('PROC future trace retained directory differs')
+        if set(os.listdir(self.directory))!=set(self.objects):
+            raise ValueError('PROC future trace complete namespace census drift')
+        total=0
+        for name,row in self.objects.items():
+            current=self.identity(os.fstat(row['fd']))
+            named=self.identity(os.stat(name,dir_fd=self.directory,follow_symlinks=False))
+            # FIFO timestamps reflect I/O, not a replacement. Every identity,
+            # kind/mode/link/owner/size predicate is nevertheless observed anew.
+            width=7 if row['fifo'] else 9
+            if current[:width]!=row['identity'][:width] or named[:width]!=current[:width]:
+                raise ValueError('PROC future trace artifact FD/path custody drift')
+            total+=current[6]
+        if total!=self.codec.stored or total>self.codec.stored_cap:
+            raise ValueError('PROC future trace aggregate stored-byte census differs')
+        return total
+
+    def fifo_capabilities(self):
+        self._check()
+        return {str(self.root/name):row['identity'][:7] for name,row in self.objects.items() if row['fifo']}
+
+    def context(self,*,retirement=False):
+        self._check(retirement=retirement)
+        return {'profile':dict(PROC_FUTURE_TRACE_SOURCE_PROFILE),'namespaceIdentity':dict(self.root_identity),
+                'fifos':{str(self.root/name):row['identity'][:7] for name,row in self.objects.items() if row['fifo']}}
+
+    def _add(self,name,*,fifo=False):
+        if name in self.objects:raise ValueError('PROC future trace occupied artifact')
+        if fifo:
+            os.mkfifo(name,0o600,dir_fd=self.directory)
+            fd=os.open(name,os.O_RDONLY|os.O_NONBLOCK|os.O_NOFOLLOW,dir_fd=self.directory)
+        else:
+            fd=os.open(name,os.O_RDWR|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600,dir_fd=self.directory)
+        try:observed=self.identity(os.fstat(fd))
+        except BaseException as first:
+            try:os.close(fd)
+            except BaseException as close_error:first.proc_measurement_additional=[failure_record(close_error)]
+            raise
+        self.objects[name]={'fd':fd,'fifo':fifo,'identity':observed}
+        if (observed[2]!=os.geteuid() or stat.S_IMODE(observed[4])!=0o600 or observed[5]!=1
+                or observed[6]!=0 or (stat.S_ISFIFO(observed[4]) if fifo else stat.S_ISREG(observed[4])) is not True):
+            raise ValueError('PROC future trace fresh artifact custody')
+        return fd
+
+    def begin(self,phase):
+        import zlib
+        self._check()
+        if self.failed or self.manifest is not None or len(self.phases)>=len(self.PHASES) or phase!=self.PHASES[len(self.phases)]:
+            raise ValueError('PROC future trace phase order/consumption')
+        source=self._add(phase+'.fifo',fifo=True);output=self._add(phase+'.gz')
+        self.phases[phase]={'readFd':source,'outputFd':output,'codec':zlib.compressobj(6,zlib.DEFLATED,31),
+            'digest':hashlib.sha256(),'encodedDigest':hashlib.sha256(),'bytes':0,'storedBytes':0,
+            'seen':False,'eof':False,'sealed':False}
+        self._check();return self.root/(phase+'.fifo')
+
+    def _write(self,phase,data):
+        state=self.phases[phase]
+        self.codec._write(state['outputFd'],data)
+        state['encodedDigest'].update(data);state['storedBytes']+=len(data)
+        self.objects[phase+'.gz']['identity']=self.identity(os.fstat(state['outputFd']))
+
+    def drain(self,phase,*,retirement=False):
+        """At most four bounded chunks; caller retains its existing monitor tick."""
+        self._check(retirement=retirement)
+        state=self.phases[phase]
+        if state['sealed'] or self.failed:raise ValueError('PROC future trace consumed phase')
+        original_end=self.codec.work_end
+        if retirement:self.codec.work_end=self.total_end
+        try:
+            for _ in range(4):
+                self._check(retirement=retirement)
+                room=self.codec.expanded_cap-self.codec.captured
+                if room<=0:raise ValueError('PROC future trace aggregate expanded bound')
+                try:raw=os.read(state['readFd'],min(65536,room))
+                except BlockingIOError:return
+                if not raw:
+                    # Initial FIFO EOF is not evidence that a writer ever opened.
+                    if state['seen']:state['eof']=True
+                    return
+                if state['eof']:raise ValueError('PROC future trace writer reopened after EOF')
+                state['seen']=True;state['bytes']+=len(raw);self.codec.captured+=len(raw)
+                state['digest'].update(raw);self._write(phase,state['codec'].compress(raw))
+        except BaseException:
+            self.failed=True;raise
+        finally:self.codec.work_end=original_end
+
+    def seal(self,phase,*,tracer_terminal):
+        """Terminal-plus-drain under the original TOTAL retirement clock only."""
+        if tracer_terminal is not True:raise ValueError('PROC future trace terminal unavailable')
+        state=self.phases[phase];original_end=self.codec.work_end
+        self.codec.work_end=self.total_end
+        try:
+            while not state['eof']:
+                self.drain(phase,retirement=True)
+                if not state['seen']:raise ValueError('PROC future trace no observed writer output')
+            self._write(phase,state['codec'].flush());state['sealed']=True
+            state['row']={'phase':phase,'bytes':state['bytes'],'sha256':state['digest'].hexdigest(),
+                'storedBytes':state['storedBytes'],'encodedSha256':state['encodedDigest'].hexdigest(),
+                'completeNormalTraceQualified':False}
+            self.codec.rows.append(dict(state['row']));self._check(retirement=True)
+            return dict(state['row'])
+        except BaseException:
+            self.failed=True;raise
+        finally:self.codec.work_end=original_end
+
+    def verify_hashes(self):
+        self._check(retirement=True)
+        for phase,state in self.phases.items():
+            if not state['sealed']:raise ValueError('PROC future trace unsealed phase')
+            fd=state['outputFd'];identity=self.identity(os.fstat(fd));os.lseek(fd,0,os.SEEK_SET);digest=hashlib.sha256();size=0
+            while True:
+                self._check(retirement=True);raw=os.read(fd,65536)
+                if not raw:break
+                size+=len(raw);digest.update(raw)
+            if (self.identity(os.fstat(fd))!=identity or size!=state['storedBytes']
+                    or digest.hexdigest()!=state['row']['encodedSha256']):
+                raise ValueError('PROC future trace earlier artifact content drift')
+        self._check(retirement=True)
+
+    def project(self,phase,*,partial=False):
+        """Strict PID framing to derived per-PID bytes, never physical-file claims."""
+        self.verify_hashes();state=self.phases[phase];fd=state['outputFd'];os.lseek(fd,0,os.SEEK_SET)
+        projections={};tail=bytearray();original_end=self.reader.work_end;self.reader.work_end=self.total_end
+        def consume(raw):
+            tail.extend(raw)
+            if b'\n' not in tail and len(tail)>65536:raise ValueError('PROC future trace line bound')
+            while b'\n' in tail:
+                at=tail.index(10)
+                if at+1>65536:raise ValueError('PROC future trace line bound')
+                line=bytes(tail[:at+1]);del tail[:at+1]
+                match=re.fullmatch(rb'([1-9][0-9]{0,9}) +([0-9]+\.[0-9]+ .*)\n',line)
+                if match is None:raise ValueError('PROC future trace PID/timestamp framing')
+                pid=int(match.group(1));projections.setdefault(pid,bytearray()).extend(match.group(2)+b'\n')
+                if len(projections)>32:raise ValueError('PROC future trace PID population')
+        try:
+            self.reader.read(fd,state['row'],consume)
+            if tail and not partial:raise ValueError('PROC future trace incomplete normal line')
+            if not projections:raise ValueError('PROC future trace missing PID records')
+            return ([(pid,bytes(raw)) for pid,raw in sorted(projections.items(),key=lambda row:'qualification.trace.'+str(row[0]))],
+                    {'partialTailBytes':len(tail),'partialTailSha256':hashlib.sha256(tail).hexdigest(),
+                     'physicalArtifact':str(self.root/(phase+'.gz')),'encodedSha256':state['row']['encodedSha256']})
+        finally:self.reader.work_end=original_end
+
+    def finish(self):
+        self.verify_hashes()
+        if self.failed or set(self.phases)!=set(self.PHASES) or self.manifest is not None:
+            raise ValueError('PROC future trace incomplete/consumed manifest')
+        fd=self._add('manifest.json');original_end=self.codec.work_end;self.codec.work_end=self.total_end
+        try:
+            body=self.codec.finish(fd)
+            self.objects['manifest.json']['identity']=self.identity(os.fstat(fd))
+            self.manifest={'path':str(self.root/'manifest.json'),'bytes':len(body),'sha256':hashlib.sha256(body).hexdigest()}
+            self._check(retirement=True);return dict(self.manifest)
+        finally:self.codec.work_end=original_end
+
+    def close(self):
+        """Close every owned sibling independently; preserve all close failures."""
+        errors=[]
+        if not self.closed:
+            for row in self.objects.values():
+                try:os.close(row['fd'])
+                except BaseException as error:errors.append(error)
+            try:os.close(self.directory)
+            except BaseException as error:errors.append(error)
+            self.closed=True
+        if errors:
+            errors[0].proc_measurement_additional=[failure_record(e) for e in errors[1:]]
+            raise errors[0]
+
+
+def proc_trace_argv(spec,slot,descriptor,authority_path,authority_sha,handshake_fd,phase,*,trace_store=None):
     if spec['role']!='qualification' or phase not in ('normal','controller','session') or type(handshake_fd) is not int or not 3<=handshake_fd<=1024:
         raise ValueError('PROC closed measurement role/handshake')
     calls='%file,%process,%memory,read,pread64,readv,socket,accept,accept4,socketpair,pipe,pipe2,eventfd,eventfd2,epoll_create,epoll_create1,timerfd_create,signalfd,signalfd4,inotify_init,inotify_init1,memfd_create,pidfd_open,close,close_range,dup,dup2,dup3,fcntl,fcntl64,getdents64,io_uring_setup,io_uring_enter,io_uring_register,io_setup,io_destroy,io_submit,io_cancel,io_getevents,io_pgetevents,process_vm_readv,process_vm_writev'
-    return [spec['transport']['tracer'],'-ff','--kill-on-exit','--interruptible=2','-ttt','-yy','-s','4096','-e','trace='+calls,'-e','raw=read,pread64,readv',
+    argv=[spec['transport']['tracer'],'-ff','--kill-on-exit','--interruptible=2','-ttt','-yy','-s','4096','-e','trace='+calls,'-e','raw=read,pread64,readv',
             '-o',str(Path(slot)/'qualification.trace'),os.path.realpath(sys.executable),'-I','-S','-B',str(Path(__file__).resolve()),
             'command','--proc-measured-controller',str(descriptor),str(authority_path),authority_sha,str(handshake_fd),phase]
+
+    if trace_store is not None:
+        if type(trace_store) is not ProcFutureTraceStore or trace_store.spec is not spec or phase not in trace_store.phases:
+            raise ValueError('PROC future trace producer not selected')
+        trace_store._check();argv[1]='-f';argv[argv.index('-o')+1]=str(trace_store.root/(phase+'.fifo'))
+    return argv
 
 
 def proc_measured_handshake(spec,descriptor,authority_path,authority_sha,fd,phase):
@@ -2027,7 +2500,15 @@ def proc_measured_handshake(spec,descriptor,authority_path,authority_sha,fd,phas
     raw=os.read(fd,8193);os.close(fd)
     if not 0<len(raw)<=8192:raise ValueError('PROC handshake framing bound')
     proof=json.loads(raw);boot=Path('/proc/sys/kernel/random/boot_id').read_text().strip()
-    if (set(proof)!={'bootId','apparatus','tracer','descriptorSha256','authoritySha256','phase','slot','subjectWorkDeadline'}
+    expected_fields={'bootId','apparatus','tracer','descriptorSha256','authoritySha256','phase','slot','subjectWorkDeadline'}
+    if 'futureTrace' in proof:
+        future=proof['futureTrace'];authority_raw=Path(authority_path).read_bytes()
+        if (future is None or hashlib.sha256(authority_raw).hexdigest()!=authority_sha
+                or json.loads(authority_raw).get('futureTraceSourceProfile')!=future.get('profile')
+                or proc_future_source_context(spec,future) is None):
+            raise ValueError('PROC future trace handshake profile/capability unavailable')
+        expected_fields.add('futureTrace')
+    if (set(proof)!=expected_fields
             or proof['bootId']!=boot or proof['phase']!=phase or proof['authoritySha256']!=authority_sha
             or proof['descriptorSha256']!=hashlib.sha256(Path(descriptor).read_bytes()).hexdigest()
             or proof['subjectWorkDeadline']!=spec['workDeadline']-10):raise ValueError('PROC measured bootstrap binding unavailable')
@@ -2051,13 +2532,17 @@ def proc_measured_handshake(spec,descriptor,authority_path,authority_sha,fd,phas
     return proof
 
 
-def proc_measurement_bounds(spec,authority,bootstrap,slot,known,tracer,subject_started):
+def proc_measurement_bounds(spec,authority,bootstrap,slot,known,tracer,subject_started,*,trace_store=None):
     proc_capacity_evidence(spec,authority,bootstrap['capacity']);proc_read_drift(spec)
     if set(os.sched_getaffinity(0))!=set(spec['cpuAffinity']):raise ValueError('PROC apparatus actual affinity drift')
     trace_files=list(Path(spec['operationRoot']).rglob('qualification.trace.*'))
     if len(trace_files)>128 or any(path.is_symlink() or not path.is_file() for path in trace_files) or sum(path.stat().st_size for path in trace_files)>8*1024**2:
         raise ValueError('PROC apparatus live 8MiB trace bound')
-    census(Path(spec['operationRoot']),min(spec['totalDeadline'],time.monotonic()+1),limit=spec['diskBytes'])
+    if trace_store is None:
+        census(Path(spec['operationRoot']),min(spec['totalDeadline'],time.monotonic()+1),limit=spec['diskBytes'])
+    else:
+        if type(trace_store) is not ProcFutureTraceStore or trace_store.spec is not spec:raise ValueError('PROC future trace bound capability')
+        census(Path(spec['operationRoot']),min(spec['totalDeadline'],time.monotonic()+1),limit=spec['diskBytes'],future_fifos=trace_store.fifo_capabilities())
     rows={}
     for path in Path('/proc').iterdir():
         if path.name.isascii() and path.name.isdigit():
@@ -2132,7 +2617,7 @@ def proc_private_artifact(path,cap):
     finally:os.close(fd)
 
 
-def proc_control_retirement_evidence(spec,slot,descriptor,authority_path,authority_sha,record,proof,child):
+def proc_control_retirement_evidence(spec,slot,descriptor,authority_path,authority_sha,record,proof,child,*,trace_store=None):
     """Actual negative-control death and partial trace custody; never read closure."""
     phase=record['phase'];root=Path(spec['operationRoot']);slot=Path(slot)
     if (spec['profile']!='proc-pair-client-qualification' or spec['role']!='qualification'
@@ -2197,19 +2682,29 @@ def proc_control_retirement_evidence(spec,slot,descriptor,authority_path,authori
         current=proc_actor(actor['pid'])
         if actor['pid']!=apparatus['pid'] and current is not None and (current['start']!=actor['start'] or current['state'] not in ('Z','X','x')):
             raise ValueError('PROC negative-control current terminal birth unavailable')
-    traces=sorted(slot.glob('qualification.trace.*'));expected={actor['pid'] for actor in actors[2:]};artifacts=[];total=0
-    for trace in traces:
-        if not re.fullmatch(r'qualification\.trace\.[1-9][0-9]*',trace.name):raise ValueError('PROC negative-control trace artifact identity')
-        observed=trace.lstat();identity=proc_read_identity(trace)
-        if (any(p.is_symlink() for p in (trace,*trace.parents)) or not stat.S_ISREG(observed.st_mode)
-                or observed.st_uid!=os.geteuid() or observed.st_nlink!=1 or total+observed.st_size>8*1024**2):
-            raise ValueError('PROC negative-control partial trace custody/bound unavailable')
-        raw=trace.read_bytes();total+=len(raw)
-        if proc_read_identity(trace)!=identity or len(raw)!=observed.st_size or total>8*1024**2:
-            raise ValueError('PROC negative-control partial trace identity/byte drift')
-        artifacts.append({'pid':int(trace.name.rsplit('.',1)[1]),'path':str(trace),'sha256':hashlib.sha256(raw).hexdigest(),'bytes':len(raw)})
-    if not traces or len(traces)>32 or {row['pid'] for row in artifacts}!=expected:
-        raise ValueError('PROC negative-control partial trace actor population unavailable')
+    if trace_store is not None:
+        if type(trace_store) is not ProcFutureTraceStore or trace_store.spec is not spec:
+            raise ValueError('PROC future negative-control source unavailable')
+        projected,physical=trace_store.project(phase,partial=True)
+        expected={actor['pid'] for actor in actors[2:]}
+        if {pid for pid,_ in projected}!=expected:
+            raise ValueError('PROC future negative-control partial PID population unavailable')
+        artifacts=[{'pid':pid,'bytes':len(raw),'sha256':hashlib.sha256(raw).hexdigest(),
+                    'derivedProjection':True,'physicalArtifact':physical} for pid,raw in projected]
+    else:
+        traces=sorted(slot.glob('qualification.trace.*'));expected={actor['pid'] for actor in actors[2:]};artifacts=[];total=0
+        for trace in traces:
+            if not re.fullmatch(r'qualification\.trace\.[1-9][0-9]*',trace.name):raise ValueError('PROC negative-control trace artifact identity')
+            observed=trace.lstat();identity=proc_read_identity(trace)
+            if (any(p.is_symlink() for p in (trace,*trace.parents)) or not stat.S_ISREG(observed.st_mode)
+                    or observed.st_uid!=os.geteuid() or observed.st_nlink!=1 or total+observed.st_size>8*1024**2):
+                raise ValueError('PROC negative-control partial trace custody/bound unavailable')
+            raw=trace.read_bytes();total+=len(raw)
+            if proc_read_identity(trace)!=identity or len(raw)!=observed.st_size or total>8*1024**2:
+                raise ValueError('PROC negative-control partial trace identity/byte drift')
+            artifacts.append({'pid':int(trace.name.rsplit('.',1)[1]),'path':str(trace),'sha256':hashlib.sha256(raw).hexdigest(),'bytes':len(raw)})
+        if not traces or len(traces)>32 or {row['pid'] for row in artifacts}!=expected:
+            raise ValueError('PROC negative-control partial trace actor population unavailable')
     return {'contract':'actual-negative-control-retirement/1','phase':phase,'measurementBinding':proof,
             'subjectReadiness':ready,'controlReadiness':control,'knownTerminalBirths':[row for row in record['sampledBirths'] if row['pid']!=apparatus['pid']],
             'pidfdSignalSent':True,'tracerExit':-signal.SIGKILL,'cleanup':'observed-known-terminal',
@@ -2217,18 +2712,27 @@ def proc_control_retirement_evidence(spec,slot,descriptor,authority_path,authori
             'publicationAuthorized':False,'limitation':'Tracer was intentionally aborted; retained traces are incomplete diagnostics, never complete lifetime/read proof.'}
 
 
-def proc_measure_once(spec,authority,bootstrap,descriptor,authority_path,authority_sha,phase):
+def proc_measure_once(spec,authority,bootstrap,descriptor,authority_path,authority_sha,phase,*,trace_store=None):
     import subprocess
     root=Path(spec['operationRoot']);slot=root if phase=='normal' else root/('control-'+phase)
     if phase!='normal':slot.mkdir(mode=0o700)
     subject_deadline=spec['workDeadline']-10
     if time.monotonic()>=subject_deadline:raise TimeoutError('PROC original subject-work reserve exhausted')
+    if trace_store is not None:
+        if (type(trace_store) is not ProcFutureTraceStore or trace_store.spec is not spec
+                or not proc_future_source_profile(authority.get('futureTraceSourceProfile'))):
+            raise ValueError('PROC future trace measure profile unavailable')
+    elif authority.get('futureTraceSourceProfile') is not None:
+        raise ValueError('PROC future trace encoding unselected by caller')
     read_fd,write_fd=os.pipe();child=None;tracer=None;pidfd=None;first=None;known={};samples=[];peak=0;ready=None;control=None;signal_sent=False;code=None;additional=[];proof=None
     stream=None
     launch_started=time.monotonic()
     try:
         stream=(slot/'measurement.tracer.log').open('xb');os.chmod(slot/'measurement.tracer.log',0o600)
-        argv=proc_trace_argv(spec,slot,root/'input.json',authority_path,authority_sha,read_fd,phase)
+        if trace_store is not None:
+            trace_store.begin(phase)
+            argv=proc_trace_argv(spec,slot,root/'input.json',authority_path,authority_sha,read_fd,phase,trace_store=trace_store)
+        else:argv=proc_trace_argv(spec,slot,root/'input.json',authority_path,authority_sha,read_fd,phase)
         child=subprocess.Popen(argv,cwd=str(root),env=dict(spec['environment']),stdin=subprocess.DEVNULL,stdout=stream,stderr=stream,
                                close_fds=True,pass_fds=(read_fd,),start_new_session=True)
         os.close(read_fd);read_fd=None
@@ -2245,10 +2749,12 @@ def proc_measure_once(spec,authority,bootstrap,descriptor,authority_path,authori
         proof={'bootId':Path('/proc/sys/kernel/random/boot_id').read_text().strip(),'apparatus':apparatus,'tracer':tracer,
                'descriptorSha256':hashlib.sha256(Path(descriptor).read_bytes()).hexdigest(),'authoritySha256':authority_sha,
                'phase':phase,'slot':str(slot),'subjectWorkDeadline':subject_deadline}
+        if trace_store is not None:proof['futureTrace']=trace_store.context()
         wire=json.dumps(proof,sort_keys=True).encode()
         if len(wire)>8192 or os.write(write_fd,wire)!=len(wire):raise ValueError('PROC handshake one-use write failure')
         os.close(write_fd);write_fd=None
         while True:
+            if trace_store is not None:trace_store.drain(phase)
             if (hashlib.sha256(Path(descriptor).read_bytes()).hexdigest()!=authority['descriptorSha256']
                     or hashlib.sha256(Path(authority_path).read_bytes()).hexdigest()!=authority_sha
                     or proc_directory_identity(root)!=authority['canonicalOperationIdentity']
@@ -2261,7 +2767,8 @@ def proc_measure_once(spec,authority,bootstrap,descriptor,authority_path,authori
                 if (ready['bootId']!=proof['bootId'] or ready['phase']!=phase or ready['descriptorSha256']!=proof['descriptorSha256']
                         or subject is None or subject['start']!=ready['subject']['start'] or subject['tracerPid']!=tracer['pid']):
                     raise ValueError('PROC actual measured subject readiness unavailable')
-            sample=proc_measurement_bounds(spec,authority,bootstrap,slot,known,tracer,ready is not None)
+            if trace_store is None:sample=proc_measurement_bounds(spec,authority,bootstrap,slot,known,tracer,ready is not None)
+            else:sample=proc_measurement_bounds(spec,authority,bootstrap,slot,known,tracer,ready is not None,trace_store=trace_store)
             sample={'elapsedMilliseconds':int((time.monotonic()-spec['started'])*1000),'rssBytes':sample['rssBytes'],
                     'actorCount':len(sample['actors'])}
             if len(samples)>=1000:raise ValueError('PROC apparatus finite sample/report bound')
@@ -2295,6 +2802,7 @@ def proc_measure_once(spec,authority,bootstrap,descriptor,authority_path,authori
             except BaseException as error:
                 if first is None:first=error
                 else:additional.append(failure_record(error))
+                additional.extend(getattr(error,'proc_measurement_additional',[]))
                 return None
         for fd in (read_fd,write_fd):
             if fd is not None:cleanup(lambda fd=fd:os.close(fd))
@@ -2308,6 +2816,8 @@ def proc_measure_once(spec,authority,bootstrap,descriptor,authority_path,authori
                         if sent is True:signal_sent=True
                 code=cleanup(lambda:child.wait(timeout=max(.001,min(10,spec['workDeadline']-time.monotonic()))))
             else:code=status
+        if trace_store is not None and phase in trace_store.phases:
+            cleanup(lambda:trace_store.seal(phase,tracer_terminal=code is not None))
         if stream is not None:cleanup(stream.close)
         if pidfd is not None:cleanup(lambda:os.close(pidfd))
     residual=[]
@@ -2357,7 +2867,8 @@ def proc_measure_once(spec,authority,bootstrap,descriptor,authority_path,authori
     if cleanup!='observed-known-terminal':raise ValueError('PROC measurement cleanup unknown; retain private hold')
     if phase!='normal' and (not signal_sent or code!=-signal.SIGKILL):raise ValueError('PROC kernel control terminal grammar differs')
     if phase!='normal':
-        retirement=proc_control_retirement_evidence(spec,slot,descriptor,authority_path,authority_sha,record,proof,child)
+        if trace_store is None:retirement=proc_control_retirement_evidence(spec,slot,descriptor,authority_path,authority_sha,record,proof,child)
+        else:retirement=proc_control_retirement_evidence(spec,slot,descriptor,authority_path,authority_sha,record,proof,child,trace_store=trace_store)
         record['controlRetirement']=retirement
         # The original observation remains immutable; this separate bounded join is
         # a fixed control artifact, never a replacement successful normal trace.
@@ -2476,8 +2987,12 @@ def proc_measured_entry(descriptor,authority_path,authority_sha,fd,phase):
     raise ValueError('PROC kernel session control unexpectedly returned normally')
 
 
-def proc_qualification_apparatus(spec,descriptor,authority_path,authority_sha,authority):
-    root=Path(spec['operationRoot']);first=None;additional=[];records=[];subject=None;header=None;normal_attempted=False
+def proc_qualification_apparatus(spec,descriptor,authority_path,authority_sha,authority,*,trace_profile=None):
+    root=Path(spec['operationRoot']);first=None;additional=[];records=[];subject=None;header=None;normal_attempted=False;trace_store=None
+    if trace_profile is None:
+        if authority.get('futureTraceSourceProfile') is not None:raise ValueError('PROC future trace caller has not selected a profile')
+    elif (not proc_future_source_profile(trace_profile) or authority.get('futureTraceSourceProfile')!=trace_profile):
+        raise ValueError('PROC future trace profile/authority differ')
     bootstrap=json.loads(Path(spec['proofInputs']['bootstrapEvidence']).read_bytes())
     proc_bootstrap_evidence(spec,authority,bootstrap)
     if bootstrap.get('instrumentation')!=PROC_INSTRUMENTATION or authority.get('instrumentation')!=PROC_INSTRUMENTATION:
@@ -2501,8 +3016,10 @@ def proc_qualification_apparatus(spec,descriptor,authority_path,authority_sha,au
            'publicationAuthorized':False,'rootAccepted':False,'qualificationAccepted':False}
     state_raw=proc_private_record(root/'command.json',state,spec['totalDeadline'],expected=(root/'command.json').read_bytes())
     try:
+        if trace_profile is not None:trace_store=ProcFutureTraceStore(spec,trace_profile)
         for phase in ('controller','session'):
-            records.append(proc_measure_once(spec,authority,bootstrap,descriptor,authority_path,authority_sha,phase))
+            if trace_store is None:records.append(proc_measure_once(spec,authority,bootstrap,descriptor,authority_path,authority_sha,phase))
+            else:records.append(proc_measure_once(spec,authority,bootstrap,descriptor,authority_path,authority_sha,phase,trace_store=trace_store))
         if spec['request']['nativeGet']:
             token=os.environ.pop('GH_TOKEN',None)
             header=proc_sensitive_header(root,token,deadline=spec['workDeadline']-10);del token
@@ -2510,13 +3027,15 @@ def proc_qualification_apparatus(spec,descriptor,authority_path,authority_sha,au
                                     'creator':proc_actor(os.getpid()),'ordinal':spec['qualificationAttempt'],'purpose':PROC_QUALIFICATION_CREDENTIAL}
             state_raw=proc_private_record(root/'command.json',state,spec['totalDeadline'],expected=state_raw)
         normal_attempted=True
-        records.append(proc_measure_once(spec,authority,bootstrap,descriptor,authority_path,authority_sha,'normal'))
+        if trace_store is None:records.append(proc_measure_once(spec,authority,bootstrap,descriptor,authority_path,authority_sha,'normal'))
+        else:records.append(proc_measure_once(spec,authority,bootstrap,descriptor,authority_path,authority_sha,'normal',trace_store=trace_store))
         output=root/'measurement.subject.json'
         if output.is_symlink() or not 0<output.stat().st_size<=MAX_OUTPUT:raise ValueError('PROC complete measured subject result unavailable')
         subject=json.loads(output.read_bytes())
         if subject.get('commandAccepted') is not True or subject.get('firstCause') is not None or subject.get('additionalFailures')!=[]:
             raise ValueError('PROC measured canonical controller failed')
-        trace=proc_trace_evidence(spec,root,authority_path,records[-1]['tracer']['pid'],apparatus_pid=os.getpid())
+        if trace_store is None:trace=proc_trace_evidence(spec,root,authority_path,records[-1]['tracer']['pid'],apparatus_pid=os.getpid())
+        else:trace=proc_trace_evidence(spec,root,authority_path,records[-1]['tracer']['pid'],apparatus_pid=os.getpid(),trace_store=trace_store)
         if not trace['clocked'] or trace['rootPid']!=records[-1]['subjectReadiness']['subject']['pid']:
             raise ValueError('PROC complete measured subject timestamp/root join unavailable')
         if header is not None:
@@ -2550,9 +3069,12 @@ def proc_qualification_apparatus(spec,descriptor,authority_path,authority_sha,au
         state.update(subject);state['runtimeEvidence']['controllerStartupTraceComplete']=True
         state['runtimeEvidence'].pop('controllerTraceGap',None)
         state['runtimeEvidence']['traceComplete']=trace['complete'];state['completeSubjectTrace']=trace
+        if trace_store is not None:
+            state['futureTraceManifest']=trace_store.finish();state['futureTraceSourceOnly']=True
         state['subjectResult']={'sha256':hashlib.sha256(output.read_bytes()).hexdigest(),'bytes':output.stat().st_size}
         state['sendState']='qualification-completed';state['qualificationAccepted']=False
-        state['qualificationBoundary']='Complete subject measurement, root acceptance remains separate.'
+        state['qualificationBoundary']=('Complete subject measurement, root acceptance remains separate.' if trace_store is None
+            else 'Source-only prospective representation; current CLI/runtime/root admission remains refused.')
     except BaseException as error:
         first=error;state['sendState']='qualification-failed-or-unknown'
         if hasattr(error,'proc_subject_result'):state['failedSubjectResult']=error.proc_subject_result
@@ -2562,6 +3084,12 @@ def proc_qualification_apparatus(spec,descriptor,authority_path,authority_sha,au
             state['semanticHeaderCreationFailure']=error.proc_sensitive_creation
             if hasattr(error,'proc_sensitive_close_failure'):additional.append(error.proc_sensitive_close_failure)
     finally:
+        if trace_store is not None:
+            try:trace_store.close()
+            except BaseException as error:
+                if first is None:first=error
+                else:additional.append(failure_record(error))
+                additional.extend(getattr(error,'proc_measurement_additional',[]))
         if header is not None:
             state['semanticHeaderRetirement']={'disposition':'held-unknown-reader-retirement','identity':header['identity']}
             if not normal_attempted:
@@ -2572,12 +3100,16 @@ def proc_qualification_apparatus(spec,descriptor,authority_path,authority_sha,au
             elif first is None:first=ValueError('PROC semantic header remains held; no positive qualification')
         state.update(firstCause=getattr(first,'proc_subject_failure',None) or failure_record(first),additionalFailures=additional,apparatusObservations=records,
                      instrumentationBoundary=PROC_INSTRUMENTATION,publicationAuthorized=False,rootAccepted=False,qualificationAccepted=False)
-        if first is not None:state['commandAccepted']=False
+        if first is not None:
+            state['commandAccepted']=False
+            if trace_store is not None:state['sendState']='qualification-failed-or-unknown'
         # Registration and canonical failure reporting are independent attempts.
         # An occupied registration never makes this command successful.
         for report_path in (root/'measurement.collector.json',root/'command.json'):
             state.update(firstCause=getattr(first,'proc_subject_failure',None) or failure_record(first),additionalFailures=additional)
-            if first is not None:state['commandAccepted']=False
+            if first is not None:
+                state['commandAccepted']=False
+                if trace_store is not None:state['sendState']='qualification-failed-or-unknown'
             try:
                 if report_path.name=='measurement.collector.json':
                     proc_private_record(report_path,{'descriptorSha256':state['descriptorSha256'],'collectorPid':os.getpid()},spec['totalDeadline'],exclusive=True)
@@ -2608,6 +3140,12 @@ def execute_proc_command(descriptor, authority_path, authority_sha, *, measureme
         authority_raw=read_regular(authority_path,256*1024)
         if hashlib.sha256(authority_raw).hexdigest()!=authority_sha:raise ValueError('PROC root-selected authority drift')
         authority=json.loads(authority_raw)
+        future_profile=authority.get('futureTraceSourceProfile')
+        if future_profile is not None:
+            proc_future_source_profile(future_profile)
+            if (measurement is None or measurement.get('futureTrace',{}).get('profile')!=future_profile
+                    or proc_future_source_context(spec,measurement.get('futureTrace')) is None):
+                raise ValueError('PROC future encoding has no current CLI/runtime admission')
         if (authority.get('schema')!=COMMAND_SCHEMA or authority.get('descriptorSha256')!=hashlib.sha256(raw).hexdigest()
                 or authority.get('operation')!=spec['operation'] or authority.get('operationRoot')!=spec['operationRoot']
                 or authority.get('profile')!=spec['profile'] or authority.get('approved') is not True
@@ -2756,7 +3294,9 @@ def execute_proc_command(descriptor, authority_path, authority_sha, *, measureme
             imports_unchanged()
             if sensitive is not None:proc_sensitive_unchanged(sensitive)
             if qualification_header is not None:proc_sensitive_unchanged(qualification_header)
-            observed=census(slot,min(spec['totalDeadline'],time.monotonic()+1),limit=spec['diskBytes'])
+            future_context=(measurement or {}).get('futureTrace')
+            if future_context is None:observed=census(slot,min(spec['totalDeadline'],time.monotonic()+1),limit=spec['diskBytes'])
+            else:observed=census(slot,min(spec['totalDeadline'],time.monotonic()+1),limit=spec['diskBytes'],future_fifos=proc_future_source_context(spec,future_context))
             if observed['fixtureSymlinks'] or observed['objects']>25000:raise ValueError('PROC operation scope changed')
             if spec['role']=='qualification':
                 traces=list(slot.glob('qualification.trace.*'))
@@ -2774,6 +3314,8 @@ def execute_proc_command(descriptor, authority_path, authority_sha, *, measureme
                     for target in owned_fd_targets(member,owner.proc,additional):
                         qualification_output=spec['role']=='qualification' and Path(target).parent==slot and (Path(target).name.startswith('qualification.trace.') and Path(target).name.rsplit('.',1)[-1].isdigit() or Path(target).name in ('qualification.observed.json','qualification.native.log','qualification.native.body','fixture-request.json',*(f'fixture-{case}{suffix}' for case in PROC_QUALIFICATION_CASES for suffix in ('.log','.body'))))
                         typed_metadata=target in {row['path'] for row in spec['readEvidence']['directories']}
+                        if future_context is not None and target==str(Path(spec['operationRoot'])/'lossless-traces'):
+                            proc_future_source_context(spec,future_context);typed_metadata=True
                         if target.startswith('/') and target not in spec['sourceReadAllowlist'] and not qualification_output and not typed_metadata and not (Path(target).parent==slot and Path(target).name in ('authorization.header','runner.body','client-preflight.body','terminal-jobs.body','terminal-artifacts.body','terminal-job.body','terminal-archive.body','storage-url.conf','terminal-job.headers','terminal-archive.headers','terminal-job-api.body','terminal-archive-api.body')) and target not in (
                                 '/dev/null',str(slot/'runner.log'),str(slot/'client-preflight.log'),str(root/'dispatch-input.json'),
                                 *(str(slot/(name+'.log')) for name in ('terminal-jobs','terminal-artifacts','terminal-job','terminal-archive','terminal-job-api','terminal-archive-api'))):

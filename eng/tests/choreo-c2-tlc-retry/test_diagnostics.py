@@ -2347,4 +2347,532 @@ class CommandInterfaceControls(unittest.TestCase):
         self.assertNotIn('synthetic-secret',module.failure_record(ValueError('Authorization: Bearer synthetic-secret'))['message'])
 
 
+
+class LosslessSourcePrototypeControls(unittest.TestCase):
+    """Synthetic FD/codec controls; no strace/client/qualification process."""
+    def prototype(self, **kwargs):
+        return module.ProcLosslessSourcePrototype('source-feasibility-only',time.monotonic()+5,**kwargs)
+
+    def output(self, root, name):
+        fd=os.open(root/name,os.O_RDWR|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)
+        self.addCleanup(os.close,fd);return fd
+
+    def capture(self, proto, root, phase, raw):
+        read,write=os.pipe2(os.O_NONBLOCK)
+        self.addCleanup(os.close,read)
+        try:self.assertEqual(len(raw),os.write(write,raw))
+        finally:os.close(write)
+        output=self.output(root,phase+'.gz')
+        row=proto.capture(phase,read,output);return output,row
+
+    def test_three_actual_pipe_captures_roundtrip_and_manifest_census(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);proto=self.prototype();total=0
+            for phase in ('controller','session','normal'):
+                raw=(phase+' synthetic trace record\n').encode()*7
+                output,row=self.capture(proto,root,phase,raw);total+=len(raw)
+                os.lseek(output,0,os.SEEK_SET);chunks=[]
+                decoded=proto.read(output,row,chunks.append)
+                self.assertEqual(raw,b''.join(chunks));self.assertEqual(len(raw),decoded['bytes'])
+            manifest=self.output(root,'manifest.json');body=proto.finish(manifest)
+            self.assertEqual(3,len(json.loads(body)['rows']))
+            self.assertFalse(json.loads(body)['completeTraceQualified'])
+            self.assertEqual(total,proto.captured);self.assertEqual(total,proto.decoded)
+            self.assertEqual(sum(p.stat().st_size for p in root.iterdir()),proto.stored)
+            with self.assertRaisesRegex(ValueError,'consumed'):proto.finish(manifest)
+
+    def test_unselected_expired_and_increased_limits_refuse(self):
+        for selection in (None,'gzip','production'):
+            with self.assertRaisesRegex(ValueError,'not selected'):
+                module.ProcLosslessSourcePrototype(selection,time.monotonic()+5)
+        with self.assertRaisesRegex(ValueError,'deadline'):
+            module.ProcLosslessSourcePrototype('source-feasibility-only',time.monotonic()-1)
+        with self.assertRaisesRegex(ValueError,'resource'):
+            self.prototype(stored_cap=8*1024**2+1)
+
+    def test_capture_incompressible_stored_overflow_consumes_without_retry(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);proto=self.prototype(stored_cap=16384+256)
+            with self.assertRaisesRegex(ValueError,'stored bound'):
+                self.capture(proto,root,'normal',os.urandom(4096))
+            self.assertTrue(proto.failed);self.assertLessEqual(proto.stored,256)
+            with self.assertRaisesRegex(ValueError,'consumed'):
+                proto.finish(self.output(root,'manifest.json'))
+
+    def test_capture_shared_expanded_cap_preserves_first_phase(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);proto=self.prototype(expanded_cap=64)
+            self.capture(proto,root,'controller',b'A'*40)
+            retained=(root/'controller.gz').read_bytes()
+            with self.assertRaisesRegex(ValueError,'captured bound'):
+                self.capture(proto,root,'session',b'B'*40)
+            self.assertEqual(retained,(root/'controller.gz').read_bytes())
+            self.assertLessEqual(proto.captured,64)
+
+    def test_strict_reader_corrupt_truncated_trailing_and_second_member_refuse(self):
+        import zlib
+        valid=zlib.compress(b'synthetic complete bytes',wbits=31)
+        corrupt=bytearray(valid);corrupt[-8]^=1
+        for bad in (bytes(corrupt),valid[:-1],valid+b'x',valid+valid):
+            with self.subTest(kind=len(bad)),tempfile.TemporaryDirectory() as directory:
+                root=Path(directory);proto=self.prototype();fd=self.output(root,'input.gz');os.write(fd,bad);os.lseek(fd,0,os.SEEK_SET)
+                expected={'bytes':24,'sha256':hashlib.sha256(b'synthetic complete bytes').hexdigest()}
+                with self.assertRaises((ValueError,zlib.error)):proto.read(fd,expected,lambda _:None)
+                self.assertTrue(proto.failed)
+
+    def test_reader_expansion_aggregate_and_decoded_identity_refuse(self):
+        import zlib
+        for limit,expected in [(16,{'bytes':64,'sha256':'0'*64}),(128,{'bytes':64,'sha256':'0'*64})]:
+            with tempfile.TemporaryDirectory() as directory:
+                root=Path(directory);proto=self.prototype(expanded_cap=limit);fd=self.output(root,'input.gz')
+                os.write(fd,zlib.compress(b'A'*64,wbits=31));os.lseek(fd,0,os.SEEK_SET)
+                with self.assertRaises(ValueError):proto.read(fd,expected,lambda _:None)
+                self.assertLessEqual(proto.decoded,limit)
+
+    def test_callback_first_failure_consumes_without_retry_or_fd_close(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);proto=self.prototype();fd,row=self.capture(proto,root,'normal',b'synthetic')
+            os.lseek(fd,0,os.SEEK_SET);calls=[]
+            def refuse(raw):calls.append(raw);raise RuntimeError('original consumer failure')
+            with self.assertRaisesRegex(RuntimeError,'original consumer failure'):proto.read(fd,row,refuse)
+            self.assertEqual(1,len(calls));self.assertTrue(proto.failed);self.assertGreater(os.fstat(fd).st_size,0)
+
+    def test_missing_phase_manifest_and_occupied_output_refuse(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);proto=self.prototype()
+            with self.assertRaisesRegex(ValueError,'phase census'):proto.finish(self.output(root,'manifest.json'))
+            other=self.prototype();fd=self.output(root,'occupied');os.write(fd,b'held')
+            with self.assertRaisesRegex(ValueError,'fresh private'):other.finish(fd)
+
+    def test_actual_waiting_pipe_obeys_original_clock(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);proto=module.ProcLosslessSourcePrototype('source-feasibility-only',time.monotonic()+.03)
+            read,write=os.pipe2(os.O_NONBLOCK)
+            try:
+                with self.assertRaisesRegex(TimeoutError,'original work deadline'):
+                    proto.capture('normal',read,self.output(root,'normal.gz'))
+                self.assertTrue(proto.failed)
+            finally:os.close(read);os.close(write)
+
+
+class FutureTraceJoinedControls(unittest.TestCase):
+    """Actual fixed FIFO/store/parser seams with synthetic inert producer bytes."""
+    proc_fixture=DiagnosticControls.proc_fixture
+
+    def store(self,root,**changes):
+        spec={'role':'qualification','request':{'nativeGet':False},'operationRoot':str(root),
+              'workDeadline':time.monotonic()+5,'totalDeadline':time.monotonic()+10}
+        spec.update(changes);store=module.ProcFutureTraceStore(spec,dict(module.PROC_FUTURE_TRACE_SOURCE_PROFILE))
+        self.addCleanup(store.close);return spec,store
+
+    def produce(self,store,phase,raw,*,chunks=()):
+        path=store.begin(phase);store.drain(phase) # initial EOF must NOT seal
+        self.assertFalse(store.phases[phase]['eof'])
+        writer=os.open(path,os.O_WRONLY|os.O_NONBLOCK|os.O_NOFOLLOW)
+        try:
+            for fragment in (chunks or (raw,)):
+                self.assertEqual(len(fragment),os.write(writer,fragment));store.drain(phase)
+        finally:os.close(writer)
+        store.seal(phase,tracer_terminal=True)
+        return store.phases[phase]['row']
+
+    def test_actual_fifo_three_phases_projection_manifest_and_full_census(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);spec,store=self.store(root)
+            for phase in store.PHASES:
+                data=b'10 1.0 +++ exited with 0 +++\n'
+                self.produce(store,phase,data,chunks=(data[:3],data[3:12],data[12:]))
+                projected,physical=store.project(phase)
+                self.assertEqual([(10,b'1.0 +++ exited with 0 +++\n')],projected)
+                self.assertEqual(0,physical['partialTailBytes'])
+            manifest=store.finish()
+            self.assertEqual(sum(p.stat().st_size for p in store.root.iterdir()),store.codec.stored)
+            self.assertLessEqual(store.codec.stored,8*1024**2)
+            self.assertFalse(json.loads(Path(manifest['path']).read_text())['completeTraceQualified'])
+            with self.assertRaises(RuntimeError):module.census(root,time.monotonic()+1)
+            caps=module.proc_future_source_context(spec,store.context(retirement=True))
+            self.assertEqual(0,module.census(root,time.monotonic()+1,future_fifos=caps)['fixtureSymlinks'])
+            hidden=store.root/'hidden';hidden.write_bytes(b'unexpected')
+            with self.assertRaisesRegex(ValueError,'census drift'):store._check(retirement=True)
+
+    def test_future_profile_and_fifo_replacement_never_become_raw_exemptions(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)
+            with self.assertRaisesRegex(ValueError,'not separately selected'):
+                module.ProcFutureTraceStore({'role':'qualification'},None)
+            spec,store=self.store(root);path=store.begin('controller');context=store.context()
+            path.unlink();os.mkfifo(path,0o600)
+            with self.assertRaisesRegex(ValueError,'FIFO identity drift'):module.proc_future_source_context(spec,context)
+            with self.assertRaisesRegex(ValueError,'custody drift'):store.drain('controller')
+
+    def test_earlier_artifact_content_change_at_manifest_is_not_a_caller_hash_bypass(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);_,store=self.store(root)
+            for phase in store.PHASES:self.produce(store,phase,b'10 1.0 +++ exited with 0 +++\n')
+            path=store.root/'controller.gz';raw=bytearray(path.read_bytes());raw[-8]^=1
+            path.write_bytes(raw)
+            with self.assertRaisesRegex(ValueError,'custody drift|content drift'):store.finish()
+            self.assertFalse((store.root/'manifest.json').exists())
+
+    def test_fixed_reader_refuses_corrupt_truncated_trailing_and_members(self):
+        import zlib
+        for kind in ('crc','truncated','trailing','member'):
+            with self.subTest(kind=kind),tempfile.TemporaryDirectory() as directory:
+                _,store=self.store(Path(directory));self.produce(store,'controller',b'10 1.0 +++ exited with 0 +++\n')
+                state=store.phases['controller'];fd=state['outputFd'];raw=(store.root/'controller.gz').read_bytes()
+                if kind=='crc':bad=bytearray(raw);bad[-8]^=1;bad=bytes(bad)
+                elif kind=='truncated':bad=raw[:-1]
+                elif kind=='trailing':bad=raw+b'x'
+                else:bad=raw+raw
+                # Inert fixture rebinds producer-side metadata, so the actual
+                # strict codec is reached after real custody/hash validation.
+                os.lseek(fd,0,os.SEEK_SET);os.ftruncate(fd,0);os.write(fd,bad)
+                delta=len(bad)-state['storedBytes'];store.codec.stored+=delta;state['storedBytes']=len(bad)
+                state['row']['encodedSha256']=hashlib.sha256(bad).hexdigest()
+                store.objects['controller.gz']['identity']=store.identity(os.fstat(fd))
+                pattern='incorrect data check' if kind=='crc' else 'truncated' if kind=='truncated' else 'trailing'
+                with self.assertRaisesRegex((ValueError,zlib.error),pattern):store.project('controller')
+
+    def test_physical_census_includes_partial_output_and_manifest_reserve(self):
+        with tempfile.TemporaryDirectory() as directory:
+            _,store=self.store(Path(directory));store.codec.stored_cap=store.codec.MANIFEST_RESERVE+256
+            path=store.begin('controller');writer=os.open(path,os.O_WRONLY|os.O_NONBLOCK)
+            try:os.write(writer,os.urandom(4096));store.drain('controller')
+            finally:os.close(writer)
+            with self.assertRaisesRegex(ValueError,'stored bound'):store.seal('controller',tracer_terminal=True)
+            self.assertLessEqual(sum(p.stat().st_size for p in store.root.iterdir()),256)
+            self.assertFalse((store.root/'manifest.json').exists())
+
+    def test_expanded_capture_limit_and_work_total_retirement_separation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            _,store=self.store(Path(directory));path=store.begin('controller');writer=os.open(path,os.O_WRONLY|os.O_NONBLOCK)
+            try:os.write(writer,b'10 1.0 +++ exited with 0 +++\n');store.drain('controller')
+            finally:os.close(writer)
+            original=store.codec.work_end;clock=[store.work_end+.1]
+            with patch.object(module.time,'monotonic',side_effect=lambda:clock[0]):
+                with self.assertRaises(TimeoutError):store.drain('controller')
+                store.seal('controller',tracer_terminal=True)
+                self.assertTrue(store.phases['controller']['sealed'])
+                self.assertEqual(original,store.codec.work_end)
+        with tempfile.TemporaryDirectory() as directory:
+            _,store=self.store(Path(directory));store.codec.expanded_cap=16;path=store.begin('controller')
+            writer=os.open(path,os.O_WRONLY|os.O_NONBLOCK)
+            try:
+                os.write(writer,b'A'*32)
+                with self.assertRaisesRegex(ValueError,'expanded bound'):store.drain('controller')
+            finally:os.close(writer)
+            self.assertEqual(16,store.codec.captured)
+
+    def test_partial_control_tail_is_retained_but_normal_framing_never_accepts_it(self):
+        with tempfile.TemporaryDirectory() as directory:
+            _,store=self.store(Path(directory));raw=b'10 1.0 +++ exited with 0 +++\n10 2.'
+            self.produce(store,'controller',raw);projection,physical=store.project('controller',partial=True)
+            self.assertEqual(5,physical['partialTailBytes']);self.assertTrue(projection)
+            self.produce(store,'session',raw)
+            with self.assertRaisesRegex(ValueError,'incomplete normal line'):store.project('session')
+
+    def test_close_retires_all_siblings_and_keeps_every_original_failure(self):
+        with tempfile.TemporaryDirectory() as directory:
+            _,store=self.store(Path(directory));store.begin('controller');owned=[r['fd'] for r in store.objects.values()]+[store.directory]
+            close=os.close;seen=[]
+            def fail_after_close(fd):
+                seen.append(fd);close(fd)
+                if len(seen)<=2:raise OSError('original close '+str(len(seen)))
+            with patch.object(module.os,'close',side_effect=fail_after_close):
+                with self.assertRaisesRegex(OSError,'original close 1') as raised:store.close()
+            self.assertEqual(owned,seen)
+            self.assertEqual([{'type':'OSError','message':'original close 2'}],raised.exception.proc_measurement_additional)
+
+    def test_actual_shared_parser_raw_and_future_match_and_refuse_hidden_reads(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);spec,_,approved=self.proc_fixture(root)
+            spec['role']='qualification';spec['request']['nativeGet']=False
+            bootstrap=root/'bootstrap-parser.json';bootstrap.write_text(json.dumps({'capacity':{'directory':'/sys/fs/cgroup'}}));spec['proofInputs']['bootstrapEvidence']=str(bootstrap)
+            slot=Path(spec['operationRoot']);python=os.path.realpath(os.sys.executable)
+            args=[python,'-I','-S','-B',str(ROOT/'eng/retain-choreo-c2-diagnostics.py'),'command','--proc-measured-controller',str(slot/'input.json'),str(approved),hashlib.sha256(approved.read_bytes()).hexdigest(),'47','normal']
+            parent=('1.0 execve('+json.dumps(python)+', '+json.dumps(args)+', 0x0) = 0\n'
+                    +'2.0 clone(child_stack=NULL, flags=SIGCHLD) = 11\n4.0 +++ exited with 0 +++\n').encode()
+            child=('3.0 execve('+json.dumps(spec['transport']['client'])+', ["curl", "-q"], 0x0) = 0\n5.0 +++ exited with 52 +++\n').encode()
+            (slot/'qualification.trace.10').write_bytes(parent);(slot/'qualification.trace.11').write_bytes(child)
+            raw=module.proc_trace_evidence(spec,slot,approved)
+            store=module.ProcFutureTraceStore(spec,dict(module.PROC_FUTURE_TRACE_SOURCE_PROFILE));self.addCleanup(store.close)
+            for phase in ('controller','session'):self.produce(store,phase,b'10 1.0 +++ exited with 0 +++\n')
+            combined=b''.join(b'10 '+line+b'\n' for line in parent.splitlines())+b''.join(b'11 '+line+b'\n' for line in child.splitlines())
+            self.produce(store,'normal',combined)
+            future=module.proc_trace_evidence(spec,slot,approved,trace_store=store)
+            self.assertEqual(raw,{k:v for k,v in future.items() if k!='representation'})
+            # Actual common engine rejects a hidden path in a decoded projection,
+            # rather than trusting an encoded checksum as source authorization.
+            bad=parent.replace(b'4.0 +++ exited',b'3.5 openat(AT_FDCWD, "/foreign/config", O_RDONLY) = 3</foreign/config>\n4.0 +++ exited')
+            with self.assertRaisesRegex(ValueError,'outside bootstrap'):
+                module.proc_trace_semantics(spec,slot,approved,[(10,bad),(11,child)],future_context=store.context(retirement=True))
+
+
+    def test_actual_raw_future_equal_time_order_uses_legacy_lexical_pid_filenames(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);spec,_,approved=self.proc_fixture(root)
+            spec['role']='qualification';spec['request']['nativeGet']=False
+            bootstrap=root/'bootstrap-parser.json';bootstrap.write_text(json.dumps({'capacity':{'directory':'/sys/fs/cgroup'}}));spec['proofInputs']['bootstrapEvidence']=str(bootstrap)
+            slot=Path(spec['operationRoot']);python=os.path.realpath(os.sys.executable)
+            args=[python,'-I','-S','-B',str(ROOT/'eng/retain-choreo-c2-diagnostics.py'),'command','--proc-measured-controller',str(slot/'input.json'),str(approved),hashlib.sha256(approved.read_bytes()).hexdigest(),'47','normal']
+            parent=('1.0 execve('+json.dumps(python)+', '+json.dumps(args)+', 0x0) = 0\n'
+                    +'2.0 clone(child_stack=NULL, flags=SIGCHLD) = 2\n4.0 +++ exited with 0 +++\n').encode()
+            child=('2.0 execve('+json.dumps(spec['transport']['client'])+', ["curl", "-q"], 0x0) = 0\n3.0 +++ exited with 52 +++\n').encode()
+            (slot/'qualification.trace.10').write_bytes(parent);(slot/'qualification.trace.2').write_bytes(child)
+            original=module.proc_trace_evidence(spec,slot,approved)
+            self.assertTrue(original['complete']);self.assertEqual(10,original['rootPid'])
+            store=module.ProcFutureTraceStore(spec,dict(module.PROC_FUTURE_TRACE_SOURCE_PROFILE));self.addCleanup(store.close)
+            for phase in ('controller','session'):self.produce(store,phase,b'10 1.0 +++ exited with 0 +++\n')
+            combined=b''.join(b'10 '+line+b'\n' for line in parent.splitlines())+b''.join(b'2 '+line+b'\n' for line in child.splitlines())
+            self.produce(store,'normal',combined)
+            future=module.proc_trace_evidence(spec,slot,approved,trace_store=store)
+            self.assertEqual(original,{key:value for key,value in future.items() if key!='representation'})
+
+    @contextlib.contextmanager
+    def measured_caller(self,root,*,monitor_failure=False,close_failure=False,report_failure=False,unknown=False):
+        """Actual measure_once/handshake, only process/kernel adapters are inert."""
+        from unittest.mock import MagicMock
+        base=root/'producer';base.mkdir(mode=0o700);uid=base/str(os.geteuid());uid.mkdir(mode=0o700)
+        lineage=uid/'source-control';lineage.mkdir(mode=0o700);slot=lineage/'attempt-inert';slot.mkdir(mode=0o700)
+        now=time.monotonic();python=os.path.realpath(os.sys.executable);tracer=root/'inert-tracer';tracer.write_bytes(b'inert-source-not-executable')
+        bootstrap=root/'bootstrap.json';bootstrap.write_text(json.dumps({'capacity':{'directory':'/sys/fs/cgroup'}}))
+        spec={'role':'qualification','request':{'nativeGet':False},'operationRoot':str(slot),
+              'started':now,'workDeadline':now+20,'totalDeadline':now+30,'cleanupSeconds':10,
+              'rssBytes':512*1024**2,'logBytes':1024**2,'diskBytes':16*1024**2,'cpuAffinity':[1],
+              'environment':{},'transport':{'tracer':str(tracer),'client':str(root/'unused-client')},
+              'sourceReadAllowlist':[python],'readEvidence':{'directories':[],'aliases':[],'absences':[]},
+              'proofInputs':{'bootstrapEvidence':str(bootstrap)}}
+        descriptor=slot/'input.json';descriptor.write_text(json.dumps(spec));descriptor_sha=hashlib.sha256(descriptor.read_bytes()).hexdigest()
+        (slot/'command.json').write_text(json.dumps({'sendState':'measurement-started','descriptorSha256':descriptor_sha}))
+        authority={'descriptorSha256':descriptor_sha,'canonicalOperationIdentity':module.proc_directory_identity(slot),
+                   'canonicalQualificationLineageIdentity':module.proc_directory_identity(lineage),
+                   'canonicalBaseIdentity':module.proc_directory_identity(uid),
+                   'futureTraceSourceProfile':dict(module.PROC_FUTURE_TRACE_SOURCE_PROFILE)}
+        approved=root/'authority.json';approved.write_text(json.dumps(authority));authority_sha=hashlib.sha256(approved.read_bytes()).hexdigest()
+        store=module.ProcFutureTraceStore(spec,dict(module.PROC_FUTURE_TRACE_SOURCE_PROFILE));self.addCleanup(store.close)
+        for phase in ('controller','session'):self.produce(store,phase,b'10 1.0 +++ exited with 0 +++\n')
+        app_pid=os.getpid();tracer_pid=2147483000;subject_pid=tracer_pid-1;events=[];holder={};clock=[now]
+        namespace={'pid':'pid:[inert]','mnt':'mnt:[inert]','user':'user:[inert]'}
+        def actor(pid):
+            if pid not in (app_pid,tracer_pid,subject_pid):return None
+            child=holder.get('child');terminal=child is not None and child.returncode is not None
+            return {'pid':pid,'ppid':app_pid if pid==tracer_pid else tracer_pid if pid==subject_pid else 1,
+                    'start':1 if pid==app_pid else 2 if pid==tracer_pid else 3,'uid':os.geteuid(),
+                    'pgid':app_pid if pid==app_pid else tracer_pid,'sid':app_pid if pid==app_pid else tracer_pid,
+                    'tgid':pid,'namespaces':namespace,'rss':4096,'state':'Z' if terminal and pid!=app_pid else 'R',
+                    'tracerPid':tracer_pid if pid==subject_pid else 0}
+        class InertPopen:
+            def __init__(inner,argv,**kwargs):
+                self.assertEqual(1,len(kwargs['pass_fds']));self.assertTrue(kwargs['close_fds'])
+                self.assertIn('-f',argv);self.assertNotIn('-ff',argv);self.assertEqual(str(store.root/'normal.fifo'),argv[argv.index('-o')+1])
+                inner.pid=tracer_pid;inner.returncode=None;inner.polls=0;inner.handshake=os.dup(kwargs['pass_fds'][0]);inner.handshaken=False
+                self.addCleanup(lambda:os.close(inner.handshake) if inner.handshake is not None else None)
+                inner.writer=os.open(store.root/'normal.fifo',os.O_WRONLY|os.O_NONBLOCK|os.O_NOFOLLOW)
+                self.addCleanup(lambda:os.close(inner.writer) if inner.writer is not None else None)
+                start=argv.index(python);measured=argv[start:]
+                raw=(str(subject_pid)+' 1.0 execve('+json.dumps(python)+', '+json.dumps(measured)+', 0x0) = 0\n'
+                     +str(subject_pid)+' 2.0 +++ exited with 0 +++\n').encode()
+                self.assertEqual(len(raw),os.write(inner.writer,raw));holder['child']=inner;events.append('popen-inert')
+            def poll(inner):
+                if inner.writer is not None:os.close(inner.writer);inner.writer=None
+                inner.polls+=1
+                if unknown:return None
+                if inner.polls>=2:inner.returncode=0
+                return inner.returncode
+            def wait(inner,timeout):
+                if unknown:raise TimeoutError('inert client remains unsettled')
+                inner.returncode=0;return 0
+        resolve=Path.resolve;read_text=Path.read_text;path_open=Path.open;private_record=module.proc_private_record
+        def resolve_actor(path,*args,**kwargs):
+            if str(path)=='/proc/'+str(tracer_pid)+'/exe':return tracer
+            if str(path)=='/proc/'+str(app_pid)+'/exe':return Path(python)
+            return resolve(path,*args,**kwargs)
+        def read_fixture(path,*args,**kwargs):
+            if str(path)=='/proc/sys/kernel/random/boot_id':return 'inert-boot-id'
+            return read_text(path,*args,**kwargs)
+        class CloseFailure:
+            def __init__(inner,stream):inner.stream=stream
+            def __getattr__(inner,name):return getattr(inner.stream,name)
+            def close(inner):inner.stream.close();raise OSError('inert original stream close failure')
+        def open_fixture(path,*args,**kwargs):
+            stream=path_open(path,*args,**kwargs)
+            return CloseFailure(stream) if close_failure and path.name=='measurement.tracer.log' else stream
+        def report(path,*args,**kwargs):
+            if report_failure and Path(path).name=='measurement.apparatus.json':raise OSError('inert independent apparatus report failure')
+            return private_record(path,*args,**kwargs)
+        def bounds(spec_arg,authority_arg,bootstrap_arg,slot_arg,known,tracer_arg,ready,*,trace_store):
+            events.append('monitor-check');child=holder['child']
+            if not child.handshaken:
+                fd=child.handshake;child.handshake=None
+                with patch.object(module.os,'getpid',return_value=subject_pid),patch.object(module.os,'getppid',return_value=tracer_pid):
+                    proof=module.proc_measured_handshake(spec,descriptor,approved,authority_sha,fd,'normal')
+                self.assertEqual(json.loads(json.dumps(store.context())),proof['futureTrace']);child.handshaken=True
+            for pid in (app_pid,tracer_pid,subject_pid):known[pid]={'pid':pid,'start':actor(pid)['start'],'tgid':pid,'instrumentationCandidate':pid==subject_pid}
+            if monitor_failure:raise ValueError('inert original monitor refusal')
+            if unknown:clock[0]=spec['workDeadline']+.1
+            return {'rssBytes':12288,'actors':[actor(pid) for pid in (app_pid,tracer_pid,subject_pid)]}
+        with contextlib.ExitStack() as stack:
+            for context in [patch.object(module,'PROC_OPERATION_BASE',base),patch('subprocess.Popen',InertPopen),
+                            patch.object(module,'proc_actor',side_effect=actor),patch.object(Path,'resolve',resolve_actor),
+                            patch.object(Path,'read_text',read_fixture),patch.object(Path,'open',open_fixture),
+                            patch.object(module,'PROC_STRACE_SHA',hashlib.sha256(tracer.read_bytes()).hexdigest()),
+                            patch.object(module.os,'pidfd_open',side_effect=lambda _:os.open('/dev/null',os.O_RDONLY)),
+                            patch.object(module.signal,'pidfd_send_signal',side_effect=lambda *args:events.append('inert-signal')),
+                            patch.object(module,'proc_measurement_bounds',side_effect=bounds),patch.object(module,'proc_private_record',side_effect=report)]:stack.enter_context(context)
+            if unknown:stack.enter_context(patch.object(module.time,'monotonic',side_effect=lambda:clock[0]))
+            def run():return module.proc_measure_once(spec,authority,{},descriptor,approved,authority_sha,'normal',trace_store=store)
+            yield run,spec,store,approved,events
+
+    def test_actual_measure_once_fifo_handshake_and_shared_parser_join(self):
+        with tempfile.TemporaryDirectory() as directory,self.measured_caller(Path(directory)) as fixture:
+            run,spec,store,approved,events=fixture;record=run()
+            self.assertIsNone(record['firstCause']);self.assertEqual('observed-known-terminal',record['cleanup'])
+            self.assertGreaterEqual(events.count('monitor-check'),2)
+            self.assertEqual(1,events.count('popen-inert'));self.assertTrue(store.phases['normal']['sealed'])
+            parsed=module.proc_trace_evidence(spec,Path(spec['operationRoot']),approved,trace_store=store)
+            self.assertTrue(parsed['complete']);self.assertTrue(parsed['representation']['sourceOnly'])
+            self.assertFalse(json.loads(Path(store.finish()['path']).read_text())['nativeAccepted'])
+
+    def test_actual_measure_once_preserves_monitor_plus_independent_close_and_report_failures(self):
+        with tempfile.TemporaryDirectory() as directory,self.measured_caller(Path(directory),monitor_failure=True,close_failure=True,report_failure=True) as fixture:
+            run,spec,store,_,events=fixture
+            with self.assertRaisesRegex(ValueError,'original monitor refusal') as raised:run()
+            self.assertEqual([{'type':'OSError','message':'inert original stream close failure'},
+                              {'type':'OSError','message':'inert independent apparatus report failure'}],raised.exception.proc_measurement_additional)
+            self.assertEqual(1,events.count('popen-inert'));self.assertFalse((store.root/'manifest.json').exists())
+
+    def test_actual_measure_once_unknown_terminal_keeps_partial_hold_without_settlement(self):
+        with tempfile.TemporaryDirectory() as directory,self.measured_caller(Path(directory),unknown=True) as fixture:
+            run,spec,store,_,events=fixture
+            with self.assertRaises(TimeoutError) as raised:run()
+            record=json.loads((Path(spec['operationRoot'])/'measurement.apparatus.json').read_text())
+            self.assertEqual('unknown-private-hold',record['cleanup']);self.assertIsNone(record['tracerExit'])
+            self.assertFalse(store.phases['normal']['sealed']);self.assertFalse((store.root/'manifest.json').exists())
+            self.assertEqual(1,events.count('popen-inert'))
+            self.assertIn('inert client remains unsettled',str(raised.exception.proc_measurement_additional))
+
+    def test_future_parser_bounds_lines_and_retained_objects_before_semantic_acceptance(self):
+        with self.assertRaisesRegex(ValueError,'line bound'):
+            list(module.proc_future_trace_lines(b'A'*65536+b'\n'))
+        self.assertEqual(['1.0 +++ exited with 0 +++'],list(module.proc_future_trace_lines(b'1.0 +++ exited with 0 +++\n')))
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);spec,store=self.store(root)
+            spec.update(readEvidence={'directories':[],'aliases':[],'absences':[]},sourceReadAllowlist=[])
+            self.produce(store,'controller',b'10 1.0 +++ exited with 0 +++\n')
+            with patch.object(module,'PROC_FUTURE_PARSER_RETAINED_BYTES',32):
+                with self.assertRaisesRegex(ValueError,'retained-object planning bound'):
+                    module.proc_trace_semantics(spec,root,root/'authority',[(10,b'1.0 +++ exited with 0 +++\n')],future_context=store.context(retirement=True))
+
+    def test_actual_apparatus_manifest_join_and_cleanup_failure_never_promote(self):
+        for close_failure in (False,True):
+            with self.subTest(close_failure=close_failure),tempfile.TemporaryDirectory() as directory:
+                root=Path(directory);base=root/'producer';base.mkdir(mode=0o700)
+                uid=base/str(os.geteuid());uid.mkdir(mode=0o700);lineage=uid/'inert';lineage.mkdir(mode=0o700)
+                slot=lineage/'attempt-source';slot.mkdir(mode=0o700);now=time.monotonic()
+                bootstrap=root/'bootstrap.json';bootstrap.write_text(json.dumps({'instrumentation':module.PROC_INSTRUMENTATION,'capacity':{'directory':'/sys/fs/cgroup'}}))
+                admission=root/'admission.json';admission.write_text(json.dumps({'recovery':{'clientQualificationEnabled':True}}))
+                python=os.path.realpath(os.sys.executable)
+                spec={'role':'qualification','request':{'nativeGet':False},'operation':'inert-source-only','operationRoot':str(slot),'transport':{'client':str(root/'unused-client')},
+                      'workDeadline':now+10,'totalDeadline':now+20,'sourceReadAllowlist':[python,str(ROOT/'eng/retain-choreo-c2-diagnostics.py')],
+                      'readEvidence':{'directories':[],'aliases':[],'absences':[]},
+                      'proofInputs':{'bootstrapEvidence':str(bootstrap),'admission':str(admission)}}
+                descriptor=slot/'input.json';descriptor.write_text(json.dumps(spec));raw=descriptor.read_bytes()
+                prepared={'sendState':'prepared-no-send','descriptorSha256':hashlib.sha256(raw).hexdigest()}
+                (slot/'command.json').write_text(json.dumps(prepared))
+                authority={'instrumentation':module.PROC_INSTRUMENTATION,'futureTraceSourceProfile':dict(module.PROC_FUTURE_TRACE_SOURCE_PROFILE),
+                           'canonicalBaseIdentity':module.proc_directory_identity(uid),'canonicalQualificationLineageIdentity':module.proc_directory_identity(lineage),
+                           'canonicalOperationIdentity':module.proc_directory_identity(slot)}
+                approved=root/'authority.json';approved.write_text(json.dumps(authority));authority_sha=hashlib.sha256(approved.read_bytes()).hexdigest()
+                observed=[]
+                def measure(spec_arg,authority_arg,bootstrap_arg,descriptor_arg,approved_arg,sha_arg,phase,*,trace_store):
+                    observed.append(phase)
+                    args=[python,'-I','-S','-B',str(ROOT/'eng/retain-choreo-c2-diagnostics.py'),'command','--proc-measured-controller',str(descriptor),str(approved),authority_sha,'47',phase]
+                    trace=('10 1.0 execve('+json.dumps(python)+', '+json.dumps(args)+', 0x0) = 0\n10 2.0 +++ exited with 0 +++\n').encode()
+                    self.produce(trace_store,phase,trace)
+                    if phase=='normal':(slot/'measurement.subject.json').write_text(json.dumps({'commandAccepted':True,'firstCause':None,'additionalFailures':[],
+                         'runtimeEvidence':{},'rootAccepted':True,'qualificationAccepted':True}))
+                    return {'tracer':{'pid':20},'subjectReadiness':{'subject':{'pid':10}}}
+                original_close=module.ProcFutureTraceStore.close
+                def close(store):
+                    original_close(store)
+                    if close_failure:raise OSError('inert final owned close failure')
+                with patch.object(module,'PROC_OPERATION_BASE',base),patch.object(module,'proc_bootstrap_evidence'),patch.object(module,'proc_measure_once',side_effect=measure),\
+                     patch.object(module,'proc_read_drift'),patch.object(module,'proc_capacity_evidence'),patch.object(module.ProcFutureTraceStore,'close',close),\
+                     patch('subprocess.Popen',side_effect=AssertionError('no native actor')):
+                    code=module.proc_qualification_apparatus(spec,descriptor,approved,authority_sha,authority,trace_profile=dict(module.PROC_FUTURE_TRACE_SOURCE_PROFILE))
+                result=json.loads((slot/'command.json').read_text());self.assertEqual(['controller','session','normal'],observed)
+                self.assertEqual(1 if close_failure else 0,code,result)
+                self.assertFalse(result['rootAccepted']);self.assertFalse(result['qualificationAccepted']);self.assertTrue(result['futureTraceSourceOnly'])
+                self.assertEqual('qualification-failed-or-unknown' if close_failure else 'qualification-completed',result['sendState'])
+                self.assertEqual(not close_failure,result['commandAccepted']);self.assertTrue((slot/'lossless-traces/manifest.json').is_file())
+                if close_failure:self.assertIn('final owned close failure',result['firstCause']['message'])
+
+    def test_actual_future_control_retirement_preserves_partial_meaning_and_birth_guards(self):
+        from types import SimpleNamespace
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);base=root/'producer';base.mkdir(mode=0o700)
+            with patch.object(module,'PROC_OPERATION_BASE',base):
+                operation=module.PROC_PROFILES['proc-pair-client-qualification'];slot=module.proc_operation_root(operation,2);slot.mkdir(parents=True,mode=0o700)
+                spec,store=self.store(slot,profile='proc-pair-client-qualification',operation=operation,qualificationAttempt=2)
+                descriptor=slot/'input.json';descriptor.write_text(json.dumps(spec));approved=root/'authority';approved.write_bytes(b'inert-source-only')
+                sha=hashlib.sha256(approved.read_bytes()).hexdigest();namespaces={'pid':'pid:[inert]','mnt':'mnt:[inert]','user':'user:[inert]'}
+                app={'pid':os.getpid(),'start':1,'uid':os.geteuid(),'pgid':os.getpid(),'sid':os.getpid(),'namespaces':namespaces}
+                tracer=dict(app,pid=10,start=2,ppid=app['pid'],pgid=10,sid=10,tracerPid=0)
+                subject=dict(tracer,pid=11,start=3,ppid=10,tracerPid=10);nested=dict(subject,pid=12,start=4,ppid=11,pgid=12,sid=12)
+                for phase in ('controller','session'):
+                    control_slot=slot/('control-'+phase);control_slot.mkdir(mode=0o700)
+                    actors=[app,tracer,subject]+([nested] if phase=='session' else [])
+                    proof={'apparatus':app,'tracer':tracer,'phase':phase,'slot':str(control_slot),'bootId':Path('/proc/sys/kernel/random/boot_id').read_text().strip(),
+                           'descriptorSha256':hashlib.sha256(descriptor.read_bytes()).hexdigest(),'authoritySha256':sha,'subjectWorkDeadline':spec['workDeadline']-10}
+                    ready={k:proof[k] for k in ('bootId','descriptorSha256','phase','subjectWorkDeadline')};ready.update(tracer=tracer,subject=subject)
+                    (control_slot/'measurement.ready.json').write_text(json.dumps(ready));(control_slot/'measurement.ready.json').chmod(0o600)
+                    control=None
+                    if phase=='session':
+                        control={'phase':phase,'bootId':proof['bootId'],'controller':subject,'child':nested}
+                        (control_slot/'measurement.control.json').write_text(json.dumps(control));(control_slot/'measurement.control.json').chmod(0o600)
+                    payload=b''.join((str(a['pid'])+' 1.0 getpid() = '+str(a['pid'])+'\n').encode() for a in actors[2:])+b'11 2.'
+                    self.produce(store,phase,payload)
+                    record={'phase':phase,'measurementBinding':proof,'tracer':tracer,'subjectReadiness':ready,'controlReadiness':control,
+                            'firstCause':None,'additionalFailures':[],'subjectStartAuthenticated':True,'pidfdSignalSent':True,'tracerExit':-module.signal.SIGKILL,
+                            'cleanup':'observed-known-terminal','residuals':[],'sampledBirths':[{'pid':a['pid'],'start':a['start'],'tgid':a['pid']} for a in actors]}
+                    child=SimpleNamespace(pid=10,returncode=-module.signal.SIGKILL)
+                    with patch.object(module,'proc_actor',side_effect=lambda pid:app if pid==app['pid'] else None):
+                        result=module.proc_control_retirement_evidence(spec,control_slot,descriptor,approved,sha,record,proof,child,trace_store=store)
+                        self.assertFalse(result['traceComplete']);self.assertFalse(result['readClosureQualified']);self.assertFalse(result['publicationAuthorized'])
+                        self.assertTrue(all(a['derivedProjection'] for a in result['traceArtifacts']))
+                        self.assertEqual(5,result['traceArtifacts'][0]['physicalArtifact']['partialTailBytes'])
+                        changed=copy.deepcopy(record);changed['sampledBirths'][1]['start']=99
+                        with self.assertRaises(ValueError):module.proc_control_retirement_evidence(spec,control_slot,descriptor,approved,sha,changed,proof,child,trace_store=store)
+
+    def test_actual_measurement_bounds_keeps_fresh_guards_and_exact_fifo_census(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);spec,store=self.store(root,cpuAffinity=[1],diskBytes=16*1024**2,rssBytes=512*1024**2,
+                transport={'tracer':str(root/'inert-tracer'),'client':str(root/'inert-client')})
+            store.begin('controller');app=os.getpid();namespaces={'pid':'pid:[inert]','mnt':'mnt:[inert]','user':'user:[inert]'}
+            actor={'pid':app,'ppid':1,'start':1,'uid':os.geteuid(),'namespaces':namespaces,'tgid':app,'rss':4096,'state':'R'}
+            iterdir=Path.iterdir;resolve=Path.resolve
+            def paths(path):return iter([Path('/proc')/str(app)]) if path==Path('/proc') else iterdir(path)
+            def resolved(path,*args,**kwargs):return Path(os.path.realpath(os.sys.executable)) if str(path)=='/proc/'+str(app)+'/exe' else resolve(path,*args,**kwargs)
+            with patch.object(module,'proc_capacity_evidence') as capacity,patch.object(module,'proc_read_drift') as drift,\
+                 patch.object(module,'proc_stat',return_value=actor),patch.object(module,'proc_actor',return_value=actor),\
+                 patch.object(Path,'iterdir',paths),patch.object(Path,'resolve',resolved):
+                result=module.proc_measurement_bounds(spec,{}, {'capacity':{}},root,{},None,False,trace_store=store)
+                self.assertEqual(4096,result['rssBytes']);self.assertEqual(1,capacity.call_count);self.assertEqual(1,drift.call_count)
+                os.mkfifo(root/'foreign-fifo',0o600)
+                with self.assertRaisesRegex(Exception,'disk-special-file'):
+                    module.proc_measurement_bounds(spec,{}, {'capacity':{}},root,{},None,False,trace_store=store)
+                self.assertEqual(2,capacity.call_count);self.assertEqual(2,drift.call_count)
+
+    def test_current_cli_refuses_future_profile_before_any_launch_or_namespace(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);spec,descriptor,approved=self.proc_fixture(root)
+            authority=json.loads(approved.read_text());authority['futureTraceSourceProfile']=dict(module.PROC_FUTURE_TRACE_SOURCE_PROFILE)
+            approved.write_text(json.dumps(authority));original=(Path(spec['operationRoot'])/'command.json').read_bytes()
+            failure=io.StringIO()
+            with patch('subprocess.Popen',side_effect=AssertionError('no runtime selected')),contextlib.redirect_stdout(io.StringIO()),contextlib.redirect_stderr(failure):
+                self.assertEqual(1,module.execute_proc_command(descriptor,approved,hashlib.sha256(approved.read_bytes()).hexdigest()))
+            self.assertIn('no current CLI/runtime admission',failure.getvalue())
+            self.assertEqual(original,(Path(spec['operationRoot'])/'command.json').read_bytes())
+            self.assertFalse((Path(spec['operationRoot'])/'lossless-traces').exists())
+
 if __name__ == '__main__': unittest.main()
