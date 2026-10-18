@@ -525,7 +525,7 @@ class Sc2Profile(unittest.TestCase):
     def test_reserved_mount_requires_exact_filesystem_root_without_fallback(self):
         root = Path('/synthetic reserved')
         selected = '42 1 7:9 / /synthetic\\040reserved rw,nosuid,nodev - ext4 /dev/loop9 rw,nodiscard\n'
-        with patch.object(Path, 'read_text', return_value=selected):
+        with patch.object(Path, 'open', return_value=io.BytesIO(selected.encode())):
             observed = SC2.reserved_mount_observation(root)
         self.assertEqual(observed['mountPoint'], str(root))
         self.assertEqual(observed['device'], '7:9')
@@ -538,11 +538,25 @@ class Sc2Profile(unittest.TestCase):
             (selected + '43 42 0:5 / /synthetic\\040reserved/allocation rw - tmpfs tmpfs rw\n', 'nested'),
         )
         for payload, reason in cases:
-            with self.subTest(reason=reason), patch.object(Path, 'read_text', return_value=payload):
+            with self.subTest(reason=reason), patch.object(Path, 'open', return_value=io.BytesIO(payload.encode())):
                 with self.assertRaisesRegex(RuntimeError, reason):
                     SC2.reserved_mount_observation(root)
         with self.assertRaisesRegex(RuntimeError, 'duplicate'):
             SC2.reserved_mount_rows(selected + selected)
+
+    def test_reserved_mount_reader_bounds_acquisition_before_parsing(self):
+        stream = Mock(wraps=io.BytesIO(b'x' * (SC2.MAX_JSON_BYTES + 8192)))
+        context = Mock()
+        context.__enter__ = Mock(return_value=stream)
+        context.__exit__ = Mock(return_value=False)
+        with patch.object(Path, 'open', return_value=context) as opened, \
+             patch.object(SC2, 'reserved_mount_rows') as parse:
+            with self.assertRaisesRegex(RuntimeError, 'exceeds bound'):
+                SC2.reserved_mount_observation(Path('/synthetic reserved'))
+        opened.assert_called_once_with('rb')
+        stream.read.assert_called_once_with(SC2.MAX_JSON_BYTES + 1)
+        self.assertEqual(stream.tell(), SC2.MAX_JSON_BYTES + 1)
+        parse.assert_not_called()
 
     def test_reserved_receipt_checks_real_guest_correspondence_and_finite_capacity(self):
         args, selection, home, receipt, capacity = self.reserved_fixture()
@@ -605,7 +619,7 @@ class Sc2Profile(unittest.TestCase):
                          'synthetic-retained-original')
 
     def test_actual_reserved_admission_does_not_exclude_same_domain_or_memory_cpu_conflicts(self):
-        cases = ('same-disk', 'relevant-unknown', 'memory', 'cpu', 'receipt-join')
+        cases = ('same-disk', 'selected-disk', 'relevant-unknown', 'memory', 'cpu', 'receipt-join')
         for case in cases:
             with self.subTest(case=case), tempfile.TemporaryDirectory(dir=self.root) as temporary:
                 original = self.root; self.root = Path(temporary); self.root.chmod(0o700)
@@ -614,9 +628,11 @@ class Sc2Profile(unittest.TestCase):
                     spawn, calls, resources = self.native_ports(args, selection)
                     target = Path(selection['admission']['resourceDisposition']['path'])
                     value = json.loads(target.read_bytes())
-                    if case == 'same-disk':
-                        value['diskDomain']['retainedOutsideDiskConflicts'][0]['sourceDevice'] = receipt['backing']['device']
-                        reason = 'shares reserved backing'
+                    if case in ('same-disk', 'selected-disk'):
+                        self.assertNotEqual(receipt['rootIdentity']['device'], receipt['backing']['device'])
+                        device = receipt['backing' if case == 'same-disk' else 'rootIdentity']['device']
+                        value['diskDomain']['retainedOutsideDiskConflicts'][0]['sourceDevice'] = device
+                        reason = 'shares reserved or backing'
                     elif case == 'relevant-unknown':
                         value['unquantifiedResourceConflicts'] = ['synthetic writer can consume selected backing']
                         reason = 'unquantified relevant'

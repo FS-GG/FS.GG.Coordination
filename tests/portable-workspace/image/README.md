@@ -143,7 +143,8 @@ resource disposition keeps shared-memory/CPU amounts and the relevant unknown
 conflict list, replacing the legacy disk amount with
 `diskDomain: {reservationSha256, reservedBytes, retainedOutsideDiskConflicts}`.
 Each retained outside entry has its original `id`, host `sourceDevice` and
-accepted `evidenceSha256`; matching the reserved backing filesystem refuses.
+accepted `evidenceSha256`; matching either the reserved filesystem or its parent
+backing filesystem refuses.
 This is a disk-only exclusion in the accepted operation, not physical zero,
 settlement or a way to ignore a relevant writer. The legacy exact four-field
 disposition and designated store continue unchanged when no reservation is bound.

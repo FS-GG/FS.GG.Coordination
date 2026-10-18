@@ -287,7 +287,10 @@ def reserved_mount_rows(payload):
 
 
 def reserved_mount_observation(root):
-    rows = reserved_mount_rows(Path('/proc/self/mountinfo').read_text())
+    with Path('/proc/self/mountinfo').open('rb') as stream:
+        payload = stream.read(MAX_JSON_BYTES + 1)
+    require(len(payload) <= MAX_JSON_BYTES, 'reserved mount observation exceeds bound')
+    rows = reserved_mount_rows(payload.decode('utf-8', errors='strict'))
     selected = [row for row in rows if row['mountPoint'] == str(root)]
     require(len(selected) == 1, 'reserved filesystem mount absent or stacked')
     require(not any(root in Path(row['mountPoint']).parents for row in rows),
@@ -962,8 +965,9 @@ class Lifetime:
                 name = text(conflict['id'])
                 require(name not in seen, 'duplicate outside disk conflict')
                 seen.add(name)
-                require(integer(conflict['sourceDevice']) != reservation['backing']['device'],
-                        'disk conflict shares reserved backing filesystem')
+                require(integer(conflict['sourceDevice']) not in
+                        (reservation['backing']['device'], reservation['rootIdentity']['device']),
+                        'disk conflict shares reserved or backing filesystem')
                 text(conflict['evidenceSha256'], r'[0-9a-f]{64}')
             self.guard_reserved_storage()
         observed = host_resources(self.checked['allocation'], path(self.selection['load']['root']))
