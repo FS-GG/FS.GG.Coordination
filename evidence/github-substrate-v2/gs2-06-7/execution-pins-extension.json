@@ -198,7 +198,7 @@
     {
       "kind": "workflow",
       "path": ".github/workflows/portable-workspace-image-qualification.yml",
-      "sha256": "64f5182a003612fa41591d6b64b450feeb0a478e17ad477bbd8dbe73a4c5731b",
+      "sha256": "d4e2dc591bd3e5c6387a91d5336665d74a375d3850b681d4eccff602505b0246",
       "externalReferences": [
         "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
         "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
@@ -208,7 +208,7 @@
     {
       "kind": "workflow",
       "path": ".github/workflows/portable-workspace-executor-qualification.yml",
-      "sha256": "5827f662c331656ab5a1423948790709f7aad5d17a449fb69c4c2c2a5c70d2d7",
+      "sha256": "4039003e4ffdee61b39d4907b75388fe301b2f58156d31ba1ac73be7c85f95b8",
       "externalReferences": [
         "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
         "actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68",

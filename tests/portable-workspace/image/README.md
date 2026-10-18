@@ -136,6 +136,10 @@ children. They do not invoke Buildah/Podman or establish native readiness.
 The selected linear qualification uses static/actual-caller preflight, not a new
 pipeline model or framework. Existing required repository CI remains required;
 the SC2 native capability and full-image operation need separate admission.
+Even path-filter or inert-step workflow edits require refreshing the exact
+current execution-pin extension digests. The full document/reference census
+complements the existing strict hosted validator; unchanged Action references
+do not make changed workflow bytes equivalent to their registered digest.
 
 ## Common-Arch source input checking
 
