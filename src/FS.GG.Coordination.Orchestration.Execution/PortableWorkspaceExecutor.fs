@@ -173,6 +173,24 @@ type PortableHostExecutionState =
         Receipt: PortableExecutionReceipt option
     }
 
+/// Fixed-capacity backing for NEW export codecs only; legacy writer grammars stay unchanged.
+type private PortableHostExportBoundedStream(maximum: int) =
+    inherit MemoryStream(maximum)
+    member private this.Check(count: int) =
+        if count < 0 || this.Position > int64 maximum - int64 count then invalidOp "host-export-encoding-size"
+    override this.Write(buffer: byte array, offset: int, count: int) =
+        this.Check count
+        base.Write(buffer, offset, count)
+    override this.Write(buffer: ReadOnlySpan<byte>) =
+        this.Check buffer.Length
+        base.Write buffer
+    override this.WriteByte(value: byte) =
+        this.Check 1
+        base.WriteByte value
+    override _.SetLength(length: int64) =
+        if length < 0L || length > int64 maximum then invalidOp "host-export-encoding-size"
+        base.SetLength length
+
 /// Source data only: native root custody and clock provenance require the owning adapter.
 type PortableHostExportRootPin =
     { Path: string; Device: uint64; Inode: uint64; OwnerUid: uint64; OwnerGid: uint64 }
@@ -569,10 +587,11 @@ module PortableWorkspaceExecutor =
         [<Literal>]
         let ContextSchema = "fsgg.portable-host-export-context/1"
         let private domain = Encoding.ASCII.GetBytes(ContextSchema + "\000")
+        let private strictUtf8 = UTF8Encoding(false, true)
 
         let private bytes (write: BinaryWriter -> unit) =
-            use stream = new MemoryStream()
-            use writer = new BinaryWriter(stream, Encoding.UTF8, true)
+            use stream = new PortableHostExportBoundedStream(MaximumContextBytes)
+            use writer = new BinaryWriter(stream, strictUtf8, true)
             write writer
             writer.Flush()
             stream.ToArray()
@@ -627,6 +646,31 @@ module PortableWorkspaceExecutor =
             { Path = reader.ReadString(); Device = reader.ReadUInt64(); Inode = reader.ReadUInt64()
               OwnerUid = reader.ReadUInt64(); OwnerGid = reader.ReadUInt64() }
 
+        // Bound each source string BEFORE UTF-8 conversion/allocation, then the exact whole wire size.
+        // Command grammar already bounds all of its textual fields to ASCII <=128 characters.
+        let private encodedSize (context: PortableHostExportContextData) =
+            let text (value: string) =
+                if isNull value || value.Length > MaximumContextBytes then invalidOp "host-export-field-size"
+                let count = strictUtf8.GetByteCount value
+                if count > MaximumContextBytes then invalidOp "host-export-field-size"
+                let mutable prefix, remaining = 1, count
+                while remaining >= 128 do
+                    prefix <- prefix + 1
+                    remaining <- remaining >>> 7
+                prefix + count
+            let binding = context.Reservation.Binding
+            let command = PortableWorkspaceContract.commandBytes binding.Command |> Result.defaultWith invalidOp
+            let fullBinding = text (Convert.ToBase64String command) + text binding.QualifiedImage + text binding.AllocationId
+                              + text binding.WorkerId + text binding.AllocationReceiptDigest
+            let selection = match context.Reservation.Selection with
+                            | NoSelectedOutputs -> 1
+                            | SelectedOutputs value -> 1 + text value.Digest + 16
+            let reservation = fullBinding + 32 + 24 + selection
+            let root (value: PortableHostExportRootPin) = text value.Path + 32
+            text ContextSchema + text (context.ExportOperationId.ToString("D")) + reservation
+            + 4 + context.ManifestBytes.Length + text (context.Clock.HostBootId.ToString("D")) + 24
+            + root context.SourceRoot + 4 + (context.RetiringRoots |> List.sumBy root) + root context.DestinationRoot
+
         let private encode (context: PortableHostExportContextData) =
             bytes (fun writer ->
                 writer.Write ContextSchema
@@ -648,8 +692,11 @@ module PortableWorkspaceExecutor =
             try
                 if not (contextValid context) then Error "host-export-original-refused"
                 else
+                    let expectedSize = encodedSize context
+                    if expectedSize > MaximumContextBytes then invalidOp "host-export-context-size"
                     let frozen = { context with ManifestBytes = Array.copy context.ManifestBytes }
                     let canonical = encode frozen
+                    if canonical.Length <> expectedSize then invalidOp "host-export-size-accounting"
                     if canonical.Length > MaximumContextBytes then Error "host-export-context-size"
                     else
                         let binding = bytes (fun writer -> writeHostBinding writer frozen.Reservation.Binding)
@@ -664,7 +711,7 @@ module PortableWorkspaceExecutor =
                 else
                     let snapshot = Array.copy input
                     use stream = new MemoryStream(snapshot, false)
-                    use reader = new BinaryReader(stream, Encoding.UTF8, true)
+                    use reader = new BinaryReader(stream, strictUtf8, true)
                     if reader.ReadString() <> ContextSchema then invalidOp "host-export-context-schema"
                     let operation = Guid.ParseExact(reader.ReadString(), "D")
                     let reservation = readHostReservation reader
@@ -736,6 +783,31 @@ module PortableWorkspaceExecutor =
 
     let private exportSourceSchema = "fsgg.portable-host-export-source-journal/1"
 
+    let private validateExportSourceEntry (entry: PortableHostExportSourceEntry) =
+        let strict = UTF8Encoding(false, true)
+        let text (value: string) =
+            if isNull value || value.Length > HostExportSource.MaximumContextBytes
+               || strict.GetByteCount value > HostExportSource.MaximumContextBytes then invalidOp "host-export-field-size"
+        let observation (value: PortableEvidence<PortableHostObservation<'value>>) =
+            match value with
+            | EvidenceMissing reason | EvidenceUnknown reason -> text reason
+            | EvidenceKnown known ->
+                if known.Binding <> entry.Original.Context.Reservation.Binding then invalidOp "host-export-observation-binding"
+                text known.ReceiptDigest
+        text entry.Host.BindingDigest
+        text entry.Host.HostContainerName
+        text entry.SupplierIdentity.Issuer
+        text entry.SupplierIdentity.ContainerId
+        let lifecycle = entry.Host.State.Lifecycle
+        observation lifecycle.WorkloadExit
+        observation lifecycle.Termination
+        observation lifecycle.InnerCleanup
+        observation lifecycle.Export
+        observation lifecycle.OuterRetirement
+        lifecycle.FirstFailure |> Option.iter text
+        if lifecycle.ReconciliationConflicts.Count > 1024 then invalidOp "host-export-conflicts-size"
+        lifecycle.ReconciliationConflicts |> Set.iter text
+
     let private writeExportSource (writer: BinaryWriter) (entry: PortableHostExportSourceEntry) =
         let section (value: byte array) =
             if value.Length > HostExportSource.MaximumContextBytes then invalidOp "host-export-section-size"
@@ -777,8 +849,9 @@ module PortableWorkspaceExecutor =
           CopyObservationBytes = copied; ReceivingObservationBytes = received }
 
     let private exportSourceBytes entry =
-        use stream = new MemoryStream()
-        use writer = new BinaryWriter(stream, Encoding.UTF8, true)
+        validateExportSourceEntry entry
+        use stream = new PortableHostExportBoundedStream(PortableWorkspaceContract.maximumDocumentBytes * 4)
+        use writer = new BinaryWriter(stream, UTF8Encoding(false, true), true)
         writer.Write exportSourceSchema
         writeExportSource writer entry
         writer.Flush()
@@ -1604,13 +1677,14 @@ module PortableWorkspaceExecutor =
                     match lifecycle.Termination with
                     | EvidenceKnown _ when lifecycle.ReconciliationConflicts.IsEmpty -> ()
                     | _ -> invalidOp "host-export-writer-termination-unconfirmed"
-                    use memory = new MemoryStream()
-                    use writer = new BinaryWriter(memory, Encoding.UTF8, true)
+                    let host = { entry.Host with State = { entry.Host.State with Lifecycle = lifecycle } }
+                    validateExportSourceEntry { entry with Host = host }
+                    use memory = new PortableHostExportBoundedStream(HostExportSource.MaximumContextBytes)
+                    use writer = new BinaryWriter(memory, UTF8Encoding(false, true), true)
                     writer.Write "fsgg.portable-host-export-attempt/1"
                     writer.Write original.Digest
                     writer.Write(hostBootId.ToString("D"))
                     writer.Write monotonicNanoseconds
-                    let host = { entry.Host with State = { entry.Host.State with Lifecycle = lifecycle } }
                     writeHost writer host
                     writer.Flush()
                     let raw = memory.ToArray()

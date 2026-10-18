@@ -21,7 +21,10 @@ The context digest is lowercase SHA-256 of ASCII
 A raw SHA-256 of the context is a different digest.
 
 Integers use little-endian .NET `BinaryWriter` encodings. Strings use UTF-8 preceded by the
-minimal unsigned 7-bit byte-length encoding. GUIDs are lowercase `D` strings. The ordered fields are:
+minimal unsigned 7-bit byte-length encoding. The new codecs use strict UTF-8: invalid surrogate
+input or malformed encoded bytes refuse. New fields and the exact aggregate encoded size are
+checked before context serialization; bounded backing streams enforce context, attempt and journal
+ceilings during writes. Legacy encoding behavior remains unchanged. GUIDs are lowercase `D` strings. The ordered fields are:
 
 1. Schema string and fresh export-operation GUID.
 2. Full existing host reservation: the binding's base64 canonical command bytes, qualified image,

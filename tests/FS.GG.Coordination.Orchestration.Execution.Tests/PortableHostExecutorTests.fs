@@ -2375,3 +2375,61 @@ type PortableHostExportSourceTests(output: Xunit.Abstractions.ITestOutputHelper)
             Assert.Equal<byte>(originalBytes, File.ReadAllBytes fixture.Journal)
         Assert.Equal(0, fixture.Runner.Runs)
         Assert.Equal(0, fixture.Runner.Cleans)
+
+    [<Fact>]
+    member _.``new codec preserves valid nonASCII exactly and refuses every invalid surrogate field``() =
+        use fixture = new HostExecutorFixture()
+        let input = context fixture
+        let unicodeBinding =
+            { input.Reservation.Binding with
+                QualifiedImage = input.Reservation.Binding.QualifiedImage + "é"
+                AllocationId = "allocation-λ"
+                WorkerId = "worker-🙂" }
+        let unicode =
+            { input with
+                Reservation = { input.Reservation with Binding = unicodeBinding }
+                SourceRoot = { input.SourceRoot with Path = "/retiring/é" }
+                DestinationRoot = { input.DestinationRoot with Path = "/durable/日本" } }
+        let original = PortableWorkspaceExecutor.HostExportSource.createOriginal unicode |> ok
+        let restored = PortableWorkspaceExecutor.HostExportSource.parseOriginal original.CanonicalBytes |> ok
+        Assert.Equal(unicode, restored.Context)
+        Assert.Equal<byte>(original.CanonicalBytes, restored.CanonicalBytes)
+        for broken in [ string (char 0xD800); string (char 0xDC00) ] do
+            for bad in [
+                { input with SourceRoot = { input.SourceRoot with Path = "/retiring/" + broken } }
+                { input with DestinationRoot = { input.DestinationRoot with Path = "/durable/" + broken } }
+                { input with RetiringRoots = [{ input.RetiringRoots.Head with Path = "/" + broken }]; SourceRoot = { input.SourceRoot with Path = "/" + broken + "/source" } }
+                { input with Reservation = { input.Reservation with Binding = { input.Reservation.Binding with QualifiedImage = "image-" + broken } } }
+                { input with Reservation = { input.Reservation with Binding = { input.Reservation.Binding with AllocationId = "allocation-" + broken } } }
+                { input with Reservation = { input.Reservation with Binding = { input.Reservation.Binding with WorkerId = "worker-" + broken } } }
+            ] do Assert.True(PortableWorkspaceExecutor.HostExportSource.createOriginal bad |> Result.isError)
+        let malformed = original.CanonicalBytes
+        let index = [0..malformed.Length-2] |> List.find (fun n -> malformed[n] = 0xC3uy && malformed[n+1] = 0xA9uy)
+        malformed[index] <- 0xC0uy
+        malformed[index+1] <- 0xAFuy
+        Assert.True(PortableWorkspaceExecutor.HostExportSource.parseOriginal malformed |> Result.isError)
+
+    [<Fact>]
+    member _.``new codec preflights individual and aggregate encoding before allocation and admits exact64KiB boundary``() =
+        use fixture = new HostExecutorFixture()
+        let input = context fixture
+        let huge = String.replicate 65537 "x"
+        let large = String.replicate 23000 "x"
+        for bad in [
+            { input with Reservation = { input.Reservation with Binding = { input.Reservation.Binding with QualifiedImage = huge } } }
+            { input with Reservation = { input.Reservation with Binding = { input.Reservation.Binding with AllocationId = huge } } }
+            { input with Reservation = { input.Reservation with Binding = { input.Reservation.Binding with WorkerId = huge } } }
+            { input with Reservation = { input.Reservation with Binding = { input.Reservation.Binding with QualifiedImage = large; AllocationId = large; WorkerId = large } } }
+        ] do Assert.True(PortableWorkspaceExecutor.HostExportSource.createOriginal bad |> Result.isError)
+        let initial = PortableWorkspaceExecutor.HostExportSource.createOriginal input |> ok
+        // Crossing the BinaryWriter 128-byte string-prefix boundary adds one prefix byte too.
+        let mutable padding = 65536 - initial.CanonicalBytes.Length
+        let padded count =
+            let binding = { input.Reservation.Binding with QualifiedImage = input.Reservation.Binding.QualifiedImage + String.replicate count "x" }
+            { input with Reservation = { input.Reservation with Binding = binding } }
+        let prefixBytes length = if length < 128 then 1 elif length < 16384 then 2 else 3
+        padding <- padding - (prefixBytes (input.Reservation.Binding.QualifiedImage.Length + padding) - prefixBytes input.Reservation.Binding.QualifiedImage.Length)
+        let exact = PortableWorkspaceExecutor.HostExportSource.createOriginal (padded padding) |> ok
+        Assert.Equal(65536, exact.CanonicalBytes.Length)
+        Assert.Equal((padded padding), (PortableWorkspaceExecutor.HostExportSource.parseOriginal exact.CanonicalBytes |> ok).Context)
+        Assert.True(PortableWorkspaceExecutor.HostExportSource.createOriginal (padded (padding+1)) |> Result.isError)
