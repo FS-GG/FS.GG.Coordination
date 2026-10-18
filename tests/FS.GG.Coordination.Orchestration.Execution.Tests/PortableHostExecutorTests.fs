@@ -2113,3 +2113,323 @@ type PortableHostExecutorTests_ControlledAuthenticatedSource() =
             Assert.Equal(0,fixture.Runner.Recoveries)
 
         ControlledGenesisSourceExport.assertPublicRegression publicBytes
+
+
+/// Actual prospective codec controls. No transport, CLR child, Podman or filesystem effect port.
+type PortableHostExecutorTests_PortableHostExportSourceTests(output: Xunit.Abstractions.ITestOutputHelper) =
+    let ok = HostExecutorAssertions.ok
+    let context (fixture: HostExecutorFixture) =
+        let manifest = PortableSupplierManifest.create [{ Path = "result.txt"; Bytes = 0UL; Sha256 = String.replicate 64 "a" }] |> ok
+        let command = { fixture.Command with CommandId = Guid.Parse("10000000-0000-0000-0000-000000000001") }
+        let reservation = { fixture.Reservation with
+                                Binding = { fixture.Reservation.Binding with Command = command; AllocationReceiptDigest = String.replicate 64 "b" }
+                                Selection = SelectedOutputs(PortableSupplierManifest.summary manifest) }
+        let root path device inode = { Path = path; Device = device; Inode = inode; OwnerUid = 1000UL; OwnerGid = 1000UL }
+        { ExportOperationId = Guid.Parse("20000000-0000-0000-0000-000000000001"); Reservation = reservation
+          ManifestBytes = PortableSupplierManifest.serialize manifest
+          Clock = { HostBootId = Guid.Parse("30000000-0000-0000-0000-000000000001"); AdmittedMonotonicNanoseconds = 1000000000UL
+                    ExportDeadlineMonotonicNanoseconds = 81000000000UL; LeaseDeadlineMonotonicNanoseconds = 91000000000UL }
+          SourceRoot = root "/retiring/selected" 5UL 18UL; RetiringRoots = [root "/retiring" 5UL 17UL]
+          DestinationRoot = root "/durable" 6UL 19UL }
+
+    [<Fact>]
+    member _.``full private original codec roundtrips without mutating or omitting reservation fields``() =
+        use fixture = new HostExecutorFixture()
+        let input = context fixture
+        let original = PortableWorkspaceExecutor.HostExportSource.createOriginal input |> ok
+        let restored = PortableWorkspaceExecutor.HostExportSource.parseOriginal original.CanonicalBytes |> ok
+        output.WriteLine("INERT_CONTEXT_BASE64=" + Convert.ToBase64String original.CanonicalBytes)
+        output.WriteLine("INERT_CONTEXT_DIGEST=" + original.Digest)
+        Assert.Equal(input, restored.Context)
+        Assert.Equal(original.Digest, restored.Digest)
+        Assert.Equal<byte>(original.BindingBytes, restored.BindingBytes)
+        Assert.Equal<byte>(original.ReservationBytes, restored.ReservationBytes)
+        let raw = original.CanonicalBytes
+        let mutableManifest = original.Context.ManifestBytes
+        mutableManifest[0] <- 0uy
+        input.ManifestBytes[0] <- 0uy
+        raw[0] <- 0uy
+        Assert.Equal(original.Digest, restored.Digest)
+        Assert.True(PortableWorkspaceExecutor.HostExportSource.parseOriginal original.CanonicalBytes |> Result.isOk)
+        Assert.Equal(0, fixture.Runner.Runs)
+        Assert.Equal(0, fixture.Runner.Cleans)
+
+    [<Fact>]
+    member _.``new source context refuses false scope clock selection and old-original substitution``() =
+        use fixture = new HostExecutorFixture()
+        let good = context fixture
+        let invalid = [
+            { good with ExportOperationId = Guid.Empty }
+            { good with ManifestBytes = [||] }
+            { good with Reservation = { good.Reservation with Selection = NoSelectedOutputs } }
+            { good with Clock = { good.Clock with HostBootId = Guid.Empty } }
+            { good with Clock = { good.Clock with LeaseDeadlineMonotonicNanoseconds = 92000000000UL } }
+            { good with Clock = { good.Clock with ExportDeadlineMonotonicNanoseconds = 81000000001UL } }
+            { good with DestinationRoot = { good.DestinationRoot with Device = 5UL } }
+            { good with SourceRoot = { good.SourceRoot with Path = "/foreign" } }
+            { good with DestinationRoot = { good.DestinationRoot with Path = "/retiring/destination" } }
+            { good with RetiringRoots = [] }
+            { good with RetiringRoots = good.RetiringRoots @ good.RetiringRoots }
+            { good with Reservation = { good.Reservation with Binding = { good.Reservation.Binding with AllocationReceiptDigest = "caller-claim" } } } ]
+        for value in invalid do Assert.True(PortableWorkspaceExecutor.HostExportSource.createOriginal value |> Result.isError)
+        let original = PortableWorkspaceExecutor.HostExportSource.createOriginal good |> ok
+        Assert.True(PortableWorkspaceExecutor.HostExportSource.originalClockCurrent good.Clock.HostBootId 1000000000UL original)
+        Assert.False(PortableWorkspaceExecutor.HostExportSource.originalClockCurrent good.Clock.HostBootId 81000000000UL original)
+        Assert.False(PortableWorkspaceExecutor.HostExportSource.originalClockCurrent Guid.Empty 1000000000UL original)
+        Assert.False(PortableWorkspaceExecutor.HostExportSource.originalClockCurrent good.Clock.HostBootId 999999999UL original)
+        Assert.Equal(0, fixture.Runner.Runs)
+
+    [<Fact>]
+    member _.``canonical original reader refuses truncation trailing bytes and nonminimal binary length``() =
+        use fixture = new HostExecutorFixture()
+        let original = PortableWorkspaceExecutor.HostExportSource.createOriginal (context fixture) |> ok
+        let raw = original.CanonicalBytes
+        // BinaryReader can decode a finite nonminimal 7-bit string prefix; exact canonical bytes still refuse.
+        Assert.True(raw[0] < 128uy)
+        let nonminimal = Array.concat [[|raw[0] ||| 128uy; 0uy|]; raw[1..]]
+        for bytes in [raw[..raw.Length-2]; Array.append raw [|0uy|]; nonminimal; Array.zeroCreate 65537] do
+            Assert.True(PortableWorkspaceExecutor.HostExportSource.parseOriginal bytes |> Result.isError)
+        Assert.True(PortableWorkspaceExecutor.HostExportSource.parseOriginal raw |> Result.isOk)
+
+    [<Fact>]
+    member _.``source attempt uses existing lock journal and retains consumed intent across cold reopen without activating runner``() =
+        use fixture = new HostExecutorFixture()
+        let input = context fixture
+        let original = PortableWorkspaceExecutor.HostExportSource.createOriginal input |> ok
+        let identity = { Issuer = "inert-owning-adapter"; ContainerId = "inert-container"
+                         AllocationDevice = 5UL; AllocationInode = 17UL }
+        let authenticate lifecycle =
+            let raw = Encoding.UTF8.GetBytes "inert independently authenticated fixture"
+            let evidence = { Identity = identity; Reservation = input.Reservation; CollectedAt = fixture.Start
+                             ReceiptDigest = Convert.ToHexString(SHA256.HashData raw).ToLowerInvariant(); Lifecycle = lifecycle }
+            let verifier = { new IPortableHostSupplierVerifier with member _.Authenticate _ = Ok evidence }
+            PortableHostSupplierIngress.authenticate verifier identity input.Reservation fixture.Start (TimeSpan.FromMinutes 1.) raw |> ok
+        let journal = PortableWorkspaceExecutor.HostExportSourceJournal(fixture.Policy.Runtime.StateRoot)
+        let initial = authenticate PortableHostAllocation.emptyLifecycle
+        let _, durability = journal.Begin(original, initial, fixture.Start, input.Clock.HostBootId, 1000000000UL) |> ok
+        match durability with EvidenceUnknown _ -> () | _ -> failwith "not directory qualified"
+        let originalBytes = File.ReadAllBytes fixture.Journal
+        Assert.True(journal.Begin(original, initial, fixture.Start, input.Clock.HostBootId, 1000000000UL) |> Result.isError)
+        Assert.Equal<byte>(originalBytes, File.ReadAllBytes fixture.Journal)
+        Assert.True(journal.PrepareAttempt(original, initial, fixture.Start, input.Clock.HostBootId, 1000000000UL) |> Result.isError)
+        Assert.Equal<byte>(originalBytes, File.ReadAllBytes fixture.Journal)
+        let termination = { Binding = input.Reservation.Binding; CollectedAt = fixture.Start; ReceiptDigest = String.replicate 64 "c"; Value = () }
+        let stopped = authenticate { PortableHostAllocation.emptyLifecycle with Termination = EvidenceKnown termination; FirstFailure = Some "original workload Unknown" }
+        let attempt, _ = journal.PrepareAttempt(original, stopped, fixture.Start, input.Clock.HostBootId, 1000000001UL) |> ok
+        let beforeReplay = File.ReadAllBytes fixture.Journal
+        let cold = PortableWorkspaceExecutor.HostExportSourceJournal(fixture.Policy.Runtime.StateRoot)
+        let state, unknown = cold.Read original |> ok
+        Assert.Equal<byte>(attempt, state.AttemptBytes.Value)
+        Assert.Equal(Some "original workload Unknown", state.Lifecycle.FirstFailure)
+        Assert.True(cold.PrepareAttempt(original, stopped, fixture.Start, input.Clock.HostBootId, 1000000002UL) |> Result.isError)
+        Assert.Equal<byte>(beforeReplay, File.ReadAllBytes fixture.Journal)
+        Assert.True(cold.ObserveCopy(original, String.replicate 64 "0", [|1uy|]) |> Result.isError)
+        let digest = Convert.ToHexString(SHA256.HashData attempt).ToLowerInvariant()
+        let local, _ = cold.ObserveCopy(original, digest, [|1uy;2uy|]) |> ok
+        match local.Lifecycle.Export with EvidenceKnown _ -> failwith "local copy promoted" | _ -> ()
+        let copyBytes = File.ReadAllBytes fixture.Journal
+        Assert.True(cold.ObserveCopy(original, digest, [|3uy|]) |> Result.isError)
+        Assert.Equal<byte>(copyBytes, File.ReadAllBytes fixture.Journal)
+        let receivingRaw = [|99uy;98uy|]
+        let manifest = match input.Reservation.Selection with SelectedOutputs value -> value | _ -> failwith "selection"
+        let exported = { Binding = input.Reservation.Binding; CollectedAt = fixture.Start; ReceiptDigest = String.replicate 64 "d"; Value = DurableManifestReadback manifest }
+        let incoming = { Host = { Identity = identity; Reservation = input.Reservation; CollectedAt = fixture.Start
+                                  ReceiptDigest = Convert.ToHexString(SHA256.HashData receivingRaw).ToLowerInvariant()
+                                  Lifecycle = { PortableHostAllocation.emptyLifecycle with Termination = EvidenceKnown termination; Export = EvidenceKnown exported } }
+                         ContextDigest = original.Digest; AttemptDigest = digest
+                         CopyObservationDigest = Convert.ToHexString(SHA256.HashData [|1uy;2uy|]).ToLowerInvariant()
+                         DestinationRoot = input.DestinationRoot; Manifest = manifest
+                         WriterTerminationReceiptDigest = termination.ReceiptDigest; ReceivingCommitReceiptDigest = exported.ReceiptDigest
+                         HostBootId = input.Clock.HostBootId; ObservedMonotonicNanoseconds = 1000000003UL }
+        let receivingVerifier = { new IPortableHostExportReceivingVerifier with member _.Authenticate _ = Ok incoming }
+        let receiving = PortableWorkspaceExecutor.HostExportSource.authenticateReceiving receivingVerifier identity original attempt [|1uy;2uy|]
+                            fixture.Start (TimeSpan.FromMinutes 1.) receivingRaw |> ok
+        let recorded, _ = cold.ObserveReceiving(original, receiving, fixture.Start) |> ok
+        Assert.Equal(Some "original workload Unknown", recorded.Lifecycle.FirstFailure)
+        Assert.Equal(EvidenceKnown exported, recorded.Lifecycle.Export)
+        let reread, durability = PortableWorkspaceExecutor.HostExportSourceJournal(fixture.Policy.Runtime.StateRoot).Read original |> ok
+        Assert.Equal(recorded.Lifecycle, reread.Lifecycle)
+        Assert.Equal<byte>(receivingRaw, reread.ReceivingObservationBytes.Value)
+        match durability with EvidenceUnknown _ -> () | _ -> failwith "cold data became durable auth"
+        let outcome = fixture.Executor(selected = input.Reservation).ExecuteAsync(fixture.Authority, fixture.Profile, input.Reservation.Binding.Command, CancellationToken.None).GetAwaiter().GetResult()
+        match outcome with Refused _ -> () | _ -> failwith "source-only journal activated executor"
+        Assert.Equal(0, fixture.Runner.Runs)
+        Assert.Equal(0, fixture.Runner.Cleans)
+        Assert.Equal(0, fixture.Runner.Recoveries)
+
+    [<Fact>]
+    member _.``receiving ingress authenticates full original destination manifest clock and both retained observation digests``() =
+        use fixture = new HostExecutorFixture()
+        let input = context fixture
+        let original = PortableWorkspaceExecutor.HostExportSource.createOriginal input |> ok
+        let identity = { Issuer = "inert-receiver-owner"; ContainerId = "inert-container"; AllocationDevice = 5UL; AllocationInode = 17UL }
+        let raw, attempt, copied = [|10uy;11uy|], [|12uy|], [|13uy|]
+        let digest (bytes: byte array) = Convert.ToHexString(SHA256.HashData bytes).ToLowerInvariant()
+        let manifest = match input.Reservation.Selection with SelectedOutputs value -> value | _ -> failwith "selection"
+        let termination = { Binding = input.Reservation.Binding; CollectedAt = fixture.Start; ReceiptDigest = String.replicate 64 "c"; Value = () }
+        let exported = { Binding = input.Reservation.Binding; CollectedAt = fixture.Start; ReceiptDigest = String.replicate 64 "d"; Value = DurableManifestReadback manifest }
+        let good = { Host = { Identity = identity; Reservation = input.Reservation; CollectedAt = fixture.Start; ReceiptDigest = digest raw
+                              Lifecycle = { PortableHostAllocation.emptyLifecycle with Termination = EvidenceKnown termination; Export = EvidenceKnown exported } }
+                     ContextDigest = original.Digest; AttemptDigest = digest attempt; CopyObservationDigest = digest copied
+                     DestinationRoot = input.DestinationRoot; Manifest = manifest; WriterTerminationReceiptDigest = termination.ReceiptDigest
+                     ReceivingCommitReceiptDigest = exported.ReceiptDigest; HostBootId = input.Clock.HostBootId; ObservedMonotonicNanoseconds = 1000000001UL }
+        let authenticate value =
+            let verifier = { new IPortableHostExportReceivingVerifier with member _.Authenticate _ = Ok value }
+            PortableWorkspaceExecutor.HostExportSource.authenticateReceiving verifier identity original attempt copied fixture.Start (TimeSpan.FromMinutes 1.) raw
+        let accepted = authenticate good |> ok
+        Assert.Equal(good, accepted.Evidence)
+        let changed = accepted.Bytes
+        changed[0] <- 0uy
+        Assert.Equal<byte>(raw, accepted.Bytes)
+        for bad in [
+            { good with ContextDigest = String.replicate 64 "0" }
+            { good with AttemptDigest = String.replicate 64 "0" }
+            { good with CopyObservationDigest = String.replicate 64 "0" }
+            { good with DestinationRoot = { good.DestinationRoot with Inode = 999UL } }
+            { good with Manifest = { good.Manifest with TotalBytes = 1UL } }
+            { good with HostBootId = Guid.NewGuid() }
+            { good with ObservedMonotonicNanoseconds = input.Clock.ExportDeadlineMonotonicNanoseconds }
+            { good with WriterTerminationReceiptDigest = String.replicate 64 "0" }
+            { good with ReceivingCommitReceiptDigest = String.replicate 64 "0" }
+            { good with Host = { good.Host with ReceiptDigest = String.replicate 64 "0" } }
+            { good with Host = { good.Host with Reservation = { input.Reservation with MaximumRuntime = TimeSpan.FromSeconds 59. } } }
+            { good with Host = { good.Host with Lifecycle = { good.Host.Lifecycle with Termination = EvidenceUnknown "not observed" } } }
+            { good with Host = { good.Host with Lifecycle = { good.Host.Lifecycle with Export = EvidenceUnknown "local copy only" } } }
+        ] do Assert.True(authenticate bad |> Result.isError)
+        let refusing = { new IPortableHostExportReceivingVerifier with member _.Authenticate _ = Error "not authenticated" }
+        Assert.True(PortableWorkspaceExecutor.HostExportSource.authenticateReceiving refusing identity original attempt copied fixture.Start (TimeSpan.FromMinutes 1.) raw |> Result.isError)
+        Assert.Equal(0, fixture.Runner.Runs)
+        Assert.Equal(0, fixture.Runner.Cleans)
+
+    [<Fact>]
+    member _.``fresh source original cannot upgrade or replace occupied legacy host journal bytes``() =
+        use fixture = new HostExecutorFixture()
+        fixture.Executor().ExecuteAsync(fixture.Authority, fixture.Profile, fixture.Command, CancellationToken.None).GetAwaiter().GetResult() |> ignore
+        let old = File.ReadAllBytes fixture.Journal
+        let input = context fixture
+        let original = PortableWorkspaceExecutor.HostExportSource.createOriginal input |> ok
+        let identity = { Issuer = "inert-owner"; ContainerId = "inert-container"; AllocationDevice = 5UL; AllocationInode = 17UL }
+        let raw = [|1uy|]
+        let evidence = { Identity = identity; Reservation = input.Reservation; CollectedAt = fixture.Start
+                         ReceiptDigest = Convert.ToHexString(SHA256.HashData raw).ToLowerInvariant(); Lifecycle = PortableHostAllocation.emptyLifecycle }
+        let verifier = { new IPortableHostSupplierVerifier with member _.Authenticate _ = Ok evidence }
+        let authenticated = PortableHostSupplierIngress.authenticate verifier identity input.Reservation fixture.Start (TimeSpan.FromMinutes 1.) raw |> ok
+        let journal = PortableWorkspaceExecutor.HostExportSourceJournal(fixture.Policy.Runtime.StateRoot)
+        Assert.True(journal.Begin(original, authenticated, fixture.Start, input.Clock.HostBootId, 1000000000UL) |> Result.isError)
+        Assert.Equal<byte>(old, File.ReadAllBytes fixture.Journal)
+        Assert.True(journal.Read original |> Result.isError)
+        Assert.Equal<byte>(old, File.ReadAllBytes fixture.Journal)
+        let legacy = fixture.Executor().ReadHostState(fixture.Profile, fixture.Command) |> ok
+        Assert.Equal(fixture.Reservation, legacy.Reservation)
+        Assert.Equal<byte>(old, File.ReadAllBytes fixture.Journal)
+
+    [<Theory>]
+    [<InlineData(0, false)>]
+    [<InlineData(1, false)>]
+    [<InlineData(2, false)>]
+    [<InlineData(3, false)>]
+    [<InlineData(4, false)>]
+    [<InlineData(0, true)>]
+    [<InlineData(1, true)>]
+    [<InlineData(2, true)>]
+    [<InlineData(3, true)>]
+    [<InlineData(4, true)>]
+    member _.``source write first failure retains old bytes or consumed new intent without replay or effects``(cut: int, duringAttempt: bool) =
+        use fixture = new HostExecutorFixture()
+        let input = context fixture
+        let original = PortableWorkspaceExecutor.HostExportSource.createOriginal input |> ok
+        let identity = { Issuer = "inert-owner"; ContainerId = "inert-container"; AllocationDevice = 5UL; AllocationInode = 17UL }
+        let authenticate lifecycle =
+            let raw = [|42uy|]
+            let evidence = { Identity = identity; Reservation = input.Reservation; CollectedAt = fixture.Start
+                             ReceiptDigest = Convert.ToHexString(SHA256.HashData raw).ToLowerInvariant(); Lifecycle = lifecycle }
+            let verifier = { new IPortableHostSupplierVerifier with member _.Authenticate _ = Ok evidence }
+            PortableHostSupplierIngress.authenticate verifier identity input.Reservation fixture.Start (TimeSpan.FromMinutes 1.) raw |> ok
+        let initial = authenticate PortableHostAllocation.emptyLifecycle
+        let termination = { Binding = input.Reservation.Binding; CollectedAt = fixture.Start; ReceiptDigest = String.replicate 64 "c"; Value = () }
+        let stopped = authenticate { PortableHostAllocation.emptyLifecycle with Termination = EvidenceKnown termination }
+        let normal = PortableWorkspaceExecutor.HostExportSourceJournal(fixture.Policy.Runtime.StateRoot)
+        if duringAttempt then normal.Begin(original, initial, fixture.Start, input.Clock.HostBootId, 1000000000UL) |> ok |> ignore
+        let previous = if duringAttempt then Some(File.ReadAllBytes fixture.Journal) else None
+        let point = match cut with
+                    | 0 -> PortableWorkspaceExecutor.BeforeSourceWrite
+                    | 1 -> PortableWorkspaceExecutor.BeforeSourceFileFlush
+                    | 2 -> PortableWorkspaceExecutor.BeforeSourceReplacement
+                    | 3 -> PortableWorkspaceExecutor.AfterSourceReplacementBeforeReadback
+                    | _ -> PortableWorkspaceExecutor.BeforeSourceColdReopen
+        let failing = PortableWorkspaceExecutor.HostExportSourceJournal.CreateControlledFailureTest(fixture.Policy.Runtime.StateRoot, point)
+        if duringAttempt then
+            Assert.True(failing.PrepareAttempt(original, stopped, fixture.Start, input.Clock.HostBootId, 1000000001UL) |> Result.isError)
+        else Assert.True(failing.Begin(original, initial, fixture.Start, input.Clock.HostBootId, 1000000000UL) |> Result.isError)
+        if cut < 3 then
+            match previous with
+            | Some old -> Assert.Equal<byte>(old, File.ReadAllBytes fixture.Journal)
+            | None -> Assert.Empty(Directory.GetFiles(Path.Combine(fixture.Policy.Runtime.StateRoot, "journal-v1"), "*.bin"))
+        else
+            let retained, durability = normal.Read original |> ok
+            Assert.Equal(duringAttempt, retained.AttemptBytes.IsSome)
+            match durability with EvidenceUnknown _ -> () | _ -> failwith "lost source return promoted durability"
+            let originalBytes = File.ReadAllBytes fixture.Journal
+            if duringAttempt then Assert.True(normal.PrepareAttempt(original, stopped, fixture.Start, input.Clock.HostBootId, 1000000002UL) |> Result.isError)
+            else Assert.True(normal.Begin(original, initial, fixture.Start, input.Clock.HostBootId, 1000000000UL) |> Result.isError)
+            Assert.Equal<byte>(originalBytes, File.ReadAllBytes fixture.Journal)
+        Assert.Equal(0, fixture.Runner.Runs)
+        Assert.Equal(0, fixture.Runner.Cleans)
+
+    [<Fact>]
+    member _.``new codec preserves valid nonASCII exactly and refuses every invalid surrogate field``() =
+        use fixture = new HostExecutorFixture()
+        let input = context fixture
+        let unicodeBinding =
+            { input.Reservation.Binding with
+                QualifiedImage = input.Reservation.Binding.QualifiedImage + "é"
+                AllocationId = "allocation-λ"
+                WorkerId = "worker-🙂" }
+        let unicode =
+            { input with
+                Reservation = { input.Reservation with Binding = unicodeBinding }
+                SourceRoot = { input.SourceRoot with Path = "/retiring/é" }
+                DestinationRoot = { input.DestinationRoot with Path = "/durable/日本" } }
+        let original = PortableWorkspaceExecutor.HostExportSource.createOriginal unicode |> ok
+        let restored = PortableWorkspaceExecutor.HostExportSource.parseOriginal original.CanonicalBytes |> ok
+        Assert.Equal(unicode, restored.Context)
+        Assert.Equal<byte>(original.CanonicalBytes, restored.CanonicalBytes)
+        for broken in [ string (char 0xD800); string (char 0xDC00) ] do
+            for bad in [
+                { input with SourceRoot = { input.SourceRoot with Path = "/retiring/" + broken } }
+                { input with DestinationRoot = { input.DestinationRoot with Path = "/durable/" + broken } }
+                { input with RetiringRoots = [{ input.RetiringRoots.Head with Path = "/" + broken }]; SourceRoot = { input.SourceRoot with Path = "/" + broken + "/source" } }
+                { input with Reservation = { input.Reservation with Binding = { input.Reservation.Binding with QualifiedImage = "image-" + broken } } }
+                { input with Reservation = { input.Reservation with Binding = { input.Reservation.Binding with AllocationId = "allocation-" + broken } } }
+                { input with Reservation = { input.Reservation with Binding = { input.Reservation.Binding with WorkerId = "worker-" + broken } } }
+            ] do Assert.True(PortableWorkspaceExecutor.HostExportSource.createOriginal bad |> Result.isError)
+        let malformed = original.CanonicalBytes
+        let index = [0..malformed.Length-2] |> List.find (fun n -> malformed[n] = 0xC3uy && malformed[n+1] = 0xA9uy)
+        malformed[index] <- 0xC0uy
+        malformed[index+1] <- 0xAFuy
+        Assert.True(PortableWorkspaceExecutor.HostExportSource.parseOriginal malformed |> Result.isError)
+
+    [<Fact>]
+    member _.``new codec preflights individual and aggregate encoding before allocation and admits exact64KiB boundary``() =
+        use fixture = new HostExecutorFixture()
+        let input = context fixture
+        let huge = String.replicate 65537 "x"
+        let large = String.replicate 23000 "x"
+        for bad in [
+            { input with Reservation = { input.Reservation with Binding = { input.Reservation.Binding with QualifiedImage = huge } } }
+            { input with Reservation = { input.Reservation with Binding = { input.Reservation.Binding with AllocationId = huge } } }
+            { input with Reservation = { input.Reservation with Binding = { input.Reservation.Binding with WorkerId = huge } } }
+            { input with Reservation = { input.Reservation with Binding = { input.Reservation.Binding with QualifiedImage = large; AllocationId = large; WorkerId = large } } }
+        ] do Assert.True(PortableWorkspaceExecutor.HostExportSource.createOriginal bad |> Result.isError)
+        let initial = PortableWorkspaceExecutor.HostExportSource.createOriginal input |> ok
+        // Crossing the BinaryWriter 128-byte string-prefix boundary adds one prefix byte too.
+        let mutable padding = 65536 - initial.CanonicalBytes.Length
+        let padded count =
+            let binding = { input.Reservation.Binding with QualifiedImage = input.Reservation.Binding.QualifiedImage + String.replicate count "x" }
+            { input with Reservation = { input.Reservation with Binding = binding } }
+        let prefixBytes length = if length < 128 then 1 elif length < 16384 then 2 else 3
+        padding <- padding - (prefixBytes (input.Reservation.Binding.QualifiedImage.Length + padding) - prefixBytes input.Reservation.Binding.QualifiedImage.Length)
+        let exact = PortableWorkspaceExecutor.HostExportSource.createOriginal (padded padding) |> ok
+        Assert.Equal(65536, exact.CanonicalBytes.Length)
+        Assert.Equal((padded padding), (PortableWorkspaceExecutor.HostExportSource.parseOriginal exact.CanonicalBytes |> ok).Context)
+        Assert.True(PortableWorkspaceExecutor.HostExportSource.createOriginal (padded (padding+1)) |> Result.isError)

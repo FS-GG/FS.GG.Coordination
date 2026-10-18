@@ -173,13 +173,86 @@ type PortableHostExecutionState =
         Receipt: PortableExecutionReceipt option
     }
 
+/// Fixed-capacity backing for NEW export codecs only; legacy writer grammars stay unchanged.
+type private PortableHostExportBoundedStream(maximum: int) =
+    inherit MemoryStream(maximum)
+    member private this.Check(count: int) =
+        if count < 0 || this.Position > int64 maximum - int64 count then invalidOp "host-export-encoding-size"
+    override this.Write(buffer: byte array, offset: int, count: int) =
+        this.Check count
+        base.Write(buffer, offset, count)
+    override this.Write(buffer: ReadOnlySpan<byte>) =
+        this.Check buffer.Length
+        base.Write buffer
+    override this.WriteByte(value: byte) =
+        this.Check 1
+        base.WriteByte value
+    override _.SetLength(length: int64) =
+        if length < 0L || length > int64 maximum then invalidOp "host-export-encoding-size"
+        base.SetLength length
+
+/// Source data only: native root custody and clock provenance require the owning adapter.
+type PortableHostExportRootPin =
+    { Path: string; Device: uint64; Inode: uint64; OwnerUid: uint64; OwnerGid: uint64 }
+
+type PortableHostExportClock =
+    { HostBootId: Guid; AdmittedMonotonicNanoseconds: uint64
+      ExportDeadlineMonotonicNanoseconds: uint64; LeaseDeadlineMonotonicNanoseconds: uint64 }
+
+type PortableHostExportContextData =
+    { ExportOperationId: Guid; Reservation: PortableHostReservation; ManifestBytes: byte array
+      Clock: PortableHostExportClock; SourceRoot: PortableHostExportRootPin
+      RetiringRoots: PortableHostExportRootPin list; DestinationRoot: PortableHostExportRootPin }
+
+/// Immutable complete original codec. It is not authentication, a runtime profile or a copy grant.
+type PortableHostExportSourceOriginal private
+    (context: PortableHostExportContextData, canonical: byte array, binding: byte array, reservation: byte array, digest: string) =
+    member _.Context = { context with ManifestBytes = Array.copy context.ManifestBytes }
+    member _.CanonicalBytes = Array.copy canonical
+    member _.BindingBytes = Array.copy binding
+    member _.ReservationBytes = Array.copy reservation
+    member _.Digest = digest
+    static member internal Create(context, canonical, binding, reservation, digest) =
+        PortableHostExportSourceOriginal({ context with ManifestBytes = Array.copy context.ManifestBytes },
+            Array.copy canonical, Array.copy binding, Array.copy reservation, digest)
+
+/// A verifier projection, never a caller authentication flag. The verifier must authenticate all fields together.
+type PortableHostExportReceivingEvidence =
+    { Host: PortableHostSupplierEvidence; ContextDigest: string; AttemptDigest: string
+      CopyObservationDigest: string; DestinationRoot: PortableHostExportRootPin
+      Manifest: PortableHostExportManifest; WriterTerminationReceiptDigest: string
+      ReceivingCommitReceiptDigest: string; HostBootId: Guid; ObservedMonotonicNanoseconds: uint64 }
+
+/// Future independently authenticated receiver transport. No production implementation is supplied.
+type IPortableHostExportReceivingVerifier =
+    abstract Authenticate: byte array -> Result<PortableHostExportReceivingEvidence, string>
+
+/// Only validated ingress creates this source observation; no execution/deletion capability exists.
+type PortableAuthenticatedHostExportReceiving private
+    (evidence: PortableHostExportReceivingEvidence, host: PortableAuthenticatedHostEvidence, bytes: byte array) =
+    member _.Evidence = evidence
+    member _.Host = host
+    member _.Bytes = Array.copy bytes
+    static member internal Create(evidence, host, bytes) = PortableAuthenticatedHostExportReceiving(evidence, host, Array.copy bytes)
+
+/// Source-only consumed attempt. Deserializing this never creates an effect or authentication capability.
+type PortableHostExportSourceSnapshot =
+    { Original: PortableHostExportSourceOriginal; Lifecycle: PortableHostLifecycle
+      AttemptBytes: byte array option; CopyObservationBytes: byte array option; ReceivingObservationBytes: byte array option }
+
 type private PortableHostJournalEntry =
     { BindingDigest: string; HostContainerName: string; State: PortableHostExecutionState }
+
+type private PortableHostExportSourceEntry =
+    { Host: PortableHostJournalEntry; Original: PortableHostExportSourceOriginal
+      SupplierIdentity: PortableHostSupplierIdentity; AttemptBytes: byte array option
+      CopyObservationBytes: byte array option; ReceivingObservationBytes: byte array option }
 
 type private PortableJournalEntry =
     | PortableRunning of commandId: Guid * bindingDigest: string * containerName: string
     | PortableSettled of bindingDigest: string * receipt: PortableExecutionReceipt
     | PortableHost of PortableHostJournalEntry
+    | PortableHostExportSource of PortableHostExportSourceEntry
     | PortableSupplierAdmissionDraft of PortableSupplierAdmissionState
 
 type private PortableLaunchDisposition =
@@ -436,10 +509,7 @@ module PortableWorkspaceExecutor =
             EvidenceKnown { Binding = binding; CollectedAt = collectedAt; ReceiptDigest = digest; Value = value }
         | _ -> invalidOp "portable-host-evidence-schema-refused"
 
-    let private writeHost (writer: BinaryWriter) (entry: PortableHostJournalEntry) =
-        writer.Write entry.BindingDigest
-        writer.Write entry.HostContainerName
-        let reservation = entry.State.Reservation
+    let private writeHostReservation (writer: BinaryWriter) (reservation: PortableHostReservation) =
         writeHostBinding writer reservation.Binding
         writeDate writer reservation.AdmittedAt
         writeDate writer reservation.HostLeaseExpiresAt
@@ -449,6 +519,11 @@ module PortableWorkspaceExecutor =
         match reservation.Selection with
         | NoSelectedOutputs -> writer.Write 0uy
         | SelectedOutputs manifest -> writer.Write 1uy; writeManifest writer manifest
+
+    let private writeHost (writer: BinaryWriter) (entry: PortableHostJournalEntry) =
+        writer.Write entry.BindingDigest
+        writer.Write entry.HostContainerName
+        writeHostReservation writer entry.State.Reservation
         let lifecycle = entry.State.Lifecycle
         writeHostEvidence (fun (w: BinaryWriter) (v: int) -> w.Write v) writer lifecycle.WorkloadExit
         writeHostEvidence (fun _ () -> ()) writer lifecycle.Termination
@@ -465,9 +540,7 @@ module PortableWorkspaceExecutor =
         writer.Write entry.State.Receipt.IsSome
         entry.State.Receipt |> Option.iter (writeReceipt writer)
 
-    let private readHost (reader: BinaryReader) =
-        let digest = reader.ReadString()
-        let containerName = reader.ReadString()
+    let private readHostReservation (reader: BinaryReader) : PortableHostReservation =
         let binding = readHostBinding reader
         let admittedAt = readDate reader
         let expiresAt = readDate reader
@@ -479,9 +552,13 @@ module PortableWorkspaceExecutor =
             | 0uy -> NoSelectedOutputs
             | 1uy -> SelectedOutputs(readManifest reader)
             | _ -> invalidOp "portable-host-selection-schema-refused"
-        let reservation =
-            { Binding = binding; AdmittedAt = admittedAt; HostLeaseExpiresAt = expiresAt
-              MaximumRuntime = runtime; ExportReserve = export; CleanupReserve = cleanup; Selection = selection }
+        { Binding = binding; AdmittedAt = admittedAt; HostLeaseExpiresAt = expiresAt
+          MaximumRuntime = runtime; ExportReserve = export; CleanupReserve = cleanup; Selection = selection }
+
+    let private readHost (reader: BinaryReader) =
+        let digest = reader.ReadString()
+        let containerName = reader.ReadString()
+        let reservation = readHostReservation reader
         let exit = readHostEvidence (fun r -> r.ReadInt32()) reader
         let termination = readHostEvidence (fun _ -> ()) reader
         let inner = readHostEvidence (fun _ -> ()) reader
@@ -501,6 +578,286 @@ module PortableWorkspaceExecutor =
                     Lifecycle = { WorkloadExit = exit; Termination = termination; InnerCleanup = inner
                                   Export = exported; OuterRetirement = outer; FirstFailure = failure
                                   ReconciliationConflicts = conflicts } } }
+
+    /// Exact ordinary source context; no wire authentication or production capability.
+    [<RequireQualifiedAccess>]
+    module HostExportSource =
+        [<Literal>]
+        let MaximumContextBytes = 65536
+        [<Literal>]
+        let ContextSchema = "fsgg.portable-host-export-context/1"
+        let private domain = Encoding.ASCII.GetBytes(ContextSchema + "\000")
+        let private strictUtf8 = UTF8Encoding(false, true)
+
+        let private bytes (write: BinaryWriter -> unit) =
+            use stream = new PortableHostExportBoundedStream(MaximumContextBytes)
+            use writer = new BinaryWriter(stream, strictUtf8, true)
+            write writer
+            writer.Flush()
+            stream.ToArray()
+
+        let private rootValid (root: PortableHostExportRootPin) =
+            not (isNull (box root)) && not (isNull root.Path)
+            && root.Path.Length > 1 && root.Path.Length <= 4096 && root.Path.StartsWith("/", StringComparison.Ordinal)
+            && not (root.Path |> Seq.exists (fun character -> character = '\000' || character = '\r' || character = '\n'))
+            && (root.Path.Split('/') |> Array.skip 1 |> Array.forall (fun part -> part <> "" && part <> "." && part <> ".."))
+            && root.Inode > 0UL
+
+        let private nested (parent: string) (child: string) =
+            child = parent || child.StartsWith(parent + "/", StringComparison.Ordinal)
+
+        let private contextValid (context: PortableHostExportContextData) =
+            if isNull (box context) || isNull context.ManifestBytes || isNull (box context.Reservation)
+               || isNull (box context.Clock) || isNull (box context.RetiringRoots) then false
+            else
+                let reservation = context.Reservation
+                let clock = context.Clock
+                let roots = context.RetiringRoots
+                let originalLimit = min reservation.HostLeaseExpiresAt reservation.Binding.Command.Deadline
+                let leaseNanoseconds = bigint ((originalLimit - reservation.AdmittedAt).Ticks) * 100I
+                let cleanupNanoseconds = bigint reservation.CleanupReserve.Ticks * 100I
+                let admitted = bigint clock.AdmittedMonotonicNanoseconds
+                let lease = bigint clock.LeaseDeadlineMonotonicNanoseconds
+                let exporting = bigint clock.ExportDeadlineMonotonicNanoseconds
+                let manifest = PortableSupplierManifest.validateSelection reservation.Selection (Some context.ManifestBytes)
+                context.ExportOperationId <> Guid.Empty && clock.HostBootId <> Guid.Empty
+                && validSha256 reservation.Binding.AllocationReceiptDigest
+                && (match manifest with Ok(Some _) -> true | _ -> false)
+                && Result.isOk (PortableHostAllocation.executionDeadline reservation.AdmittedAt reservation reservation)
+                && leaseNanoseconds > 0I && lease - admitted = leaseNanoseconds
+                && admitted < exporting && exporting <= lease - cleanupNanoseconds
+                && roots.Length > 0 && roots.Length <= 16
+                && rootValid context.SourceRoot && rootValid context.DestinationRoot && List.forall rootValid roots
+                && (roots |> List.pairwise |> List.forall (fun (left,right) -> StringComparer.Ordinal.Compare(left.Path,right.Path) < 0))
+                && (roots |> List.exists (fun root -> nested root.Path context.SourceRoot.Path))
+                && context.SourceRoot.Device <> context.DestinationRoot.Device
+                && (roots |> List.forall (fun root -> root.Device <> context.DestinationRoot.Device
+                                                      && not (nested root.Path context.DestinationRoot.Path)
+                                                      && not (nested context.DestinationRoot.Path root.Path)))
+
+        let private writeRoot (writer: BinaryWriter) (root: PortableHostExportRootPin) =
+            writer.Write root.Path
+            writer.Write root.Device
+            writer.Write root.Inode
+            writer.Write root.OwnerUid
+            writer.Write root.OwnerGid
+
+        let private readRoot (reader: BinaryReader) : PortableHostExportRootPin =
+            { Path = reader.ReadString(); Device = reader.ReadUInt64(); Inode = reader.ReadUInt64()
+              OwnerUid = reader.ReadUInt64(); OwnerGid = reader.ReadUInt64() }
+
+        // Bound each source string BEFORE UTF-8 conversion/allocation, then the exact whole wire size.
+        // Command grammar already bounds all of its textual fields to ASCII <=128 characters.
+        let private encodedSize (context: PortableHostExportContextData) =
+            let text (value: string) =
+                if isNull value || value.Length > MaximumContextBytes then invalidOp "host-export-field-size"
+                let count = strictUtf8.GetByteCount value
+                if count > MaximumContextBytes then invalidOp "host-export-field-size"
+                let mutable prefix, remaining = 1, count
+                while remaining >= 128 do
+                    prefix <- prefix + 1
+                    remaining <- remaining >>> 7
+                prefix + count
+            let binding = context.Reservation.Binding
+            let command = PortableWorkspaceContract.commandBytes binding.Command |> Result.defaultWith invalidOp
+            let fullBinding = text (Convert.ToBase64String command) + text binding.QualifiedImage + text binding.AllocationId
+                              + text binding.WorkerId + text binding.AllocationReceiptDigest
+            let selection = match context.Reservation.Selection with
+                            | NoSelectedOutputs -> 1
+                            | SelectedOutputs value -> 1 + text value.Digest + 16
+            let reservation = fullBinding + 32 + 24 + selection
+            let root (value: PortableHostExportRootPin) = text value.Path + 32
+            text ContextSchema + text (context.ExportOperationId.ToString("D")) + reservation
+            + 4 + context.ManifestBytes.Length + text (context.Clock.HostBootId.ToString("D")) + 24
+            + root context.SourceRoot + 4 + (context.RetiringRoots |> List.sumBy root) + root context.DestinationRoot
+
+        let private encode (context: PortableHostExportContextData) =
+            bytes (fun writer ->
+                writer.Write ContextSchema
+                writer.Write(context.ExportOperationId.ToString("D"))
+                // This is the same full original grammar used by existing host /1 records.
+                writeHostReservation writer context.Reservation
+                writer.Write context.ManifestBytes.Length
+                writer.Write context.ManifestBytes
+                writer.Write(context.Clock.HostBootId.ToString("D"))
+                writer.Write context.Clock.AdmittedMonotonicNanoseconds
+                writer.Write context.Clock.ExportDeadlineMonotonicNanoseconds
+                writer.Write context.Clock.LeaseDeadlineMonotonicNanoseconds
+                writeRoot writer context.SourceRoot
+                writer.Write context.RetiringRoots.Length
+                context.RetiringRoots |> List.iter (writeRoot writer)
+                writeRoot writer context.DestinationRoot)
+
+        let createOriginal (context: PortableHostExportContextData) =
+            try
+                if not (contextValid context) then Error "host-export-original-refused"
+                else
+                    let expectedSize = encodedSize context
+                    if expectedSize > MaximumContextBytes then invalidOp "host-export-context-size"
+                    let frozen = { context with ManifestBytes = Array.copy context.ManifestBytes }
+                    let canonical = encode frozen
+                    if canonical.Length <> expectedSize then invalidOp "host-export-size-accounting"
+                    if canonical.Length > MaximumContextBytes then Error "host-export-context-size"
+                    else
+                        let binding = bytes (fun writer -> writeHostBinding writer frozen.Reservation.Binding)
+                        let reservation = bytes (fun writer -> writeHostReservation writer frozen.Reservation)
+                        Ok(PortableHostExportSourceOriginal.Create(frozen, canonical, binding, reservation,
+                            sha256 (Array.append domain canonical)))
+            with _ -> Error "host-export-original-refused"
+
+        let parseOriginal (input: byte array) =
+            try
+                if isNull input || input.Length = 0 || input.Length > MaximumContextBytes then Error "host-export-context-size"
+                else
+                    let snapshot = Array.copy input
+                    use stream = new MemoryStream(snapshot, false)
+                    use reader = new BinaryReader(stream, strictUtf8, true)
+                    if reader.ReadString() <> ContextSchema then invalidOp "host-export-context-schema"
+                    let operation = Guid.ParseExact(reader.ReadString(), "D")
+                    let reservation = readHostReservation reader
+                    let manifestLength = reader.ReadInt32()
+                    if manifestLength < 1 || manifestLength > PortableSupplierManifest.MaximumBytes then invalidOp "host-export-manifest-size"
+                    let manifest = reader.ReadBytes manifestLength
+                    if manifest.Length <> manifestLength then invalidOp "host-export-manifest-truncated"
+                    let clock =
+                        { HostBootId = Guid.ParseExact(reader.ReadString(), "D"); AdmittedMonotonicNanoseconds = reader.ReadUInt64()
+                          ExportDeadlineMonotonicNanoseconds = reader.ReadUInt64(); LeaseDeadlineMonotonicNanoseconds = reader.ReadUInt64() }
+                    let source = readRoot reader
+                    let count = reader.ReadInt32()
+                    if count < 1 || count > 16 then invalidOp "host-export-root-count"
+                    let roots = [ for _ in 1 .. count -> readRoot reader ]
+                    let destination = readRoot reader
+                    if stream.Position <> stream.Length then invalidOp "host-export-context-trailing"
+                    createOriginal { ExportOperationId = operation; Reservation = reservation; ManifestBytes = manifest
+                                     Clock = clock; SourceRoot = source; RetiringRoots = roots; DestinationRoot = destination }
+                    |> Result.bind (fun original ->
+                        if original.CanonicalBytes = snapshot then Ok original else Error "host-export-context-noncanonical")
+            with _ -> Error "host-export-context-refused"
+
+        /// A data-only clock check. This does not authenticate a boot or clock observer.
+        let originalClockCurrent hostBootId monotonicNanoseconds (original: PortableHostExportSourceOriginal) =
+            let clock = original.Context.Clock
+            hostBootId = clock.HostBootId && monotonicNanoseconds >= clock.AdmittedMonotonicNanoseconds
+            && monotonicNanoseconds < clock.ExportDeadlineMonotonicNanoseconds
+
+
+        /// Source-only authenticated observation ingress. Context and copy digests are joins, not authentication.
+        let authenticateReceiving (verifier: IPortableHostExportReceivingVerifier) (identity: PortableHostSupplierIdentity)
+                                  (original: PortableHostExportSourceOriginal) (attempt: byte array) (copyObservation: byte array)
+                                  (now: DateTimeOffset) (maximumAge: TimeSpan) (input: byte array) =
+            let refuse = Error "host-export-receiving-evidence-refused"
+            if isNull (box verifier) || isNull (box original) || isNull input || input.Length = 0 || input.Length > MaximumContextBytes
+               || isNull attempt || attempt.Length = 0 || attempt.Length > MaximumContextBytes
+               || isNull copyObservation || copyObservation.Length = 0 || copyObservation.Length > MaximumContextBytes then refuse
+            else
+                try
+                    let frozen = Array.copy input
+                    match verifier.Authenticate(Array.copy frozen) with
+                    | Error _ -> refuse
+                    | Ok evidence ->
+                        let hostVerifier = { new IPortableHostSupplierVerifier with member _.Authenticate _ = Ok evidence.Host }
+                        match PortableHostSupplierIngress.authenticate hostVerifier identity original.Context.Reservation now maximumAge frozen with
+                        | Error _ -> refuse
+                        | Ok host ->
+                            let originalContext = original.Context
+                            let matches =
+                                originalClockCurrent evidence.HostBootId evidence.ObservedMonotonicNanoseconds original
+                                && evidence.ContextDigest = original.Digest && evidence.AttemptDigest = sha256 attempt
+                                && evidence.CopyObservationDigest = sha256 copyObservation
+                                && evidence.DestinationRoot = originalContext.DestinationRoot
+                                && originalContext.Reservation.Selection = SelectedOutputs evidence.Manifest
+                                && validSha256 evidence.WriterTerminationReceiptDigest
+                                && validSha256 evidence.ReceivingCommitReceiptDigest
+                            match host.Evidence.Lifecycle.Termination, host.Evidence.Lifecycle.Export with
+                            | EvidenceKnown terminated, EvidenceKnown exported when matches
+                                && terminated.ReceiptDigest = evidence.WriterTerminationReceiptDigest
+                                && exported.ReceiptDigest = evidence.ReceivingCommitReceiptDigest
+                                && exported.Value = DurableManifestReadback evidence.Manifest
+                                && exported.CollectedAt >= terminated.CollectedAt
+                                && exported.CollectedAt < min originalContext.Reservation.HostLeaseExpiresAt originalContext.Reservation.Binding.Command.Deadline
+                                && host.Evidence.Lifecycle.ReconciliationConflicts.IsEmpty ->
+                                    Ok(PortableAuthenticatedHostExportReceiving.Create(evidence, host, frozen))
+                            | _ -> refuse
+                with _ -> refuse
+
+
+    let private exportSourceSchema = "fsgg.portable-host-export-source-journal/1"
+
+    let private validateExportSourceEntry (entry: PortableHostExportSourceEntry) =
+        let strict = UTF8Encoding(false, true)
+        let text (value: string) =
+            if isNull value || value.Length > HostExportSource.MaximumContextBytes
+               || strict.GetByteCount value > HostExportSource.MaximumContextBytes then invalidOp "host-export-field-size"
+        let observation (value: PortableEvidence<PortableHostObservation<'value>>) =
+            match value with
+            | EvidenceMissing reason | EvidenceUnknown reason -> text reason
+            | EvidenceKnown known ->
+                if known.Binding <> entry.Original.Context.Reservation.Binding then invalidOp "host-export-observation-binding"
+                text known.ReceiptDigest
+        text entry.Host.BindingDigest
+        text entry.Host.HostContainerName
+        text entry.SupplierIdentity.Issuer
+        text entry.SupplierIdentity.ContainerId
+        let lifecycle = entry.Host.State.Lifecycle
+        observation lifecycle.WorkloadExit
+        observation lifecycle.Termination
+        observation lifecycle.InnerCleanup
+        observation lifecycle.Export
+        observation lifecycle.OuterRetirement
+        lifecycle.FirstFailure |> Option.iter text
+        if lifecycle.ReconciliationConflicts.Count > 1024 then invalidOp "host-export-conflicts-size"
+        lifecycle.ReconciliationConflicts |> Set.iter text
+
+    let private writeExportSource (writer: BinaryWriter) (entry: PortableHostExportSourceEntry) =
+        let section (value: byte array) =
+            if value.Length > HostExportSource.MaximumContextBytes then invalidOp "host-export-section-size"
+            writer.Write value.Length
+            writer.Write value
+        let optional value =
+            writer.Write(Option.isSome value)
+            value |> Option.iter section
+        section entry.Original.CanonicalBytes
+        writeHost writer entry.Host
+        writer.Write entry.SupplierIdentity.Issuer
+        writer.Write entry.SupplierIdentity.ContainerId
+        writer.Write entry.SupplierIdentity.AllocationDevice
+        writer.Write entry.SupplierIdentity.AllocationInode
+        optional entry.AttemptBytes
+        optional entry.CopyObservationBytes
+        optional entry.ReceivingObservationBytes
+
+    let private readExportSource (reader: BinaryReader) =
+        let section () =
+            let length = reader.ReadInt32()
+            if length < 1 || length > HostExportSource.MaximumContextBytes then invalidOp "host-export-section-size"
+            let value = reader.ReadBytes length
+            if value.Length <> length then invalidOp "host-export-section-truncated"
+            value
+        let optional () = if reader.ReadBoolean() then Some(section ()) else None
+        let original = section () |> HostExportSource.parseOriginal |> Result.defaultWith invalidOp
+        let host = readHost reader
+        let identity = { Issuer = reader.ReadString(); ContainerId = reader.ReadString()
+                         AllocationDevice = reader.ReadUInt64(); AllocationInode = reader.ReadUInt64() }
+        let attempt, copied, received = optional (), optional (), optional ()
+        if host.State.Reservation <> original.Context.Reservation || host.BindingDigest <> original.Digest
+           || host.HostContainerName <> identity.ContainerId || host.State.Receipt.IsSome
+           || String.IsNullOrWhiteSpace identity.Issuer || String.IsNullOrWhiteSpace identity.ContainerId
+           || not (original.Context.RetiringRoots |> List.exists (fun root -> root.Device = identity.AllocationDevice && root.Inode = identity.AllocationInode))
+           || (attempt.IsNone && (copied.IsSome || received.IsSome)) || (copied.IsNone && received.IsSome) then
+            invalidOp "host-export-source-original-conflict"
+        { Host = host; Original = original; SupplierIdentity = identity; AttemptBytes = attempt
+          CopyObservationBytes = copied; ReceivingObservationBytes = received }
+
+    let private exportSourceBytes entry =
+        validateExportSourceEntry entry
+        use stream = new PortableHostExportBoundedStream(PortableWorkspaceContract.maximumDocumentBytes * 4)
+        use writer = new BinaryWriter(stream, UTF8Encoding(false, true), true)
+        writer.Write exportSourceSchema
+        writeExportSource writer entry
+        writer.Flush()
+        let raw = stream.ToArray()
+        if raw.Length > PortableWorkspaceContract.maximumDocumentBytes * 4 then invalidOp "portable-journal-size-refused"
+        raw
 
     // This v2 record is an inert source draft. It cannot become authenticated host execution.
     let private writeSupplier (writer: BinaryWriter) (state: PortableSupplierAdmissionState) =
@@ -997,6 +1354,7 @@ module PortableWorkspaceExecutor =
                     | "fsgg.portable-execution-supplier-journal/4" ->
                         if info.Length > int64 PortableSupplierAdmission.MaximumSupplierBytes then invalidOp "supplier-journal-size"
                         PortableSupplierAdmissionDraft(readSupplier (if schema.EndsWith("/2", StringComparison.Ordinal) then SupplierJournalV2 elif schema.EndsWith("/3", StringComparison.Ordinal) then SupplierJournalV3 else SupplierJournalV4) reader)
+                    | "fsgg.portable-host-export-source-journal/1" -> PortableHostExportSource(readExportSource reader)
                     | "fsgg.portable-execution-host-journal/1" -> PortableHost(readHost reader)
                     | "fsgg.portable-execution-journal/1" ->
                       match reader.ReadByte() with
@@ -1013,11 +1371,21 @@ module PortableWorkspaceExecutor =
                 if stream.Position <> stream.Length then
                     invalidOp "portable-journal-trailing-bytes-refused"
 
+                match entry with
+                | PortableHostExportSource state ->
+                    let expected = exportSourceBytes state
+                    if stream.Length <> int64 expected.Length then invalidOp "host-export-source-noncanonical"
+                    stream.Position <- 0L
+                    let actual = Array.zeroCreate<byte> expected.Length
+                    stream.ReadExactly(actual.AsSpan())
+                    if actual <> expected then invalidOp "host-export-source-noncanonical"
+                | _ -> ()
                 Some entry
 
         let write path entry =
             // /4 checks the complete candidate size before any temporary-file effect.
             let prepared = match entry with
+                           | PortableHostExportSource state -> Some(exportSourceBytes state)
                            | PortableSupplierAdmissionDraft state when state.JournalVersion = SupplierJournalV4 -> Some(supplierSourceBytes state)
                            | _ -> None
             let temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp"
@@ -1029,6 +1397,7 @@ module PortableWorkspaceExecutor =
 
                 use writer = new BinaryWriter(stream, Encoding.UTF8, true)
                 match entry with
+                | PortableHostExportSource _ -> writer.Write(prepared.Value: byte array)
                 | PortableSupplierAdmissionDraft state when state.JournalVersion = SupplierJournalV4 ->
                     writer.Write(prepared.Value: byte array)
                 | PortableSupplierAdmissionDraft state ->
@@ -1049,7 +1418,7 @@ module PortableWorkspaceExecutor =
                       writer.Write 2uy
                       writer.Write binding
                       writeReceipt writer receipt
-                  | PortableHost _ | PortableSupplierAdmissionDraft _ -> invalidOp "portable-journal-state-refused"
+                  | PortableHost _ | PortableSupplierAdmissionDraft _ | PortableHostExportSource _ -> invalidOp "portable-journal-state-refused"
 
                 if prepared.IsSome then failSourceAt BeforeSourceFileFlush
                 writer.Flush()
@@ -1183,6 +1552,33 @@ module PortableWorkspaceExecutor =
                 // Flush+rename is NOT a qualified directory-durable commit. No ACK/runner receipt.
                 "supplier-admission-commit-unknown: directory durability is unavailable")
 
+        member _.BeginExportSource(entry: PortableHostExportSourceEntry) =
+            let command = entry.Host.State.Reservation.Binding.Command
+            locked command.WorkspaceScope command.IdempotencyId (fun path ->
+                if read path |> Option.isSome then invalidOp "host-export-source-existing-original"
+                write path (PortableHostExportSource entry)
+                failSourceAt AfterSourceReplacementBeforeReadback
+                failSourceAt BeforeSourceColdReopen
+                match read path with
+                | Some(PortableHostExportSource restored) when exportSourceBytes restored = exportSourceBytes entry -> ()
+                | _ -> invalidOp "host-export-source-readback")
+
+        member _.ChangeExportSource(original: PortableHostExportSourceOriginal, change) =
+            let command = original.Context.Reservation.Binding.Command
+            locked command.WorkspaceScope command.IdempotencyId (fun path ->
+                match read path with
+                | Some(PortableHostExportSource entry) when entry.Original.CanonicalBytes = original.CanonicalBytes ->
+                    let updated, result = change entry
+                    if updated.Original.CanonicalBytes <> entry.Original.CanonicalBytes
+                       || updated.SupplierIdentity <> entry.SupplierIdentity then invalidOp "host-export-original-change"
+                    write path (PortableHostExportSource updated)
+                    failSourceAt AfterSourceReplacementBeforeReadback
+                    failSourceAt BeforeSourceColdReopen
+                    match read path with
+                    | Some(PortableHostExportSource restored) when exportSourceBytes restored = exportSourceBytes updated -> result
+                    | _ -> invalidOp "host-export-source-readback"
+                | _ -> invalidOp "host-export-source-original-missing")
+
         member _.Reserve(workspaceScope, idempotencyId, commandId, binding, containerName) =
             locked workspaceScope idempotencyId (fun path ->
                 match read path with
@@ -1227,6 +1623,106 @@ module PortableWorkspaceExecutor =
                     write path (PortableSettled(binding, receipt))
                     true
                 | _ -> false)
+
+    /// Inactive original/attempt journal under the SAME owner key and lock. No copy/delete port exists.
+    /// Flush, rename and cold readback do not establish directory durability or recreate authentication.
+    type HostExportSourceJournal private (stateRoot: string, sourceFailure: ControlledSupplierStoreFailurePoint option) =
+        let journal = DurableJournal(stateRoot, sourceFailure)
+        let unknown = EvidenceUnknown "host-export source directory durability unqualified"
+        let snapshot (entry: PortableHostExportSourceEntry) =
+            { Original = entry.Original; Lifecycle = entry.Host.State.Lifecycle
+              AttemptBytes = entry.AttemptBytes |> Option.map Array.copy
+              CopyObservationBytes = entry.CopyObservationBytes |> Option.map Array.copy
+              ReceivingObservationBytes = entry.ReceivingObservationBytes |> Option.map Array.copy }
+        new(stateRoot: string) = HostExportSourceJournal(stateRoot, None)
+        /// Fixed source fault cut only; no alternate store, clock or effect callback.
+        static member CreateControlledFailureTest(stateRoot: string, point: ControlledSupplierStoreFailurePoint) =
+            HostExportSourceJournal(stateRoot, Some point)
+        member _.Begin(original: PortableHostExportSourceOriginal, evidence: PortableAuthenticatedHostEvidence,
+                       now: DateTimeOffset, hostBootId: Guid, monotonicNanoseconds: uint64) =
+            if isNull (box original) || isNull (box evidence) || not (evidence.IsCurrent now)
+               || evidence.Evidence.Reservation <> original.Context.Reservation
+               || evidence.Evidence.Lifecycle <> PortableHostAllocation.emptyLifecycle
+               || not (HostExportSource.originalClockCurrent hostBootId monotonicNanoseconds original)
+               || not (original.Context.RetiringRoots |> List.exists (fun root ->
+                    root.Device = evidence.Evidence.Identity.AllocationDevice && root.Inode = evidence.Evidence.Identity.AllocationInode)) then
+                Error "host-export-source-original-refused"
+            else
+                let entry = { Original = original; SupplierIdentity = evidence.Evidence.Identity
+                              Host = { BindingDigest = original.Digest; HostContainerName = evidence.Evidence.Identity.ContainerId
+                                       State = { Reservation = original.Context.Reservation; Lifecycle = evidence.Evidence.Lifecycle; Receipt = None } }
+                              AttemptBytes = None; CopyObservationBytes = None; ReceivingObservationBytes = None }
+                journal.BeginExportSource entry |> Result.map (fun () -> snapshot entry, unknown)
+        member _.Read(original: PortableHostExportSourceOriginal) =
+            let command = original.Context.Reservation.Binding.Command
+            journal.Read(command.WorkspaceScope, command.IdempotencyId)
+            |> Result.bind (function
+                | Some(PortableHostExportSource entry) when entry.Original.CanonicalBytes = original.CanonicalBytes -> Ok(snapshot entry, unknown)
+                | _ -> Error "host-export-source-original-missing")
+        /// Consumes exactly one intent before returning its bytes. An uncertain write never retries.
+        member _.PrepareAttempt(original: PortableHostExportSourceOriginal, evidence: PortableAuthenticatedHostEvidence,
+                                now: DateTimeOffset, hostBootId: Guid, monotonicNanoseconds: uint64) =
+            if isNull (box evidence) || not (evidence.IsCurrent now)
+               || evidence.Evidence.Reservation <> original.Context.Reservation
+               || not (HostExportSource.originalClockCurrent hostBootId monotonicNanoseconds original) then
+                Error "host-export-source-attempt-refused"
+            else
+                journal.ChangeExportSource(original, fun entry ->
+                    if entry.AttemptBytes.IsSome || entry.SupplierIdentity <> evidence.Evidence.Identity then invalidOp "host-export-attempt-consumed"
+                    let incoming = evidence.Evidence.Lifecycle
+                    match incoming.Export, incoming.OuterRetirement with
+                    | EvidenceKnown _, _ | _, EvidenceKnown _ -> invalidOp "host-export-premature-receiving-evidence"
+                    | _ -> ()
+                    let lifecycle = PortableHostAllocation.reconcileLifecycle entry.Host.State.Lifecycle incoming
+                    match lifecycle.Termination with
+                    | EvidenceKnown _ when lifecycle.ReconciliationConflicts.IsEmpty -> ()
+                    | _ -> invalidOp "host-export-writer-termination-unconfirmed"
+                    let host = { entry.Host with State = { entry.Host.State with Lifecycle = lifecycle } }
+                    validateExportSourceEntry { entry with Host = host }
+                    use memory = new PortableHostExportBoundedStream(HostExportSource.MaximumContextBytes)
+                    use writer = new BinaryWriter(memory, UTF8Encoding(false, true), true)
+                    writer.Write "fsgg.portable-host-export-attempt/1"
+                    writer.Write original.Digest
+                    writer.Write(hostBootId.ToString("D"))
+                    writer.Write monotonicNanoseconds
+                    writeHost writer host
+                    writer.Flush()
+                    let raw = memory.ToArray()
+                    if raw.Length > HostExportSource.MaximumContextBytes then invalidOp "host-export-attempt-size"
+                    let updated = { entry with Host = host; AttemptBytes = Some raw }
+                    updated, (Array.copy raw, unknown))
+        /// Local copy bytes remain opaque observations. They can never become durable Export evidence.
+        member _.ObserveCopy(original: PortableHostExportSourceOriginal, attemptDigest: string, bytes: byte array) =
+            if isNull bytes || bytes.Length = 0 || bytes.Length > HostExportSource.MaximumContextBytes then Error "host-export-copy-size"
+            else
+                let frozen = Array.copy bytes
+                journal.ChangeExportSource(original, fun entry ->
+                    if entry.AttemptBytes |> Option.forall (fun raw -> sha256 raw <> attemptDigest) then invalidOp "host-export-copy-attempt"
+                    match entry.CopyObservationBytes with
+                    | Some previous when previous <> frozen -> invalidOp "host-export-copy-conflict"
+                    | _ -> ()
+                    let updated = { entry with CopyObservationBytes = Some frozen }
+                    updated, (snapshot updated, unknown))
+
+        /// Records authenticated source evidence only. Cold readback remains data and durability Unknown.
+        member _.ObserveReceiving(original: PortableHostExportSourceOriginal, observation: PortableAuthenticatedHostExportReceiving, now: DateTimeOffset) =
+            if isNull (box observation) || not (observation.Host.IsCurrent now) then Error "host-export-receiving-expired"
+            else
+                journal.ChangeExportSource(original, fun entry ->
+                    let evidence = observation.Evidence
+                    if entry.SupplierIdentity <> evidence.Host.Identity || evidence.Host.Reservation <> original.Context.Reservation
+                       || evidence.ContextDigest <> original.Digest
+                       || (entry.AttemptBytes |> Option.forall (fun raw -> sha256 raw <> evidence.AttemptDigest))
+                       || (entry.CopyObservationBytes |> Option.forall (fun raw -> sha256 raw <> evidence.CopyObservationDigest)) then
+                        invalidOp "host-export-receiving-original-conflict"
+                    let raw = observation.Bytes
+                    match entry.ReceivingObservationBytes with
+                    | Some prior when prior <> raw -> invalidOp "host-export-receiving-conflict"
+                    | _ -> ()
+                    let lifecycle = PortableHostAllocation.reconcileLifecycle entry.Host.State.Lifecycle observation.Host.Evidence.Lifecycle
+                    let updated = { entry with ReceivingObservationBytes = Some raw
+                                               Host = { entry.Host with State = { entry.Host.State with Lifecycle = lifecycle } } }
+                    updated, (snapshot updated, unknown))
 
     /// Inactive source journal only: shares the existing key/lock, never a runner or transport.
     /// Every successful write is still durability-Unknown; no production ACK/handoff API exists.
