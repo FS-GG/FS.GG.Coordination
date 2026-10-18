@@ -63,10 +63,13 @@ trailing bytes, additional members and expansion overflow refuse. Decoded
 callbacks remain provisional until the complete reader succeeds.
 
 Combined trace bytes remain the physical artifact. PID/timestamp framing creates
-sorted per-PID projections for the same semantic engine as raw files; per-PID
+per-PID projections in lexical `qualification.trace.<PID>` filename order for
+the same semantic engine as raw files; per-PID
 hashes are explicitly derived projections. Existing fork, chronological cwd,
 dirfd, FD, source-read, continuation and terminal checks remain. Equal-time event
-ordering preserves the original sorted-PID/per-PID serial rule. Complete normal
+ordering preserves the original lexical-filename/per-PID serial rule, including
+different-width PIDs such as 10 and 2. Numeric PID sorting would change equal-time
+lineage decisions; an actual raw/future parser regression retains that case. Complete normal
 traces reject incomplete final lines. Aborted control tails remain in the encoded
 artifact with their count/hash and never establish complete trace or read closure.
 Future namespace metadata access does not authorize reading its gzip/FIFO content.

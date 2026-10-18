@@ -2608,6 +2608,26 @@ class FutureTraceJoinedControls(unittest.TestCase):
                 module.proc_trace_semantics(spec,slot,approved,[(10,bad),(11,child)],future_context=store.context(retirement=True))
 
 
+    def test_actual_raw_future_equal_time_order_uses_legacy_lexical_pid_filenames(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);spec,_,approved=self.proc_fixture(root)
+            spec['role']='qualification';spec['request']['nativeGet']=False
+            bootstrap=root/'bootstrap-parser.json';bootstrap.write_text(json.dumps({'capacity':{'directory':'/sys/fs/cgroup'}}));spec['proofInputs']['bootstrapEvidence']=str(bootstrap)
+            slot=Path(spec['operationRoot']);python=os.path.realpath(os.sys.executable)
+            args=[python,'-I','-S','-B',str(ROOT/'eng/retain-choreo-c2-diagnostics.py'),'command','--proc-measured-controller',str(slot/'input.json'),str(approved),hashlib.sha256(approved.read_bytes()).hexdigest(),'47','normal']
+            parent=('1.0 execve('+json.dumps(python)+', '+json.dumps(args)+', 0x0) = 0\n'
+                    +'2.0 clone(child_stack=NULL, flags=SIGCHLD) = 2\n4.0 +++ exited with 0 +++\n').encode()
+            child=('2.0 execve('+json.dumps(spec['transport']['client'])+', ["curl", "-q"], 0x0) = 0\n3.0 +++ exited with 52 +++\n').encode()
+            (slot/'qualification.trace.10').write_bytes(parent);(slot/'qualification.trace.2').write_bytes(child)
+            original=module.proc_trace_evidence(spec,slot,approved)
+            self.assertTrue(original['complete']);self.assertEqual(10,original['rootPid'])
+            store=module.ProcFutureTraceStore(spec,dict(module.PROC_FUTURE_TRACE_SOURCE_PROFILE));self.addCleanup(store.close)
+            for phase in ('controller','session'):self.produce(store,phase,b'10 1.0 +++ exited with 0 +++\n')
+            combined=b''.join(b'10 '+line+b'\n' for line in parent.splitlines())+b''.join(b'2 '+line+b'\n' for line in child.splitlines())
+            self.produce(store,'normal',combined)
+            future=module.proc_trace_evidence(spec,slot,approved,trace_store=store)
+            self.assertEqual(original,{key:value for key,value in future.items() if key!='representation'})
+
     @contextlib.contextmanager
     def measured_caller(self,root,*,monitor_failure=False,close_failure=False,report_failure=False,unknown=False):
         """Actual measure_once/handshake, only process/kernel adapters are inert."""

@@ -2442,7 +2442,7 @@ class ProcFutureTraceStore:
             self.reader.read(fd,state['row'],consume)
             if tail and not partial:raise ValueError('PROC future trace incomplete normal line')
             if not projections:raise ValueError('PROC future trace missing PID records')
-            return ([(pid,bytes(raw)) for pid,raw in sorted(projections.items())],
+            return ([(pid,bytes(raw)) for pid,raw in sorted(projections.items(),key=lambda row:'qualification.trace.'+str(row[0]))],
                     {'partialTailBytes':len(tail),'partialTailSha256':hashlib.sha256(tail).hexdigest(),
                      'physicalArtifact':str(self.root/(phase+'.gz')),'encodedSha256':state['row']['encodedSha256']})
         finally:self.reader.work_end=original_end
