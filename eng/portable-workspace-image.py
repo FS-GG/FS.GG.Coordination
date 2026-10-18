@@ -76,7 +76,21 @@ def run(
     check: bool = True,
     timeout_seconds: int = 120,
     capture_limit_bytes: int | None = None,
+    execution=None,
+    label: str | None = None,
+    environment: dict[str, str] | None = None,
+    retirement: bool = False,
 ) -> subprocess.CompletedProcess[str]:
+    # Existing profiles retain their historical command semantics. The closed
+    # product profile supplies one enclosing lifetime/capture owner, never a new
+    # timeout per stage or an unbounded-capture path.
+    if execution is not None and capture_limit_bytes is None:
+        raise RuntimeError('enclosing execution requires bounded capture')
+    if execution is None and (label is not None or retirement):
+        raise RuntimeError('execution-only command options require an enclosing owner')
+    if environment is not None and (capture_limit_bytes is None or type(environment) is not dict
+                                    or not all(type(k) is str and type(v) is str for k, v in environment.items())):
+        raise RuntimeError('explicit child environment requires bounded capture and string values')
     if capture_limit_bytes is not None:
         import math
         import selectors
@@ -84,18 +98,36 @@ def run(
         if (type(capture_limit_bytes) is not int or not 0 < capture_limit_bytes <= COMMON_CAPTURE_LIMIT_BYTES
                 or type(timeout_seconds) not in (int, float) or not math.isfinite(timeout_seconds) or timeout_seconds <= 0):
             raise RuntimeError('invalid bounded command capture/deadline')
-        deadline = time.monotonic() + timeout_seconds
+        clock = execution.now if execution is not None else time.monotonic
+        deadline = (execution.command_deadline(timeout_seconds, retirement)
+                    if execution is not None else time.monotonic() + timeout_seconds)
+        slot = execution.command_intent(argv, cwd, environment, label, retirement) if execution is not None else None
+        if execution is not None and clock() >= deadline:
+            error = RuntimeError('command phase deadline exhausted before launch')
+            execution.command_abandoned(slot, error)
+            raise error
         output = {'stdout': bytearray(), 'stderr': bytearray()}
         total = 0
-        process = subprocess.Popen(argv, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        try:
+            process = subprocess.Popen(argv, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                       **({'env': environment} if environment is not None else {}),
+                                       **({'start_new_session': True} if execution is not None else {}))
+        except BaseException as error:
+            if execution is not None:
+                execution.command_launch_unknown(slot, error)
+            raise
         selector = None
         primary = None
         try:
+            if execution is not None:
+                execution.command_started(slot, process)
             selector = selectors.DefaultSelector()
             for name in output:
                 selector.register(getattr(process, name), selectors.EVENT_READ, name)
             while selector.get_map() or process.poll() is None:
-                remaining = deadline - time.monotonic()
+                if execution is not None:
+                    execution.command_tick(slot, process, retirement)
+                remaining = deadline - clock()
                 if remaining <= 0:
                     raise RuntimeError(f'command timed out after {timeout_seconds} seconds')
                 for key, _ in selector.select(min(remaining, 0.1)):
@@ -105,11 +137,17 @@ def run(
                         continue
                     output[key.data].extend(chunk)
                     total += len(chunk)
+                    if execution is not None:
+                        execution.command_output(slot, key.data, chunk)
                     if total > capture_limit_bytes:
                         raise RuntimeError(f'command output exceeded combined {capture_limit_bytes} byte capture limit')
-            status = process.wait(timeout=max(0.001, deadline - time.monotonic()))
+            if execution is not None and clock() >= deadline:
+                raise RuntimeError('command completed outside its original clipped phase deadline')
+            status = process.wait(timeout=max(0.001, deadline - clock()))
             result = subprocess.CompletedProcess(argv, status,
                 output['stdout'].decode('utf-8', errors='replace'), output['stderr'].decode('utf-8', errors='replace'))
+            if execution is not None:
+                execution.command_settled(slot, process, status)
             if check and status:
                 raise RuntimeError(f'command failed with exit {status}')
             return result
@@ -118,7 +156,9 @@ def run(
             error.add_note('bounded command stdout tail: ' + output['stdout'][-4096:].decode('utf-8', errors='replace'))
             error.add_note('bounded command stderr tail: ' + output['stderr'][-4096:].decode('utf-8', errors='replace'))
             try:
-                if process.poll() is None:
+                if execution is not None:
+                    execution.command_stop(slot, process, error)
+                elif process.poll() is None:
                     process.terminate()
                     try:
                         process.wait(timeout=1)
@@ -127,7 +167,8 @@ def run(
                         process.wait(timeout=1)
                 else:
                     process.wait(timeout=1)
-                error.add_note(f'direct child {process.pid} reaped with exit {process.returncode}; descendant/build effects unconfirmed')
+                if execution is None:
+                    error.add_note(f'direct child {process.pid} reaped with exit {process.returncode}; descendant/build effects unconfirmed')
             except BaseException as cleanup_error:
                 error.add_note('direct child termination/reap unconfirmed: ' + str(cleanup_error)[-4096:])
             raise
@@ -137,6 +178,8 @@ def run(
                 try:
                     handle.close()
                 except BaseException as close_error:
+                    if execution is not None:
+                        execution.command_close_failed(slot, close_error)
                     if close_primary is None:
                         close_primary = close_error
                     else:
@@ -498,7 +541,15 @@ def require_layer_cache_absent(stream) -> None:
         raise RuntimeError("OCI archive layer cannot be inspected as a bounded tar stream") from error
 
 
-def inspect_oci_archive(candidate: Path, *, profile: str = 'portable-python', expected_inventory=None, built_image_id=None) -> dict:
+def inspect_oci_archive(candidate: Path, *, profile: str = 'portable-python', expected_inventory=None,
+                        built_image_id=None, product_policy=None, observe=None) -> dict:
+    if profile == 'sc2-headless':
+        if product_policy is None:
+            raise RuntimeError('closed product OCI policy required')
+        return _inspect_common_oci_archive(candidate, None, built_image_id,
+                                           product_policy=product_policy, observe=observe)
+    if product_policy is not None or observe is not None:
+        raise RuntimeError('product OCI options require the closed product profile')
     if profile == 'common-arch':
         return inspect_common_oci_archive(candidate, expected_inventory, built_image_id)
     if profile != 'portable-python':
@@ -591,8 +642,23 @@ def write_manifest(state: Path, manifest: dict, archive_identity: dict, *, image
     return persist_manifest(state, manifest)
 
 
-def append_journal(path: Path, record: dict) -> None:
-    with path.open("ab") as stream:
+def append_journal(path: Path, record: dict, *, expected_identity=None) -> None:
+    # Preserve both existing profile contracts; only the new Linux enclosing
+    # owner supplies an already-created exact journal object.
+    if expected_identity is None:
+        stream = path.open('ab')
+    else:
+        descriptor = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_NOFOLLOW)
+        try:
+            stream = os.fdopen(descriptor, 'ab')
+        except BaseException:
+            os.close(descriptor)
+            raise
+    with stream:
+        if expected_identity is not None:
+            actual = os.fstat(stream.fileno())
+            if (actual.st_dev, actual.st_ino, actual.st_nlink) != (*expected_identity, 1):
+                raise RuntimeError('journal object identity changed')
         os.fchmod(stream.fileno(), 0o600)
         stream.write(canonical_bytes(record))
         stream.flush()
@@ -1310,16 +1376,20 @@ def common_layer_path(value):
     return value
 
 
-def common_virtual_resolve(path, population):
+def common_virtual_resolve(path, population, *, reject_fifo_alias=False):
     """Resolve links inside the image root; never touch host filesystem paths."""
     from posixpath import normpath
     current = path
+    followed_link = False
     for _ in range(40):
         parts = current.split('/')
         replaced = False
         for index in range(len(parts)):
             prefix = '/'.join(parts[:index+1])
             entry = population.get(prefix)
+            if reject_fifo_alias and entry and entry['kind'] == 'fifo':
+                common_require(not followed_link and index == len(parts) - 1,
+                               'product OCI alias/traversal to FIFO refused')
             if entry and entry['kind'] in ('symlink', 'hardlink'):
                 target = entry['target']
                 suffix = '/'.join(parts[index+1:])
@@ -1327,6 +1397,7 @@ def common_virtual_resolve(path, population):
                 joined = '/'.join(p for p in (base, target.lstrip('/'), suffix) if p)
                 current = normpath('/' + joined).lstrip('/')
                 replaced = True
+                followed_link = True
                 break
         if not replaced:
             return current
@@ -1365,8 +1436,66 @@ class CommonTarInfo(tarfile.TarInfo):
         return super()._proc_gnulong(archive)
 
 
-def common_layer_entries(stream, media_type):
+def product_tar_info(headers, json_bytes):
+    """Product metadata guard around stdlib parsing, not another tar parser.
+
+    _proc_member covers nested extension headers on both older and newer
+    Python tarfile implementations; fromtarfile alone does not.
+    """
+    class ProductTarInfo(CommonTarInfo):
+        @classmethod
+        def fromtarfile(cls, archive):
+            return tarfile.TarInfo.fromtarfile.__func__(cls, archive)
+
+        def _proc_member(self, archive):
+            count = getattr(archive, '_common_header_count', 0) + 1
+            common_require(count <= headers, 'product tar header bound exceeded')
+            archive._common_header_count = count
+            common_require(self.type not in (tarfile.XGLTYPE, tarfile.GNUTYPE_SPARSE),
+                           'product global PAX/sparse metadata refused before parsing')
+            extended = self.type in (tarfile.XHDTYPE, tarfile.SOLARIS_XHDTYPE,
+                                     tarfile.GNUTYPE_LONGNAME, tarfile.GNUTYPE_LONGLINK)
+            depth = getattr(archive, '_product_metadata_depth', 0)
+            if extended:
+                common_require(depth < 16, 'product tar nested metadata bound exceeded')
+                archive._product_metadata_depth = depth + 1
+            try:
+                return super()._proc_member(archive)
+            finally:
+                archive._product_metadata_depth = depth
+
+        def _proc_pax(self, archive):
+            common_require(0 <= self.size <= json_bytes, 'product tar extended metadata bound exceeded')
+            return tarfile.TarInfo._proc_pax(self, archive)
+
+        def _proc_gnusparse_00(self, *args):
+            common_require(False, 'product sparse PAX metadata refused before expansion')
+
+        _proc_gnusparse_01 = _proc_gnusparse_00
+        _proc_gnusparse_10 = _proc_gnusparse_00
+    return ProductTarInfo
+
+
+def product_fifo_entry(member, name):
+    """The one SC2-only FIFO metadata tuple; never read FIFO content."""
+    entry = {'kind': 'fifo', 'type': '6', 'bytes': member.size, 'mode': member.mode,
+             'uid': member.uid, 'gid': member.gid,
+             'deviceMajor': member.devmajor, 'deviceMinor': member.devminor}
+    common_require(member.type == tarfile.FIFOTYPE
+                   and re.fullmatch(r'tmp/clr-debug-pipe-[1-9][0-9]{0,19}-[0-9]{1,20}-(in|out)', name)
+                   is not None and member.linkname == '' and not member.issparse()
+                   and all(type(value) is int for key, value in entry.items() if key not in ('kind', 'type'))
+                   and (member.size, member.mode, member.uid, member.gid, member.devmajor, member.devminor)
+                   == (0, 0o700, 0, 0, 0, 0),
+                   'product CLR FIFO metadata refused: ' + name + ' ' + repr(entry))
+    return entry
+
+
+def common_layer_entries(stream, media_type, *, policy=None, observe=None, account_path=None):
     import gzip
+    limits = policy or {'layerBytes': MAX_LAYER_SCAN_BYTES, 'headers': MAX_LAYER_SCAN_MEMBERS,
+                        'hashFiles': False, 'strictTypes': False}
+    tick = observe or (lambda: None)
     common_require(media_type in ('application/vnd.oci.image.layer.v1.tar', 'application/vnd.oci.image.layer.v1.tar+gzip'),
                    'unsupported common OCI layer compression')
     raw = gzip.GzipFile(fileobj=stream) if media_type.endswith('+gzip') else stream
@@ -1376,9 +1505,10 @@ def common_layer_entries(stream, media_type):
             self.digest = hashlib.sha256()
         def read(self, size=-1):
             common_require(size >= 0, 'unbounded layer read refused')
-            value = raw.read(min(size, 1024 * 1024, MAX_LAYER_SCAN_BYTES - self.bytes + 1))
+            tick()
+            value = raw.read(min(size, 1024 * 1024, limits['layerBytes'] - self.bytes + 1))
             self.bytes += len(value)
-            common_require(self.bytes <= MAX_LAYER_SCAN_BYTES, 'common layer uncompressed byte bound exceeded')
+            common_require(self.bytes <= limits['layerBytes'], 'common layer uncompressed byte bound exceeded')
             self.digest.update(value)
             return value
     reader = BoundedHashReader()
@@ -1386,11 +1516,19 @@ def common_layer_entries(stream, media_type):
     members = 0
     seen_names = set()
     try:
-        with tarfile.open(fileobj=reader, mode='r|', tarinfo=CommonTarInfo) as layer:
+        info_type = product_tar_info(limits['headers'], limits['jsonBytes']) if policy is not None else CommonTarInfo
+        with tarfile.open(fileobj=reader, mode='r|', tarinfo=info_type) as layer:
             for member in layer:
+                tick()
+                # Streaming mode still caches TarInfo objects by default. None
+                # are needed after this iteration; retain only bounded semantic
+                # entries, never a second unbounded header population.
+                layer.members.clear()
                 members += 1
-                common_require(members <= MAX_LAYER_SCAN_MEMBERS, 'common layer member bound exceeded')
+                common_require(members <= limits['headers'], 'common layer member bound exceeded')
                 name = common_layer_path(member.name)
+                if account_path is not None:
+                    account_path(name)
                 if not name:
                     common_require(member.isdir(), 'invalid root layer member')
                     continue
@@ -1406,11 +1544,21 @@ def common_layer_entries(stream, media_type):
                         whiteouts.add('/'.join(p for p in (directory, basename[4:]) if p))
                     continue
                 common_require(member.size >= 0, 'invalid common layer member size')
+                if limits['strictTypes']:
+                    common_require(not member.issparse() and
+                                   (member.isfile() or member.isdir() or member.issym() or member.islnk()
+                                    or (limits.get('clrFifoMetadata') is True and member.type == tarfile.FIFOTYPE)),
+                                   'product OCI special/sparse member refused: ' + name +
+                                   ' type=' + repr(member.type) + ' sparse=' + str(member.issparse()))
                 entry = {'kind': 'other'}
-                if member.isdir():
+                if limits.get('clrFifoMetadata') is True and member.type == tarfile.FIFOTYPE:
+                    entry = product_fifo_entry(member, name)
+                elif member.isdir():
                     entry['kind'] = 'directory'
                 elif member.issym() or member.islnk():
                     common_text(member.linkname)
+                    if account_path is not None:
+                        account_path(member.linkname)
                     entry = {'kind': 'symlink' if member.issym() else 'hardlink', 'target': member.linkname}
                 elif member.isfile():
                     entry['kind'] = 'file'
@@ -1423,6 +1571,23 @@ def common_layer_entries(stream, media_type):
                         common_require(content is not None, 'image inventory missing data')
                         entry['inventory'] = content.read(MAX_LOCK_BYTES + 1)
                         common_require(len(entry['inventory']) == member.size, 'image inventory size mismatch')
+                    if limits['hashFiles'] and 'inventory' in entry:
+                        entry['sha256'] = sha256_file_bytes(entry['inventory'])
+                    elif limits['hashFiles']:
+                        content = layer.extractfile(member)
+                        common_require(content is not None, 'product file bytes missing')
+                        value = hashlib.sha256()
+                        count = 0
+                        while True:
+                            tick()
+                            chunk = content.read(1024 * 1024)
+                            if not chunk:
+                                break
+                            count += len(chunk)
+                            common_require(count <= member.size, 'product member framing exceeded')
+                            value.update(chunk)
+                        common_require(count == member.size, 'product member framing incomplete')
+                        entry['sha256'] = value.hexdigest()
                 entries[name] = entry
         # Include all trailing tar blocks in the actual uncompressed diffID.
         while reader.read(1024 * 1024):
@@ -1439,32 +1604,46 @@ def inspect_common_oci_archive(candidate, expected_inventory, built_image_id):
         raise RuntimeError('common-arch: malformed/bounded OCI archive read failed') from error
 
 
-def _inspect_common_oci_archive(candidate, expected_inventory, built_image_id):
-    common_require(isinstance(expected_inventory, bytes), 'externally bound common inventory required')
-    common_inventory(expected_inventory)
-    with tarfile.open(candidate, 'r:', tarinfo=CommonTarInfo) as archive:
+def _inspect_common_oci_archive(candidate, expected_inventory, built_image_id, *, product_policy=None, observe=None):
+    policy = product_policy
+    tick = observe or (lambda: None)
+    archive_bound = policy['archiveBytes'] if policy is not None else MAX_PAYLOAD_BYTES
+    expanded_bound = policy['expandedBytes'] if policy is not None else MAX_PAYLOAD_BYTES
+    header_bound = policy['headers'] if policy is not None else MAX_LAYER_SCAN_MEMBERS
+    image_name = policy['imageName'] if policy is not None else COMMON_IMAGE_NAME
+    if policy is None:
+        common_require(isinstance(expected_inventory, bytes), 'externally bound common inventory required')
+        common_inventory(expected_inventory)
+    else:
+        common_require(candidate.stat().st_size <= archive_bound, 'product OCI archive byte bound exceeded')
+    info_type = product_tar_info(264, policy['jsonBytes']) if policy is not None else CommonTarInfo
+    with tarfile.open(candidate, 'r:', tarinfo=info_type) as archive:
         members = {}
         total = 0
         directory_names = set()
         for member in archive:
+            tick()
+            archive.members.clear()
             if member.isdir():
                 name = member.name.rstrip('/')
                 common_require(name in ('blobs', 'blobs/sha256') and name not in directory_names, 'invalid OCI archive directory')
                 directory_names.add(name)
                 continue
-            common_require(len(members) < MAX_LAYER_SCAN_MEMBERS and member.name not in members, 'OCI archive population bound/duplicate')
+            common_require(len(members) < (132 if policy is not None else MAX_LAYER_SCAN_MEMBERS)
+                           and member.name not in members, 'OCI archive population bound/duplicate')
             common_require(member.isfile() and not member.issym() and not member.islnk(), 'OCI archive member is not regular')
             common_path(member.name)
             common_require(member.size >= 0, 'invalid OCI archive member size')
             total += member.size
-            common_require(total <= MAX_PAYLOAD_BYTES, 'OCI archive byte bound exceeded')
+            common_require(total <= archive_bound, 'OCI archive byte bound exceeded')
             members[member.name] = member
         used = set()
         def read_json(name):
-            common_require(name in members and members[name].size <= MAX_LOCK_BYTES, 'bounded OCI JSON missing/overlarge')
+            json_bound = policy['jsonBytes'] if policy is not None else MAX_LOCK_BYTES
+            common_require(name in members and members[name].size <= json_bound, 'bounded OCI JSON missing/overlarge')
             used.add(name)
             stream = archive.extractfile(members[name])
-            payload = stream.read(MAX_LOCK_BYTES + 1)
+            payload = stream.read(json_bound + 1)
             common_require(len(payload) == members[name].size, 'OCI JSON bytes mismatch')
             return common_json(payload), payload
         layout, _ = read_json('oci-layout')
@@ -1481,7 +1660,7 @@ def _inspect_common_oci_archive(candidate, expected_inventory, built_image_id):
             common_require(len(payload) == value['size'] and sha256_file_bytes(payload) == digest[7:], 'OCI descriptor bytes mismatch')
             return result, payload
         common_require(descriptor.get('mediaType') == 'application/vnd.oci.image.manifest.v1+json'
-                       and descriptor.get('annotations', {}).get('org.opencontainers.image.ref.name') == COMMON_IMAGE_NAME,
+                       and descriptor.get('annotations', {}).get('org.opencontainers.image.ref.name') == image_name,
                        'common OCI descriptor/tag mismatch')
         platform = descriptor.get('platform')
         common_require(platform is None or (platform.get('os'), platform.get('architecture')) == ('linux', 'amd64'), 'OCI descriptor platform mismatch')
@@ -1491,7 +1670,11 @@ def _inspect_common_oci_archive(candidate, expected_inventory, built_image_id):
         common_require(config_descriptor.get('mediaType') == 'application/vnd.oci.image.config.v1+json', 'OCI config media type mismatch')
         config, _ = descriptor_json(config_descriptor)
         common_require(config_descriptor['digest'] == built_image_id, 'common exported config differs from built image ID')
-        verify_common_image({'Os': config.get('os'), 'Architecture': config.get('architecture'), 'Config': config.get('config', {})})
+        observation = {'Os': config.get('os'), 'Architecture': config.get('architecture'), 'Config': config.get('config', {})}
+        if policy is None:
+            verify_common_image(observation)
+        else:
+            policy['verifyConfig'](observation)
         layers = manifest.get('layers')
         rootfs = config.get('rootfs', {})
         common_require(isinstance(layers, list) and 0 < len(layers) <= 128
@@ -1499,7 +1682,22 @@ def _inspect_common_oci_archive(candidate, expected_inventory, built_image_id):
                        and len(rootfs['diff_ids']) == len(layers), 'common OCI layers/diffIDs mismatch')
         population = {}
         children = {}
-        total_headers = total_expanded = 0
+        total_headers = total_expanded = total_fifo_entries = 0
+        path_metadata_bytes = 0
+        def account_path(value):
+            nonlocal path_metadata_bytes
+            path_metadata_bytes += len(value.encode('utf-8'))
+            common_require(path_metadata_bytes <= policy['pathMetadataBytes'], 'product OCI path metadata byte bound exceeded')
+        def resolve(value):
+            return common_virtual_resolve(value, population, reject_fifo_alias=policy is not None)
+        def deletion_parent(value, *, include_self=False):
+            if policy is None:
+                return
+            parts = value.split('/') if value else []
+            for index in range(1, len(parts) + (1 if include_self else 0)):
+                parent = '/'.join(parts[:index])
+                common_require(population.get(parent, {}).get('kind', 'directory') == 'directory',
+                               'product OCI whiteout below non-directory refused')
         def remove_path(path):
             pending = [path]
             while pending:
@@ -1517,36 +1715,59 @@ def _inspect_common_oci_archive(candidate, expected_inventory, built_image_id):
                 existing = population.get(parent)
                 common_require(existing is None or existing['kind'] == 'directory', 'OCI child below non-directory/link refused')
                 if existing is None:
+                    if policy is not None:
+                        account_path(parent)
                     population[parent] = {'kind': 'directory'}
                     children.setdefault(parent.rpartition('/')[0], set()).add(parent)
             population[path] = entry
             children.setdefault(path.rpartition('/')[0], set()).add(path)
-            common_require(len(population) <= MAX_LAYER_SCAN_MEMBERS, 'effective image population bound exceeded')
+            common_require(len(population) <= header_bound, 'effective image population bound exceeded')
         for layer, expected_diff in zip(layers, rootfs['diff_ids']):
+            tick()
             digest = common_text(layer.get('digest'), r'sha256:[0-9a-f]{64}')
             name = 'blobs/sha256/' + digest[7:]
             common_require(name in members and members[name].size == common_size(layer.get('size')), 'OCI layer size mismatch')
             used.add(name)
             stream = archive.extractfile(members[name])
-            common_require(sha256_stream(stream) == digest[7:], 'OCI layer compressed digest mismatch')
-            entries, whiteouts, opaque, actual_diff, headers, expanded = common_layer_entries(archive.extractfile(members[name]), layer.get('mediaType'))
+            actual_hash = hashlib.sha256()
+            while True:
+                tick()
+                block = stream.read(1024 * 1024)
+                if not block:
+                    break
+                actual_hash.update(block)
+            common_require(actual_hash.hexdigest() == digest[7:], 'OCI layer compressed digest mismatch')
+            remaining_policy = (dict(policy, layerBytes=min(policy['layerBytes'], expanded_bound - total_expanded),
+                                     headers=header_bound - total_headers) if policy is not None else None)
+            if remaining_policy is not None:
+                common_require(remaining_policy['layerBytes'] > 0 and remaining_policy['headers'] > 0,
+                               'product cumulative OCI aperture exhausted before layer')
+            entries, whiteouts, opaque, actual_diff, headers, expanded = common_layer_entries(
+                archive.extractfile(members[name]), layer.get('mediaType'),
+                policy=remaining_policy, observe=tick if policy is not None else None,
+                account_path=account_path if policy is not None else None)
             total_headers += headers
             total_expanded += expanded
-            common_require(total_headers <= MAX_LAYER_SCAN_MEMBERS and total_expanded <= MAX_PAYLOAD_BYTES,
+            common_require(total_headers <= header_bound and total_expanded <= expanded_bound,
                            'common OCI total expanded/header bound exceeded')
             common_require(actual_diff == common_text(expected_diff, r'sha256:[0-9a-f]{64}'), 'OCI layer uncompressed diffID mismatch')
             # Apply deletions to prior layers first, independently of tar member order.
             for removed in whiteouts:
+                deletion_parent(removed)
                 remove_path(removed)
             for directory in opaque:
+                deletion_parent(directory, include_self=True)
                 for removed in list(children.get(directory, set())):
                     remove_path(removed)
             # Dict insertion order is tar order. Bind a hardlink to the inode
             # available at its header, before any later same-layer replacement.
             # Forward links refuse rather than guessing an extraction policy.
             for path, entry in entries.items():
+                tick()
+                if entry['kind'] == 'fifo':
+                    total_fifo_entries += 1
                 if entry['kind'] == 'hardlink':
-                    resolved = common_virtual_resolve(common_layer_path(entry['target']), population)
+                    resolved = resolve(common_layer_path(entry['target']))
                     target = population.get(resolved, {})
                     common_require(target.get('kind') == 'file', 'unresolved/forward OCI hardlink')
                     common_require(not (common_private_key_path(path) and target.get('bytes', 0) > 0),
@@ -1556,11 +1777,12 @@ def _inspect_common_oci_archive(candidate, expected_inventory, built_image_id):
                 insert_path(path, entry)
             # Also catch a private-key directory alias to nonzero bytes elsewhere.
             for path in population:
+                tick()
                 if common_private_key_path(path):
-                    pending = [common_virtual_resolve(path, population)]
+                    pending = [resolve(path)]
                     visited = set()
                     while pending:
-                        target_path = common_virtual_resolve(pending.pop(), population)
+                        target_path = resolve(pending.pop())
                         if target_path in visited:
                             continue
                         visited.add(target_path)
@@ -1570,17 +1792,33 @@ def _inspect_common_oci_archive(candidate, expected_inventory, built_image_id):
                         if target.get('kind') == 'directory':
                             pending.extend(children.get(target_path, set()))
         common_require(used == set(members), 'unbound OCI archive payload')
+        effective_fifos = 0
         for path in population:
-            resolved = common_virtual_resolve(path, population)
+            tick()
+            resolved = resolve(path)
             common_require(not common_forbidden_image_path(path) and not common_forbidden_image_path(resolved)
                            and not population[path].get('sensitiveOrigin'), 'effective image contains engine/private key state')
             entry = population[path]
+            if entry['kind'] == 'fifo':
+                effective_fifos += 1
             if entry['kind'] == 'hardlink':
                 common_require(resolved in population and population[resolved]['kind'] == 'file', 'unresolved OCI hardlink')
-        retained = population.get('opt/fsgg/package-inventory.txt', {})
-        common_require(retained.get('kind') == 'file' and retained.get('inventory') == expected_inventory,
-                       'effective common image inventory differs from acquired input')
-        return {'digest': descriptor['digest'], 'configDigest': config_descriptor['digest'], 'manifestBytes': len(manifest_bytes)}
+        if policy is None:
+            retained = population.get('opt/fsgg/package-inventory.txt', {})
+            common_require(retained.get('kind') == 'file' and retained.get('inventory') == expected_inventory,
+                           'effective common image inventory differs from acquired input')
+        else:
+            for path, expected in policy['files'].items():
+                actual = population.get(path, {})
+                common_require(actual.get('kind') == 'file' and actual.get('sha256') == expected,
+                               'effective product source/input bytes mismatch: ' + path)
+        result = {'digest': descriptor['digest'], 'configDigest': config_descriptor['digest'], 'manifestBytes': len(manifest_bytes)}
+        if policy is not None:
+            result.update({'rootfsDiffIds': rootfs['diff_ids'], 'config': config['config'],
+                           'headers': total_headers, 'expandedBytes': total_expanded,
+                           'effectiveMembers': len(population), 'pathMetadataBytes': path_metadata_bytes,
+                           'fifoEntries': total_fifo_entries, 'effectiveFifos': effective_fifos})
+        return result
 
 
 def common_context_inventory(checked):
@@ -1857,7 +2095,9 @@ def main() -> int:
     parser.add_argument("--podman", default="/usr/bin/podman")
     parser.add_argument("--root", required=True)
     parser.add_argument("--runroot", required=True)
-    parser.add_argument("--profile", choices=("portable-python", "common-arch"), default="portable-python")
+    parser.add_argument("--profile", choices=("portable-python", "common-arch", "sc2-headless"), default="portable-python")
+    parser.add_argument("--operation-input")
+    parser.add_argument("--expected-operation-input-sha256")
     parser.add_argument("--engine-allocation")
     parser.add_argument("--engine-scratch-dir")
     parser.add_argument("--image-source")
@@ -1865,6 +2105,18 @@ def main() -> int:
     parser.add_argument("--acquisition-dir")
     parser.add_argument("--expected-acquired-inputs-sha256")
     args = parser.parse_args()
+    if args.profile == 'sc2-headless':
+        if sys.platform != 'linux':
+            parser.error('sc2-headless requires the selected Linux profile')
+        import importlib.util
+        implementation = Path(__file__).with_name('portable_workspace_sc2.py')
+        spec = importlib.util.spec_from_file_location('portable_workspace_sc2', implementation)
+        profile = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(profile)
+        print(json.dumps(profile.main(args, globals()), sort_keys=True, separators=(',', ':')))
+        return 0
+    if args.operation_input is not None or args.expected_operation_input_sha256 is not None:
+        parser.error('operation input requires the closed sc2-headless profile')
     common_flags = (args.image_source, args.expected_image_source_revision,
                     args.acquisition_dir, args.expected_acquired_inputs_sha256, args.engine_allocation, args.engine_scratch_dir)
     if args.profile == "common-arch":

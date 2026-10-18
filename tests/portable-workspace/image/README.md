@@ -32,6 +32,99 @@ container after every attempt; the workflow repeats scoped cleanup even on failu
 remains separate and requires its joined source and durable journal enforcement.
 
 
+## Closed SC2 image profile
+
+`eng/portable-workspace-image.py` also owns `--profile sc2-headless`, implemented
+by its internal `portable_workspace_sc2.py` module. It has no second executable
+entrypoint. This source preparation does not qualify the current native engines,
+image, product journeys, hard containment or cleanup after loss of the caller.
+The historical image and small Buildah pilot are not current qualification.
+
+The externally selected, private `--operation-input` and
+`--expected-operation-input-sha256` bind exact helper/product revisions, trees and
+file hashes, support binaries/libraries, pre-provisioned allocation/configuration
+objects, topology/resource-disposition references, explicit license acceptance and
+one original boot/monotonic interval. That correspondence is not permission to run.
+Actual product base digest, local tag and OCI export name are also restricted
+selection data. The helper permits only a digest-pinned Microsoft .NET SDK base
+which independently matches the hash-bound recipe's two-stage FROM structure;
+the selected output tag is local-store-only. The native builder must report the
+supported1.43.1 family in addition to matching its externally selected file pin.
+Private source revisions, pins and admission evidence stay in the restricted
+selection; public controls use independently committed synthetic repositories.
+Unknown/duplicate fields, other-profile acquisition flags, external Git pointers,
+dirty/ignored output, source substitutions and changed config/support objects
+refuse. The complete tracked product tree is independently checked, including
+Git's assume-unchanged blind spot; context directory tokens fence later entry
+changes. These are observations under single-owner custody, not immutable mounts.
+
+`check-inputs` is inert: fixed local Git reads and file/configuration checks, no
+engine, acquisition, state reservation or build. It returns the actual proposed
+argv and input object identity. `preflight` and `qualify` consume an exclusive
+operation directory and original journal. Reusing an operation refuses. Native
+preflight checks resource disposition, four-CPU affinity, exact separate VFS stores,
+rootless platform and current user/group mapping before dependent work. Buildah
+pulls the pinned base once (retry0), builds the maintained licensed headless target,
+retains the actual image ID and exports once. Only the fully verified, rehashed
+same OCI object can cross to the designated Podman load store. Loaded config,
+rootfs diffIDs and the selected local tag must match. No product container is run.
+
+All commands, sampling helpers and archive/hash loops share the original
+3600-second work aperture plus120-second retirement aperture. Phase limits are
+clipped; none renew the clock. The controller samples scoped RSS and whole logical
+disk every15 seconds, refuses observation gaps above60 seconds, and retains the
+4-CPU affinity/12GiB RSS/80GiB population policy. Affinity and sampled RSS are not
+kernel quotas. Disk accounting includes the allocation's context, build store,
+archive and evidence plus the disjoint designated load store, each path once.
+Both storage filesystems need capacity. Shared-host reservations are charged at
+the shared host; a separately hash-bound topology relation is required before
+omitting those reservations from the inner-cgroup headroom calculation. Unknown
+relevant conflicts refuse. This never settles another operation's reservation.
+
+Finite source bounds are8MiB combined raw command output across the operation,
+32MiB retained metadata,128KiB per record/result,2048 records,512 commands and512
+sampled processes (bounded8192-entry visible process scan). Source checking bounds
+8192 tracked leaves/512MiB total,256MiB per leaf and16384 context entries. OCI
+policy bounds are16GiB archive,32GiB cumulative expanded bytes,16GiB per layer,
+128 layers,200000 layer headers,4096-byte paths and1MiB JSON/extension records.
+Streaming tar readers discard Python's header cache, charge cumulative path and
+derived-parent metadata against64MiB, bound nested extensions to16, and refuse
+global PAX/sparse expansion before stdlib parsing can retain/expand it. No file
+content is retained merely for its hash. These finite object/byte bounds are
+source safeguards; current native output, time and memory fit remain unproved.
+
+The SC2-only virtual layer policy additionally represents a zero-size FIFO only
+at the bounded `tmp/clr-debug-pipe-<number>-<number>-(in|out)` name with exact
+type6/mode0700/UID0/GID0/empty link/device0:0 metadata. Its numeric name is not
+process identity. It is counted but never opened, extracted or assigned a file
+digest. Other special types and different metadata refuse. Ordinary layer
+replacement and whiteout rules retain the new type; aliases to/traversing a FIFO
+and hardlinks targeting one refuse. Required source/input evidence remains an
+effective regular file plus its exact digest. The outer archive admits only
+regular JSON/blob members. Neither earlier profile receives this exception.
+
+Intent precedes Popen. Actual PID/kernel birth, session/group/cgroup, available
+namespace observations, raw partial streams, EOF and wait are distinct records.
+Very short commands can lose namespace links before waitpid reports exit; that
+observation gap is retained, never invented as namespace proof. Kernel birth
+still binds the actual direct child. Failed calls retain their first cause and
+unknown effects; only that retained birth permits direct-child signalling.
+There is no command-line matching, global prune, foreign-container removal or
+new deadline for cleanup. Native container censuses are retained even when they
+refuse; unowned identities remain obligations. A leader exit or an empty named
+container census never proves escaped-descendant settlement. Image assertions,
+retirement gaps and reporting outcomes remain separate in the existing journal
+and canonical manifest route.
+
+Run the inert actual-caller controls with
+`python3 tests/portable-workspace/image/test_sc2_profile.py`. They route real
+check-inputs/preflight/qualify through synthetic repositories and controlled
+native Popen responses while the shared capture drains genuine small Python
+children. They do not invoke Buildah/Podman or establish native readiness.
+The selected linear qualification uses static/actual-caller preflight, not a new
+pipeline model or framework. Existing required repository CI remains required;
+the SC2 native capability and full-image operation need separate admission.
+
 ## Common-Arch source input checking
 
 `eng/portable-workspace-image.py --profile common-arch check-inputs` extends this

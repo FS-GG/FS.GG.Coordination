@@ -7,6 +7,7 @@ on:
       - .github/workflows/portable-workspace-executor-qualification.yml
       - eng/portable-workspace-executor-qualification.fsx
       - eng/portable-workspace-image.py
+      - eng/portable_workspace_sc2.py
       - src/FS.GG.Coordination.Orchestration.Execution/**
       - tests/portable-workspace/executor-qualification/**
       - tests/portable-workspace/image/**
@@ -16,6 +17,7 @@ on:
       - .github/workflows/portable-workspace-executor-qualification.yml
       - eng/portable-workspace-executor-qualification.fsx
       - eng/portable-workspace-image.py
+      - eng/portable_workspace_sc2.py
       - src/FS.GG.Coordination.Orchestration.Execution/**
       - tests/portable-workspace/executor-qualification/**
       - tests/portable-workspace/image/**

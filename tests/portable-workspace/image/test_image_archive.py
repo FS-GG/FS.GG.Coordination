@@ -153,10 +153,15 @@ def main() -> None:
     common = importlib.util.module_from_spec(common_spec)
     common_spec.loader.exec_module(common)
     assert unittest.TextTestRunner().run(unittest.defaultTestLoader.loadTestsFromTestCase(common.CommonArchInputs)).wasSuccessful()
+    sc2_spec = importlib.util.spec_from_file_location("sc2_profile_controls", Path(__file__).with_name("test_sc2_profile.py"))
+    assert sc2_spec and sc2_spec.loader
+    sc2 = importlib.util.module_from_spec(sc2_spec)
+    sc2_spec.loader.exec_module(sc2)
+    assert unittest.TextTestRunner().run(unittest.defaultTestLoader.loadTestsFromTestCase(sc2.Sc2Profile)).wasSuccessful()
     source = (ROOT / "eng/portable-workspace-image.py").read_text()
     containerfile = (ROOT / "tests/portable-workspace/image/Containerfile").read_text()
     inputs = json.loads((ROOT / "tests/portable-workspace/image/inputs.json").read_text())
-    assert hashlib.sha256(source.encode()).hexdigest() == "8baed6e995ab930285d7713987a926284833589190fc69b5c05cca11b9677b4a"
+    assert hashlib.sha256(source.encode()).hexdigest() == "1335644f58b6663f26ab632ae2d0491a16fbcdfaaa2fc2751e4479a8e0def1fa"
     assert_fixed_build_inputs(containerfile, source, inputs)
     IMAGE.require_containerfile_contract(containerfile)
     for changed, expected in (
