@@ -29,6 +29,7 @@ def synthetic_common_archive(path, inventory, *, base=(), final=(), config_updat
     import gzip
     def tar_layer(entries):
         out=io.BytesIO()
+        fifo_devices=[]
         with tarfile.open(fileobj=out,mode='w') as archive:
             for name,kind,value in entries:
                 member=tarfile.TarInfo(name);member.mtime=0
@@ -40,7 +41,22 @@ def synthetic_common_archive(path, inventory, *, base=(), final=(), config_updat
                     member.type=tarfile.LNKTYPE;member.linkname=value;archive.addfile(member)
                 elif kind=='directory':
                     member.type=tarfile.DIRTYPE;archive.addfile(member)
-        return out.getvalue()
+                elif kind=='fifo':
+                    member.type=tarfile.FIFOTYPE;member.mode=0o700
+                    for key,item in (value or {}).items():setattr(member,key,item)
+                    if value and ('devmajor' in value or 'devminor' in value):
+                        # stdlib's writer zeroes device fields for FIFOs. Keep
+                        # the negative a REAL valid-checksum header mutant so
+                        # the production reader sees the requested metadata.
+                        fifo_devices.append((out.tell(),member.devmajor,member.devminor))
+                    archive.addfile(member,io.BytesIO(b'x'*member.size) if member.size else None)
+        payload=bytearray(out.getvalue())
+        for offset,major,minor in fifo_devices:
+            header=bytearray(payload[offset:offset+512]);assert header[156:157]==tarfile.FIFOTYPE
+            header[329:337]=f'{major:07o}\0'.encode();header[337:345]=f'{minor:07o}\0'.encode()
+            header[148:156]=b' '*8;header[148:156]=f'{sum(header):06o}\0 '.encode()
+            payload[offset:offset+512]=header
+        return bytes(payload)
     raw_layers=[tar_layer(base)] if base else []
     raw_layers.append(tar_layer([('opt/fsgg/package-inventory.txt','file',inventory),*final]))
     compressed=[gzip.compress(value,mtime=0) for value in raw_layers]
