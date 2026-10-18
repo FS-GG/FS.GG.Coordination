@@ -390,11 +390,23 @@ def public_command_evidence(scratch, status, end, clock, files_left, entries_lef
         for item in value['additionalFailures']: closed_failure(item)
         for key,shape in {'originalServerBirths':[birth],
                 'originalServerStopRequests':[dict.fromkeys(('pid','start','signal','disposition','at'))],
-                'exitMembers':[birth],'diskSamples':[dict.fromkeys(('objects','logicalBytes','allocatedBytes',
-                    'fixtureSymlinks','linkTraversal','reportReserveBytes','observedAt'))],
+                'exitMembers':[birth],
                 'fdDenialObservations':{'entries':[denial],'omitted':scalar},
                 'endpointObservations':{'entries':[endpoint],'omitted':scalar}}.items():
             closed(value[key],shape)
+        # Retain legacy exact samples; new mutable-temp samples explicitly report
+        # incomplete observations without paths or arbitrary nested metadata.
+        disk_shape=dict.fromkeys(('objects','logicalBytes','allocatedBytes','fixtureSymlinks',
+                                 'linkTraversal','reportReserveBytes','observedAt'))
+        if not isinstance(value['diskSamples'],list): raise ValueError('public-counterparts-disk-list')
+        for sample in value['diskSamples']:
+            shape=disk_shape
+            if isinstance(sample,dict) and 'vanishedEntries' in sample:
+                shape=dict(disk_shape,vanishedEntries=None,byteCoverage=None)
+                if (type(sample['vanishedEntries']) is not int or not 0<=sample['vanishedEntries']<=25000
+                        or sample.get('byteCoverage') != ('observed-only' if sample['vanishedEntries'] else 'sampled')):
+                    raise ValueError('public-counterparts-disk-coverage')
+            closed(sample,shape)
         for key in ('schema','commandExit','commandAccepted','omittedDiskSamples',
                     'cleanupObservedAt','modelCheckingRequired','limitation'): closed(value[key],scalar)
         owner_shape=dict.fromkeys(owner_fields)
@@ -589,13 +601,42 @@ def require(ok, message):
     if not ok: raise RuntimeError(message)
 
 # Same non-following disk inventory as the qualified single-controller route.
-def census(root,deadline,limit=DISK_LIMIT,clock=time.monotonic,*,future_fifos=None):
-    logical=allocated=objects=links=0;stack=[root]
+def census(root,deadline,limit=DISK_LIMIT,clock=time.monotonic,*,future_fifos=None,mutable_tmp=None,expected_tmp_identity=None):
+    # Only the public canonical adapter opts into advisory observation of its
+    # declared temporary subtree. Strict held-namespace callers remain unchanged.
+    logical=allocated=objects=links=vanished=attempts=0;stack=[root]
+    def tmp_identity():
+        require(mutable_tmp.resolve(strict=True)==mutable_tmp,'tmp-scope-retargeted')
+        s=mutable_tmp.lstat()
+        require(stat.S_ISDIR(s.st_mode),'tmp-scope-retargeted')
+        return (s.st_dev,s.st_ino,s.st_mode,s.st_uid,s.st_gid)
+    if mutable_tmp is not None:
+        require(future_fifos is None and mutable_tmp.is_absolute()
+                and mutable_tmp!=root and mutable_tmp.is_relative_to(root),'tmp-scope-join')
+        original_tmp=tmp_identity()
+        require(expected_tmp_identity is None or original_tmp==expected_tmp_identity,
+                'tmp-scope-retargeted')
+    def vanished_tmp(path):
+        # Root/ancestor/pinned-source failures are never converted into samples.
+        if mutable_tmp is None or path==mutable_tmp or not path.is_relative_to(mutable_tmp):return False
+        require(tmp_identity()==original_tmp,'tmp-scope-retargeted')
+        return True
     while stack:
-        require(clock()<deadline,'disk-budget');path=stack.pop();s=path.lstat();objects+=1
+        require(clock()<deadline,'disk-budget');path=stack.pop()
+        if mutable_tmp is not None:
+            attempts+=1;require(attempts<=25000,'disk-population-cap')
+        try:s=path.lstat()
+        except FileNotFoundError:
+            if not vanished_tmp(path):raise
+            vanished+=1;continue
+        objects+=1
         require(objects<=25000,'disk-population-cap');logical+=s.st_size;allocated+=s.st_blocks*512
         require(max(logical,allocated)<=limit,'disk-byte-cap')
-        if stat.S_ISDIR(s.st_mode):stack.extend(path.iterdir())
+        if stat.S_ISDIR(s.st_mode):
+            try:stack.extend(path.iterdir())
+            except FileNotFoundError:
+                if not vanished_tmp(path):raise
+                vanished+=1
         elif stat.S_ISLNK(s.st_mode):links+=1
         elif stat.S_ISFIFO(s.st_mode) and future_fifos is not None:
             expected=future_fifos.get(str(path))
@@ -603,7 +644,11 @@ def census(root,deadline,limit=DISK_LIMIT,clock=time.monotonic,*,future_fifos=No
             require(expected is not None and tuple(expected)==observed and s.st_uid==os.geteuid()
                     and stat.S_IMODE(s.st_mode)==0o600 and s.st_nlink==1,'disk-special-file')
         else:require(stat.S_ISREG(s.st_mode),'disk-special-file')
-    return {'objects':objects,'logicalBytes':logical,'allocatedBytes':allocated,'fixtureSymlinks':links,'linkTraversal':False}
+    result={'objects':objects,'logicalBytes':logical,'allocatedBytes':allocated,'fixtureSymlinks':links,'linkTraversal':False}
+    if mutable_tmp is not None:
+        require(tmp_identity()==original_tmp,'tmp-scope-retargeted')
+        result.update(vanishedEntries=vanished,byteCoverage='observed-only' if vanished else 'sampled')
+    return result
 
 COMMAND_SCHEMA = 'fsgg.canonical.owned-command/1'
 RESULT_SCHEMA = 'fsgg.canonical.command-result/1'
@@ -2227,6 +2272,93 @@ PROC_FUTURE_TRACE_SOURCE_PROFILE = {
     'encoding':'gzip-pid-stream/1','sourceOnly':True,
     'storedBytes':8*1024**2,'expandedBytes':32*1024**2}
 
+# Historical exact bytes already declared in ordinal 4's retained read closure.
+# These are prospective SOURCE inputs, never a refresh of that consumed operation.
+PROC_FUTURE_TRACE_RUNTIME = {
+    'python': {'path':'/usr/bin/python3.14','bytes':14424,'mode':0o755,
+               'sha256':'375532f83be620283ab780c14ca6bcc5907dc379d2b621de0c5d0a112cf5458b'},
+    'libpython': {'path':'/usr/lib/libpython3.14.so.1.0','bytes':6344456,'mode':0o755,
+                  'sha256':'0a5be42fd90e91b9d96010310ac288037a001fe7aa582345cda4e37d15a01500'},
+    'zlibExtension': {'path':'/usr/lib/python3.14/lib-dynload/zlib.cpython-314-x86_64-linux-gnu.so',
+                      'bytes':45624,'mode':0o755,
+                      'sha256':'679b434b38b14fc48cdc7e09fad1110c7f01b0b0257aa9f76afd87e83d09c7b4'},
+    'libz': {'path':'/usr/lib/libz.so.1.3.2','bytes':104464,'mode':0o755,
+             'sha256':'9ba92a0b85dc9b659e8f5e596a69452cec801def6ece0883a8a2c1f032e52397'}}
+PROC_FUTURE_TRACE_PRODUCER_SOURCE = {
+    'archiveSha256':'4bde6246926890dcee824f6e6ac42a06752f47d77e5097d86e3c0d6d4b709fe5',
+    'straceCSha256':'06525ee83048d477139312ad96e750585354e5f9f56663bdde0f959dce5b16dc',
+    'argvContract':'fixed-named-fifo-follower-no-output-pipe/1'}
+
+
+def proc_future_source_closure(spec):
+    """Derive a finite prospective source join, without inspecting the live host.
+
+    Existing descriptor/bootstrap authority and proc_read_drift still own all
+    other pins and each actual per-use observation. A matching digest alone is
+    neither authenticated bootstrap nor qualification/runtime admission.
+    """
+    pins=spec.get('pins');evidence=spec.get('readEvidence')
+    if (type(pins) is not list or len(pins)>512 or type(evidence) is not dict
+            or set(evidence)!={'contract','directories','aliases','absences','runtimeData'}
+            or evidence['contract']!='ordinary-exact-profile-observation-and-drift'
+            or any(type(evidence[key]) is not list for key in ('directories','aliases','absences'))):
+        raise ValueError('PROC future source closure inventory unavailable')
+    by_path={row.get('path'):row for row in pins if type(row) is dict}
+    if len(by_path)!=len(pins):raise ValueError('PROC future source closure duplicate/malformed pin')
+    runtime={key:dict(value) for key,value in PROC_FUTURE_TRACE_RUNTIME.items()}
+    tracer_path=spec.get('transport',{}).get('tracer')
+    runtime['tracer']={'path':tracer_path,'bytes':1706640,'mode':0o500,'sha256':PROC_STRACE_SHA}
+    directories={row.get('path'):row for row in evidence['directories'] if type(row) is dict}
+    if len(directories)!=len(evidence['directories']):raise ValueError('PROC future source closure duplicate directory')
+    for role,pin in runtime.items():
+        if type(pin['path']) is not str or not Path(pin['path']).is_absolute() or by_path.get(pin['path'])!=pin:
+            raise ValueError('PROC future source closure exact '+role+' pin unavailable')
+        if pin['path'] not in spec.get('sourceReadAllowlist',[]):
+            raise ValueError('PROC future source closure undeclared '+role+' read')
+        path=Path(pin['path']);directory=directories.get(str(path.parent),{})
+        identity=directory.get('relevantEntries',{}).get(path.name,{})
+        if (identity.get('kind')!=stat.S_IFREG or identity.get('mode')!=pin['mode']
+                or identity.get('uid')!=(os.geteuid() if role=='tracer' else 0)
+                or type(identity.get('device')) is not int or type(identity.get('inode')) is not int):
+            raise ValueError('PROC future source closure '+role+' directory join unavailable')
+    libz=Path(runtime['libz']['path']);alias=str(libz.parent/'libz.so.1')
+    aliases=[row for row in evidence['aliases'] if type(row) is dict and row.get('path')==alias]
+    if (len(aliases)!=1 or aliases[0].get('resolved')!=str(libz) or aliases[0].get('target')!=libz.name
+            or aliases[0].get('identity',{}).get('kind')!=stat.S_IFLNK):
+        raise ValueError('PROC future source closure libz alias unavailable')
+    entry=directories.get(str(libz.parent),{}).get('relevantEntries',{}).get('libz.so.1')
+    if entry!=aliases[0]['identity']:raise ValueError('PROC future source closure libz alias directory differs')
+    for level in ('x86-64-v2','x86-64-v3','x86-64-v4'):
+        path=str(libz.parent/'glibc-hwcaps'/level/'libz.so.1')
+        rows=[row for row in evidence['absences'] if type(row) is dict and row.get('path')==path]
+        if (len(rows)!=1 or rows[0].get('errno')!='ENOENT' or rows[0].get('ancestor')!=str(libz.parent)
+                or rows[0].get('missingComponents')!=['glibc-hwcaps',level,'libz.so.1']
+                or rows[0].get('ancestorIdentity')!=directories[str(libz.parent)].get('identity')):
+            raise ValueError('PROC future source closure libz negative lookup unavailable')
+    # A bounded canonical snapshot binds the COMPLETE declared inventory, rather
+    # than dropping its other libraries, aliases or negative lookups to these roles.
+    raw=json.dumps(evidence,sort_keys=True,separators=(',',':'),ensure_ascii=True).encode('ascii')
+    if len(raw)>256*1024:raise ValueError('PROC future source closure inventory bound')
+    return {'schema':'fsgg.proc.future-trace-source-closure/1','sourceOnly':True,
+            'profile':dict(PROC_FUTURE_TRACE_SOURCE_PROFILE),'runtime':runtime,
+            'producerSource':dict(PROC_FUTURE_TRACE_PRODUCER_SOURCE),
+            'readEvidenceSha256':hashlib.sha256(raw).hexdigest()}
+
+
+def proc_future_source_closure_digest(closure):
+    raw=json.dumps(closure,sort_keys=True,separators=(',',':'),ensure_ascii=True).encode('ascii')
+    return hashlib.sha256(b'fsgg.proc.future-trace-source-closure/1\0'+raw).hexdigest()
+
+
+def proc_future_source_closure_binding(spec, bootstrap, authority):
+    closure=proc_future_source_closure(spec)
+    if (bootstrap.get('futureTraceSourceClosure')!=closure
+            or authority.get('futureTraceSourceClosure')!=closure
+            or bootstrap.get('readEvidence')!=spec['readEvidence']
+            or any(pin not in bootstrap.get('candidateSupportPins',[]) for pin in closure['runtime'].values())):
+        raise ValueError('PROC future source closure bootstrap/authority differ')
+    return proc_future_source_closure_digest(closure)
+
 
 def proc_future_source_profile(profile):
     if profile is None:return False
@@ -2240,10 +2372,14 @@ def proc_future_source_profile(profile):
 def proc_future_source_context(spec, context):
     """Validate the exact prospective capability, never infer one from a name."""
     if context is None:return None
-    if (type(context) is not dict or set(context)!={'profile','namespaceIdentity','fifos'}
+    if (type(context) is not dict or set(context) not in ({'profile','namespaceIdentity','fifos'},
+            {'profile','namespaceIdentity','fifos','sourceClosureSha256'})
             or not proc_future_source_profile(context['profile'])
             or spec.get('role')!='qualification' or spec.get('request',{}).get('nativeGet') is not False):
         raise ValueError('PROC future trace context outside selected source profile')
+    if ('sourceClosureSha256' in context and context['sourceClosureSha256']!=
+            proc_future_source_closure_digest(proc_future_source_closure(spec))):
+        raise ValueError('PROC future trace source closure context drift')
     root=Path(spec['operationRoot'])/'lossless-traces'
     if proc_directory_identity(root)!=context['namespaceIdentity']:
         raise ValueError('PROC future trace namespace capability drift')
@@ -2271,10 +2407,14 @@ class ProcFutureTraceStore:
     PHASES=('controller','session','normal')
     NAMESPACE='lossless-traces'
 
-    def __init__(self, spec, profile):
+    def __init__(self, spec, profile, *, source_closure_sha=None):
         if (not proc_future_source_profile(profile) or spec.get('role')!='qualification'
                 or spec.get('request',{}).get('nativeGet') is not False):
             raise ValueError('PROC future trace source profile not separately selected')
+        if (source_closure_sha is not None and source_closure_sha!=
+                proc_future_source_closure_digest(proc_future_source_closure(spec))):
+            raise ValueError('PROC future trace source closure store differs')
+        self.source_closure_sha=source_closure_sha
         self.spec=spec;self.root=Path(spec['operationRoot'])/self.NAMESPACE
         self.work_end=spec['workDeadline'];self.total_end=spec['totalDeadline']
         if (not all(type(x) in (int,float) and math.isfinite(x) for x in (self.work_end,self.total_end))
@@ -2327,8 +2467,13 @@ class ProcFutureTraceStore:
 
     def context(self,*,retirement=False):
         self._check(retirement=retirement)
-        return {'profile':dict(PROC_FUTURE_TRACE_SOURCE_PROFILE),'namespaceIdentity':dict(self.root_identity),
+        context={'profile':dict(PROC_FUTURE_TRACE_SOURCE_PROFILE),'namespaceIdentity':dict(self.root_identity),
                 'fifos':{str(self.root/name):row['identity'][:7] for name,row in self.objects.items() if row['fifo']}}
+        if self.source_closure_sha is not None:
+            if self.source_closure_sha!=proc_future_source_closure_digest(proc_future_source_closure(self.spec)):
+                raise ValueError('PROC future trace source closure store drift')
+            context['sourceClosureSha256']=self.source_closure_sha
+        return context
 
     def _add(self,name,*,fifo=False):
         if name in self.objects:raise ValueError('PROC future trace occupied artifact')
@@ -2505,6 +2650,8 @@ def proc_measured_handshake(spec,descriptor,authority_path,authority_sha,fd,phas
         future=proof['futureTrace'];authority_raw=Path(authority_path).read_bytes()
         if (future is None or hashlib.sha256(authority_raw).hexdigest()!=authority_sha
                 or json.loads(authority_raw).get('futureTraceSourceProfile')!=future.get('profile')
+                or future.get('sourceClosureSha256')!=proc_future_source_closure_digest(proc_future_source_closure(spec))
+                or json.loads(authority_raw).get('futureTraceSourceClosure')!=proc_future_source_closure(spec)
                 or proc_future_source_context(spec,future) is None):
             raise ValueError('PROC future trace handshake profile/capability unavailable')
         expected_fields.add('futureTrace')
@@ -2997,6 +3144,9 @@ def proc_qualification_apparatus(spec,descriptor,authority_path,authority_sha,au
     proc_bootstrap_evidence(spec,authority,bootstrap)
     if bootstrap.get('instrumentation')!=PROC_INSTRUMENTATION or authority.get('instrumentation')!=PROC_INSTRUMENTATION:
         raise ValueError('PROC authenticated explicit instrumentation source boundary unavailable')
+    source_closure_sha=None
+    if trace_profile is not None:
+        source_closure_sha=proc_future_source_closure_binding(spec,bootstrap,authority)
     if spec['request']['nativeGet'] and (authority.get('qualificationCredentialReference')!=PROC_QUALIFICATION_CREDENTIAL or authority.get('nativeCollectorApproved') is not True):
         raise ValueError('PROC qualification fixed borrowed read binding not separately admitted')
     admission=json.loads(Path(spec['proofInputs']['admission']).read_bytes())
@@ -3016,7 +3166,7 @@ def proc_qualification_apparatus(spec,descriptor,authority_path,authority_sha,au
            'publicationAuthorized':False,'rootAccepted':False,'qualificationAccepted':False}
     state_raw=proc_private_record(root/'command.json',state,spec['totalDeadline'],expected=(root/'command.json').read_bytes())
     try:
-        if trace_profile is not None:trace_store=ProcFutureTraceStore(spec,trace_profile)
+        if trace_profile is not None:trace_store=ProcFutureTraceStore(spec,trace_profile,source_closure_sha=source_closure_sha)
         for phase in ('controller','session'):
             if trace_store is None:records.append(proc_measure_once(spec,authority,bootstrap,descriptor,authority_path,authority_sha,phase))
             else:records.append(proc_measure_once(spec,authority,bootstrap,descriptor,authority_path,authority_sha,phase,trace_store=trace_store))
@@ -3144,6 +3294,8 @@ def execute_proc_command(descriptor, authority_path, authority_sha, *, measureme
         if future_profile is not None:
             proc_future_source_profile(future_profile)
             if (measurement is None or measurement.get('futureTrace',{}).get('profile')!=future_profile
+                    or measurement.get('futureTrace',{}).get('sourceClosureSha256')!=proc_future_source_closure_digest(proc_future_source_closure(spec))
+                    or authority.get('futureTraceSourceClosure')!=proc_future_source_closure(spec)
                     or proc_future_source_context(spec,measurement.get('futureTrace')) is None):
                 raise ValueError('PROC future encoding has no current CLI/runtime admission')
         if (authority.get('schema')!=COMMAND_SCHEMA or authority.get('descriptorSha256')!=hashlib.sha256(raw).hexdigest()
@@ -3803,7 +3955,7 @@ def execute_command(seconds, log_path, endpoint, argv):
     server_handles = {}; stop_requests = []; disk_samples = []; disk_omitted = 0; last_disk = None
     fd_denials = {'entries':[], 'omitted':0}
     endpoint_observations = {'entries':[], 'omitted':0}
-    mutable_root = Path.cwd()
+    mutable_root = Path.cwd(); original_tmp_identity = None
     def sample_disk(cutoff, force=False):
         nonlocal last_disk, disk_omitted
         now = time.monotonic()
@@ -3811,7 +3963,8 @@ def execute_command(seconds, log_path, endpoint, argv):
             current_tmp = Path(spec['mutableScope']['tmpdir'])
             require(current_tmp.resolve(strict=True) == current_tmp and current_tmp.is_dir(), 'tmp-scope-retargeted')
         if force or last_disk is None or now - last_disk >= .5:
-            observed = census(mutable_root, min(cutoff, now + 1), limit=DISK_LIMIT - 384 * 1024)
+            observed = census(mutable_root, min(cutoff, now + 1), limit=DISK_LIMIT - 384 * 1024,
+                              mutable_tmp=current_tmp,expected_tmp_identity=original_tmp_identity)
             require(observed['objects'] < 25000, 'disk-report-entry-reserve')
             observed['reportReserveBytes'] = 384 * 1024
             observed['observedAt'] = time.monotonic()
@@ -3850,6 +4003,8 @@ def execute_command(seconds, log_path, endpoint, argv):
                 or Path(os.environ.get('TMPDIR','')).absolute() != tmpdir
                 or tmpdir.resolve(strict=True) != tmpdir or not tmpdir.is_dir()):
             raise ValueError('exclusive cwd/log/TMPDIR scope join')
+        tmp_stat=tmpdir.lstat()
+        original_tmp_identity=(tmp_stat.st_dev,tmp_stat.st_ino,tmp_stat.st_mode,tmp_stat.st_uid,tmp_stat.st_gid)
         if not hasattr(os, 'pidfd_open') or not hasattr(signal, 'pidfd_send_signal'):
             raise ValueError('original-server pidfd capability unavailable')
         model = Path(argv[2]); java = Path(os.environ['JAVA_HOME']) / 'bin/java'

@@ -14,12 +14,41 @@ import contextlib
 import io
 import base64
 import resource
+import stat
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[3]
 spec = importlib.util.spec_from_file_location('choreo_diagnostics', ROOT / 'eng/retain-choreo-c2-diagnostics.py')
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
+
+
+def future_source_closure_fixture(spec):
+    """Inert declared metadata only; never reads these selected runtime paths."""
+    runtime=copy.deepcopy(module.PROC_FUTURE_TRACE_RUNTIME)
+    runtime['tracer']={'path':spec['transport']['tracer'],'bytes':1706640,'mode':0o500,'sha256':module.PROC_STRACE_SHA}
+    directories={};pins=[]
+    for index,(role,pin) in enumerate(runtime.items()):
+        path=Path(pin['path']);parent=str(path.parent)
+        directories.setdefault(parent,{'path':parent,'identity':{'device':1,'inode':100+len(directories),'kind':stat.S_IFDIR,'mode':0o755,'uid':0},
+                                       'completePopulation':False,'relevantEntries':{}})
+        directories[parent]['relevantEntries'][path.name]={'device':1,'inode':200+index,'kind':stat.S_IFREG,
+                                                          'mode':pin['mode'],'uid':os.geteuid() if role=='tracer' else 0}
+        pins.append(pin)
+    libz=Path(runtime['libz']['path']);parent=directories[str(libz.parent)]
+    alias_identity={'device':1,'inode':300,'kind':stat.S_IFLNK,'mode':0o777,'uid':0}
+    parent['relevantEntries']['libz.so.1']=alias_identity
+    evidence={'contract':'ordinary-exact-profile-observation-and-drift','directories':list(directories.values()),
+              'aliases':[{'path':str(libz.parent/'libz.so.1'),'target':libz.name,'resolved':str(libz),'identity':alias_identity}],
+              'absences':[{'path':str(libz.parent/'glibc-hwcaps'/level/'libz.so.1'),'ancestor':str(libz.parent),
+                           'ancestorIdentity':copy.deepcopy(parent['identity']),'errno':'ENOENT',
+                           'missingComponents':['glibc-hwcaps',level,'libz.so.1']} for level in ('x86-64-v2','x86-64-v3','x86-64-v4')],
+              'runtimeData':{'contract':'inert-source-fixture-only'}}
+    spec['pins']=pins;spec['readEvidence']=evidence
+    spec['sourceReadAllowlist']=list(dict.fromkeys(spec.get('sourceReadAllowlist',[])+[pin['path'] for pin in pins]))
+    closure=module.proc_future_source_closure(spec)
+    return closure,{'candidateSupportPins':copy.deepcopy(pins),'readEvidence':copy.deepcopy(evidence),
+                    'futureTraceSourceClosure':copy.deepcopy(closure)}
 
 
 class DiagnosticControls(unittest.TestCase):
@@ -2642,14 +2671,20 @@ class FutureTraceJoinedControls(unittest.TestCase):
               'environment':{},'transport':{'tracer':str(tracer),'client':str(root/'unused-client')},
               'sourceReadAllowlist':[python],'readEvidence':{'directories':[],'aliases':[],'absences':[]},
               'proofInputs':{'bootstrapEvidence':str(bootstrap)}}
+        with patch.object(module,'PROC_STRACE_SHA',hashlib.sha256(tracer.read_bytes()).hexdigest()):
+            closure,bootstrap_value=future_source_closure_fixture(spec)
+        bootstrap_value['capacity']={'directory':'/sys/fs/cgroup'}
+        bootstrap.write_text(json.dumps(bootstrap_value))
         descriptor=slot/'input.json';descriptor.write_text(json.dumps(spec));descriptor_sha=hashlib.sha256(descriptor.read_bytes()).hexdigest()
         (slot/'command.json').write_text(json.dumps({'sendState':'measurement-started','descriptorSha256':descriptor_sha}))
         authority={'descriptorSha256':descriptor_sha,'canonicalOperationIdentity':module.proc_directory_identity(slot),
                    'canonicalQualificationLineageIdentity':module.proc_directory_identity(lineage),
                    'canonicalBaseIdentity':module.proc_directory_identity(uid),
-                   'futureTraceSourceProfile':dict(module.PROC_FUTURE_TRACE_SOURCE_PROFILE)}
+                   'futureTraceSourceProfile':dict(module.PROC_FUTURE_TRACE_SOURCE_PROFILE),'futureTraceSourceClosure':closure}
         approved=root/'authority.json';approved.write_text(json.dumps(authority));authority_sha=hashlib.sha256(approved.read_bytes()).hexdigest()
-        store=module.ProcFutureTraceStore(spec,dict(module.PROC_FUTURE_TRACE_SOURCE_PROFILE));self.addCleanup(store.close)
+        with patch.object(module,'PROC_STRACE_SHA',hashlib.sha256(tracer.read_bytes()).hexdigest()):
+            store=module.ProcFutureTraceStore(spec,dict(module.PROC_FUTURE_TRACE_SOURCE_PROFILE),source_closure_sha=module.proc_future_source_closure_digest(closure))
+        self.addCleanup(store.close)
         for phase in ('controller','session'):self.produce(store,phase,b'10 1.0 +++ exited with 0 +++\n')
         app_pid=os.getpid();tracer_pid=2147483000;subject_pid=tracer_pid-1;events=[];holder={};clock=[now]
         namespace={'pid':'pid:[inert]','mnt':'mnt:[inert]','user':'user:[inert]'}
@@ -2776,10 +2811,15 @@ class FutureTraceJoinedControls(unittest.TestCase):
                       'workDeadline':now+10,'totalDeadline':now+20,'sourceReadAllowlist':[python,str(ROOT/'eng/retain-choreo-c2-diagnostics.py')],
                       'readEvidence':{'directories':[],'aliases':[],'absences':[]},
                       'proofInputs':{'bootstrapEvidence':str(bootstrap),'admission':str(admission)}}
+                spec['transport']['tracer']=str(root/'unused-tracer')
+                closure,bootstrap_value=future_source_closure_fixture(spec)
+                bootstrap_value.update(instrumentation=module.PROC_INSTRUMENTATION,capacity={'directory':'/sys/fs/cgroup'})
+                bootstrap.write_text(json.dumps(bootstrap_value))
                 descriptor=slot/'input.json';descriptor.write_text(json.dumps(spec));raw=descriptor.read_bytes()
                 prepared={'sendState':'prepared-no-send','descriptorSha256':hashlib.sha256(raw).hexdigest()}
                 (slot/'command.json').write_text(json.dumps(prepared))
                 authority={'instrumentation':module.PROC_INSTRUMENTATION,'futureTraceSourceProfile':dict(module.PROC_FUTURE_TRACE_SOURCE_PROFILE),
+                           'futureTraceSourceClosure':closure,
                            'canonicalBaseIdentity':module.proc_directory_identity(uid),'canonicalQualificationLineageIdentity':module.proc_directory_identity(lineage),
                            'canonicalOperationIdentity':module.proc_directory_identity(slot)}
                 approved=root/'authority.json';approved.write_text(json.dumps(authority));authority_sha=hashlib.sha256(approved.read_bytes()).hexdigest()
@@ -2846,7 +2886,9 @@ class FutureTraceJoinedControls(unittest.TestCase):
 
     def test_actual_measurement_bounds_keeps_fresh_guards_and_exact_fifo_census(self):
         with tempfile.TemporaryDirectory() as directory:
-            root=Path(directory);spec,store=self.store(root,cpuAffinity=[1],diskBytes=16*1024**2,rssBytes=512*1024**2,
+            # This unit fixture observes its own test-runner allocation. It does
+            # not select or widen the separate native qualification profile.
+            root=Path(directory);spec,store=self.store(root,cpuAffinity=sorted(os.sched_getaffinity(0)),diskBytes=16*1024**2,rssBytes=512*1024**2,
                 transport={'tracer':str(root/'inert-tracer'),'client':str(root/'inert-client')})
             store.begin('controller');app=os.getpid();namespaces={'pid':'pid:[inert]','mnt':'mnt:[inert]','user':'user:[inert]'}
             actor={'pid':app,'ppid':1,'start':1,'uid':os.geteuid(),'namespaces':namespaces,'tgid':app,'rss':4096,'state':'R'}
@@ -2862,6 +2904,10 @@ class FutureTraceJoinedControls(unittest.TestCase):
                 with self.assertRaisesRegex(Exception,'disk-special-file'):
                     module.proc_measurement_bounds(spec,{}, {'capacity':{}},root,{},None,False,trace_store=store)
                 self.assertEqual(2,capacity.call_count);self.assertEqual(2,drift.call_count)
+                with patch.object(module.os,'sched_getaffinity',return_value=set()):
+                    with self.assertRaisesRegex(ValueError,'actual affinity drift'):
+                        module.proc_measurement_bounds(spec,{}, {'capacity':{}},root,{},None,False,trace_store=store)
+                self.assertEqual(3,capacity.call_count);self.assertEqual(3,drift.call_count)
 
     def test_current_cli_refuses_future_profile_before_any_launch_or_namespace(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -2874,5 +2920,220 @@ class FutureTraceJoinedControls(unittest.TestCase):
             self.assertIn('no current CLI/runtime admission',failure.getvalue())
             self.assertEqual(original,(Path(spec['operationRoot'])/'command.json').read_bytes())
             self.assertFalse((Path(spec['operationRoot'])/'lossless-traces').exists())
+
+    def test_actual_future_handshake_refuses_a_downgraded_closure_context(self):
+        with tempfile.TemporaryDirectory() as directory,self.measured_caller(Path(directory)) as fixture:
+            run,spec,store,approved,events=fixture
+            original=store.context
+            def downgraded(**kwargs):
+                context=original(**kwargs);context.pop('sourceClosureSha256');return context
+            with patch.object(store,'context',side_effect=downgraded):
+                with self.assertRaisesRegex(ValueError,'handshake profile/capability unavailable'):run()
+            self.assertEqual(1,events.count('popen-inert'))
+            self.assertFalse((store.root/'manifest.json').exists())
+
+
+class FutureSourceClosureControls(unittest.TestCase):
+    def fixture(self):
+        spec={'transport':{'tracer':'/inert/source-only/tracer'}}
+        closure,bootstrap=future_source_closure_fixture(spec)
+        return spec,closure,bootstrap,{'futureTraceSourceClosure':copy.deepcopy(closure)}
+
+    def test_complete_source_join_and_domain_bound_digest(self):
+        spec,closure,bootstrap,authority=self.fixture()
+        self.assertEqual({'python','libpython','zlibExtension','libz','tracer'},set(closure['runtime']))
+        self.assertTrue(closure['sourceOnly']);self.assertTrue(closure['profile']['sourceOnly'])
+        expected=hashlib.sha256(b'fsgg.proc.future-trace-source-closure/1\0'+json.dumps(closure,sort_keys=True,separators=(',',':'),ensure_ascii=True).encode()).hexdigest()
+        self.assertEqual(expected,module.proc_future_source_closure_binding(spec,bootstrap,authority))
+        # Full inventory changes bind even outside the minimum five codec roles.
+        changed=copy.deepcopy(spec);changed['readEvidence']['runtimeData']['extra']='inert changed observation'
+        self.assertNotEqual(expected,module.proc_future_source_closure_digest(module.proc_future_source_closure(changed)))
+        with self.assertRaisesRegex(ValueError,'bootstrap/authority differ'):
+            module.proc_future_source_closure_binding(changed,bootstrap,authority)
+
+    def test_each_runtime_role_pin_and_directory_join_are_required(self):
+        for role in ('python','libpython','zlibExtension','libz','tracer'):
+            for field in ('bytes','sha256','mode','directory','undeclared'):
+                with self.subTest(role=role,field=field):
+                    spec,closure,_,_=self.fixture();pin=closure['runtime'][role]
+                    row=next(p for p in spec['pins'] if p['path']==pin['path'])
+                    if field=='bytes':row['bytes']+=1
+                    elif field=='sha256':row['sha256']='0'*64
+                    elif field=='mode':row['mode']=0o777
+                    elif field=='undeclared':spec['sourceReadAllowlist'].remove(pin['path'])
+                    else:
+                        parent=next(d for d in spec['readEvidence']['directories'] if d['path']==str(Path(pin['path']).parent))
+                        parent['relevantEntries'].pop(Path(pin['path']).name)
+                    with self.assertRaises(ValueError):module.proc_future_source_closure(spec)
+
+    def test_alias_negative_inventory_and_original_bootstrap_cannot_be_borrowed(self):
+        for mutation in ('alias','alias-entry','negative','ancestor','bootstrap-pin','bootstrap-inventory','missing-manifest','authority-manifest'):
+            with self.subTest(mutation=mutation):
+                spec,closure,bootstrap,authority=self.fixture()
+                if mutation=='alias':spec['readEvidence']['aliases'][0]['target']='different'
+                elif mutation=='alias-entry':
+                    parent=next(d for d in spec['readEvidence']['directories'] if d['path']=='/usr/lib')
+                    parent['relevantEntries']['libz.so.1']=dict(parent['relevantEntries']['libz.so.1'],inode=999)
+                elif mutation=='negative':spec['readEvidence']['absences'].pop()
+                elif mutation=='ancestor':spec['readEvidence']['absences'][0]['ancestorIdentity']['inode']=999
+                elif mutation=='bootstrap-pin':bootstrap['candidateSupportPins'].pop()
+                elif mutation=='bootstrap-inventory':bootstrap['readEvidence']['runtimeData']['changed']=True
+                elif mutation=='missing-manifest':bootstrap.pop('futureTraceSourceClosure')
+                else:authority['futureTraceSourceClosure']['producerSource']['straceCSha256']='0'*64
+                with self.assertRaises(ValueError):module.proc_future_source_closure_binding(spec,bootstrap,authority)
+
+    def test_actual_apparatus_rejects_unjoined_closure_before_store_or_launch(self):
+        spec,closure,bootstrap,authority=self.fixture()
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);path=root/'bootstrap.json'
+            bootstrap['instrumentation']=module.PROC_INSTRUMENTATION
+            bootstrap.pop('futureTraceSourceClosure');path.write_text(json.dumps(bootstrap))
+            spec.update(operationRoot=str(root/'never-created'),proofInputs={'bootstrapEvidence':str(path)})
+            authority.update(instrumentation=module.PROC_INSTRUMENTATION,futureTraceSourceProfile=dict(module.PROC_FUTURE_TRACE_SOURCE_PROFILE))
+            with patch.object(module,'proc_bootstrap_evidence'),patch.object(module,'ProcFutureTraceStore') as store,patch('subprocess.Popen') as launch:
+                with self.assertRaisesRegex(ValueError,'bootstrap/authority differ'):
+                    module.proc_qualification_apparatus(spec,root/'descriptor',root/'authority','a'*64,authority,trace_profile=dict(module.PROC_FUTURE_TRACE_SOURCE_PROFILE))
+                store.assert_not_called();launch.assert_not_called()
+            self.assertFalse((root/'never-created').exists())
+
+    def test_each_context_rechecks_the_join_instead_of_caching_metadata(self):
+        spec,closure,_,_=self.fixture()
+        with tempfile.TemporaryDirectory() as directory:
+            now=time.monotonic()
+            spec.update(role='qualification',request={'nativeGet':False},operationRoot=directory,
+                        workDeadline=now+10,totalDeadline=now+20)
+            digest=module.proc_future_source_closure_digest(closure)
+            store=module.ProcFutureTraceStore(spec,dict(module.PROC_FUTURE_TRACE_SOURCE_PROFILE),source_closure_sha=digest)
+            try:
+                store.begin('controller');context=store.context()
+                self.assertEqual(digest,context['sourceClosureSha256'])
+                self.assertEqual(store.fifo_capabilities(),module.proc_future_source_context(spec,context))
+                crossed=dict(context,sourceClosureSha256='0'*64)
+                with self.assertRaisesRegex(ValueError,'context drift'):module.proc_future_source_context(spec,crossed)
+                spec['readEvidence']['runtimeData']['changed-after-selection']=True
+                with self.assertRaisesRegex(ValueError,'store drift'):store.context()
+                with self.assertRaisesRegex(ValueError,'context drift'):module.proc_future_source_context(spec,context)
+            finally:store.close()
+
+
+class MutableTempCensusControls(unittest.TestCase):
+    """Injected filesystem races and owner receipts; no Quint/JVM/native qualification."""
+    def race(self, root, path, *, error=FileNotFoundError, replace=False):
+        original=Path.lstat;seen=[]
+        def lstat(item,*args,**kwargs):
+            if item==path and not seen:
+                seen.append(str(item))
+                if replace:
+                    (root/'tmp').rename(root/'old-tmp');(root/'tmp').mkdir()
+                raise error('inert transient entry')
+            return original(item,*args,**kwargs)
+        return patch.object(Path,'lstat',lstat),seen
+
+    def test_only_declared_tmp_descendant_enoent_is_observed_incomplete(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);tmp=root/'tmp';tmp.mkdir();entry=tmp/'TLC.tla';entry.write_bytes(b'inert')
+            (root/'retained').write_bytes(b'x'*100)
+            guard,seen=self.race(root,entry)
+            with guard:value=module.census(root,100,clock=lambda:1,mutable_tmp=tmp)
+            self.assertEqual([str(entry)],seen);self.assertEqual(1,value['vanishedEntries'])
+            self.assertEqual('observed-only',value['byteCoverage']);self.assertGreaterEqual(value['logicalBytes'],100)
+            self.assertFalse(value['linkTraversal'])
+            self.assertEqual('sampled',module.census(root,100,clock=lambda:1,mutable_tmp=tmp)['byteCoverage'])
+            self.assertNotIn('byteCoverage',module.census(root,100,clock=lambda:1))
+
+    def test_strict_default_other_paths_permissions_root_identity_and_original_bounds_refuse(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);tmp=root/'tmp';tmp.mkdir();entry=tmp/'TLC.tla';entry.touch()
+            other=root/'pinned';other.touch()
+            for target,kwargs,error in [(entry,{},FileNotFoundError),(other,{'mutable_tmp':tmp},FileNotFoundError),
+                                        (entry,{'mutable_tmp':tmp},PermissionError),(tmp,{'mutable_tmp':tmp},FileNotFoundError)]:
+                with self.subTest(target=target.name,kwargs=kwargs,error=error):
+                    guard,_=self.race(root,target,error=error)
+                    with guard,self.assertRaises(error):module.census(root,100,clock=lambda:1,**kwargs)
+            guard,_=self.race(root,entry,replace=True)
+            with guard,self.assertRaisesRegex(RuntimeError,'tmp-scope-retargeted'):
+                module.census(root,100,clock=lambda:1,mutable_tmp=tmp)
+            for kwargs,message in [({'limit':0},'disk-byte-cap'),({'deadline':1},'disk-budget')]:
+                args=dict(deadline=100,clock=lambda:1,mutable_tmp=tmp);args.update(kwargs)
+                with self.assertRaisesRegex(RuntimeError,message):module.census(root,**args)
+            original_iterdir=Path.iterdir
+            def crowded(path):return iter([entry]*25001) if path==tmp else original_iterdir(path)
+            with patch.object(Path,'iterdir',crowded),self.assertRaisesRegex(RuntimeError,'disk-population-cap'):
+                module.census(root,100,clock=lambda:1,mutable_tmp=tmp)
+            os.mkfifo(tmp/'special')
+            with self.assertRaisesRegex(RuntimeError,'disk-special-file'):module.census(root,100,clock=lambda:1,mutable_tmp=tmp)
+
+    def test_directory_iteration_disappearance_is_explicit_without_hiding_other_failures(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);tmp=root/'tmp';tmp.mkdir();gone=tmp/'subtree';gone.mkdir()
+            original=Path.iterdir
+            def iterdir(path):
+                if path==gone:raise FileNotFoundError('inert directory retirement')
+                return original(path)
+            with patch.object(Path,'iterdir',iterdir):
+                value=module.census(root,100,clock=lambda:1,mutable_tmp=tmp)
+                self.assertEqual(1,value['vanishedEntries']);self.assertEqual('observed-only',value['byteCoverage'])
+                with self.assertRaises(FileNotFoundError):module.census(root,100,clock=lambda:1)
+
+    def test_public_caller_records_vanished_temp_sample_and_retains_unrelated_first_cause(self):
+        import importlib.machinery
+        for mode in ('clean','unrelated','replace-tmp'):
+            unrelated=mode=='unrelated'
+            with self.subTest(mode=mode),tempfile.TemporaryDirectory() as directory:
+                root=Path(directory);tmp=root/'tmp';tmp.mkdir();entry=tmp/'TLC.tla';entry.touch()
+                java=root/'java/bin/java';jar=root/'quint/apalache-dist-0.56.1/apalache/lib/apalache.jar'
+                model=root/'model.qnt';quint=root/'quint-bin'
+                for file in (java,jar,model,quint):file.parent.mkdir(parents=True,exist_ok=True);file.write_text('inert source fixture')
+                log=root/'case.log';calls=[]
+                class Loader:
+                    def create_module(self,spec):return None
+                    def exec_module(self,owner):owner.run=run
+                def run(argv,cwd,env,deadline,cleanup,rss,out,cap,**kwargs):
+                    calls.append('owner');Path(out).write_text('inert model message, not acceptance\n')
+                    kwargs['control']('before-popen',None,None,{})
+                    leader={'pid':101,'pgid':101,'ppid':os.getpid(),'start':1,'state':'R','rss':0}
+                    receipt=dict(argv=argv,leader=leader,ownedPopenPid=101,birthIdentityUnavailable=False,exit=0,
+                        exitObservation=None,firstCause='RuntimeError: original unrelated failure' if unrelated else None,additionalFailures=[],cleanup='observed-empty-group',
+                        residual=[],escapedDescendants=[],escapedResidual=[],custody='observed-owned-group',
+                        sampledPeakAggregateRss=0,accountingScope='inert fixture')
+                    Path(out+'.result.json').write_text(json.dumps(receipt))
+                    if unrelated:raise RuntimeError('original unrelated failure')
+                    if mode=='replace-tmp':tmp.rename(root/'old-tmp');tmp.mkdir()
+                    return receipt
+                owner_spec=importlib.machinery.ModuleSpec('inert_owner',Loader())
+                guard,seen=self.race(root,entry);previous=Path.cwd();errors=io.StringIO()
+                try:
+                    os.chdir(root)
+                    with guard,patch.dict(os.environ,{'TMPDIR':str(tmp),'JAVA_HOME':str(root/'java'),'QUINT_HOME':str(root/'quint')},clear=True),patch.object(module.importlib.util,'spec_from_file_location',return_value=owner_spec),contextlib.redirect_stdout(io.StringIO()),contextlib.redirect_stderr(errors):
+                        status=module.execute_command(10,str(log),19820,[str(quint),'verify',str(model)])
+                finally:os.chdir(previous)
+                if mode=='replace-tmp':
+                    self.assertEqual(1,status);self.assertFalse(Path(str(log)+'.command.json').exists())
+                    failure=json.loads(errors.getvalue());self.assertEqual('tmp-scope-retargeted',failure['firstCause']['message'])
+                    self.assertEqual('observed-empty-group',json.loads(Path(str(log)+'.result.json').read_text())['cleanup'])
+                    continue
+                result=json.loads(Path(str(log)+'.command.json').read_text())
+                self.assertEqual(['owner'],calls);self.assertEqual([str(entry)],seen)
+                self.assertEqual(mode=='clean',result['commandAccepted'],result['firstCause']);self.assertEqual(0 if mode=='clean' else 1,status)
+                self.assertTrue(any(row['vanishedEntries']==1 and row['byteCoverage']=='observed-only' for row in result['diskSamples']))
+                expected='original unrelated failure' if unrelated else 'tmp-scope-retargeted' if mode=='replace-tmp' else None
+                self.assertEqual(expected,result['firstCause']['message'] if expected else result['firstCause'])
+                self.assertEqual('observed-empty-group',result['ownerReceipt']['cleanup'])
+
+    def test_public_closed_projection_accepts_legacy_and_explicit_coverage_only(self):
+        fixture=CommandInterfaceControls()
+        for mode in ('legacy','sampled','incomplete','bad-count','bad-coverage','private-field'):
+            with self.subTest(mode=mode),tempfile.TemporaryDirectory() as directory:
+                root=Path(directory);scratch=root/'scratch';scratch.mkdir()
+                paths,value=fixture.public_counterpart_fixture(scratch)
+                sample=value['diskSamples'][0]
+                if mode!='legacy':sample.update(vanishedEntries=1 if mode=='incomplete' else 0,byteCoverage='observed-only' if mode=='incomplete' else 'sampled')
+                if mode=='bad-count':sample['vanishedEntries']=-1
+                if mode=='bad-coverage':sample['byteCoverage']='complete'
+                if mode=='private-field':sample['arbitraryPrivateData']='NEVER COPY'
+                paths['command'].write_text(json.dumps(value,indent=2)+'\n')
+                result=module.capture(scratch,root/'diagnostics',1,max_output=98304)['publicCommandEvidence']
+                self.assertEqual(mode in ('legacy','sampled','incomplete'),result['complete'],result)
+                self.assertNotIn('NEVER COPY',json.dumps(result))
 
 if __name__ == '__main__': unittest.main()

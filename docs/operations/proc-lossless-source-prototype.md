@@ -112,3 +112,109 @@ current raw bootstrap contract do not implicitly cover new codec imports or the
 new producer grammar. A separate reviewed profile and explicit native admission
 would be necessary; this source delivery supplies neither and creates no fifth
 qualification ordinal.
+
+## Prospective source closure join
+
+The future apparatus now requires a separate `futureTraceSourceClosure` value in
+both the existing bootstrap evidence and its existing authority. It derives the
+expected value from the selected descriptor, after the existing bootstrap and
+instrumentation checks and before creating the trace store or launching a tracer.
+The old raw route does not acquire this requirement. No CLI profile, operation
+ordinal, release flag or instrumentation exception is enabled by this change.
+
+The closed source contract selects the already retained Python3.14 executable,
+libpython3.14, Python zlib extension, libz1.3.2 and selected strace7.2 bytes. Each
+role must equal its declared path/size/mode/SHA256 pin, belong to the declared
+read allowlist, and join the relevant directory entry. The libz alias must join
+its directory entry and resolved target; all three selected glibc-hwcaps misses
+must join their declared ancestor identity. The complete declared read inventory,
+including its other libraries, aliases, misses and runtime-data contract, has a
+canonical digest. This does not replace the existing complete pin/bootstrap join
+or any fresh `proc_read_drift`, capacity, process or lifetime observation.
+
+The manifest and its digest use the domain
+`fsgg.proc.future-trace-source-closure/1`. The digest travels through the held
+store context and existing one-use measured handshake. The measured caller
+refuses a missing or changed closure, including an otherwise valid namespace
+context without the digest. Context observations recompute the declared join;
+the retained digest is not a metadata-observation cache. Lower-level unbound
+codec/parser fixtures remain source controls and cannot satisfy this handshake.
+Matching a manifest is not authentication by itself: its actual use depends on
+the existing descriptor/bootstrap/authority chain and a separately selected
+future runtime contract.
+
+The prospective producer case pins release `strace.c` SHA256
+`06525ee83048d477139312ad96e750585354e5f9f56663bdde0f959dce5b16dc`
+from release archive SHA256
+`4bde6246926890dcee824f6e6ac42a06752f47d77e5097d86e3c0d6d4b709fe5`.
+Its source distinguishes separate per-PID output (`984–988`) from follower PID
+prefixes (`899–919`, `3293`). The fixed named FIFO is opened by the same tracer;
+the output stream gets close-on-exec (`679–690`) and the pre-exec subject closes
+that stream (`1682`, `1870`). Only the existing handshake descriptor is inherited
+from the apparatus. No `|`/`!` output form, `/proc/self/fd` writer inheritance,
+shell or compressor actor is selected. Source reasoning about these paths is
+distinct from observed FIFO/backpressure behavior in an actual tracer.
+
+The original instrumentation boundary remains unchanged. Its explicit changed-
+argv review requirement is not waived: this is the additional prospective source
+case for `-f` and fixed-FIFO output, not a new native admission or a promotion of
+the old boundary. The existing source bound of two possible startup probes,
+unknown unsampled births/lifetimes/peak RSS, pidfd-only apparatus signaling and
+early-abort private holds remain. No complete instrumentation census is claimed.
+
+Focused controls exercise missing or crossed role pins, directory/alias/negative
+joins, borrowed bootstrap inventories, missing/changed manifests, full-inventory
+digest changes, refusal before store/launch, and actual caller/handshake downgrade
+refusal. Existing actual FIFO, shared parser, first-cause, independent cleanup and
+WORK/TOTAL controls remain. These are synthetic source controls without a real
+tracer, client, native provider or credential operation.
+The existing required `compiler-and-tests` runner selects both
+`FutureSourceClosureControls` and `FutureTraceJoinedControls` through its actual
+unittest invocation, with verbose case names for readback. This adds the 24
+focused assertions to the maintained gate; actual hosted results remain a
+separate exact-head observation.
+The measurement-bound unit fixture uses its test runner's observed allocation
+and separately verifies real mismatched-affinity refusal; a fixture's allocation
+does not select or widen the native qualification profile.
+
+The source owner can derive the prospective manifest from the retained historical
+inventory without altering any original. A future supplier must still provide a
+fresh source/profile-bound bootstrap packet through the existing PROC owner/root:
+current selected runtime/source identities, directory/alias/negative inventory,
+actual capacity, original finite clocks and the explicitly reviewed encoding
+contract. Historical inode observations and old clocks are not current evidence.
+Current raw maximum4 remains binding; its four consumed attempts cannot be reused
+or extended by this source manifest. A different qualification admission requires
+the existing root-owned decision before any native launch. Publication, scoped-App
+observation and compatible installed FsQuint adoption retain their own gates.
+
+
+### Canonical public temporary-file census
+
+The first corrected hosted selector passed all 64 source controls at `6dabbf23`.
+A separate canonical base command then refused when TLC retired a temporary
+`TLC.tla` between directory enumeration and `lstat`. Its model's no-error message
+was not command acceptance: the original command retained `FileNotFoundError`,
+exit `-15`, `commandAccepted=false` and observed-empty-group cleanup. The overall
+Bootstrap run failed even though its six required contexts completed successfully.
+
+Only the public canonical command's declared `mutableScope.tmpdir` opts into
+advisory treatment of descendant `ENOENT` during a disk sample. The original TMP
+root's device/inode/mode/owner is fixed before launch and checked for every sample,
+before and after inventory, and when an entry disappears. A vanished descendant
+or subtree increments `vanishedEntries`; `byteCoverage=observed-only` explicitly
+means its unobserved bytes are unknown. A zero count reports `sampled`, never
+continuous or complete peak coverage. Existing observed byte/population/time caps
+still refuse, including a population cap on attempted entries. No unknown bytes
+are assigned zero or claimed to meet a complete disk bound.
+
+The default census remains strict for PROC and held namespaces. A missing TMP
+root, replacement, missing non-TMP entry, permission failure, special file, input
+pin drift or expired original deadline still refuses. The closed optional public
+diagnostic reader admits legacy samples and the explicit two-field extension;
+unknown fields or invalid coverage/counts remain omissions. Controls inject the
+original race through the actual public caller with an inert owner receipt,
+retain an unrelated original first cause and cleanup, and reject TMP replacement.
+They also exercise directory disappearance, strict census, caps, deadlines,
+permissions and exact legacy/new diagnostic projection. They do not rerun TLC,
+trace or qualify a native provider, and do not alter raw maximum4 or CLI refusal.
