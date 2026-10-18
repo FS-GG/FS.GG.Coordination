@@ -33,6 +33,11 @@ SAMPLE_SECONDS = 15
 MAX_SAMPLE_GAP_SECONDS = 60
 RSS_BYTES = 12 * 1024**3
 DISK_BYTES = 80 * 1024**3
+RESERVED_GUEST_BASE = Path('/var/tmp/fsgg-sc2-reserved')
+RESERVED_BACKING_BYTES = 256 * 1024**3
+RESERVED_SETUP_FREE_BYTES = 208 * 1024**3
+RESERVED_FREE_INODES = 1024**2
+RESERVED_BLOCK_BYTES = 4096
 ARCHIVE_BYTES = 16 * 1024**3
 EXPANDED_BYTES = 32 * 1024**3
 LAYER_BYTES = 16 * 1024**3
@@ -255,6 +260,117 @@ def disk_backing(value):
     return filesystem
 
 
+def reserved_mount_rows(payload):
+    """Bounded mountinfo parsing; a directory beneath a missing mount is not R."""
+    require(type(payload) is str and len(payload.encode()) <= MAX_JSON_BYTES,
+            'reserved mount observation exceeds bound')
+    lines = payload.splitlines()
+    require(0 < len(lines) <= 4096, 'reserved mount population exceeds bound')
+    rows, identities = [], set()
+    for line in lines:
+        columns = line.split()
+        require(len(columns) >= 10 and columns.count('-') == 1, 'invalid reserved mount observation')
+        separator = columns.index('-')
+        require(separator >= 6 and len(columns) == separator + 4,
+                'invalid reserved mount fields')
+        mount_id = integer(int(columns[0]))
+        require(mount_id > 0 and mount_id not in identities, 'duplicate reserved mount identity')
+        identities.add(mount_id)
+        def decode(value):
+            return re.sub(r'\\([0-7]{3})', lambda match: chr(int(match[1], 8)), value)
+        rows.append({'mountId': mount_id, 'device': text(columns[2], r'[0-9]+:[0-9]+'),
+                     'root': decode(columns[3]), 'mountPoint': decode(columns[4]),
+                     'filesystem': columns[separator + 1],
+                     'options': sorted(columns[5].split(',')),
+                     'superOptions': sorted(columns[separator + 3].split(','))})
+    return rows
+
+
+def reserved_mount_observation(root):
+    with Path('/proc/self/mountinfo').open('rb') as stream:
+        payload = stream.read(MAX_JSON_BYTES + 1)
+    require(len(payload) <= MAX_JSON_BYTES, 'reserved mount observation exceeds bound')
+    rows = reserved_mount_rows(payload.decode('utf-8', errors='strict'))
+    selected = [row for row in rows if row['mountPoint'] == str(root)]
+    require(len(selected) == 1, 'reserved filesystem mount absent or stacked')
+    require(not any(root in Path(row['mountPoint']).parents for row in rows),
+            'nested mount escapes reserved filesystem')
+    return {**selected[0], 'namespaceInode': Path('/proc/self/ns/mnt').stat().st_ino}
+
+
+def reserved_storage(selection, directories):
+    """Check guest correspondence to externally accepted host custody evidence.
+
+    Host backing/UUID/retention fields are selected evidence, not authority
+    authenticated by this process. No host path or engine is opened here.
+    """
+    reference = selection['admission'].get('storageReservation')
+    if reference is None:
+        return None
+    payload, _ = regular_bytes(path(reference['path']), MAX_JSON_BYTES, reference['sha256'])
+    receipt = strict_json(payload)
+    fields(receipt, 'schema operationId backend root rootIdentity mount filesystem backing custody')
+    require(receipt['schema'] == 'fsgg.sc2.reserved-storage/1'
+            and receipt['backend'] == 'preallocated-hdd-sibling-ext4', 'unsupported storage reservation')
+    require(receipt['operationId'] == selection['operationId'], 'storage reservation operation mismatch')
+    text(receipt['operationId'], r'[0-9a-f]{32}')
+    root = path(receipt['root'])
+    require(root == RESERVED_GUEST_BASE / receipt['operationId'], 'reserved filesystem root outside closed profile')
+    fields(receipt['rootIdentity'], 'device inode mode uid')
+    for value in receipt['rootIdentity'].values():
+        integer(value)
+    require(directory_pin(root) == receipt['rootIdentity'], 'reserved root identity changed')
+    require(path(selection['allocation']['path']) == root / 'allocation'
+            and path(selection['load']['root']) == root / 'current-store',
+            'reserved storage requires closed allocation/current-store layout')
+    for value in directories:
+        require(root in value.parents and value.stat().st_dev == root.stat().st_dev,
+                'mutable path outside reserved filesystem')
+    mount = receipt['mount']
+    fields(mount, 'namespaceInode mountId device root filesystem options superOptions')
+    for key in ('namespaceInode', 'mountId'):
+        require(integer(mount[key]) > 0, 'reserved mount identity missing')
+    require(mount['device'] == f'{os.major(root.stat().st_dev)}:{os.minor(root.stat().st_dev)}'
+            and mount['root'] == '/' and mount['filesystem'] == 'ext4',
+            'reserved filesystem identity/type/root mismatch')
+    for key in ('options', 'superOptions'):
+        flags = mount[key]
+        require(type(flags) is list and 0 < len(flags) <= 32
+                and all(type(flag) is str and re.fullmatch(r'[a-zA-Z0-9_=.-]{1,80}', flag) for flag in flags)
+                and flags == sorted(set(flags)) and 'rw' in flags
+                and not any(flag == 'ro' or flag.split('=', 1)[0] == 'discard' for flag in flags),
+                'reserved mount flags unsafe or noncanonical')
+    observed = reserved_mount_observation(root)
+    require(observed == {**mount, 'mountPoint': str(root)}, 'reserved mount correspondence changed')
+    filesystem, backing, custody = [receipt[key] for key in ('filesystem', 'backing', 'custody')]
+    fields(filesystem, 'uuid totalBytes totalInodes minimumFreeInodes')
+    text(filesystem['uuid'], r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}')
+    for key in ('totalBytes', 'totalInodes', 'minimumFreeInodes'):
+        require(integer(filesystem[key]) > 0, 'finite reserved filesystem budget missing')
+    require(filesystem['minimumFreeInodes'] == RESERVED_FREE_INODES <= filesystem['totalInodes'],
+            'reserved inode floor differs from fixed profile')
+    fields(backing, 'path device inode ownerUid bytes allocatedBytes evidenceSha256')
+    text(backing['path'])  # Host path is evidence, never interpreted in the guest namespace.
+    for key in ('device', 'inode', 'ownerUid', 'bytes', 'allocatedBytes'):
+        integer(backing[key])
+    require(backing['inode'] > 0 and backing['ownerUid'] == 0
+            and backing['bytes'] == RESERVED_BACKING_BYTES and backing['allocatedBytes'] >= backing['bytes']
+            and backing['bytes'] >= filesystem['totalBytes'] >= RESERVED_SETUP_FREE_BYTES,
+            'reserved backing allocation/capacity insufficient')
+    text(backing['evidenceSha256'], r'[0-9a-f]{64}')
+    fields(custody, 'owner retention reclaim evidenceSha256')
+    text(custody['owner']); text(custody['evidenceSha256'], r'[0-9a-f]{64}')
+    require(custody['retention'] == 'until-explicit-disposition' and custody['reclaim'] == 'prohibited',
+            'reserved backing custody does not retain allocation')
+    capacity = os.statvfs(root)
+    require(capacity.f_frsize == RESERVED_BLOCK_BYTES
+            and capacity.f_blocks * capacity.f_frsize == filesystem['totalBytes']
+            and capacity.f_files == filesystem['totalInodes'], 'reserved filesystem totals changed')
+    require(capacity.f_bavail * capacity.f_frsize >= DISK_BYTES, 'reserved filesystem free byte floor not met')
+    require(capacity.f_favail >= filesystem['minimumFreeInodes'], 'reserved filesystem free inode floor not met')
+    return receipt
+
+
 def source_identity(api, root, revision, tree, command=None, *, complete=False, observe=None):
     require((root / '.git').is_dir() and not (root / '.git').is_symlink(),
             'source requires internal Git directory, not a worktree pointer')
@@ -342,7 +458,8 @@ def selected_input(args):
     require(object_id['mode'] == 0o600, 'private operation input mode0600 required')
     selection = strict_json(payload)
     fields(selection, 'operationId helper product allocation build load support clock admission resourceDomain licenseAccepted')
-    fields(selection['resourceDomain'], 'relation topologySha256')
+    reserved = type(selection['admission']) is dict and 'storageReservation' in selection['admission']
+    fields(selection['resourceDomain'], 'relation topologySha256' + (' storageReservationSha256' if reserved else ''))
     require(selection['resourceDomain']['relation'] == 'shared-host-reservations-outside-enclosing-cgroup',
             'unsupported resource-domain relation')
     text(selection['operationId'], r'[a-z0-9][a-z0-9-]{0,63}')
@@ -369,9 +486,12 @@ def selected_input(args):
     require(work == start + WORK_SECONDS and total == work + RETIRE_SECONDS, 'original lifetime mismatch')
     # These references bind the root-selected determining evidence. They cannot
     # assert authority or replace fresh adjacent native admission observations.
-    fields(selection['admission'], 'topology resourceDisposition')
+    fields(selection['admission'], 'topology resourceDisposition' + (' storageReservation' if reserved else ''))
     require(selection['resourceDomain']['topologySha256'] == selection['admission']['topology']['sha256'],
             'resource-domain topology correspondence missing')
+    if reserved:
+        require(selection['resourceDomain']['storageReservationSha256'] ==
+                selection['admission']['storageReservation']['sha256'], 'storage reservation correspondence missing')
     for reference in selection['admission'].values():
         fields(reference, 'path sha256')
         regular_bytes(path(reference['path']), MAX_JSON_BYTES, text(reference['sha256'], r'[0-9a-f]{64}'))
@@ -497,7 +617,12 @@ def check_inputs(args, api, *, command=None, skip_source_commands=False):
     load_root, load_run = path(load['root']), path(load['runroot'])
     require(build_root == allocation / 'build' / 'graphroot' and build_run == allocation / 'build' / 'runroot'
             and load_run == allocation / 'load' / 'runroot', 'closed store layout mismatch')
-    require(load_root == Path.home() / '.local/share/fsgg/headless-images/sc2', 'designated load store mismatch')
+    if 'storageReservation' not in selection['admission']:
+        require(load_root == Path.home() / '.local/share/fsgg/headless-images/sc2', 'designated load store mismatch')
+    else:
+        # Reject arbitrary store/layout requests before reading their namespace
+        # configuration; a receipt does not turn this into a generic path port.
+        reserved_storage(selection, [])
     disjoint([('allocation', allocation), ('load store', load_root)])
     require(path(args.root) == build_root and path(args.runroot) == build_run, 'store CLI mismatch')
     state = path(args.state_dir)
@@ -510,6 +635,10 @@ def check_inputs(args, api, *, command=None, skip_source_commands=False):
     for name, graph, runtime in (('build', build_root, build_run), ('load', load_root, load_run)):
         paths, env, directories, config_pins = check_namespace(allocation / name, graph, runtime)
         pins.update(directories); configs.update(config_pins); envs[name] = env
+    reservation = reserved_storage(selection, [allocation, *map(Path, pins)])
+    if reservation is not None:
+        pins[str(allocation)] = directory_pin(allocation)
+        pins[reservation['root']] = directory_pin(path(reservation['root']))
     support = selection['support']
     require(type(support) is dict and set(support) ==
             {'builder', 'podman', 'crun', 'conmon', 'git', 'du', 'python'} | set(SUPPORT_LIBRARIES),
@@ -537,6 +666,7 @@ def check_inputs(args, api, *, command=None, skip_source_commands=False):
     return {'profile': PROFILE, 'selection': selection, 'inputIdentity': input_object,
             'inputSha256': args.expected_operation_input_sha256, 'helper': helper, 'product': product,
             'allocation': allocation, 'state': state, 'directoryPins': pins, 'configPins': configs,
+            'storageReservation': reservation,
             'supportPins': support_tokens,
             'sourcePins': {**complete_tokens, **declared_tokens, **{str(root / name): file_token(root / name)
                            for key, root in (('helper', helper), ('product', product))
@@ -810,10 +940,36 @@ class Lifetime:
         self.work_guard()
         reference = self.selection['admission']['resourceDisposition']
         disposition = strict_json(regular_bytes(path(reference['path']), MAX_JSON_BYTES, reference['sha256'])[0])
-        fields(disposition, 'sharedHostReservedMemoryBytes sharedHostReservedCpu sharedHostReservedDiskBytes unquantifiedResourceConflicts')
-        for key in ('sharedHostReservedMemoryBytes', 'sharedHostReservedCpu', 'sharedHostReservedDiskBytes'):
+        reservation = self.checked.get('storageReservation')
+        fields(disposition, 'sharedHostReservedMemoryBytes sharedHostReservedCpu unquantifiedResourceConflicts ' +
+               ('diskDomain' if reservation is not None else 'sharedHostReservedDiskBytes'))
+        for key in ('sharedHostReservedMemoryBytes', 'sharedHostReservedCpu'):
             integer(disposition[key])
         require(disposition['unquantifiedResourceConflicts'] == [], 'unquantified relevant resource conflicts remain')
+        if reservation is None:
+            reserved_disk = integer(disposition['sharedHostReservedDiskBytes'])
+        else:
+            # Only accepted disk-domain correspondence changes. Shared memory
+            # and CPU reservations below still apply, and old disk Unknown is
+            # retained explicitly rather than replaced by a physical zero.
+            domain = disposition['diskDomain']
+            fields(domain, 'reservationSha256 reservedBytes retainedOutsideDiskConflicts')
+            require(domain['reservationSha256'] == self.selection['admission']['storageReservation']['sha256'],
+                    'resource disposition reservation mismatch')
+            reserved_disk = integer(domain['reservedBytes'])
+            outside = domain['retainedOutsideDiskConflicts']
+            require(type(outside) is list and len(outside) <= 32, 'bounded outside disk conflicts required')
+            seen = set()
+            for conflict in outside:
+                fields(conflict, 'id sourceDevice evidenceSha256')
+                name = text(conflict['id'])
+                require(name not in seen, 'duplicate outside disk conflict')
+                seen.add(name)
+                require(integer(conflict['sourceDevice']) not in
+                        (reservation['backing']['device'], reservation['rootIdentity']['device']),
+                        'disk conflict shares reserved or backing filesystem')
+                text(conflict['evidenceSha256'], r'[0-9a-f]{64}')
+            self.guard_reserved_storage()
         observed = host_resources(self.checked['allocation'], path(self.selection['load']['root']))
         # Home envelopes share the physical host but are outside this operation's
         # enforcing inner cgroup. Do not debit them twice or infer settlement.
@@ -829,9 +985,9 @@ class Lifetime:
         tasks = observed['enclosingTasksMax']
         require(tasks is None or tasks - observed['enclosingTasksCurrent'] >= MAX_PROCESSES,
                 'enclosing task observation headroom not met')
-        require(observed['diskFreeBytes'] >= DISK_BYTES + disposition['sharedHostReservedDiskBytes'],
+        require(observed['diskFreeBytes'] >= DISK_BYTES + reserved_disk,
                 'whole population disk capacity not met')
-        require(observed['loadStoreDiskFreeBytes'] >= DISK_BYTES + disposition['sharedHostReservedDiskBytes'],
+        require(observed['loadStoreDiskFreeBytes'] >= DISK_BYTES + reserved_disk,
                 'designated load-store disk capacity not met')
         for value in (self.checked['product'], self.checked['allocation'] / 'build' / 'download-tmp'):
             disk_backing(value)
@@ -956,6 +1112,13 @@ class Lifetime:
         else:
             self.direct_rss_check()
 
+    def guard_reserved_storage(self):
+        if self.checked.get('storageReservation') is not None:
+            root = path(self.checked['storageReservation']['root'])
+            actual = reserved_storage(self.selection, [Path(name) for name in self.checked['directoryPins']
+                                                       if Path(name) != root])
+            require(actual == self.checked['storageReservation'], 'storage reservation changed')
+
     def guard_objects(self, *, retirement=False):
         """Adjacent correspondence, never an authorization from selected data."""
         self.work_guard(retirement)
@@ -963,6 +1126,7 @@ class Lifetime:
                                         self.checked['inputSha256'])
         require(actual == self.checked['inputIdentity'], 'operation input object replaced')
         require(strict_json(payload) == self.selection, 'operation selection changed')
+        self.guard_reserved_storage()
         for role, alias in SUPPORT_LIBRARIES.items():
             require(Path(alias).resolve(strict=True) == path(self.selection['support'][role]['path']),
                     'native library linkage alias changed')

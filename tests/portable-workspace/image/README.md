@@ -89,6 +89,66 @@ the shared host; a separately hash-bound topology relation is required before
 omitting those reservations from the inner-cgroup headroom calculation. Unknown
 relevant conflicts refuse. This never settles another operation's reservation.
 
+The reserved-storage alternative binds one fresh, host-protected, fully
+preallocated HDD sibling ext4 filesystem. Its exact mounted root `R` contains
+`R/allocation` and the separate `R/current-store`; the allocation retains the
+existing closed context, state, build, runroot and namespace layout. Both stores,
+downloads, archive and operation evidence share this finite filesystem. A genuine
+bind of its whole filesystem root into the selected container is permitted;
+missing mounts, a directory beneath the mount, subdirectory roots, stacked or
+nested mounts, and overlay/tmpfs fallback are not equivalent. Existing stores
+and their images remain untouched. Loading into an older store is a separate
+effect, outside this profile.
+
+This closed profile uses `R=/var/tmp/fsgg-sc2-reserved/<32-lowercase-hex-operation>`
+and a 256 GiB backing, 4096-byte filesystem blocks and 2,097,152 requested inodes.
+The owner verifies at least 208 GiB available and 1,048,576 free inodes after
+formatting; the receipt binds actual filesystem totals. The helper keeps the
+runtime 80 GiB free-byte floor and exactly 1,048,576 free-inode floor. Setup uses
+no reserved-block percentage, discard or lazy inode/journal initialization. Its
+separate accepted owner evidence covers the format profile, two preallocated
+1 MiB control/error files and bounded host metadata outside the guest filesystem.
+These source values select a finite budget; they do not establish a reservation
+or permission to format anything.
+
+The supplying owner must establish actual backing allocation, protected object
+custody, mount correspondence and retention through explicit disposition. An
+externally selected receipt digest binds those accepted facts; parsing a receipt
+does not authenticate its author or grant setup or execution authority. The guest
+checks its observable directory, mount namespace, filesystem and capacity facts
+again at determining boundaries. It cannot independently establish host backing
+custody from a guest mount label. The selected owner excludes backing truncation,
+hole punching, discard/trim, resizing and automatic reclamation. Partial setup,
+expiry or caller loss retains reached objects and outputs; there is no positive
+cleanup or expansion branch.
+
+The original 80 GiB combined logical ceiling and 80 GiB free-space admission floor
+both remain. Two paths on this filesystem share one capacity, not two reserves.
+The supplying owner selects a finite backing and inode population plus a positive
+free-inode floor before setup. This is a bounded attempt, not a guarantee of image
+fit: ENOSPC, inode exhaustion and sampled excess remain failures with their original
+first cause and reached artifacts retained. No limit reduction, expansion or
+automatic retry follows. Shared physical memory and CPU reservations remain
+charged. Only disk conflicts proven outside the selected protected filesystem
+may be retained as excluded from its disk accounting; unresolved conflicts that
+can consume or reclaim that reservation still refuse.
+
+The existing admission object adds `storageReservation: {path, sha256}` only for
+this alternative, joined by `resourceDomain.storageReservationSha256`. The exact
+`fsgg.sc2.reserved-storage/1` receipt binds the operation/backend, guest root and
+identity, mount namespace/ID/device/root/type/flags, filesystem UUID/totals/inode
+floor, backing identity/size/allocation/evidence digest and owner retention
+evidence. Host-only fields remain externally authenticated facts. The associated
+resource disposition keeps shared-memory/CPU amounts and the relevant unknown
+conflict list, replacing the legacy disk amount with
+`diskDomain: {reservationSha256, reservedBytes, retainedOutsideDiskConflicts}`.
+Each retained outside entry has its original `id`, host `sourceDevice` and
+accepted `evidenceSha256`; matching either the reserved filesystem or its parent
+backing filesystem refuses.
+This is a disk-only exclusion in the accepted operation, not physical zero,
+settlement or a way to ignore a relevant writer. The legacy exact four-field
+disposition and designated store continue unchanged when no reservation is bound.
+
 Finite source bounds are8MiB combined raw command output across the operation,
 32MiB retained metadata,128KiB per record/result,2048 records,512 commands and512
 sampled processes (bounded8192-entry visible process scan). Source checking bounds
