@@ -652,7 +652,7 @@ def census(root,deadline,limit=DISK_LIMIT,clock=time.monotonic,*,future_fifos=No
 
 COMMAND_SCHEMA = 'fsgg.canonical.owned-command/1'
 RESULT_SCHEMA = 'fsgg.canonical.command-result/1'
-OWNER_SHA = 'c07c9a6afedc2f977a9611772d52266f298b9fd136378511fd3f4c6ba52e76db'
+OWNER_SHA = 'fadf5fff66a66410fe00cc045a0ee0652f62ef6776673765baae0914729a36cb'
 TOOLCHAIN_ID = '79b32dacc5bb150e23c4017eef16f3f688cde062441583d5ea1ffa5cc9e62486'
 
 

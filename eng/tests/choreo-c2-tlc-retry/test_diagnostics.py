@@ -3136,4 +3136,84 @@ class MutableTempCensusControls(unittest.TestCase):
                 self.assertEqual(mode in ('legacy','sampled','incomplete'),result['complete'],result)
                 self.assertNotIn('NEVER COPY',json.dumps(result))
 
+
+class DetachedDomainControls(unittest.TestCase):
+    def detached_fixture(self, maximum_members=128):
+        import types
+        spec=importlib.util.spec_from_file_location('inert_detached_owner',ROOT/'eng/shared_process_owner.py')
+        owner=importlib.util.module_from_spec(spec);spec.loader.exec_module(owner)
+        rows={100:{'pid':100,'start':1,'pgid':100,'ppid':9,'state':'S','rss':1},
+              101:{'pid':101,'start':2,'pgid':101,'ppid':100,'state':'S','rss':1},
+              102:{'pid':102,'start':3,'pgid':101,'ppid':101,'state':'S','rss':1}}
+        terminal=set();sent=[];closed=[];clock=types.SimpleNamespace(value=100.)
+        def sleep(seconds):
+            self.assertGreaterEqual(seconds,0);clock.value+=seconds
+        clock.monotonic=lambda:clock.value;clock.sleep=sleep
+        domain=owner.DetachedDomain('/inert/qualified-shell','a'*64,280.,maximum_members=maximum_members,
+            observe=lambda pid:dict(rows[pid]) if pid in rows else None,
+            group_members=lambda group:[dict(v) for v in rows.values() if v['pgid']==group and v['state']!='Z'],
+            acquire=lambda pid:pid+1000,terminal=lambda fd:fd in terminal,
+            send=lambda fd,sig:sent.append((fd,sig)),release=closed.append,
+            executable_identity=lambda pid:('/inert/qualified-shell','a'*64),clock=clock.monotonic)
+        return owner,domain,rows,terminal,sent,closed,clock
+
+    def test_detached_original_birth_executable_and_pidfd_controls(self):
+        for fault in ('none','executable','parent','birth','terminal'):
+            owner,domain,rows,terminal,sent,closed,clock=self.detached_fixture()
+            domain.bind(rows[100]);candidate=dict(rows[101])
+            if fault=='executable':domain.executable_identity=lambda pid:('/inert/foreign','b'*64)
+            if fault=='parent':rows[101]['ppid']=999;candidate=dict(rows[101])
+            if fault=='birth':rows[101]['start']=99
+            if fault=='terminal':terminal.add(1101)
+            if fault=='none':
+                domain.observe([candidate,dict(rows[102])]);self.assertTrue(domain.owns(rows[101]));self.assertEqual((101,2,101),domain.browser)
+            else:
+                with self.assertRaises(ValueError):domain.observe([candidate])
+                self.assertIsNone(domain.browser)
+            self.assertEqual([],sent)
+
+    def test_detached_outer_exit_does_not_accept_live_renderer(self):
+        owner,domain,rows,terminal,sent,closed,clock=self.detached_fixture();domain.bind(rows[100]);domain.observe([rows[101],rows[102]])
+        rows.pop(100);rows.pop(101);terminal.update((1100,1101))
+        self.assertFalse(domain.settled())
+        with self.assertRaisesRegex(RuntimeError,'custody retained'):domain.close()
+        self.assertEqual([],closed)
+        rows.pop(102);terminal.add(1102);self.assertTrue(domain.settled());domain.close();self.assertEqual({1100,1101,1102},set(closed))
+
+    def test_detached_only_held_original_descriptors_can_signal(self):
+        owner,domain,rows,terminal,sent,closed,clock=self.detached_fixture();domain.bind(rows[100]);domain.observe([rows[101],rows[102]])
+        domain.retire(owner.signal.SIGTERM);self.assertEqual({1100,1101,1102},{fd for fd,sig in sent});self.assertTrue(all(sig==15 for fd,sig in sent))
+        sent.clear();rows[100]['start']=55
+        with self.assertRaisesRegex(ValueError,'birth unknown'):domain.retire(owner.signal.SIGKILL)
+        self.assertEqual([],sent)
+
+    def test_detached_incomplete_census_new_foreign_birth_and_caps_refuse(self):
+        for fault in ('unknown','new-after-terminal','cap'):
+            owner,domain,rows,terminal,sent,closed,clock=self.detached_fixture(maximum_members=1 if fault=='cap' else 128);domain.bind(rows[100])
+            if fault=='unknown':
+                domain.census=lambda group:(_ for _ in ()).throw(PermissionError('inert missing census'))
+                with self.assertRaises(PermissionError):domain.observe()
+            elif fault=='cap':
+                with self.assertRaisesRegex(ValueError,'member cap'):domain.observe([rows[101]])
+            else:
+                domain.observe([rows[101],rows[102]]);terminal.add(1101);rows.pop(101);rows[103]={'pid':103,'start':4,'pgid':101,'ppid':102,'state':'S','rss':1}
+                with self.assertRaisesRegex(ValueError,'after group leader terminal'):domain.observe()
+            self.assertEqual([],sent)
+
+    def test_strict_absolute_retirement_refuses_before_birth(self):
+        owner,domain,rows,terminal,sent,closed,clock=self.detached_fixture()
+        from unittest.mock import Mock
+        with tempfile.TemporaryDirectory() as t,patch.object(owner,'time',clock),patch.object(owner.subprocess,'Popen') as spawn:
+            for deadline,end in ((277.,280.),(276.,281.),(100.,100.)):
+                with self.assertRaises(ValueError):owner.run(['inert'],t,{},deadline,4,100,str(Path(t)/'absent.log'),retirement_deadline=end,detached_domain=domain)
+            spawn.assert_not_called();self.assertFalse((Path(t)/'absent.log').exists())
+
+    def test_strict_original_end_includes_cleanup_and_keeps_first_failure(self):
+        from unittest.mock import Mock
+        owner,domain,rows,terminal,sent,closed,clock=self.detached_fixture();child=Mock(pid=100,returncode=0);child.poll.return_value=0
+        with tempfile.TemporaryDirectory() as t,patch.object(owner,'time',clock),patch.object(owner.subprocess,'Popen',return_value=child),patch.object(owner,'proc',side_effect=lambda pid,*args:dict(rows[100])),patch.object(owner,'census',return_value=[]),patch.object(owner,'observed_escapes',return_value=[]),patch.object(owner.os,'killpg') as numeric_group,patch.object(owner.os,'kill') as numeric_pid:
+            with self.assertRaisesRegex(RuntimeError,'settlement incomplete'):
+                owner.run(['inert'],t,{},276.,4,100,str(Path(t)/'run.log'),retirement_deadline=280.,detached_domain=domain)
+            receipt=json.loads((Path(t)/'run.log.result.json').read_text());self.assertIn('settlement incomplete',receipt['firstCause']);self.assertTrue(receipt['additionalFailures']);self.assertLessEqual(clock.value,280.);self.assertEqual({15,9},{sig for fd,sig in sent});numeric_group.assert_not_called();numeric_pid.assert_not_called();child.wait.assert_not_called()
+
 if __name__ == '__main__': unittest.main()
