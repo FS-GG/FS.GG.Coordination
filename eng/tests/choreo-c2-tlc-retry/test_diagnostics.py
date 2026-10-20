@@ -3216,4 +3216,18 @@ class DetachedDomainControls(unittest.TestCase):
                 owner.run(['inert'],t,{},276.,4,100,str(Path(t)/'run.log'),retirement_deadline=280.,detached_domain=domain)
             receipt=json.loads((Path(t)/'run.log.result.json').read_text());self.assertIn('settlement incomplete',receipt['firstCause']);self.assertTrue(receipt['additionalFailures']);self.assertLessEqual(clock.value,280.);self.assertEqual({15,9},{sig for fd,sig in sent});numeric_group.assert_not_called();numeric_pid.assert_not_called();child.wait.assert_not_called()
 
+    def test_production_executable_descriptor_refuses_replaced_selected_path(self):
+        owner,domain,rows,terminal,sent,closed,clock=self.detached_fixture()
+        with tempfile.TemporaryDirectory() as tmp:
+            selected=Path(tmp)/'shell';old=Path(tmp)/'old-shell';selected.write_bytes(b'original-running-bytes')
+            domain.executable=str(selected);original_open=Path.open
+            def opened(path,*args,**kwargs):
+                if str(path)=='/proc/101/exe':return original_open(old if old.exists() else selected,*args,**kwargs)
+                return original_open(path,*args,**kwargs)
+            with patch.object(owner.pathlib.Path,'open',opened):
+                self.assertEqual((str(selected),hashlib.sha256(selected.read_bytes()).hexdigest()),domain._executable(101))
+                selected.rename(old);selected.write_bytes(b'desired-new-file')
+                with self.assertRaisesRegex(ValueError,'inode differs'):domain._executable(101)
+            self.assertEqual([],sent)
+
 if __name__ == '__main__': unittest.main()

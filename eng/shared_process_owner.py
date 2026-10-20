@@ -3,7 +3,7 @@
 One direct child and one synchronous hook, no second owner/thread. Unexecuted source.
 Sampled RSS/disk are stops, not hard containment. Unknown birth never licenses a signal.
 """
-import hashlib, json, os, pathlib, signal, subprocess, time
+import hashlib, json, os, pathlib, signal, stat, subprocess, time
 
 def describe(error):
     try:return type(error).__name__+': '+str(error)
@@ -81,15 +81,31 @@ class DetachedDomain:
     def birth(row):return row['pid'],row['start'],row['pgid']
 
     def _executable(self,pid):
-        self.checkpoint();p=pathlib.Path('/proc')/str(pid)/'exe';real=p.resolve(strict=True)
-        digest=hashlib.sha256()
-        if real.stat().st_size>256*1024*1024:raise ValueError('detached executable byte cap')
-        with real.open('rb') as source:
+        # Open the proc executable itself: resolving its pathname can select a
+        # replacement inode while the process still executes the unlinked inode.
+        self.checkpoint();p=pathlib.Path('/proc')/str(pid)/'exe'
+        def identity(stream):
+            value=os.fstat(stream.fileno())
+            if not stat.S_ISREG(value.st_mode) or not 0<value.st_size<=256*1024*1024:
+                raise ValueError('detached executable byte/type cap')
+            return value.st_dev,value.st_ino,value.st_size,value.st_mtime_ns,value.st_ctime_ns
+        digest=hashlib.sha256();count=0
+        with p.open('rb') as running,pathlib.Path(self.executable).open('rb') as selected:
+            original=identity(running)
+            if identity(selected)!=original:raise ValueError('running executable inode differs from selected input')
             while True:
-                self.checkpoint();block=source.read(1024*1024)
+                self.checkpoint();block=running.read(1024*1024)
                 if not block:break
+                count+=len(block)
+                if count>256*1024*1024 or count>original[2]:raise ValueError('actual executable read cap')
                 digest.update(block)
-        return str(real),digest.hexdigest()
+            if count!=original[2] or identity(running)!=original or identity(selected)!=original:
+                raise ValueError('executable descriptor changed during hash')
+            self.checkpoint()
+            with p.open('rb') as current,pathlib.Path(self.executable).open('rb') as current_selected:
+                if identity(current)!=original or identity(current_selected)!=original:
+                    raise ValueError('executable process/path identity changed after hash')
+        return self.executable,digest.hexdigest()
 
     def _retain(self,row):
         self.checkpoint();key=self.birth(row)
