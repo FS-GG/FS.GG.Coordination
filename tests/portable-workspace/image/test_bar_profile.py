@@ -54,7 +54,7 @@ class BarProfile(unittest.TestCase):
         for child in product.iterdir():
             if child.name != '.git':
                 shutil.rmtree(child) if child.is_dir() else child.unlink()
-        payloads = {'engine': b'synthetic headless bytes', 'map': b'synthetic map', 'game': b'synthetic sdp'}
+        payloads = {'engine': b'synthetic headless bytes'.ljust(64, b'\0'), 'map': b'synthetic map', 'game': b'synthetic sdp'}
         resources = {'toolchain': {'parentOsCandidate': BAR.BASE_IMAGE},
                      'engine': {'headlessSha256': sha(payloads['engine'])},
                      'map': {'file': 'synthetic.sd7', 'sha256': sha(payloads['map'])},
@@ -92,9 +92,10 @@ class BarProfile(unittest.TestCase):
         self.payloads = payloads
         return args, selection, home
 
-    def image(self, args, *, missing=None, changed=None, fifo=False):
-        with patch.object(Path, 'home', return_value=self.root / 'home'):
-            checked = BAR.check_inputs(args, IMAGE.__dict__)
+    def image(self, args, *, missing=None, changed=None, fifo=False, manifest_mutate=None, manifest_payload=None, tail=None, checked=None):
+        if checked is None:
+            with patch.object(Path, 'home', return_value=self.root / 'home'):
+                checked = BAR.check_inputs(args, IMAGE.__dict__)
         policy = BAR.oci_policy(checked)
         files = {'recipe/' + Path(name).name: (Path(args.image_source) / name).read_bytes()
                  for name in BAR.PRODUCT_FILES}
@@ -104,18 +105,41 @@ class BarProfile(unittest.TestCase):
             'opt/barc/data/maps/synthetic.sd7': self.payloads['map'],
             'opt/barc/data/packages/' + 'a' * 32 + '.sdp': self.payloads['game']})
         files.update({name: ('synthetic output ' + name).encode() for name in policy['requiredRegularFiles']})
+        plugin = 'opt/barc/plugin/libSkirmishAI.so'
+        files[plugin] = files[plugin].ljust(64, b'\0')
+        library = 'usr/lib/x86_64-linux-gnu/libfixture.so'; loader = 'lib64/ld-linux-x86-64.so.2'
+        files[library] = b'synthetic library'.ljust(64, b'\0'); files[loader] = b'synthetic interpreter'.ljust(64, b'\0')
+        roots = {'engine': '/opt/barc/engine/spring-headless', 'plugin': '/' + plugin}
+        records = {}
+        for name in [roots['engine'][1:], plugin, library, loader]:
+            is_root = '/' + name in roots.values()
+            metadata = {'class': 'ELF64', 'machine': 'x86-64', 'type': 3,
+                        'needed': ['libfixture.so'] if is_root else [],
+                        'soname': 'libfixture.so' if name == library else None,
+                        'interpreter': '/' + loader if name == roots['engine'][1:] else None,
+                        'searchPath': None, 'searchPathKind': None}
+            edges = [{'needed': 'libfixture.so', 'path': '/' + library}] if is_root else []
+            if metadata['interpreter']: edges.append({'interpreter': '/' + loader, 'path': '/' + loader})
+            records['/' + name] = {'sha256': sha(files[name]), 'bytes': len(files[name]), 'metadata': metadata, 'dependencies': edges}
+        manifest = {'schema': 'bar-static-elf-correspondence/1', 'roots': roots, 'files': records,
+                    'aliases': {name: name for name in records}, 'loadedAbiAccepted': False,
+                    'scope': 'ELF64 x86-64 image-local DT_NEEDED/interpreter candidate correspondence; not loader order, symbols, versions, dlopen or loaded ABI proof',
+                    'expectedRoots': {role: records[name]['sha256'] for role, name in roots.items()}}
+        if manifest_mutate: manifest_mutate(manifest)
+        files['opt/barc/STATIC-ELF.json'] = SHARED.canonical(manifest) if manifest_payload is None else manifest_payload
         if missing: files.pop(missing)
         if changed: files[changed[0]] = changed[1]
         rows = [(name, 'file', value) for name, value in files.items()]
         if fifo: rows.append(('tmp/clr-debug-pipe-7-123-in', 'fifo', b''))
         archive = self.root / 'synthetic-built.oci.tar'
         with patch.object(COMMON.IMAGE, 'COMMON_IMAGE_NAME', checked['selection']['product']['exportName']):
-            _, image_id, config = COMMON.synthetic_common_archive(archive, b'synthetic 1\n', final=rows,
+            _, image_id, config = COMMON.synthetic_common_archive(archive, b'synthetic 1\n',
+                base=rows if tail is not None else (), final=tail if tail is not None else rows,
                 config_update={'User': '10001:10001', 'WorkingDir': '/work',
                                'Entrypoint': ['bash', '/opt/barc/entrypoint.sh'], 'Cmd': []})
         with tarfile.open(archive, 'r:') as data:
             native_config = json.load(data.extractfile('blobs/sha256/' + image_id[7:]))
-        return {'archive': archive, 'id': image_id, 'policy': policy,
+        return {'archive': archive, 'id': image_id, 'policy': policy, 'checked': checked,
                 'inspect': {'Id': image_id, 'Os': 'linux', 'Architecture': 'amd64', 'Config': config,
                             'RootFS': {'Layers': native_config['rootfs']['diff_ids']}}}
 
@@ -206,7 +230,9 @@ class BarProfile(unittest.TestCase):
                 BAR.main(args, IMAGE.__dict__)
             self.assertEqual(count, len(calls))
         self.assertEqual(result['imageId'], image['id'])
-        self.assertEqual(len(result['producedOutputs']), 8)
+        self.assertEqual(len(result['producedOutputs']), 9)
+        self.assertEqual(result['staticElfCorrespondence']['files'], 4)
+        self.assertFalse(result['staticElfCorrespondence']['loadedAbiAccepted'])
         self.assertFalse(result['productRuntimeAcceptance'])
         records = [json.loads(row) for row in Path(result['journal']).read_bytes().splitlines()]
         self.assertEqual(records[0]['profile'], BAR.PROFILE)
@@ -236,6 +262,95 @@ class BarProfile(unittest.TestCase):
                     self.assertFalse(any('load' in argv or 'tag' in argv for argv in calls))
                 finally:
                     self.base.root = self.root = oldroot
+
+    def test_static_manifest_failure_refuses_before_actual_load_port(self):
+        args, selection, home = self.fixture(); args.mode = 'qualify'
+        image = self.image(args, manifest_mutate=lambda m: m['aliases'].pop('/usr/lib/x86_64-linux-gnu/libfixture.so'))
+        spawn, calls, resources = self.ports(args, selection, image)
+        with self.native_context(home, spawn, resources), self.assertRaisesRegex(RuntimeError, 'lookup alias'):
+            BAR.main(args, IMAGE.__dict__)
+        self.assertFalse(any('load' in argv or 'tag' in argv for argv in calls))
+
+    def test_static_manifest_refusal_variants_use_actual_archive_verifier(self):
+        args, _, _ = self.fixture(); checked = self.image(args)['checked']
+        cases = [
+            {'missing': 'opt/barc/STATIC-ELF.json'},
+            {'manifest_payload': b'{broken'},
+            {'manifest_payload': b' ' * (BAR.MAX_JSON_BYTES + 1)},
+            {'manifest_mutate': lambda m: m.update(loadedAbiAccepted=True)},
+            {'manifest_mutate': lambda m: m['files'].pop('/usr/lib/x86_64-linux-gnu/libfixture.so')},
+            {'manifest_mutate': lambda m: m['files']['/usr/lib/x86_64-linux-gnu/libfixture.so'].update(sha256='0'*64)},
+            {'manifest_mutate': lambda m: m['aliases'].pop('/usr/lib/x86_64-linux-gnu/libfixture.so')},
+            {'manifest_mutate': lambda m: m['expectedRoots'].update(engine='0'*64)},
+        ]
+        for index, options in enumerate(cases):
+            with self.subTest(case=index):
+                image = self.image(args, checked=checked, **options)
+                with self.assertRaises(RuntimeError):
+                    IMAGE.inspect_oci_archive(image['archive'], profile=BAR.PROFILE,
+                        built_image_id=image['id'], product_policy=image['policy'])
+
+    def test_effective_layers_cannot_delete_replace_or_retarget_manifest_members(self):
+        args, _, _ = self.fixture(); checked = self.image(args)['checked']
+        library = 'usr/lib/x86_64-linux-gnu/libfixture.so'
+        cases = [
+            [('opt/barc/.wh.STATIC-ELF.json', 'file', b'')],
+            [('usr/lib/x86_64-linux-gnu/.wh.libfixture.so', 'file', b'')],
+            [(library, 'file', b'different library'.ljust(64, b'\0'))],
+            [(library, 'symlink', '/lib64/ld-linux-x86-64.so.2')],
+            [('lib64/libfixture.so', 'file', b'another candidate'.ljust(64, b'\0'))],
+            [('opt/barc/STATIC-ELF.json', 'file', b'{}')],
+        ]
+        for rows in cases:
+            with self.subTest(rows=rows):
+                image = self.image(args, tail=rows, checked=checked)
+                with self.assertRaises(RuntimeError):
+                    IMAGE.inspect_oci_archive(image['archive'], profile=BAR.PROFILE,
+                        built_image_id=image['id'], product_policy=image['policy'])
+
+    def test_aliases_bind_effective_directory_resolution(self):
+        args, _, _ = self.fixture(); checked = self.image(args)['checked']
+        def alias(m):
+            m['aliases']['/lib/x86_64-linux-gnu/libfixture.so'] = '/usr/lib/x86_64-linux-gnu/libfixture.so'
+        image = self.image(args, manifest_mutate=alias, tail=[('lib', 'symlink', 'usr/lib')], checked=checked)
+        result = IMAGE.inspect_oci_archive(image['archive'], profile=BAR.PROFILE,
+                    built_image_id=image['id'], product_policy=image['policy'])
+        self.assertEqual(result['staticElfCorrespondence']['aliases'], 5)
+        image = self.image(args, manifest_mutate=alias, tail=[('lib', 'symlink', 'missing')], checked=checked)
+        with self.assertRaises(RuntimeError):
+            IMAGE.inspect_oci_archive(image['archive'], profile=BAR.PROFILE,
+                built_image_id=image['id'], product_policy=image['policy'])
+
+    def test_observation_failure_remains_original_before_load(self):
+        args, _, _ = self.fixture(); image = self.image(args)
+        sentinel = RuntimeError('original verification clock exhausted')
+        def expired(): raise sentinel
+        image['policy']['verifyBarStaticElf'] = lambda payload, population, resolve, observe: BAR.verify_static_elf(
+            payload, population, resolve, expired, sha(self.payloads['engine']))
+        with self.assertRaisesRegex(RuntimeError, 'original verification clock exhausted'):
+            IMAGE.inspect_oci_archive(image['archive'], profile=BAR.PROFILE,
+                built_image_id=image['id'], product_policy=image['policy'])
+
+    def test_manifest_population_and_metadata_refusals(self):
+        args, _, _ = self.fixture(); checked = self.image(args)['checked']
+        mutations = [
+            lambda m: m.update(schema='unselected'),
+            lambda m: m.update(extra='unknown'),
+            lambda m: m['roots'].update(engine='/not-selected'),
+            lambda m: m['files']['/opt/barc/engine/spring-headless'].update(bytes=True),
+            lambda m: m['files']['/opt/barc/engine/spring-headless']['metadata'].update(machine='aarch64'),
+            lambda m: m['files']['/opt/barc/engine/spring-headless']['metadata'].update(needed=['libfixture.so', 'libfixture.so']),
+            lambda m: m['files']['/opt/barc/engine/spring-headless']['metadata'].update(searchPath='/host', searchPathKind='RUNPATH'),
+            lambda m: m['files']['/opt/barc/engine/spring-headless']['dependencies'].clear(),
+            lambda m: m['files'].update({f'/extra{i}': {} for i in range(257)}),
+            lambda m: m['aliases'].update({f'/extra{i}': '/lib64/ld-linux-x86-64.so.2' for i in range(8193)}),
+        ]
+        for index, mutate in enumerate(mutations):
+            with self.subTest(case=index):
+                image = self.image(args, manifest_mutate=mutate, checked=checked)
+                with self.assertRaises(RuntimeError):
+                    IMAGE.inspect_oci_archive(image['archive'], profile=BAR.PROFILE,
+                        built_image_id=image['id'], product_policy=image['policy'])
 
     def test_bar_mapping_and_existing_load_image_block_build(self):
         for failure in ('bad_mapping', 'existing_image'):

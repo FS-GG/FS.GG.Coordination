@@ -1576,8 +1576,15 @@ def common_layer_entries(stream, media_type, *, policy=None, observe=None, accou
                         common_require(content is not None, 'image inventory missing data')
                         entry['inventory'] = content.read(MAX_LOCK_BYTES + 1)
                         common_require(len(entry['inventory']) == member.size, 'image inventory size mismatch')
-                    if limits['hashFiles'] and 'inventory' in entry:
-                        entry['sha256'] = sha256_file_bytes(entry['inventory'])
+                    if limits.get('verifyBarStaticElf') is not None and name == 'opt/barc/STATIC-ELF.json':
+                        common_require(member.size <= limits['jsonBytes'], 'BAR static ELF manifest byte bound')
+                        content = layer.extractfile(member)
+                        common_require(content is not None, 'BAR static ELF manifest data missing')
+                        entry['barStaticElf'] = content.read(limits['jsonBytes'] + 1)
+                        common_require(len(entry['barStaticElf']) == member.size, 'BAR static ELF manifest framing mismatch')
+                    retained = entry.get('inventory', entry.get('barStaticElf'))
+                    if limits['hashFiles'] and retained is not None:
+                        entry['sha256'] = sha256_file_bytes(retained)
                     elif limits['hashFiles']:
                         content = layer.extractfile(member)
                         common_require(content is not None, 'product file bytes missing')
@@ -1839,6 +1846,12 @@ def _inspect_common_oci_archive(candidate, expected_inventory, built_image_id, *
                 result['producedOutputs'] = {
                     path: {'sha256': population[path]['sha256'], 'bytes': population[path]['bytes']}
                     for path in policy['requiredRegularFiles']}
+            if policy.get('verifyBarStaticElf') is not None:
+                retained = population.get('opt/barc/STATIC-ELF.json', {})
+                common_require(retained.get('kind') == 'file' and isinstance(retained.get('barStaticElf'), bytes),
+                               'effective BAR static ELF manifest missing')
+                result['staticElfCorrespondence'] = policy['verifyBarStaticElf'](
+                    retained['barStaticElf'], population, resolve, tick)
         return result
 
 
