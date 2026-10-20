@@ -7,6 +7,7 @@ on:
       - .github/workflows/portable-workspace-image-qualification.yml
       - eng/portable-workspace-image.py
       - eng/portable_workspace_sc2.py
+      - eng/portable_workspace_bar.py
       - tests/portable-workspace/image/**
   push:
     branches: [main]
@@ -14,6 +15,7 @@ on:
       - .github/workflows/portable-workspace-image-qualification.yml
       - eng/portable-workspace-image.py
       - eng/portable_workspace_sc2.py
+      - eng/portable_workspace_bar.py
       - tests/portable-workspace/image/**
 
 permissions:
@@ -47,6 +49,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           test -z "$(git status --porcelain)"
           PYTHONDONTWRITEBYTECODE=1 python3 tests/portable-workspace/image/test_image_archive.py
+          PYTHONDONTWRITEBYTECODE=1 python3 tests/portable-workspace/image/test_bar_profile.py
           command -v podman
           install -d -m 0700 "$QUALIFICATION_STATE"
           python3 eng/portable-workspace-image.py preflight \
