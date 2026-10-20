@@ -283,13 +283,32 @@ class BarProfile(unittest.TestCase):
 
     def test_original_expired_clock_cannot_be_reset_by_qualify(self):
         args, selection, home = self.fixture(); args.mode = 'qualify'
-        for key in ('start', 'workEnd', 'totalEnd'):
-            selection['clock'][key] -= 4000
+        # A recently booted runner cannot subtract 4000 seconds from its monotonic
+        # epoch without making the input invalid before the deadline guard.
+        # Bind a positive original and advance only the owner's injected clock.
+        selection['clock'].update(start=10.0, workEnd=3610.0, totalEnd=3730.0)
         self.base.rebind_selection(args, selection)
         spawn, calls, resources = self.ports(args, selection)
-        with self.native_context(home, spawn, resources), self.assertRaisesRegex(RuntimeError, 'original|deadline'):
+        with self.native_context(home, spawn, resources), \
+             patch.object(BAR.Lifetime, 'now', return_value=4010.0), \
+             self.assertRaisesRegex(RuntimeError, 'original|deadline'):
             BAR.main(args, IMAGE.__dict__)
         self.assertEqual(calls, [])
+        self.assertFalse((Path(args.state_dir) / selection['operationId']).exists())
+
+    def test_low_uptime_subtraction_remains_invalid_input_not_deadline_evidence(self):
+        args, selection, home = self.fixture(); args.mode = 'qualify'
+        # Reproduce the former fixture on a ten-second-old host. Its negative
+        # start must retain the production input refusal, never pass as expiry.
+        selection['clock'].update(start=10.0 - 4000, workEnd=3610.0 - 4000,
+                                  totalEnd=3730.0 - 4000)
+        self.base.rebind_selection(args, selection)
+        spawn, calls, resources = self.ports(args, selection)
+        with self.native_context(home, spawn, resources), \
+             self.assertRaisesRegex(RuntimeError, 'finite clock required'):
+            BAR.main(args, IMAGE.__dict__)
+        self.assertEqual(calls, [])
+        self.assertFalse((Path(args.state_dir) / selection['operationId']).exists())
 
     def test_bar_config_accepts_empty_cmd_and_refuses_inherited_shell_and_sc2(self):
         config = {'Os': 'linux', 'Architecture': 'amd64', 'Config': {'User': '10001:10001',
