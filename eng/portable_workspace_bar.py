@@ -7,7 +7,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import stat
 import sys
 
@@ -270,6 +270,131 @@ def verify_image_config(value):
     require(not config.get('Volumes') and not config.get('OnBuild'), 'unexpected BAR image effects')
 
 
+def verify_static_elf(payload, population, resolve, observe, expected_engine):
+    """Join produced metadata to the effective archive, without loading ELF."""
+    require(type(payload) is bytes and 0 < len(payload) <= MAX_JSON_BYTES, 'bounded static ELF manifest required')
+    value = strict_json(payload)
+    fields(value, 'schema roots files aliases loadedAbiAccepted scope expectedRoots')
+    require(value['schema'] == 'bar-static-elf-correspondence/1' and value['loadedAbiAccepted'] is False,
+            'static ELF schema or acceptance scope differs')
+    require(value['scope'] == 'ELF64 x86-64 image-local DT_NEEDED/interpreter candidate correspondence; not loader order, symbols, versions, dlopen or loaded ABI proof',
+            'static ELF correspondence scope differs')
+    fields(value['roots'], 'engine plugin'); fields(value['expectedRoots'], 'engine plugin')
+    files, aliases = value['files'], value['aliases']
+    require(type(files) is dict and 0 < len(files) <= 256 and type(aliases) is dict and 0 < len(aliases) <= 8192,
+            'static ELF file/alias population bound')
+    def member(name):
+        text(name)
+        require(name.startswith('/') and name != '/' and PurePosixPath(name).as_posix() == name
+                and all(part not in ('', '.', '..') for part in name[1:].split('/')), 'noncanonical static ELF path')
+        return name[1:]
+    def library(name):
+        text(name, r'[A-Za-z0-9_+.-]+')
+        require(name not in ('.', '..'), 'invalid static ELF library name')
+    total = 0
+    graph = {}
+    for name, record in files.items():
+        observe(); relative = member(name)
+        fields(record, 'sha256 bytes metadata dependencies')
+        digest = text(record['sha256'], r'[0-9a-f]{64}')
+        require(type(record['bytes']) is int and 64 <= record['bytes'] <= 256 * 1024**2,
+                'static ELF file byte bound')
+        total += record['bytes']; require(total <= 512 * 1024**2, 'static ELF cumulative byte bound')
+        require(resolve(relative) == relative, 'static ELF canonical file became an alias')
+        actual = population.get(relative, {})
+        require(actual.get('kind') == 'file' and actual.get('sha256') == digest and actual.get('bytes') == record['bytes'],
+                'static ELF effective file correspondence differs: ' + name)
+        metadata = record['metadata']; fields(metadata, 'class machine type needed soname interpreter searchPath searchPathKind')
+        require(metadata['class'] == 'ELF64' and metadata['machine'] == 'x86-64'
+                and type(metadata['type']) is int and metadata['type'] in (2, 3), 'unsupported static ELF metadata')
+        needed = metadata['needed']
+        require(type(needed) is list and len(needed) <= 128, 'static ELF dependency population bound')
+        for dependency in needed: library(dependency)
+        require(len(set(needed)) == len(needed), 'duplicate static ELF dependency')
+        if metadata['soname'] is not None: library(metadata['soname'])
+        require(metadata['interpreter'] in (None, '/lib64/ld-linux-x86-64.so.2'), 'unsupported static ELF interpreter')
+        if metadata['searchPath'] is None:
+            require(metadata['searchPathKind'] is None, 'static ELF search kind without path')
+        else:
+            text(metadata['searchPath']); require(metadata['searchPathKind'] in ('RPATH', 'RUNPATH'), 'unsupported static ELF search kind')
+            entries = metadata['searchPath'].split(':')
+            require(len(entries) <= 16 and all(entry == '$ORIGIN' or entry.startswith('$ORIGIN/') for entry in entries),
+                    'unsupported static ELF search path')
+            require(all('$' not in entry[len('$ORIGIN'):] and '..' not in PurePosixPath(entry[len('$ORIGIN'):]).parts
+                        for entry in entries), 'unsupported static ELF search expansion')
+        edges = record['dependencies']; require(type(edges) is list and len(edges) <= 129, 'static ELF edge population bound')
+        needed_edges = {}; interpreter_edges = []
+        for edge in edges:
+            observe(); require(type(edge) is dict, 'static ELF edge required')
+            if set(edge) == {'needed', 'path'}:
+                library(edge['needed']); require(edge['needed'] not in needed_edges, 'duplicate static ELF edge')
+                needed_edges[edge['needed']] = edge['path']
+            else:
+                fields(edge, 'interpreter path'); interpreter_edges.append(edge)
+            member(edge['path']); require(edge['path'] in files, 'static ELF edge target omitted')
+        require(set(needed_edges) == set(needed), 'static ELF needed/edge population differs')
+        expected_interpreters = [] if metadata['interpreter'] is None else [metadata['interpreter']]
+        require([edge['interpreter'] for edge in interpreter_edges] == expected_interpreters, 'static ELF interpreter edge differs')
+        for edge in interpreter_edges:
+            require(aliases.get(edge['interpreter']) == edge['path'], 'static ELF interpreter alias omitted or changed')
+        graph[name] = [edge['path'] for edge in edges]
+    for selected, target in aliases.items():
+        observe(); relative = member(selected); member(target)
+        require(target in files and '/' + resolve(relative) == target, 'static ELF effective alias correspondence differs')
+    required_aliases = set()
+    for name, record in files.items():
+        metadata = record['metadata']; origin = PurePosixPath(name).parent
+        directories = [str(origin), '/lib/x86_64-linux-gnu', '/usr/lib/x86_64-linux-gnu', '/lib64', '/usr/lib64']
+        if metadata['searchPath'] is not None:
+            for entry in metadata['searchPath'].split(':'):
+                directory = str(origin / entry[len('$ORIGIN'):].lstrip('/'))
+                actual = '/' + resolve(directory.lstrip('/'))
+                require(actual == '/' or population.get(actual[1:], {}).get('kind') == 'directory',
+                        'static ELF search directory missing')
+                directories.append(actual)
+        for edge in record['dependencies']:
+            observe()
+            if 'needed' in edge:
+                candidates = set()
+                for directory in directories:
+                    observe(); selected = str(PurePosixPath(directory) / edge['needed'])
+                    target = '/' + resolve(member(selected))
+                    actual = population.get(target[1:])
+                    require(actual is not None or member(selected) not in population, 'static ELF dangling candidate alias')
+                    if actual is not None:
+                        require(actual.get('kind') == 'file' and target in files, 'static ELF lookup resolves outside declared files')
+                        require(aliases.get(selected) == target, 'static ELF lookup alias omitted or changed')
+                        candidates.add(target); required_aliases.add(selected)
+                require(candidates == {edge['path']}, 'static ELF dependency candidate correspondence differs')
+            else:
+                required_aliases.add(edge['interpreter'])
+    for role, selected in (('engine', '/opt/barc/engine/spring-headless'), ('plugin', '/opt/barc/plugin/libSkirmishAI.so')):
+        target = value['roots'][role]; member(target)
+        require(target in files and aliases.get(selected) == target and '/' + resolve(member(selected)) == target,
+                'static ELF selected root correspondence differs')
+        required_aliases.add(selected)
+        digest = text(value['expectedRoots'][role], r'[0-9a-f]{64}')
+        require(files[target]['sha256'] == digest and (role != 'engine' or digest == expected_engine),
+                'static ELF expected root digest differs')
+    require(required_aliases == set(aliases), 'static ELF lookup alias population differs')
+    reached = set(); pending = list(value['roots'].values())
+    while pending:
+        observe(); name = pending.pop()
+        if name in reached: continue
+        reached.add(name); pending.extend(graph[name])
+    require(reached == set(files), 'static ELF declared closure contains unreachable files')
+    for record in files.values():
+        for edge in record['dependencies']:
+            observe()
+            if 'needed' in edge:
+                soname = files[edge['path']]['metadata']['soname']
+                require(soname is None or soname == edge['needed'], 'static ELF dependency SONAME differs')
+    return {'manifestSha256': hashlib.sha256(payload).hexdigest(), 'manifestBytes': len(payload),
+            'files': len(files), 'fileBytes': total, 'aliases': len(aliases), 'roots': value['roots'],
+            'scope': 'effective OCI file/hash/alias readback of produced static candidate correspondence',
+            'loadedAbiAccepted': False}
+
+
 def oci_policy(checked):
     resources = checked['resources']
     files = {'recipe/' + Path(name).name: digest for name, digest in checked['selection']['product']['files'].items()}
@@ -283,10 +408,12 @@ def oci_policy(checked):
         'strictTypes': True, 'imageName': checked['selection']['product']['exportName'],
         'pathMetadataBytes': shared.PATH_METADATA_BYTES, 'jsonBytes': MAX_JSON_BYTES,
         'verifyConfig': verify_image_config, 'files': files,
+        'verifyBarStaticElf': lambda payload, population, resolve, observe: verify_static_elf(
+            payload, population, resolve, observe, resources['engine']['headlessSha256']),
         'requiredRegularFiles': ['opt/barc/plugin/libSkirmishAI.so', 'opt/barc/PLUGIN.SHA256',
             'opt/barc/BUILD-SOURCES.txt', 'opt/barc/toolchain/ubuntu-packages.txt',
             'opt/barc/toolchain/vcpkg-status.txt', 'opt/barc/toolchain/SHA256SUMS',
-            'opt/barc/toolchain/MANIFEST.SHA256', 'opt/highbar/tests/headless/_launch.sh']}
+            'opt/barc/toolchain/MANIFEST.SHA256', 'opt/highbar/tests/headless/_launch.sh', 'opt/barc/STATIC-ELF.json']}
 
 
 def proposed_commands(checked, directory):
@@ -372,6 +499,7 @@ def qualify(owner):
     return {'imageId': image_id, 'localTag': local_tag, 'archive': str(archive),
             'archiveSha256': exported['sha256'], 'archiveObject': exported['object'],
             'producedOutputs': verified['producedOutputs'],
+            'staticElfCorrespondence': verified['staticElfCorrespondence'],
             'imageAssertions': 'verified OCI and exact separate-store loaded config/rootfs/source correspondence',
             'productRuntimeAcceptance': False, 'hardContainment': False,
             'descendantSettlement': 'unproved', 'workerLossTeardown': 'unproved'}

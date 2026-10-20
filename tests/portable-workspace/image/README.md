@@ -562,6 +562,25 @@ image recipe's pinned build performs its own complete engine/game acquisition,
 compiled controls and dependency checks. The verifier retains the existing
 16 GiB archive, 32 GiB expanded, 16 GiB per-layer, 200000-header, 64 MiB path
 metadata and 1 MiB JSON bounds. BAR allows no CLR FIFO metadata exception.
+The BAR policy also requires the produced `/opt/barc/STATIC-ELF.json`. Only this
+closed manifest path is retained as bounded content by the streaming OCI reader;
+other profiles retain their existing behavior. Verification occurs after every
+layer's whiteouts, replacements and aliases have been applied and before load.
+It checks the versioned schema, selected roots and expected engine digest, all
+declared file hashes/sizes, recursive needed/interpreter edges, the producer's
+closed candidate-directory lookup and exact alias population against that
+effective filesystem. Missing, malformed, oversized or changed evidence refuses
+load. The result retains the actual manifest hash and scoped correspondence.
+
+This reads back the pinned recipe's produced static metadata; it does not reparse
+ELF bytes, reproduce dynamic-loader ordering, or prove symbols, versions, dlopen
+populations or loaded ABI. `loadedAbiAccepted` remains false. Bounds include256
+files/512MiB declared file bytes,8192 aliases,128 dependencies/129 edges per file
+and the existing1MiB JSON limit. Validation loops call the original operation's
+observer; they neither renew its clock nor suppress its resource/deadline failure.
+The image/runtime, authentic old-writer/fence and ordinary BAR storage conditions
+remain independent prerequisites. Synthetic archive/control success is not an
+actual image or resource acceptance.
 The original 8 MiB aggregate command capture, 32 MiB metadata, 2048 journal
 records and 512 command bounds remain shared across phases, including failure
 retention. Archive mutation or failed verification blocks load; first failure,
@@ -582,6 +601,15 @@ stores, capacity failures and failed/invalid exports before dependent effects.
 The linear workflow needs no new scheduler or custom model. Reuse the existing
 20-minute job cap, keep warm source controls below60 seconds, and reassess if
 retry, sharing or publication behavior changes. No CI savings are claimed.
+
+The expanded manifest controls measured97.44 seconds on one local CPU, above that
+60-second target. Independent malformed/tampered archive variants reuse one
+synthetic source selection; one actual controller case proves refusal before the
+load port. This preserves the meaningful boundaries without repeating the full
+synthetic qualification for every variant. The first120-second capped aggregate
+failed and remains retained; the revised aggregate passed within a180-second
+local bound. Existing hosted job limits remain unchanged, and hosted latency and
+net savings for this increment are not established.
 
 Source review and required exact-head CI establish only the controller source
 prerequisite. Full issue1032 acceptance still requires root's separate fresh
