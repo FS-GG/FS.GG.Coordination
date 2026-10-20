@@ -548,7 +548,7 @@ def require_layer_cache_absent(stream) -> None:
 
 def inspect_oci_archive(candidate: Path, *, profile: str = 'portable-python', expected_inventory=None,
                         built_image_id=None, product_policy=None, observe=None) -> dict:
-    if profile == 'sc2-headless':
+    if profile in ('sc2-headless', 'bar-headless'):
         if product_policy is None:
             raise RuntimeError('closed product OCI policy required')
         return _inspect_common_oci_archive(candidate, None, built_image_id,
@@ -1817,12 +1817,28 @@ def _inspect_common_oci_archive(candidate, expected_inventory, built_image_id, *
                 actual = population.get(path, {})
                 common_require(actual.get('kind') == 'file' and actual.get('sha256') == expected,
                                'effective product source/input bytes mismatch: ' + path)
+            # BAR keeps produced plugin/toolchain identities as outputs. Require
+            # their regular nonempty effective members, retaining actual hashes;
+            # no executable, archive extraction or guessed output hash is used.
+            required_outputs = policy.get('requiredRegularFiles', [])
+            common_require(isinstance(required_outputs, list) and len(required_outputs) <= 16
+                           and len(set(required_outputs)) == len(required_outputs),
+                           'bounded unique produced output set required')
+            for path in required_outputs:
+                common_path(path)
+                actual = population.get(path, {})
+                common_require(actual.get('kind') == 'file' and actual.get('sha256')
+                               and actual.get('bytes', 0) > 0, 'required product output missing: ' + path)
         result = {'digest': descriptor['digest'], 'configDigest': config_descriptor['digest'], 'manifestBytes': len(manifest_bytes)}
         if policy is not None:
             result.update({'rootfsDiffIds': rootfs['diff_ids'], 'config': config['config'],
                            'headers': total_headers, 'expandedBytes': total_expanded,
                            'effectiveMembers': len(population), 'pathMetadataBytes': path_metadata_bytes,
                            'fifoEntries': total_fifo_entries, 'effectiveFifos': effective_fifos})
+            if policy.get('requiredRegularFiles'):
+                result['producedOutputs'] = {
+                    path: {'sha256': population[path]['sha256'], 'bytes': population[path]['bytes']}
+                    for path in policy['requiredRegularFiles']}
         return result
 
 
@@ -2100,7 +2116,7 @@ def main() -> int:
     parser.add_argument("--podman", default="/usr/bin/podman")
     parser.add_argument("--root", required=True)
     parser.add_argument("--runroot", required=True)
-    parser.add_argument("--profile", choices=("portable-python", "common-arch", "sc2-headless"), default="portable-python")
+    parser.add_argument("--profile", choices=("portable-python", "common-arch", "sc2-headless", "bar-headless"), default="portable-python")
     parser.add_argument("--operation-input")
     parser.add_argument("--expected-operation-input-sha256")
     parser.add_argument("--engine-allocation")
@@ -2110,13 +2126,15 @@ def main() -> int:
     parser.add_argument("--acquisition-dir")
     parser.add_argument("--expected-acquired-inputs-sha256")
     args = parser.parse_args()
-    if args.profile == 'sc2-headless':
+    if args.profile in ('sc2-headless', 'bar-headless'):
         if sys.platform != 'linux':
-            parser.error('sc2-headless requires the selected Linux profile')
+            parser.error('closed image profiles require the selected Linux profile')
         import importlib.util
         import stat
-        implementation = Path(__file__).with_name('portable_workspace_sc2.py')
-        spec = importlib.util.spec_from_file_location('portable_workspace_sc2', implementation)
+        module_name = {'sc2-headless': 'portable_workspace_sc2',
+                       'bar-headless': 'portable_workspace_bar'}[args.profile]
+        implementation = Path(__file__).with_name(module_name + '.py')
+        spec = importlib.util.spec_from_file_location(module_name, implementation)
         profile = importlib.util.module_from_spec(spec)
         # Compile captured regular source, never read/write a sibling pyc before
         # the profile's independent source/cleanliness checks. This bootstrap
@@ -2139,7 +2157,7 @@ def main() -> int:
         print(json.dumps(profile.main(args, globals()), sort_keys=True, separators=(',', ':')))
         return 0
     if args.operation_input is not None or args.expected_operation_input_sha256 is not None:
-        parser.error('operation input requires the closed sc2-headless profile')
+        parser.error('operation input requires a closed product image profile')
     common_flags = (args.image_source, args.expected_image_source_revision,
                     args.acquisition_dir, args.expected_acquired_inputs_sha256, args.engine_allocation, args.engine_scratch_dir)
     if args.profile == "common-arch":

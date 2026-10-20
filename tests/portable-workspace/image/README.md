@@ -496,3 +496,98 @@ those tmpfs charges. Neither a fixed tmpfs size nor an empty scaffold proves eno
 capacity for export. Native admission retains whole-operation limits, exact teardown
 and original failures. Controls exercise the actual production path against a small
 owned tmpfs directory; intercepted engine transport supplies no native acceptance.
+
+## Closed BAR image profile
+
+Issue [1032](https://github.com/FS-GG/FS.GG.Coordination/issues/1032) owns the
+`--profile bar-headless` addition to the same entrypoint. It builds the complete
+`headless-integration` target from the accepted FSBar recipe, verifies an OCI
+export and loads that exact image into a fresh, separate operation store. It has
+no arbitrary command, image-runtime, native-game or old-attempt resume mode.
+FSBar's six recipe files remain product-owned inputs; the current prerequisite
+is the controller profile, not a newly asserted recipe defect.
+
+The private operation document uses schema `fsgg.bar-headless-operation/1` and
+requires exactly `schema`, `operationId`, `helper`, `product`, `allocation`,
+`build`, `load`, `support`, `clock`, `admission`, `resourceDomain`, and
+`licenseAccepted`. It follows the existing closed SC2 field shapes, with these
+BAR constraints:
+
+- The helper revision/tree and all three executing local source files are pinned:
+  `eng/portable-workspace-image.py`, `eng/portable_workspace_bar.py`, and
+  `eng/portable_workspace_sc2.py`. The unchanged SC2 module supplies process,
+  deadline, capture, custody and sampling primitives; the entrypoint supplies
+  the bounded subprocess and OCI reader. There are no other local execution
+  imports. Both internal modules are captured from bounded regular source without
+  consulting bytecode caches, and their captured hashes are checked. Native
+  executable/library pins remain required separately.
+- Product revision/tree and the complete tracked product context are checked.
+  The six individually pinned files are `Containerfile`, `resources.json`,
+  `build-image.py`, `entrypoint.sh`, `test_source.py`, and `README.md` below
+  `containers/barc-stock-headless/`. The exact approved Ubuntu base digest and
+  three-stage FROM structure must match; only a local output tag is accepted.
+- Allocation contains `context`, `state`, `build/graphroot`, `build/runroot`, and
+  `load/runroot`, plus the existing private namespace configuration directories.
+  Load storage is exactly `$HOME/.local/share/fsgg/headless-images/bar/<operationId>`.
+  Both image roots and both runroots must initially be empty. Native census refuses foreign
+  containers and requires an empty BAR load-image population before acquisition
+  and again before loading. An existing operation directory cannot be consumed
+  a second time. No cleanup removes another generation or prunes a global store.
+- BAR has no `storageReservation` extension or disk-budget exclusion. The same
+  original boot/monotonic clock provides 3600 seconds of work and 120 seconds
+  for retirement. Existing admission still requires four CPUs, 12 GiB memory
+  reservation plus 2 GiB headroom, quantified relevant shared reservations,
+  sufficient enclosing capacity/PIDs, and 80 GiB free on both selected stores.
+  Unknown resource conflicts refuse the operation. Four-CPU affinity, one build
+  job, an 80 GiB sampled storage ceiling and 12 GiB observed process RSS ceiling
+  retain their existing scope; these are not hard per-operation containment or
+  measured fit guarantees.
+
+Fixed commands pull the approved digest, build with no retry and no layer cache,
+export the actual image ID, verify the archive, load by that verified archive,
+then compare loaded image ID/config/rootfs and read back the selected local tag.
+The supported Buildah family remains 1.43.1. Preflight also requires the final
+UID/GID10001 mapping. The final image must have Linux amd64, user10001:10001,
+working directory `/work` and entrypoint `bash /opt/barc/entrypoint.sh`; its CMD
+is empty because that final ENTRYPOINT resets the development stage's CMD.
+See the [Dockerfile CMD/ENTRYPOINT rules](https://docs.docker.com/reference/dockerfile/#understand-how-cmd-and-entrypoint-interact).
+No product container is started by this profile.
+
+The streaming verifier requires the exact recipe/resources/entrypoint, selected
+headless engine binary, map and game SDP hashes. It additionally requires and
+records the actual hashes and sizes of the nonempty plugin, plugin hash manifest,
+source manifest, toolchain package/status/hash manifests and maintained HighBar
+launcher. These are output identities, not invented expected plugin bytes. The
+image recipe's pinned build performs its own complete engine/game acquisition,
+compiled controls and dependency checks. The verifier retains the existing
+16 GiB archive, 32 GiB expanded, 16 GiB per-layer, 200000-header, 64 MiB path
+metadata and 1 MiB JSON bounds. BAR allows no CLR FIFO metadata exception.
+The original 8 MiB aggregate command capture, 32 MiB metadata, 2048 journal
+records and 512 command bounds remain shared across phases, including failure
+retention. Archive mutation or failed verification blocks load; first failure,
+direct-child settlement and remaining retirement uncertainty stay distinct.
+
+Run the inert source controls with:
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 python3 tests/portable-workspace/image/test_bar_profile.py
+```
+
+They use synthetic Git inputs, tiny Python capture children and injected native
+ports. They do not execute Buildah, Podman, a product runtime or private assets.
+The existing image workflow runs them before its existing portable-Python image
+work; adding this profile does not start a BAR build in CI. This static/actual-
+caller preflight catches malformed selections, wrong products, drift, occupied
+stores, capacity failures and failed/invalid exports before dependent effects.
+The linear workflow needs no new scheduler or custom model. Reuse the existing
+20-minute job cap, keep warm source controls below60 seconds, and reassess if
+retry, sharing or publication behavior changes. No CI savings are claimed.
+
+Source review and required exact-head CI establish only the controller source
+prerequisite. Full issue1032 acceptance still requires root's separate fresh
+capacity/interference admission, the actual complete image build, manifest and
+static ELF/dependency correspondence, independent readback and observed scoped
+retirement. Source-only or intermediate-toolchain completion cannot close it.
+Loaded engine/plugin ABI, Count1, useful play (still0/6), B2 adoption, publication,
+parent acceptance and original holds remain separate. Prepared inputs and
+`check-inputs` correspondence never grant execution authority.
