@@ -3118,10 +3118,19 @@ printf '%s\n' '{"type":"turn.completed","usage":{"input_tokens":1,"cached_input_
                         request.ProcessOperationId, request.AttemptId, 1L, StartObserved observation, horizon.Token)
                 Assert.Equal(Appended, startRecorded)
                 let mutable terminal = observation
+                let mutable observationRevision = 2L
                 while terminal.Lifecycle = SessionLifecycle.Running && timer.Elapsed < TimeSpan.FromSeconds 30. do
                     do! Task.Delay(50, horizon.Token)
                     let! observed = provider.Observe(terminal.Session, horizon.Token)
                     terminal <- observed |> Result.defaultWith failwith
+                    // Match ExecutionActor.Observe: record the genuine provider result
+                    // before resolving the next command against the advanced journal.
+                    let! recorded =
+                        (executions :> IExecutionSessionJournal).AppendAttempt(
+                            request.ProcessOperationId, request.AttemptId, observationRevision,
+                            ObservationRecorded terminal, horizon.Token)
+                    Assert.Equal(Appended, recorded)
+                    observationRevision <- observationRevision + 1L
                 Assert.Equal(SessionLifecycle.Succeeded, terminal.Lifecycle)
                 Assert.Single(File.ReadAllLines spawns) |> ignore
                 (transport :> IDisposable).Dispose()
@@ -3139,7 +3148,7 @@ printf '%s\n' '{"type":"turn.completed","usage":{"input_tokens":1,"cached_input_
                 | Reconciled value -> Assert.Equal(observation.Session, value.Session)
                 | other -> failwithf "ordinary replacement reconciliation failed: %A" other
                 let! observed = recovered.Observe(observation.Session, horizon.Token)
-                Assert.True(Result.isOk observed)
+                Assert.True(Result.isOk observed, sprintf "ordinary replacement observation refused: %A" observed)
                 let! cancelled = recovered.Cancel(observation.Session, horizon.Token)
                 match cancelled with
                 | CancelUnknown reason -> failwithf "ordinary replacement cancellation became unknown: %s" reason

@@ -2606,8 +2606,10 @@ type ExecutorRuntimeTests() =
 
 /// Exercises the runner projection only; authoritative domain verification belongs to the Host tests.
 type OrdinaryAssignmentRuntimeTests() =
-    [<Fact>]
-    member _.``ordinary runner refuses obligation drift then releases one controlled invocation and preserves launch identity``() =
+    [<Theory>]
+    [<InlineData(false)>]
+    [<InlineData(true)>]
+    member _.``ordinary runner refuses obligation drift then releases one controlled invocation and preserves launch identity``(reconcileTerminal: bool) =
         task {
             let repository, baseline = RuntimeFixture.repo()
             let root = Directory.CreateTempSubdirectory("ordinary-runtime-").FullName
@@ -2778,8 +2780,8 @@ type OrdinaryAssignmentRuntimeTests() =
                 let observe0 =
                     { command with
                         CommandId = Guid.NewGuid()
-                        Kind = "observe"
-                        ProviderSessionReference = started.ProviderSessionReference
+                        Kind = if reconcileTerminal then "reconcile" else "observe"
+                        ProviderSessionReference = if reconcileTerminal then null else started.ProviderSessionReference
                         BodySha256 = ""
                     }
                 let observe = { observe0 with BodySha256 = ExecutorWire.commandV2Digest observe0 }
@@ -2809,6 +2811,10 @@ type OrdinaryAssignmentRuntimeTests() =
             let reconciled = reconciliation |> List.pick(fun bytes -> ExecutorWire.parseResponse bytes |> Result.toOption)
             Assert.Equal(started.ProviderSessionReference, reconciled.ProviderSessionReference)
             Assert.Equal("succeeded", reconciled.Lifecycle)
+            let! observation = invoke replacement artifact (commandFor "observe") true
+            let observed = observation |> List.pick(fun bytes -> ExecutorWire.parseResponse bytes |> Result.toOption)
+            Assert.Equal(started.ProviderSessionReference, observed.ProviderSessionReference)
+            Assert.Equal("succeeded", observed.Lifecycle)
             let! cancellation = invoke replacement artifact (commandFor "cancel") true
             Assert.True(cancellation |> List.exists(fun bytes ->
                 ExecutorWire.parseOperationOutcome bytes |> Result.toOption

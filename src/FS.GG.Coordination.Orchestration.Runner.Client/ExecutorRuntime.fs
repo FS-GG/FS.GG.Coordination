@@ -686,6 +686,33 @@ type ExecutorRuntime
                 return readiness
         }
 
+    // Every actual terminal observation retains the same bounded artifact proof,
+    // including reconciliation after lost launch output that completes before polling.
+    let emitObservation output command (selected: Supervised) (observation: SessionObservation) =
+        task {
+            let artifact =
+                match observation.Lifecycle, observation.Candidate with
+                | Succeeded, Some candidate ->
+                    if artifacts.Count >= 4 && not (artifacts.ContainsKey candidate.CandidateId) then
+                        Error "executor-artifact-capacity-refused"
+                    else
+                        selected.Inspector.CreateArtifact(candidate, ExecutorWire.maximumContentBytes)
+                        |> Result.map Some
+                | _ -> Ok None
+            match artifact with
+            | Error reason ->
+                do! writeFrame output (ExecutorWire.encodeOperationOutcome (
+                    operation command "reconcile" "unknown" (Some observation.Session) reason))
+            | Ok retained ->
+                match retained with
+                | Some value ->
+                    artifacts[value.Manifest.CandidateId] <- value
+                    do! writeFrame output (ExecutorWire.encodeArtifactManifest value.Manifest)
+                | None -> ()
+                do! writeFrame output (ExecutorWire.encodeResponse (
+                    observationResponse command selected.Readiness observation))
+        }
+
     let handleCommand (output: Stream) (controlBytes: byte array) (digest: string) (command: ExecutorCommandV2) causal =
         let replyCommand = {command with BodySha256=digest}
         let receipt (_: ExecutorCommandV2) = receipt replyCommand
@@ -961,12 +988,7 @@ type ExecutorRuntime
                                     persistProviderSession selected command observation.Session
                                     selected.Session <- Some observation.Session
 
-                                    do!
-                                        writeFrame
-                                            output
-                                            (ExecutorWire.encodeResponse (
-                                                observationResponse command selected.Readiness observation
-                                            ))
+                                    do! emitObservation output replyCommand selected observation
                                 | Some ConfirmedAbsent ->
                                     do!
                                         writeFrame
@@ -1039,12 +1061,7 @@ type ExecutorRuntime
                                                     receipt command "observed" true "provider-process-creation-observed"
                                                 ))
 
-                                        do!
-                                            writeFrame
-                                                output
-                                                (ExecutorWire.encodeResponse (
-                                                    observationResponse command selected.Readiness observation
-                                                ))
+                                        do! emitObservation output replyCommand selected observation
                                     | LaunchRefused reason ->
                                         do!
                                             writeFrame
@@ -1136,53 +1153,7 @@ type ExecutorRuntime
                                                     operation command "reconcile" "unknown" (Some session) reason
                                                 ))
                                     | Ok observation ->
-                                        match observation.Lifecycle, observation.Candidate with
-                                        | Succeeded, Some candidate ->
-                                            match
-                                                if
-                                                    artifacts.Count >= 4
-                                                    && not (artifacts.ContainsKey candidate.CandidateId)
-                                                then
-                                                    Error "executor-artifact-capacity-refused"
-                                                else
-                                                    selected.Inspector.CreateArtifact(
-                                                        candidate,
-                                                        ExecutorWire.maximumContentBytes
-                                                    )
-                                            with
-                                            | Ok artifact ->
-                                                artifacts[candidate.CandidateId] <- artifact
-
-                                                do!
-                                                    writeFrame
-                                                        output
-                                                        (ExecutorWire.encodeArtifactManifest artifact.Manifest)
-
-                                                do!
-                                                    writeFrame
-                                                        output
-                                                        (ExecutorWire.encodeResponse (
-                                                            observationResponse command selected.Readiness observation
-                                                        ))
-                                            | Error reason ->
-                                                do!
-                                                    writeFrame
-                                                        output
-                                                        (ExecutorWire.encodeOperationOutcome (
-                                                            operation
-                                                                command
-                                                                "reconcile"
-                                                                "unknown"
-                                                                (Some session)
-                                                                reason
-                                                        ))
-                                        | _ ->
-                                            do!
-                                                writeFrame
-                                                    output
-                                                    (ExecutorWire.encodeResponse (
-                                                        observationResponse command selected.Readiness observation
-                                                    ))
+                                        do! emitObservation output replyCommand selected observation
                         | "reconcile" ->
                             let intent =
                                 {
@@ -1228,12 +1199,7 @@ type ExecutorRuntime
                                     persistProviderSession selected command observation.Session
                                     selected.Session <- Some observation.Session
 
-                                    do!
-                                        writeFrame
-                                            output
-                                            (ExecutorWire.encodeResponse (
-                                                observationResponse command selected.Readiness observation
-                                            ))
+                                    do! emitObservation output replyCommand selected observation
                                 | ConfirmedAbsent ->
                                     do!
                                         writeFrame
