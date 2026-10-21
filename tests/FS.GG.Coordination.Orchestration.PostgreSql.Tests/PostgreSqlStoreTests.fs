@@ -3078,6 +3078,7 @@ printf '%s\n' '{"type":"turn.completed","usage":{"input_tokens":1,"cached_input_
                 let timer = Stopwatch.StartNew()
                 let observedReferences = ResizeArray<string * string * string>()
                 let mutable loseLaunchOutput = interruption = "launch-output-lost"
+                let mutable originalLaunchFrames: byte array list option = None
                 let track (transport: LocalExecutorTransport) =
                     { new IAuthenticatedExecutorTransport with
                         member _.Exchange(frames, token) =
@@ -3086,6 +3087,8 @@ printf '%s\n' '{"type":"turn.completed","usage":{"input_tokens":1,"cached_input_
                                 let command, _, _ = QualifiedExecutorWire.parseCommand control |> Result.defaultWith failwith
                                 let reference = OrdinaryAssignmentWire.reference control |> Result.defaultWith failwith |> Option.get
                                 observedReferences.Add((command.Kind, reference.AssignmentSha256, reference.ArtifactSha256))
+                                if command.Kind = "launch" && originalLaunchFrames.IsNone then
+                                    originalLaunchFrames <- Some(frames |> List.map Array.copy)
                                 let! result = (transport :> IAuthenticatedExecutorTransport).Exchange(frames, token)
                                 if command.Kind = "launch" && loseLaunchOutput then
                                     loseLaunchOutput <- false
@@ -3136,10 +3139,39 @@ printf '%s\n' '{"type":"turn.completed","usage":{"input_tokens":1,"cached_input_
                 (transport :> IDisposable).Dispose()
                 use replacement = new LocalExecutorTransport(configuration)
                 let recovered = RemoteExecutorProvider(executions, resolver, track replacement) :> IExecutionProvider
-                let! duplicate = recovered.Launch(preparation.LaunchIntent, horizon.Token)
-                match duplicate with
-                | LaunchStarted value -> Assert.Equal(observation.Session, value.Session)
-                | other -> failwithf "ordinary replay refused: %A" other
+                // Replay the exact original command independently of later journal
+                // revisions. It already exists and grants no renewed reservation.
+                let originalFrames = originalLaunchFrames |> Option.get
+                let originalControl = List.last originalFrames
+                let originalCommand, _, originalDigest = QualifiedExecutorWire.parseCommand originalControl |> Result.defaultWith failwith
+                let! persistedReplay = (executions :> IExecutorCommandStore).PersistCommand(originalControl, horizon.Token)
+                match persistedReplay with
+                | CommandDuplicate revision -> Assert.Equal(originalCommand.ExpectedRevision, revision)
+                | other -> failwithf "identical original command replay changed: %A" other
+                let! exactReplay = (track replacement).Exchange(originalFrames, horizon.Token)
+                let replayFrames = (exactReplay |> Result.defaultWith failwith).Frames
+                let replayResponse = Assert.Single<ExecutorResponse>(replayFrames |> List.choose(fun frame -> ExecutorWire.parseResponse frame |> Result.toOption))
+                Assert.Equal(originalCommand.CommandId, replayResponse.CommandId)
+                Assert.Equal(originalDigest, replayResponse.BodySha256)
+                Assert.Equal(ProviderSessionReference.value observation.Session, replayResponse.ProviderSessionReference)
+                Assert.Equal("succeeded", replayResponse.Lifecycle)
+                Assert.True(replayFrames |> List.exists(fun frame ->
+                    ExecutorWire.parseReceipt frame |> Result.toOption
+                    |> Option.exists(fun receipt -> receipt.Disposition = "duplicate" && not receipt.ProcessCreationObserved)))
+                Assert.Single(File.ReadAllLines spawns) |> ignore
+                // A semantic duplicate at a later revision belongs to the actual
+                // coordinator, which reconciles rather than requests a new launch.
+                let coordinator = ExecutionSessionCoordinator(recovered, executions, TimeProvider.System)
+                let! duplicate = coordinator.Launch(preparation.LaunchIntent, horizon.Token)
+                let duplicateState =
+                    match duplicate with
+                    | SessionAdvanced state | SessionDuplicate state -> state
+                    | other -> failwithf "ordinary coordinator replay refused: %A" other
+                Assert.Equal(preparation.LaunchIntent, duplicateState.Intent)
+                Assert.Equal(Some observation.Session, duplicateState.Observation |> Option.map _.Session)
+                let! retainedReservation = (executions :> IExecutorCommandStore).ReadSubscription(request.ExecutionReservationId, horizon.Token)
+                Assert.Equal(preparation.ExecutionReservation,
+                    retainedReservation |> Result.bind(fun (bytes, _) -> SubscriptionAccountingCodec.decodeReservation bytes) |> Result.defaultWith failwith)
                 Assert.Single(File.ReadAllLines spawns) |> ignore
                 let! durableRoute = (executions :> IExecutorCommandStore).ReadRoute(request.ProcessOperationId, request.AttemptId, horizon.Token)
                 Assert.Equal(reference, durableRoute |> Result.bind OrdinaryAssignmentWire.reference |> Result.defaultWith failwith |> Option.get)

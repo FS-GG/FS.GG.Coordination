@@ -1229,43 +1229,46 @@ type ExecutorRuntime
                                             operation command "cancel" "refused" None reason
                                         ))
                             | Ok session ->
-                                let! cancelled =
-                                    match recoveredTerminal selected controlBytes replyCommand causal with
-                                    | Some _ -> Task.FromResult(CancelRefused "executor-session-already-terminal")
-                                    | None -> selected.Provider.Cancel(session, CancellationToken.None)
-
-                                match cancelled with
-                                | CancelAccepted ->
-                                    do!
-                                        writeFrame
-                                            output
-                                            (ExecutorWire.encodeOperationOutcome (
-                                                operation
-                                                    command
-                                                    "cancel"
-                                                    "accepted"
-                                                    (Some session)
-                                                    "termination-requested-not-yet-observed"
-                                            ))
-                                | CancelRefused reason ->
-                                    do!
-                                        writeFrame
-                                            output
-                                            (ExecutorWire.encodeOperationOutcome (
-                                                operation
-                                                    command
-                                                    "cancel"
-                                                    "termination-not-observed"
-                                                    (Some session)
-                                                    reason
-                                            ))
-                                | CancelUnknown reason ->
-                                    do!
-                                        writeFrame
-                                            output
-                                            (ExecutorWire.encodeOperationOutcome (
-                                                operation command "cancel" "unknown" (Some session) reason
-                                            ))
+                                match recoveredTerminal selected controlBytes replyCommand causal with
+                                | Some _ ->
+                                    // Verified terminal proof establishes that no termination
+                                    // effect is needed; it is not an uncertain live refusal.
+                                    do! writeFrame output (ExecutorWire.encodeOperationOutcome (
+                                        operation command "cancel" "refused" (Some session) "executor-session-already-terminal"))
+                                | None ->
+                                    let! cancelled = selected.Provider.Cancel(session, CancellationToken.None)
+                                    match cancelled with
+                                    | CancelAccepted ->
+                                        do!
+                                            writeFrame
+                                                output
+                                                (ExecutorWire.encodeOperationOutcome (
+                                                    operation
+                                                        command
+                                                        "cancel"
+                                                        "accepted"
+                                                        (Some session)
+                                                        "termination-requested-not-yet-observed"
+                                                ))
+                                    | CancelRefused reason ->
+                                        do!
+                                            writeFrame
+                                                output
+                                                (ExecutorWire.encodeOperationOutcome (
+                                                    operation
+                                                        command
+                                                        "cancel"
+                                                        "termination-not-observed"
+                                                        (Some session)
+                                                        reason
+                                                ))
+                                    | CancelUnknown reason ->
+                                        do!
+                                            writeFrame
+                                                output
+                                                (ExecutorWire.encodeOperationOutcome (
+                                                    operation command "cancel" "unknown" (Some session) reason
+                                                ))
                         | _ ->
                             do!
                                 writeFrame

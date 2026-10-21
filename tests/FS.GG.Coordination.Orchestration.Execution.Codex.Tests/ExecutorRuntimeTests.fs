@@ -2818,17 +2818,27 @@ type OrdinaryAssignmentRuntimeTests() =
             let! cancellation = invoke replacement artifact (commandFor "cancel") true
             Assert.True(cancellation |> List.exists(fun bytes ->
                 ExecutorWire.parseOperationOutcome bytes |> Result.toOption
-                |> Option.exists(fun outcome -> outcome.Reason = "executor-session-already-terminal")))
+                |> Option.exists(fun outcome -> outcome.Disposition = "refused" && outcome.Reason = "executor-session-already-terminal")))
+            let assertUnknownCancellation () =
+                task {
+                    let! frames = invoke (ExecutorRuntime(options, TimeProvider.System)) artifact (commandFor "cancel") true
+                    Assert.True(frames |> List.exists(fun bytes ->
+                        ExecutorWire.parseOperationOutcome bytes |> Result.toOption
+                        |> Option.exists(fun outcome -> outcome.Disposition = "unknown")))
+                    Assert.Single(File.ReadAllLines(Path.Combine(root, "spawns"))) |> ignore
+                }
             let sessionPath = Path.Combine(options.StateRoot, "executor-control", command.AssignmentId.ToString("N"), command.AttemptId.ToString("N"), string command.Generation, "provider-session.json")
             let retainedSession = File.ReadAllBytes sessionPath
             for invalid in [| [||]; System.Text.Encoding.UTF8.GetBytes "[\"fsgg.executor-provider-session/1\",\"wrong\",\"codex-thread:substituted\",\"wrong\"]" |] do
                 File.WriteAllBytes(sessionPath, invalid)
                 let! refused = invoke (ExecutorRuntime(options, TimeProvider.System)) artifact command true
                 Assert.False(refused |> List.exists(fun bytes -> ExecutorWire.parseResponse bytes |> Result.isOk))
+                do! assertUnknownCancellation ()
                 Assert.Single(File.ReadAllLines(Path.Combine(root, "spawns"))) |> ignore
             File.Delete sessionPath
             let! missing = invoke (ExecutorRuntime(options, TimeProvider.System)) artifact command true
             Assert.False(missing |> List.exists(fun bytes -> ExecutorWire.parseResponse bytes |> Result.isOk))
+            do! assertUnknownCancellation ()
             File.WriteAllBytes(sessionPath, retainedSession)
             let artifactPath = Path.Combine(options.ArtifactRoot, command.CandidateId.ToString("N") + ".manifest.json")
             let retainedArtifact = File.ReadAllBytes artifactPath
@@ -2840,6 +2850,7 @@ type OrdinaryAssignmentRuntimeTests() =
             File.Delete artifactPath
             let! noTerminal = invoke (ExecutorRuntime(options, TimeProvider.System)) artifact command true
             Assert.False(noTerminal |> List.exists(fun bytes -> ExecutorWire.parseResponse bytes |> Result.isOk))
+            do! assertUnknownCancellation ()
             File.WriteAllBytes(artifactPath, retainedArtifact)
             Assert.Single(File.ReadAllLines(Path.Combine(root, "spawns"))) |> ignore
             let changed = { artifact with Principal = "different-principal" }
