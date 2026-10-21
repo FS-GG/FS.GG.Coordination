@@ -2488,6 +2488,182 @@ class FutureTraceJoinedControls(unittest.TestCase):
     """Actual fixed FIFO/store/parser seams with synthetic inert producer bytes."""
     proc_fixture=DiagnosticControls.proc_fixture
 
+    def lossless_command_fixture(self,root):
+        """Real descriptor/canonical paths; only external input observations are inert."""
+        spec,descriptor,approved=self.proc_fixture(root)
+        # The fixture declares the reviewed contract independently so the actual
+        # old command entrypoint can be used for a causal red control.
+        runtime={'schema':'fsgg.proc.lossless-qualification-profile/1','encoding':'gzip-pid-stream/1',
+                 'sourceOnly':False,'qualificationOrdinal':5,'storedBytes':8*1024**2,'expandedBytes':32*1024**2,
+                 'maximumPids':32,'physicalLineBytes':65536,'physicalRecords':131072,
+                 'retainedObjectBytes':128*1024**2,'manifestReserveBytes':16384}
+        operation=module.PROC_PROFILES['proc-pair-client-qualification']
+        lineage=module.PROC_OPERATION_BASE/str(os.geteuid())/operation;lineage.mkdir(mode=0o700)
+        slot=lineage/'attempt-5';slot.mkdir(mode=0o700)
+        for name in ('home','tmp'):(slot/name).mkdir(mode=0o700)
+        spec.update(profile='proc-pair-client-qualification',role='qualification',operation=operation,
+                    qualificationAttempt=5,traceRuntimeProfile=runtime,operationRoot=str(slot))
+        spec['environment'].update(HOME=str(slot/'home'),TMPDIR=str(slot/'tmp'))
+        spec['request']={'method':'GET','endpoint':'repos/'+module.PROC_REPOSITORY,'apiVersion':'2026-03-10',
+                         'body':None,'requestLimit':5,'nativeGet':False,'credentialReference':None,'cases':list(module.PROC_QUALIFICATION_CASES)}
+        spec['proofInputs']['bootstrapEvidence']=spec['proofInputs'].pop('runtimeQualification')
+        limit=resource.getrlimit(resource.RLIMIT_AS)[0]
+        spec['addressSpaceBytes']=None if limit==resource.RLIM_INFINITY else limit
+        spec['workDeadline']=spec['started']+20;spec['totalDeadline']=spec['workDeadline']+10
+        original={row['path']:row for row in spec['pins']}
+        closure,bootstrap=future_source_closure_fixture(spec)
+        original.update({row['path']:row for row in spec['pins']});spec['pins']=list(original.values())
+        spec['sourceReadAllowlist']=list(original)
+        bootstrap.update(instrumentation=module.PROC_INSTRUMENTATION,capacity={'directory':'/sys/fs/cgroup','inert':True},
+                         losslessRuntimeProfile=copy.deepcopy(runtime))
+        Path(spec['proofInputs']['bootstrapEvidence']).write_text(json.dumps(bootstrap))
+        admission={'recovery':{'clientQualificationEnabled':True},'losslessQualification':{
+            'enabled':True,'profile':copy.deepcopy(runtime),'operation':operation,'qualificationAttempt':5}}
+        Path(spec['proofInputs']['admission']).write_text(json.dumps(admission))
+        authority=json.loads(approved.read_text())
+        authority.update(profile=spec['profile'],operation=operation,operationRoot=str(slot),
+            canonicalOperationIdentity=module.proc_directory_identity(slot),canonicalQualificationLineageIdentity=module.proc_directory_identity(lineage),
+            losslessRuntimeProfile=copy.deepcopy(runtime),losslessQualificationApproved=True,nonEffectQualificationApproved=True,
+            publicationAuthorized=False,nativeGetApproved=False,futureTraceSourceProfile=dict(module.PROC_FUTURE_TRACE_SOURCE_PROFILE),
+            futureTraceSourceClosure=closure,instrumentation=copy.deepcopy(module.PROC_INSTRUMENTATION))
+        def save():
+            descriptor.write_text(json.dumps(spec));raw=descriptor.read_bytes()
+            authority['descriptorSha256']=hashlib.sha256(raw).hexdigest();approved.write_text(json.dumps(authority))
+            (slot/'input.json').write_bytes(raw)
+            (slot/'command.json').write_text(json.dumps({'schema':module.RESULT_SCHEMA,'operation':operation,
+                'sendState':'prepared-no-send','descriptorSha256':authority['descriptorSha256']}))
+        save();return spec,descriptor,approved,authority,bootstrap,admission,save
+
+    @contextlib.contextmanager
+    def lossless_command_adapters(self,events,*,measure=None,close_failure=False,read_failure=False):
+        """Keep real command/preflight/apparatus/store/parser; no process can launch."""
+        from types import SimpleNamespace
+        original_readlink=module.os.readlink;original_close=module.ProcFutureTraceStore.close
+        stdout=io.StringIO();stderr=io.StringIO()
+        proxy=SimpleNamespace(**vars(module.sys))
+        proxy.flags=SimpleNamespace(isolated=1,no_site=1,optimize=0)
+        proxy.dont_write_bytecode=True;proxy.stdout=stdout;proxy.stderr=stderr
+        def bootstrap(*args):events.append('bootstrap')
+        def reads(*args):
+            events.append('read-drift')
+            if read_failure:raise ValueError('inert exact input drift')
+        def close(store):
+            original_close(store)
+            if close_failure:raise OSError('inert final sibling close failure')
+        def observe(spec,authority,bootstrap,descriptor,approved,sha,phase,*,trace_store):
+            events.append('measure-'+phase)
+            if measure is not None:return measure(spec,authority,bootstrap,descriptor,approved,sha,phase,trace_store=trace_store)
+            python=os.path.realpath(os.sys.executable)
+            argv=[python,'-I','-S','-B',str(ROOT/'eng/retain-choreo-c2-diagnostics.py'),'command','--proc-measured-controller',
+                  str(Path(spec['operationRoot'])/'input.json'),str(approved),sha,'47',phase]
+            self.produce(trace_store,phase,('10 1.0 execve('+json.dumps(python)+', '+json.dumps(argv)+', 0x0) = 0\n10 2.0 +++ exited with 0 +++\n').encode())
+            if phase=='normal':(Path(spec['operationRoot'])/'measurement.subject.json').write_text(json.dumps({
+                'commandAccepted':True,'firstCause':None,'additionalFailures':[],'runtimeEvidence':{},
+                'rootAccepted':True,'qualificationAccepted':True}))
+            return {'tracer':{'pid':20},'subjectReadiness':{'subject':{'pid':10}}}
+        with patch.object(module,'sys',proxy),patch.object(module.os,'readlink',side_effect=lambda p,*a,**k:'/dev/null' if str(p)=='/proc/self/fd/0' else original_readlink(p,*a,**k)),\
+             patch.object(module,'proc_bootstrap_evidence',side_effect=bootstrap),patch.object(module,'proc_read_drift',side_effect=reads),\
+             patch.object(module,'proc_capacity_evidence'),patch.object(module,'proc_measure_once',side_effect=observe),\
+             patch.object(module.ProcFutureTraceStore,'close',close),patch('subprocess.Popen',side_effect=AssertionError('no tracer/client/native actor')):
+            yield stderr
+
+    def test_lossless_real_entrypoint_runs_joined_apparatus_and_refuses_replay(self):
+        with tempfile.TemporaryDirectory() as directory:
+            spec,descriptor,approved,_,_,_,_=self.lossless_command_fixture(Path(directory));slot=Path(spec['operationRoot']);events=[]
+            with self.lossless_command_adapters(events) as errors:
+                code=module.execute_proc_command(descriptor,approved,hashlib.sha256(approved.read_bytes()).hexdigest())
+                self.assertEqual(0,code,errors.getvalue()+(slot/'command.json').read_text())
+                result=json.loads((slot/'command.json').read_text())
+                self.assertEqual(['controller','session','normal'],[e[8:] for e in events if e.startswith('measure-')])
+                self.assertLess(events.index('bootstrap'),events.index('measure-controller'))
+                self.assertLess(events.index('read-drift',events.index('bootstrap')),events.index('measure-controller'))
+                self.assertFalse(result['rootAccepted']);self.assertFalse(result['qualificationAccepted']);self.assertFalse(result['publicationAuthorized'])
+                self.assertFalse(result['futureTraceSourceOnly']);self.assertTrue(result['completeSubjectTrace']['complete'])
+                original=(slot/'command.json').read_bytes()
+                self.assertEqual(1,module.execute_proc_command(descriptor,approved,hashlib.sha256(approved.read_bytes()).hexdigest()))
+                self.assertEqual(original,(slot/'command.json').read_bytes())
+                self.assertEqual(3,len([e for e in events if e.startswith('measure-')]))
+
+    def test_lossless_real_entrypoint_refuses_unselected_crossed_and_consumed_before_effects(self):
+        for mutation in ('default-disabled','flag-false','authority','bootstrap-profile','bootstrap-closure','source-closure',
+                         'native-get','publication','descriptor-profile','consumed','canonical-input','input-drift'):
+            with self.subTest(mutation=mutation),tempfile.TemporaryDirectory() as directory:
+                spec,descriptor,approved,authority,bootstrap,admission,save=self.lossless_command_fixture(Path(directory))
+                if mutation=='default-disabled':admission.pop('losslessQualification')
+                elif mutation=='flag-false':admission['losslessQualification']['enabled']=False
+                elif mutation=='authority':authority.pop('losslessQualificationApproved')
+                elif mutation=='bootstrap-profile':bootstrap['losslessRuntimeProfile']['expandedBytes']+=1
+                elif mutation=='bootstrap-closure':bootstrap.pop('futureTraceSourceClosure')
+                elif mutation=='source-closure':authority['futureTraceSourceClosure']['readEvidenceSha256']='0'*64
+                elif mutation=='native-get':authority['nativeGetApproved']=True
+                elif mutation=='publication':authority['publicationAuthorized']=True
+                elif mutation=='descriptor-profile':spec['traceRuntimeProfile']['physicalRecords']+=1
+                Path(spec['proofInputs']['bootstrapEvidence']).write_text(json.dumps(bootstrap))
+                Path(spec['proofInputs']['admission']).write_text(json.dumps(admission));save();slot=Path(spec['operationRoot'])
+                if mutation=='consumed':(slot/'command.json').write_text(json.dumps({'sendState':'measurement-started'}))
+                elif mutation=='canonical-input':(slot/'input.json').write_text('{}')
+                original=(slot/'command.json').read_bytes();events=[]
+                with self.lossless_command_adapters(events,read_failure=mutation=='input-drift'):
+                    self.assertEqual(1,module.execute_proc_command(descriptor,approved,hashlib.sha256(approved.read_bytes()).hexdigest()))
+                self.assertEqual(original,(slot/'command.json').read_bytes())
+                self.assertFalse((slot/'dispatch-input.json').exists());self.assertFalse((slot/'lossless-traces').exists())
+                self.assertFalse(any(e.startswith('measure-') for e in events))
+
+    def test_lossless_exact_ordinal_contract_cannot_widen_raw_or_renew_old_slots(self):
+        with tempfile.TemporaryDirectory() as directory:
+            spec,_,_,_,_,_,_=self.lossless_command_fixture(Path(directory))
+            self.assertEqual('qualification',module.proc_command_preflight(spec,now=time.monotonic())['role'])
+            self.assertEqual(Path(spec['operationRoot']),module.proc_operation_root(spec['operation'],5,trace_runtime_profile=spec['traceRuntimeProfile']))
+            for ordinal in (None,True,0,1,2,3,4,6):
+                with self.subTest(futureOrdinal=ordinal):
+                    bad=copy.deepcopy(spec);bad['qualificationAttempt']=ordinal
+                    with self.assertRaises(ValueError):module.proc_command_preflight(bad,now=time.monotonic())
+                    with self.assertRaises(ValueError):module.proc_operation_root(spec['operation'],ordinal,trace_runtime_profile=spec['traceRuntimeProfile'])
+            for ordinal in (1,2,3,4):
+                raw=copy.deepcopy(spec);raw.pop('traceRuntimeProfile');raw['qualificationAttempt']=ordinal
+                slot=module.proc_operation_root(raw['operation'],ordinal);raw['operationRoot']=str(slot)
+                raw['environment'].update(HOME=str(slot/'home'),TMPDIR=str(slot/'tmp'))
+                self.assertEqual('qualification',module.proc_command_preflight(raw,now=time.monotonic())['role'])
+            for ordinal in (0,5,6,True):
+                raw=copy.deepcopy(spec);raw.pop('traceRuntimeProfile');raw['qualificationAttempt']=ordinal
+                with self.assertRaises(ValueError):module.proc_command_preflight(raw,now=time.monotonic())
+            for field in spec['traceRuntimeProfile']:
+                bad=copy.deepcopy(spec);value=bad['traceRuntimeProfile'][field]
+                bad['traceRuntimeProfile'][field]=(not value) if type(value) is bool else value+1 if type(value) is int else value+'-crossed'
+                with self.subTest(field=field),self.assertRaises(ValueError):module.proc_command_preflight(bad,now=time.monotonic())
+
+    def test_lossless_entrypoint_rejoins_original_bytes_before_exclusive_claim(self):
+        for mutation in ('descriptor','authority'):
+            with self.subTest(mutation=mutation),tempfile.TemporaryDirectory() as directory:
+                spec,descriptor,approved,_,_,_,_=self.lossless_command_fixture(Path(directory));slot=Path(spec['operationRoot']);events=[]
+                original=module.proc_qualification_apparatus
+                def changed(*args,**kwargs):
+                    if mutation=='descriptor':
+                        crossed=json.loads(descriptor.read_text());crossed['item']='crossed-original'
+                        descriptor.write_text(json.dumps(crossed));(slot/'input.json').write_bytes(descriptor.read_bytes())
+                        prepared=json.loads((slot/'command.json').read_text())
+                        prepared['descriptorSha256']=hashlib.sha256(descriptor.read_bytes()).hexdigest()
+                        (slot/'command.json').write_text(json.dumps(prepared))
+                    else:
+                        crossed=json.loads(approved.read_text());crossed['approved']=False;approved.write_text(json.dumps(crossed))
+                    return original(*args,**kwargs)
+                with self.lossless_command_adapters(events) as errors,patch.object(module,'proc_qualification_apparatus',side_effect=changed):
+                    self.assertEqual(1,module.execute_proc_command(descriptor,approved,hashlib.sha256(approved.read_bytes()).hexdigest()))
+                    self.assertIn('adjacent original input/authority drift',errors.getvalue())
+                self.assertFalse((slot/'dispatch-input.json').exists());self.assertFalse((slot/'lossless-traces').exists())
+                self.assertFalse(any(e.startswith('measure-') for e in events))
+
+    def test_lossless_real_entrypoint_keeps_measurement_and_independent_close_failure(self):
+        def fail(*args,**kwargs):raise ValueError('inert original monitor failure')
+        with tempfile.TemporaryDirectory() as directory:
+            spec,descriptor,approved,_,_,_,_=self.lossless_command_fixture(Path(directory));events=[]
+            with self.lossless_command_adapters(events,measure=fail,close_failure=True):
+                self.assertEqual(1,module.execute_proc_command(descriptor,approved,hashlib.sha256(approved.read_bytes()).hexdigest()))
+            result=json.loads((Path(spec['operationRoot'])/'command.json').read_text())
+            self.assertIn('original monitor failure',result['firstCause']['message'])
+            self.assertEqual(['inert final sibling close failure'],[e['message'] for e in result['additionalFailures']])
+            self.assertFalse(result['commandAccepted']);self.assertEqual('qualification-failed-or-unknown',result['sendState'])
+
     def store(self,root,**changes):
         spec={'role':'qualification','request':{'nativeGet':False},'operationRoot':str(root),
               'workDeadline':time.monotonic()+5,'totalDeadline':time.monotonic()+10}
@@ -2658,7 +2834,7 @@ class FutureTraceJoinedControls(unittest.TestCase):
             self.assertEqual(original,{key:value for key,value in future.items() if key!='representation'})
 
     @contextlib.contextmanager
-    def measured_caller(self,root,*,monitor_failure=False,close_failure=False,report_failure=False,unknown=False):
+    def measured_caller(self,root,*,monitor_failure=False,close_failure=False,report_failure=False,unknown=False,runtime=False):
         """Actual measure_once/handshake, only process/kernel adapters are inert."""
         from unittest.mock import MagicMock
         base=root/'producer';base.mkdir(mode=0o700);uid=base/str(os.geteuid());uid.mkdir(mode=0o700)
@@ -2671,9 +2847,13 @@ class FutureTraceJoinedControls(unittest.TestCase):
               'environment':{},'transport':{'tracer':str(tracer),'client':str(root/'unused-client')},
               'sourceReadAllowlist':[python],'readEvidence':{'directories':[],'aliases':[],'absences':[]},
               'proofInputs':{'bootstrapEvidence':str(bootstrap)}}
+        if runtime:
+            spec.update(profile='proc-pair-client-qualification',operation=module.PROC_PROFILES['proc-pair-client-qualification'],
+                        qualificationAttempt=5,traceRuntimeProfile=copy.deepcopy(module.PROC_LOSSLESS_RUNTIME_PROFILE))
         with patch.object(module,'PROC_STRACE_SHA',hashlib.sha256(tracer.read_bytes()).hexdigest()):
             closure,bootstrap_value=future_source_closure_fixture(spec)
         bootstrap_value['capacity']={'directory':'/sys/fs/cgroup'}
+        if runtime:bootstrap_value['losslessRuntimeProfile']=copy.deepcopy(spec['traceRuntimeProfile'])
         bootstrap.write_text(json.dumps(bootstrap_value))
         descriptor=slot/'input.json';descriptor.write_text(json.dumps(spec));descriptor_sha=hashlib.sha256(descriptor.read_bytes()).hexdigest()
         (slot/'command.json').write_text(json.dumps({'sendState':'measurement-started','descriptorSha256':descriptor_sha}))
@@ -2681,6 +2861,8 @@ class FutureTraceJoinedControls(unittest.TestCase):
                    'canonicalQualificationLineageIdentity':module.proc_directory_identity(lineage),
                    'canonicalBaseIdentity':module.proc_directory_identity(uid),
                    'futureTraceSourceProfile':dict(module.PROC_FUTURE_TRACE_SOURCE_PROFILE),'futureTraceSourceClosure':closure}
+        if runtime:authority.update(losslessRuntimeProfile=copy.deepcopy(spec['traceRuntimeProfile']),losslessQualificationApproved=True,
+                                    nonEffectQualificationApproved=True,publicationAuthorized=False,nativeGetApproved=False)
         approved=root/'authority.json';approved.write_text(json.dumps(authority));authority_sha=hashlib.sha256(approved.read_bytes()).hexdigest()
         with patch.object(module,'PROC_STRACE_SHA',hashlib.sha256(tracer.read_bytes()).hexdigest()):
             store=module.ProcFutureTraceStore(spec,dict(module.PROC_FUTURE_TRACE_SOURCE_PROFILE),source_closure_sha=module.proc_future_source_closure_digest(closure))
@@ -2755,8 +2937,41 @@ class FutureTraceJoinedControls(unittest.TestCase):
                             patch.object(module.signal,'pidfd_send_signal',side_effect=lambda *args:events.append('inert-signal')),
                             patch.object(module,'proc_measurement_bounds',side_effect=bounds),patch.object(module,'proc_private_record',side_effect=report)]:stack.enter_context(context)
             if unknown:stack.enter_context(patch.object(module.time,'monotonic',side_effect=lambda:clock[0]))
-            def run():return module.proc_measure_once(spec,authority,{},descriptor,approved,authority_sha,'normal',trace_store=store)
+            def run():return module.proc_measure_once(spec,authority,bootstrap_value,descriptor,approved,authority_sha,'normal',trace_store=store)
             yield run,spec,store,approved,events
+
+    def test_lossless_actual_measure_handshake_carries_runtime_binding(self):
+        with tempfile.TemporaryDirectory() as directory,self.measured_caller(Path(directory),runtime=True) as fixture:
+            run,spec,store,_,events=fixture
+            result=run();context=result['measurementBinding']['futureTrace']
+            self.assertEqual(module.proc_lossless_runtime_digest(spec),context['runtimeProfileSha256'])
+            self.assertEqual(store.source_closure_sha,context['sourceClosureSha256'])
+            self.assertEqual(1,events.count('popen-inert'));self.assertTrue(store.phases['normal']['sealed'])
+
+    def test_lossless_actual_handshake_refuses_missing_or_crossed_runtime_context(self):
+        for mutation in ('missing','crossed'):
+            with self.subTest(mutation=mutation),tempfile.TemporaryDirectory() as directory,self.measured_caller(Path(directory),runtime=True) as fixture:
+                run,spec,store,_,events=fixture;original=store.context
+                def changed(**kwargs):
+                    context=original(**kwargs)
+                    if mutation=='missing':context.pop('runtimeProfileSha256')
+                    else:context['runtimeProfileSha256']='0'*64
+                    return context
+                with patch.object(store,'context',side_effect=changed):
+                    with self.assertRaisesRegex(ValueError,'context outside|runtime context drift'):run()
+                self.assertEqual(1,events.count('popen-inert'));self.assertFalse((store.root/'manifest.json').exists())
+
+    def test_lossless_real_entrypoint_overflow_retains_failure_and_no_success_manifest(self):
+        def overflow(spec,authority,bootstrap,descriptor,approved,sha,phase,*,trace_store):
+            trace_store.codec.expanded_cap=8
+            self.produce(trace_store,phase,b'10 1.0 +++ exited with 0 +++\n')
+        with tempfile.TemporaryDirectory() as directory:
+            spec,descriptor,approved,_,_,_,_=self.lossless_command_fixture(Path(directory));events=[]
+            with self.lossless_command_adapters(events,measure=overflow):
+                self.assertEqual(1,module.execute_proc_command(descriptor,approved,hashlib.sha256(approved.read_bytes()).hexdigest()))
+            result=json.loads((Path(spec['operationRoot'])/'command.json').read_text())
+            self.assertIn('aggregate expanded bound',result['firstCause']['message'])
+            self.assertFalse(result['commandAccepted']);self.assertFalse((Path(spec['operationRoot'])/'lossless-traces/manifest.json').exists())
 
     def test_actual_measure_once_fifo_handshake_and_shared_parser_join(self):
         with tempfile.TemporaryDirectory() as directory,self.measured_caller(Path(directory)) as fixture:
@@ -2934,6 +3149,19 @@ class FutureTraceJoinedControls(unittest.TestCase):
 
 
 class FutureSourceClosureControls(unittest.TestCase):
+    def test_lossless_adjacent_inputs_refuse_special_oversize_and_preserve_read_cause(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);fifo=root/'fifo';os.mkfifo(fifo,0o600)
+            with self.assertRaisesRegex(ValueError,'kind/size'):module.proc_lossless_input_bytes(fifo)
+            path=root/'input';path.write_bytes(b'x'*(256*1024+1))
+            with self.assertRaisesRegex(ValueError,'kind/size'):module.proc_lossless_input_bytes(path)
+            path.write_bytes(b'{}');first=ValueError('original selected input read failure');close=os.close
+            def fail_close(fd):close(fd);raise OSError('secondary selected input close failure')
+            with patch.object(module.os,'read',side_effect=first),patch.object(module.os,'close',side_effect=fail_close):
+                with self.assertRaises(ValueError) as raised:module.proc_lossless_input_bytes(path)
+            self.assertIs(first,raised.exception)
+            self.assertEqual(['secondary selected input close failure'],[e['message'] for e in first.proc_measurement_additional])
+
     def fixture(self):
         spec={'transport':{'tracer':'/inert/source-only/tracer'}}
         closure,bootstrap=future_source_closure_fixture(spec)

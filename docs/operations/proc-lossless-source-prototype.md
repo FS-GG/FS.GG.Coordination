@@ -1,9 +1,11 @@
 # Prospective PROC lossless trace source
 
-Status: **joined source implementation with inert controls; runtime admission
-refused**. The current raw 8 MiB contract, profiles and maximum qualification
-ordinal 4 remain unchanged. No command-line profile selects this representation.
-The explicit helper profile is a source-control input, not an execution grant.
+Status: **joined source implementation with inert controls; native runtime
+disabled**. Raw qualification retains its 8 MiB contract and ordinals 1–4.
+The real command entrypoint also supports a separately selected, prospective
+lossless runtime contract for exactly global ordinal 5. The unchanged maintained
+admission does not enable it. The source-only helper profile remains distinct.
+Neither contract nor a successful source test grants execution.
 
 ## Producer and lifetime
 
@@ -104,14 +106,14 @@ or machine resource conformance. Original failed/unknown qualification evidence
 and all holds remain. A retained incomplete sample fitting gzip proves none of
 those outcomes.
 
-Before any future runtime profile is selected, the existing PROC owner/root must
+Before any future native runtime is selected, the existing PROC owner/root must
 reconcile its exact tracer/interpreter/zlib Python and extension/library source
 closure, bootstrap capacity, directory/negative lookup inventory, original finite
 clocks and stored/expanded budgets. The existing immutable instrumentation and
 current raw bootstrap contract do not implicitly cover new codec imports or the
-new producer grammar. A separate reviewed profile and explicit native admission
-would be necessary; this source delivery supplies neither and creates no fifth
-qualification ordinal.
+new producer grammar. A separately reviewed runtime contract and explicit native
+admission remain necessary. The integration below supplies a dormant contract;
+it does not create or launch a fifth qualification attempt.
 
 ## Prospective source closure join
 
@@ -119,8 +121,9 @@ The future apparatus now requires a separate `futureTraceSourceClosure` value in
 both the existing bootstrap evidence and its existing authority. It derives the
 expected value from the selected descriptor, after the existing bootstrap and
 instrumentation checks and before creating the trace store or launching a tracer.
-The old raw route does not acquire this requirement. No CLI profile, operation
-ordinal, release flag or instrumentation exception is enabled by this change.
+The old raw route does not acquire this requirement. This source-closure join
+alone enables no CLI profile, ordinal, release flag or instrumentation exception;
+the runtime selection below binds it separately.
 
 The closed source contract selects the already retained Python3.14 executable,
 libpython3.14, Python zlib extension, libz1.3.2 and selected strace7.2 bytes. Each
@@ -218,3 +221,64 @@ retain an unrelated original first cause and cleanup, and reject TMP replacement
 They also exercise directory disappearance, strict census, caps, deadlines,
 permissions and exact legacy/new diagnostic projection. They do not rerun TLC,
 trace or qualify a native provider, and do not alter raw maximum4 or CLI refusal.
+
+## Disabled enforcing runtime contract
+
+[Delivery 1037](https://github.com/FS-GG/FS.GG.Coordination/issues/1037) extends the
+existing command entrypoint with `traceRuntimeProfile`. Its exact
+`fsgg.proc.lossless-qualification-profile/1` value is defined by
+`PROC_LOSSLESS_RUNTIME_PROFILE` in
+[`retain-choreo-c2-diagnostics.py`](../../eng/retain-choreo-c2-diagnostics.py).
+It is valid only for the existing non-effect client-qualification operation,
+exactly global ordinal 5, and `nativeGet=false`. It cannot rename the original
+operation, reuse ordinals 1–4, admit raw ordinal 5, or select ordinal 6. Omitting
+the new field preserves the existing raw contract and roots.
+
+The runtime contract retains aggregate 8 MiB stored and 32 MiB captured/decoded
+bounds, a 16 KiB manifest reserve, 32 PIDs, 64 KiB physical lines, 131072 records
+and the 128 MiB conservative retained-object bound. The existing 90-second work
+plus 10-second cleanup ceiling, one CPU, sampled 512 MiB RSS, 1 MiB logs and
+16 MiB disk contract remain. These are refusal bounds; they prove neither stream
+fit nor hard aggregate memory, allocation, containment or timely cleanup.
+
+The descriptor, authority and bootstrap must carry matching exact runtime values.
+Authority also needs explicit `losslessQualificationApproved=true`, existing
+non-effect approval, `publicationAuthorized=false`, `nativeGetApproved=false`,
+and the unchanged source-only codec profile and complete source-closure manifest.
+These observations do not substitute for fresh root admission.
+
+A separate top-level `losslessQualification` selection in the existing admission
+document must contain exactly `enabled`, `profile`, `operation` and
+`qualificationAttempt`, joined to that same contract and ordinal. Missing or
+false `enabled` refuses before capture or canonical claim. The maintained
+admission file remains unchanged and has no such selection, so the new runtime
+is disabled. Existing recovery keys and publisher flags are unchanged; adding a
+new field beneath the closed recovery object would still refuse.
+
+The real `execute_proc_command` route passes the selected codec profile to the
+existing apparatus. It validates bootstrap, complete read drift and source
+closure, then rejoins bounded original descriptor/authority bytes, original
+canonical input/result and held directory identities before the exclusive claim
+or store creation. A consumed canonical result never becomes another attempt.
+The held FIFO context carries a domain-separated runtime-profile digest alongside
+the complete source-closure digest. The actual one-use handshake refuses a
+missing or crossed runtime digest and cannot downgrade this operation to raw
+capture. The existing normal and two negative-control phases, shared owner,
+strict parser, first cause and independent cleanup remain in use.
+
+Controls in the already selected `FutureTraceJoinedControls` and
+`FutureSourceClosureControls` reach the real entrypoint and apparatus with inert
+process/kernel/input adapters. They cover successful joined collection, default
+refusal, exact ordinals, every closed profile field, bootstrap/source drift,
+adjacent descriptor/authority replacement, replay, runtime-bound handshake,
+overflow and independent close failure. They do not launch a real tracer, client,
+native API operation or CLR. The positive entrypoint control fails against the
+previous source at its source-only refusal. Source tests and a merged capability
+do not establish native fit or acceptance.
+
+Programme/root retains the separate decision to admit any genuine ordinal 5,
+including exact current source/runtime and bootstrap inventory, resources,
+original finite clock, custody and retirement. All four consumed unaccepted
+originals, historical Unknowns, original publisher effects and parent
+[1026](https://github.com/FS-GG/FS.GG.Coordination/issues/1026) publication,
+installed adoption, containment and consolidation obligations remain unchanged.

@@ -791,10 +791,12 @@ PROC_WORKFLOW = '.github/workflows/callable-cli-release-publish.yml'
 PROC_OPERATION_BASE = Path('/var/tmp/fsgg-canonical-owned-commands')
 
 
-def proc_operation_root(operation,qualification_attempt=None):
+def proc_operation_root(operation,qualification_attempt=None,*,trace_runtime_profile=None):
     lineage=PROC_OPERATION_BASE / str(os.geteuid()) / operation
-    if qualification_attempt is None:return lineage
-    if operation!=PROC_PROFILES['proc-pair-client-qualification'] or type(qualification_attempt) is not int or not 1<=qualification_attempt<=4:
+    if qualification_attempt is None and trace_runtime_profile is None:return lineage
+    lossless=proc_lossless_runtime_profile(trace_runtime_profile)
+    allowed=(qualification_attempt==5 if lossless else 1<=qualification_attempt<=4) if type(qualification_attempt) is int else False
+    if operation!=PROC_PROFILES['proc-pair-client-qualification'] or not allowed:
         raise ValueError('PROC fixed qualification lineage/ordinal')
     return lineage/('attempt-'+str(qualification_attempt))
 
@@ -1111,8 +1113,10 @@ def proc_command_preflight(spec, *, now):
               'publisher','repositoryId','workflowId','workflowPath','source','originalPublisher',
               'request','argv','transport','readEvidence','pins','proofInputs','sourceReadAllowlist','environment','operationRoot','qualificationAttempt',
               'started','workDeadline','totalDeadline','cleanupSeconds','rssBytes','addressSpaceBytes','logBytes','diskBytes','cpuAffinity'}
+    if 'traceRuntimeProfile' in spec:fields.add('traceRuntimeProfile')
     if set(spec) != fields or spec['schema'] != COMMAND_SCHEMA or spec['profile'] not in PROC_PROFILES:
         raise ValueError('PROC command schema/profile')
+    lossless=proc_lossless_runtime_spec(spec)
     expected_role = 'qualification' if spec['profile']=='proc-pair-client-qualification' else ('watch' if spec['profile'] == 'proc-pair-native-watch' else 'dispatch')
     if spec['role'] != expected_role: raise ValueError('PROC profile role exchange')
     if (spec['campaign'] != 'unified-roadmap-20261003' or not all(type(spec[k]) is str and spec[k] for k in ('item','attempt'))
@@ -1139,11 +1143,11 @@ def proc_command_preflight(spec, *, now):
             or spec['addressSpaceBytes'] is not None and (type(spec['addressSpaceBytes']) is not int or spec['addressSpaceBytes']<spec['rssBytes'])):
         raise ValueError('PROC resource profile')
     ordinal=spec['qualificationAttempt']
-    if (spec['role']=='qualification' and (type(ordinal) is not int or not 1<=ordinal<=4)
+    if (spec['role']=='qualification' and (type(ordinal) is not int or not (ordinal==5 if lossless else 1<=ordinal<=4))
             or spec['role']!='qualification' and ordinal is not None):
         raise ValueError('PROC root-selected qualification ordinal cannot become effect retry')
     root = Path(spec['operationRoot'])
-    if root!=proc_operation_root(spec['operation'],ordinal):
+    if root!=proc_operation_root(spec['operation'],ordinal,trace_runtime_profile=spec.get('traceRuntimeProfile')):
         raise ValueError('PROC fixed operation root')
     environment = spec['environment']
     if (set(environment)!={'HOME','TMPDIR','PATH','LANG','LC_ALL','TZ','OPENSSL_CONF'}
@@ -2121,10 +2125,10 @@ def proc_private_record(path,value,deadline,*,exclusive=False,expected=None,cap=
 
 
 class ProcLosslessSourcePrototype:
-    """Inert FD/codec feasibility only; never selected by a command profile.
+    """Bounded FD/codec mechanics; selection alone never admits a command.
 
-    Existing traced command execution does not call this type. Selection here is
-    source-control opt-in, not root admission or a source/read-closure assertion.
+    Source fixtures and the separately gated lossless profile share these bytes.
+    The codec supplies no root admission or source/read-closure assertion.
     The owner supplies exclusively held fresh output FDs and a nonblocking FIFO;
     this codec adds no process, source lookup, deadline or caller FD ownership.
     """
@@ -2272,6 +2276,103 @@ PROC_FUTURE_TRACE_SOURCE_PROFILE = {
     'encoding':'gzip-pid-stream/1','sourceOnly':True,
     'storedBytes':8*1024**2,'expandedBytes':32*1024**2}
 
+# A closed prospective runtime contract, separate from the unchanged source-only
+# profile above. Neither this constant nor ordinal support enables an operation.
+PROC_LOSSLESS_RUNTIME_PROFILE = {
+    'schema':'fsgg.proc.lossless-qualification-profile/1',
+    'encoding':'gzip-pid-stream/1','sourceOnly':False,'qualificationOrdinal':5,
+    'storedBytes':8*1024**2,'expandedBytes':32*1024**2,
+    'maximumPids':32,'physicalLineBytes':65536,'physicalRecords':131072,
+    'retainedObjectBytes':128*1024**2,'manifestReserveBytes':16384}
+
+
+def proc_lossless_runtime_profile(profile):
+    if profile is None:return False
+    if (type(profile) is not dict or set(profile)!=set(PROC_LOSSLESS_RUNTIME_PROFILE)
+            or any(type(profile[key]) is not type(value) or profile[key]!=value
+                   for key,value in PROC_LOSSLESS_RUNTIME_PROFILE.items())):
+        raise ValueError('PROC exact lossless runtime profile unavailable')
+    return True
+
+
+def proc_lossless_runtime_spec(spec):
+    if 'traceRuntimeProfile' not in spec:return False
+    if (not proc_lossless_runtime_profile(spec['traceRuntimeProfile'])
+            or spec.get('profile')!='proc-pair-client-qualification' or spec.get('role')!='qualification'
+            or type(spec.get('qualificationAttempt')) is not int or spec['qualificationAttempt']!=5
+            or spec.get('request',{}).get('nativeGet') is not False):
+        raise ValueError('PROC lossless runtime requires sole non-effect qualification ordinal5')
+    return True
+
+
+def proc_lossless_runtime_authority(spec,authority,*,bootstrap=None):
+    selected=proc_lossless_runtime_spec(spec)
+    if not selected:
+        if 'losslessRuntimeProfile' in authority or authority.get('losslessQualificationApproved') is True:
+            raise ValueError('PROC lossless runtime authority crossed a raw/source-only descriptor')
+        return False
+    if (authority.get('losslessRuntimeProfile')!=spec['traceRuntimeProfile']
+            or not proc_lossless_runtime_profile(authority.get('losslessRuntimeProfile'))
+            or authority.get('losslessQualificationApproved') is not True
+            or authority.get('nonEffectQualificationApproved') is not True
+            or authority.get('publicationAuthorized') is not False or authority.get('nativeGetApproved') is not False
+            or not proc_future_source_profile(authority.get('futureTraceSourceProfile'))
+            or bootstrap is not None and (not proc_lossless_runtime_profile(bootstrap.get('losslessRuntimeProfile'))
+                                         or bootstrap['losslessRuntimeProfile']!=spec['traceRuntimeProfile'])):
+        raise ValueError('PROC lossless runtime descriptor/authority/bootstrap selection unavailable')
+    return True
+
+
+def proc_lossless_runtime_admission(spec,authority,bootstrap,admission):
+    if not proc_lossless_runtime_authority(spec,authority,bootstrap=bootstrap):return False
+    # A missing field in the unchanged maintained admission means disabled.
+    # Existing recovery selection remains exact and is not widened with a flag.
+    selected=admission.get('losslessQualification')
+    if (type(selected) is not dict or set(selected)!={'enabled','profile','operation','qualificationAttempt'}
+            or selected['enabled'] is not True
+            or not proc_lossless_runtime_profile(selected['profile'])
+            or selected['profile']!=spec['traceRuntimeProfile'] or selected['operation']!=spec['operation']
+            or type(selected['qualificationAttempt']) is not int or selected['qualificationAttempt']!=5):
+        raise ValueError('PROC protected lossless qualification remains disabled')
+    return True
+
+
+def proc_lossless_runtime_digest(spec):
+    if not proc_lossless_runtime_spec(spec):return None
+    raw=json.dumps(spec['traceRuntimeProfile'],sort_keys=True,separators=(',',':')).encode('ascii')
+    return hashlib.sha256(b'fsgg.proc.lossless-qualification-profile/1\0'+raw).hexdigest()
+
+
+def proc_lossless_input_bytes(path):
+    path=Path(path)
+    if any(p.is_symlink() for p in (path,*path.parents)):
+        raise ValueError('PROC lossless original input alias')
+    fd=os.open(path,os.O_RDONLY|os.O_NONBLOCK|os.O_NOFOLLOW);first=None
+    try:
+        row=os.fstat(fd)
+        if not stat.S_ISREG(row.st_mode) or not 0<row.st_size<=256*1024:
+            raise ValueError('PROC lossless original input kind/size')
+        raw=os.read(fd,256*1024+1)
+        if len(raw)!=row.st_size or len(raw)>256*1024:
+            raise ValueError('PROC lossless original input changed/oversized')
+        return raw
+    except BaseException as error:first=error;raise
+    finally:
+        try:os.close(fd)
+        except BaseException as error:
+            if first is None:raise
+            first.proc_measurement_additional=[failure_record(error)]
+
+
+def proc_lossless_runtime_inputs(spec,descriptor,authority_path,authority_sha,authority):
+    """Rejoin bounded original input bytes immediately before the exclusive claim."""
+    raw=proc_lossless_input_bytes(descriptor);approved=proc_lossless_input_bytes(authority_path)
+    if (json.loads(raw)!=spec or hashlib.sha256(raw).hexdigest()!=authority.get('descriptorSha256')
+            or hashlib.sha256(approved).hexdigest()!=authority_sha or json.loads(approved)!=authority):
+        raise ValueError('PROC lossless adjacent original input/authority drift')
+    proc_command_preflight(spec,now=time.monotonic())
+    return raw
+
 # Historical exact bytes already declared in ordinal 4's retained read closure.
 # These are prospective SOURCE inputs, never a refresh of that consumed operation.
 PROC_FUTURE_TRACE_RUNTIME = {
@@ -2372,11 +2473,15 @@ def proc_future_source_profile(profile):
 def proc_future_source_context(spec, context):
     """Validate the exact prospective capability, never infer one from a name."""
     if context is None:return None
-    if (type(context) is not dict or set(context) not in ({'profile','namespaceIdentity','fifos'},
-            {'profile','namespaceIdentity','fifos','sourceClosureSha256'})
+    fields={'profile','namespaceIdentity','fifos'}
+    runtime_digest=proc_lossless_runtime_digest(spec)
+    if runtime_digest is not None:fields.add('runtimeProfileSha256')
+    if (type(context) is not dict or set(context) not in (fields,fields|{'sourceClosureSha256'})
             or not proc_future_source_profile(context['profile'])
             or spec.get('role')!='qualification' or spec.get('request',{}).get('nativeGet') is not False):
         raise ValueError('PROC future trace context outside selected source profile')
+    if runtime_digest is not None and context['runtimeProfileSha256']!=runtime_digest:
+        raise ValueError('PROC lossless runtime context drift')
     if ('sourceClosureSha256' in context and context['sourceClosureSha256']!=
             proc_future_source_closure_digest(proc_future_source_closure(spec))):
         raise ValueError('PROC future trace source closure context drift')
@@ -2402,7 +2507,7 @@ class ProcFutureTraceStore:
     """Fixed prospective trace namespace, held capabilities and monitor drain.
 
     The retained codec proof is reused without a shell or additional actor.
-    This source-only route never confers normal/native qualification acceptance.
+    Neither source selection nor the gated runtime route confers native acceptance.
     """
     PHASES=('controller','session','normal')
     NAMESPACE='lossless-traces'
@@ -2415,6 +2520,7 @@ class ProcFutureTraceStore:
                 proc_future_source_closure_digest(proc_future_source_closure(spec))):
             raise ValueError('PROC future trace source closure store differs')
         self.source_closure_sha=source_closure_sha
+        self.runtime_profile_sha=proc_lossless_runtime_digest(spec)
         self.spec=spec;self.root=Path(spec['operationRoot'])/self.NAMESPACE
         self.work_end=spec['workDeadline'];self.total_end=spec['totalDeadline']
         if (not all(type(x) in (int,float) and math.isfinite(x) for x in (self.work_end,self.total_end))
@@ -2469,6 +2575,9 @@ class ProcFutureTraceStore:
         self._check(retirement=retirement)
         context={'profile':dict(PROC_FUTURE_TRACE_SOURCE_PROFILE),'namespaceIdentity':dict(self.root_identity),
                 'fifos':{str(self.root/name):row['identity'][:7] for name,row in self.objects.items() if row['fifo']}}
+        if self.runtime_profile_sha!=proc_lossless_runtime_digest(self.spec):
+            raise ValueError('PROC lossless runtime store selection drift')
+        if self.runtime_profile_sha is not None:context['runtimeProfileSha256']=self.runtime_profile_sha
         if self.source_closure_sha is not None:
             if self.source_closure_sha!=proc_future_source_closure_digest(proc_future_source_closure(self.spec)):
                 raise ValueError('PROC future trace source closure store drift')
@@ -2646,6 +2755,8 @@ def proc_measured_handshake(spec,descriptor,authority_path,authority_sha,fd,phas
     if not 0<len(raw)<=8192:raise ValueError('PROC handshake framing bound')
     proof=json.loads(raw);boot=Path('/proc/sys/kernel/random/boot_id').read_text().strip()
     expected_fields={'bootId','apparatus','tracer','descriptorSha256','authoritySha256','phase','slot','subjectWorkDeadline'}
+    if proc_lossless_runtime_spec(spec) and 'futureTrace' not in proof:
+        raise ValueError('PROC lossless runtime handshake cannot downgrade to raw')
     if 'futureTrace' in proof:
         future=proof['futureTrace'];authority_raw=Path(authority_path).read_bytes()
         if (future is None or hashlib.sha256(authority_raw).hexdigest()!=authority_sha
@@ -2654,6 +2765,7 @@ def proc_measured_handshake(spec,descriptor,authority_path,authority_sha,fd,phas
                 or json.loads(authority_raw).get('futureTraceSourceClosure')!=proc_future_source_closure(spec)
                 or proc_future_source_context(spec,future) is None):
             raise ValueError('PROC future trace handshake profile/capability unavailable')
+        proc_lossless_runtime_authority(spec,json.loads(authority_raw))
         expected_fields.add('futureTrace')
     if (set(proof)!=expected_fields
             or proof['bootId']!=boot or proof['phase']!=phase or proof['authoritySha256']!=authority_sha
@@ -2769,7 +2881,7 @@ def proc_control_retirement_evidence(spec,slot,descriptor,authority_path,authori
     phase=record['phase'];root=Path(spec['operationRoot']);slot=Path(slot)
     if (spec['profile']!='proc-pair-client-qualification' or spec['role']!='qualification'
             or phase not in ('controller','session') or slot!=root/('control-'+phase) or Path(descriptor)!=root/'input.json'
-            or root!=proc_operation_root(spec['operation'],spec['qualificationAttempt'])
+            or root!=proc_operation_root(spec['operation'],spec['qualificationAttempt'],trace_runtime_profile=spec.get('traceRuntimeProfile'))
             or proof is None or child is None or record.get('measurementBinding')!=proof
             or proof['phase']!=phase or proof['slot']!=str(slot)
             or proof['bootId']!=Path('/proc/sys/kernel/random/boot_id').read_text().strip()
@@ -2861,6 +2973,8 @@ def proc_control_retirement_evidence(spec,slot,descriptor,authority_path,authori
 
 def proc_measure_once(spec,authority,bootstrap,descriptor,authority_path,authority_sha,phase,*,trace_store=None):
     import subprocess
+    if proc_lossless_runtime_authority(spec,authority,bootstrap=bootstrap) and trace_store is None:
+        raise ValueError('PROC lossless runtime measurement cannot downgrade to raw')
     root=Path(spec['operationRoot']);slot=root if phase=='normal' else root/('control-'+phase)
     if phase!='normal':slot.mkdir(mode=0o700)
     subject_deadline=spec['workDeadline']-10
@@ -3136,11 +3250,14 @@ def proc_measured_entry(descriptor,authority_path,authority_sha,fd,phase):
 
 def proc_qualification_apparatus(spec,descriptor,authority_path,authority_sha,authority,*,trace_profile=None):
     root=Path(spec['operationRoot']);first=None;additional=[];records=[];subject=None;header=None;normal_attempted=False;trace_store=None
+    lossless=proc_lossless_runtime_authority(spec,authority)
+    if lossless and trace_profile is None:raise ValueError('PROC lossless runtime apparatus cannot downgrade to raw')
     if trace_profile is None:
         if authority.get('futureTraceSourceProfile') is not None:raise ValueError('PROC future trace caller has not selected a profile')
     elif (not proc_future_source_profile(trace_profile) or authority.get('futureTraceSourceProfile')!=trace_profile):
         raise ValueError('PROC future trace profile/authority differ')
-    bootstrap=json.loads(Path(spec['proofInputs']['bootstrapEvidence']).read_bytes())
+    bootstrap=json.loads(proc_lossless_input_bytes(spec['proofInputs']['bootstrapEvidence']) if lossless
+                         else Path(spec['proofInputs']['bootstrapEvidence']).read_bytes())
     proc_bootstrap_evidence(spec,authority,bootstrap)
     if bootstrap.get('instrumentation')!=PROC_INSTRUMENTATION or authority.get('instrumentation')!=PROC_INSTRUMENTATION:
         raise ValueError('PROC authenticated explicit instrumentation source boundary unavailable')
@@ -3149,16 +3266,23 @@ def proc_qualification_apparatus(spec,descriptor,authority_path,authority_sha,au
         source_closure_sha=proc_future_source_closure_binding(spec,bootstrap,authority)
     if spec['request']['nativeGet'] and (authority.get('qualificationCredentialReference')!=PROC_QUALIFICATION_CREDENTIAL or authority.get('nativeCollectorApproved') is not True):
         raise ValueError('PROC qualification fixed borrowed read binding not separately admitted')
-    admission=json.loads(Path(spec['proofInputs']['admission']).read_bytes())
+    admission=json.loads(proc_lossless_input_bytes(spec['proofInputs']['admission']) if lossless
+                         else Path(spec['proofInputs']['admission']).read_bytes())
     if admission.get('recovery',{}).get('clientQualificationEnabled') is not True:raise ValueError('PROC protected qualification remains disabled')
+    if lossless:
+        proc_lossless_runtime_admission(spec,authority,bootstrap,admission)
+        proc_read_drift(spec)
     for path in (root/'input.json',root/'command.json'):
         if path.is_symlink() or not path.is_file():raise ValueError('PROC root-prepared measurement state missing')
-    raw=Path(descriptor).read_bytes();prepared=json.loads((root/'command.json').read_bytes())
-    if ((root/'input.json').read_bytes()!=raw or prepared.get('sendState')!='prepared-no-send'
+    raw=proc_lossless_runtime_inputs(spec,descriptor,authority_path,authority_sha,authority) if lossless else Path(descriptor).read_bytes()
+    prepared=json.loads(proc_lossless_input_bytes(root/'command.json') if lossless else (root/'command.json').read_bytes())
+    original_input=proc_lossless_input_bytes(root/'input.json') if lossless else (root/'input.json').read_bytes()
+    if (original_input!=raw or prepared.get('sendState')!='prepared-no-send'
             or prepared.get('descriptorSha256')!=hashlib.sha256(raw).hexdigest()
             or authority.get('canonicalBaseIdentity')!=proc_directory_identity(PROC_OPERATION_BASE/str(os.geteuid()))
             or authority.get('canonicalQualificationLineageIdentity')!=proc_directory_identity(root.parent)
-            or authority.get('canonicalOperationIdentity')!=proc_directory_identity(root)):
+            or authority.get('canonicalOperationIdentity')!=proc_directory_identity(root)
+            or lossless and (prepared.get('schema')!=RESULT_SCHEMA or prepared.get('operation')!=spec['operation'])):
         raise ValueError('PROC measurement original prepared/lineage state drift')
     proc_private_record(root/'dispatch-input.json',None,spec['totalDeadline'],exclusive=True)
     state={'schema':RESULT_SCHEMA,'operation':spec['operation'],'originalOperation':PROC_ORIGINAL,
@@ -3220,10 +3344,12 @@ def proc_qualification_apparatus(spec,descriptor,authority_path,authority_sha,au
         state['runtimeEvidence'].pop('controllerTraceGap',None)
         state['runtimeEvidence']['traceComplete']=trace['complete'];state['completeSubjectTrace']=trace
         if trace_store is not None:
-            state['futureTraceManifest']=trace_store.finish();state['futureTraceSourceOnly']=True
+            state['futureTraceManifest']=trace_store.finish();state['futureTraceSourceOnly']=not lossless
+            if lossless:state['losslessRuntimeProfile']=dict(spec['traceRuntimeProfile'])
         state['subjectResult']={'sha256':hashlib.sha256(output.read_bytes()).hexdigest(),'bytes':output.stat().st_size}
         state['sendState']='qualification-completed';state['qualificationAccepted']=False
         state['qualificationBoundary']=('Complete subject measurement, root acceptance remains separate.' if trace_store is None
+            else 'Complete lossless subject measurement; native/root acceptance remains separate.' if lossless
             else 'Source-only prospective representation; current CLI/runtime/root admission remains refused.')
     except BaseException as error:
         first=error;state['sendState']='qualification-failed-or-unknown'
@@ -3290,10 +3416,11 @@ def execute_proc_command(descriptor, authority_path, authority_sha, *, measureme
         authority_raw=read_regular(authority_path,256*1024)
         if hashlib.sha256(authority_raw).hexdigest()!=authority_sha:raise ValueError('PROC root-selected authority drift')
         authority=json.loads(authority_raw)
+        lossless=proc_lossless_runtime_authority(spec,authority)
         future_profile=authority.get('futureTraceSourceProfile')
         if future_profile is not None:
             proc_future_source_profile(future_profile)
-            if (measurement is None or measurement.get('futureTrace',{}).get('profile')!=future_profile
+            if not (lossless and measurement is None) and (measurement is None or measurement.get('futureTrace',{}).get('profile')!=future_profile
                     or measurement.get('futureTrace',{}).get('sourceClosureSha256')!=proc_future_source_closure_digest(proc_future_source_closure(spec))
                     or authority.get('futureTraceSourceClosure')!=proc_future_source_closure(spec)
                     or proc_future_source_context(spec,measurement.get('futureTrace')) is None):
@@ -3334,6 +3461,8 @@ def execute_proc_command(descriptor, authority_path, authority_sha, *, measureme
             raise ValueError('PROC shared owner closure absent')
         if spec['role']=='qualification' and measurement is None:
             if os.readlink('/proc/self/fd/0')!='/dev/null':raise ValueError('PROC qualification stdin must be root-selected dev-null')
+            if lossless:
+                return proc_qualification_apparatus(spec,descriptor,authority_path,authority_sha,authority,trace_profile=future_profile)
             return proc_qualification_apparatus(spec,descriptor,authority_path,authority_sha,authority)
         owner_deadline=spec['workDeadline']
         if measurement is not None:
@@ -3351,6 +3480,9 @@ def execute_proc_command(descriptor, authority_path, authority_sha, *, measureme
         if spec['role']=='qualification':
             if os.readlink('/proc/self/fd/0')!='/dev/null':raise ValueError('PROC qualification stdin must be root-selected dev-null')
             proc_bootstrap_evidence(spec,authority,qualification)
+            if lossless:
+                proc_lossless_runtime_admission(spec,authority,qualification,admission)
+                proc_future_source_closure_binding(spec,qualification,authority)
         else:
             proc_runtime_evidence(spec,authority,qualification)
             proc_capacity_evidence(spec,authority,qualification.get('capacity') or {})
@@ -3526,6 +3658,8 @@ def execute_proc_command(descriptor, authority_path, authority_sha, *, measureme
         result['commandAccepted']=True
     except BaseException as error:
         first=error
+        if spec is not None and 'traceRuntimeProfile' in spec:
+            additional.extend(getattr(error,'proc_measurement_additional',[]))
         if result is not None:result['commandAccepted']=False
         if result is not None and spec['role']=='qualification':result['sendState']='qualification-failed-or-unknown'
         if result is not None and spec['role']=='dispatch' and result['sendState']=='send-started':result['sendState']='consumed-unknown'
@@ -3564,7 +3698,9 @@ def execute_proc_command(descriptor, authority_path, authority_sha, *, measureme
                                   'reportingFailure':failure_record(error),'reportDisposition':result['reportDisposition']}),file=sys.stderr)
                 if first is None:first=error
         elif first is not None:
-            print(json.dumps({'schema':RESULT_SCHEMA,'firstCause':failure_record(first),'commandAccepted':False}),file=sys.stderr)
+            failed={'schema':RESULT_SCHEMA,'firstCause':failure_record(first),'commandAccepted':False}
+            if spec is not None and 'traceRuntimeProfile' in spec:failed['additionalFailures']=additional
+            print(json.dumps(failed),file=sys.stderr)
     return 0 if first is None else 1
 
 
