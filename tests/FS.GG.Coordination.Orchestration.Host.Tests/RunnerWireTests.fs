@@ -155,3 +155,24 @@ let ``event serializer v2 reads retained v1 event bytes`` () =
 
     let before = evolve initial eventValue
     Assert.Equal(before.Revision, (evolve before (CommandRecorded receipt)).Revision)
+
+[<Fact>]
+let ``ordinary references are closed bounded and distinguish semantic from content identity`` () =
+    let semantic=String.replicate 64 "a"
+    let objectDigest=String.replicate 64 "b"
+    let payload=Encoding.UTF8.GetBytes "retained historical payload"
+    let bytes=OrdinaryAssignmentWire.wrap OrdinaryAssignmentWire.routeSchema semantic objectDigest payload |> Result.defaultWith failwith
+    let reference=OrdinaryAssignmentWire.reference bytes |> Result.defaultWith failwith |> Option.get
+    Assert.Equal(semantic,reference.AssignmentSha256)
+    Assert.Equal(objectDigest,reference.ArtifactSha256)
+    Assert.Equal<byte>(payload,OrdinaryAssignmentWire.payload reference |> Result.defaultWith failwith)
+    let changed=Encoding.UTF8.GetString(bytes).Replace(objectDigest,String.replicate 64 "c") |> Encoding.UTF8.GetBytes
+    Assert.True(OrdinaryAssignmentWire.reference changed |> Result.isError)
+    let unknown=Encoding.UTF8.GetString(bytes).TrimEnd('}')+",\"unknown\":true}"
+    Assert.True(OrdinaryAssignmentWire.reference (Encoding.UTF8.GetBytes unknown) |> Result.isError)
+    let duplicate=Encoding.UTF8.GetString(bytes).Replace("\"schema\":","\"schema\":\"duplicate\",\"schema\":")
+    Assert.True(OrdinaryAssignmentWire.reference (Encoding.UTF8.GetBytes duplicate) |> Result.isError)
+    Assert.True(OrdinaryAssignmentWire.wrap OrdinaryAssignmentWire.commandSchema semantic objectDigest (Array.zeroCreate (32*1024)) |> Result.isError)
+    // A new-schema record without its mandatory attachment cannot fall back to a historical executable decoder.
+    let missing=Encoding.UTF8.GetBytes "{\"schema\":\"fsgg.orchestration.executor-command/6\"}"
+    Assert.True(QualifiedExecutorWire.parseCommand missing |> Result.isError)

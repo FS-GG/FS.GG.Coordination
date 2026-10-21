@@ -303,6 +303,42 @@ module MainRouteAdmission =
 
         JsonSerializer.SerializeToUtf8Bytes(wire, options)
 
+    /// Retain the exact durable route wrapper in the existing bounded preparation field.
+    let encodeBound commandId preparation (routeBytes: byte array) =
+        let historical=encode commandId preparation
+        match ExecutorWire.parseRouteBinding routeBytes with
+        | Ok binding when routeBytes.AsSpan().SequenceEqual((ExecutorWire.encodeRouteBinding binding).AsSpan()) -> historical
+        | _ ->
+            let document=System.Text.Json.Nodes.JsonNode.Parse(Encoding.UTF8.GetString historical)
+            document["routeBindingBase64"] <- System.Text.Json.Nodes.JsonValue.Create(Convert.ToBase64String routeBytes)
+            JsonSerializer.SerializeToUtf8Bytes(document,options)
+
+    let retainedReference (bytes: byte array) =
+        try
+            use document=JsonDocument.Parse(ReadOnlyMemory bytes)
+            let encoded=document.RootElement.GetProperty("routeBindingBase64").GetString()
+            if isNull encoded || encoded.Length>45000 then Error "ordinary-preparation-reference-size-refused"
+            else Convert.FromBase64String encoded |> OrdinaryAssignmentWire.reference
+        with
+        | :? JsonException
+        | :? FormatException
+        | :? InvalidOperationException
+        | :? Collections.Generic.KeyNotFoundException -> Error "ordinary-preparation-reference-refused"
+
+    // Historical plain/causal encodings retain their canonical-byte contract.
+    // New ordinary wrappers retain the exact independently validated durable object.
+    let private canonicalRetainedRoute (routeBytes: byte array) =
+        match OrdinaryAssignmentWire.reference routeBytes with
+        | Ok(Some _) -> Some routeBytes
+        | _ ->
+            use document = JsonDocument.Parse(ReadOnlyMemory routeBytes)
+            if document.RootElement.GetProperty("schema").GetString() = QualifiedExecutorWire.routeSchema then
+                JsonSerializer.Deserialize<QualifiedExecutorRoute>(routeBytes, options)
+                |> QualifiedExecutorWire.encodeRoute
+                |> Some
+            else
+                None
+
     let decode (workItemId: WorkItemId) (principal: string) (bytes: byte array) =
         try
             if isNull bytes || bytes.Length = 0 || bytes.Length > 2 * 1024 * 1024 then
@@ -358,8 +394,9 @@ module MainRouteAdmission =
                             decode64 8192 wire.LaunchBase64
                             |> Result.bind (fun launchBytes -> ExecutionProtocol.decode launchBytes)
                             |> Result.bind (fun launch ->
-                                decode64 8192 wire.RouteBindingBase64
-                                |> Result.bind ExecutorWire.parseRouteBinding
+                                decode64 (32*1024) wire.RouteBindingBase64
+                                |> Result.bind QualifiedExecutorWire.parseRoute
+                                |> Result.map(fun (binding,_,_) -> binding)
                                 |> Result.map (fun binding -> launch, binding))
                             |> Result.bind (fun (launch, binding) ->
                                 decode64 8192 wire.InputManifestBase64
@@ -481,14 +518,14 @@ module MainRouteAdmission =
                                             ExecutionReservation = executionReservation
                                         }
 
+                                    let canonical =
+                                        match Convert.FromBase64String wire.RouteBindingBase64 |> canonicalRetainedRoute with
+                                        | Some retainedRoute -> encodeBound wire.CommandId preparation retainedRoute
+                                        | None -> encode wire.CommandId preparation
+
                                     if wire.CommandId <> commandId preparation then
                                         Error "main-route-admission-command-binding-refused"
-                                    elif
-                                        not (
-                                            ReadOnlySpan<byte>(bytes)
-                                                .SequenceEqual(ReadOnlySpan<byte>(encode wire.CommandId preparation))
-                                        )
-                                    then
+                                    elif not (ReadOnlySpan<byte>(bytes).SequenceEqual(ReadOnlySpan<byte>(canonical))) then
                                         Error "main-route-admission-noncanonical-refused"
                                     else
                                         Ok preparation)

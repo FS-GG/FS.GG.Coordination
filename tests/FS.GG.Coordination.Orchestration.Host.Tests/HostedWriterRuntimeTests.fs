@@ -2144,7 +2144,7 @@ let ``expired stored candidate resumes once after exact rejected continuation`` 
             { new ICandidateStore with
                 member _.Put(value, _) =
                     Assert.Equal(current.Candidate, value.Candidate)
-                    Assert.Equal<byte array>(current.Bytes, value.Bytes)
+                    Assert.Equal<byte>(current.Bytes, value.Bytes)
                     Task.FromResult(Error(Existing currentReceipt))
                 member _.Read(_, _) = Task.FromResult(Ok current)
                 member _.Quarantine(_, _, _) = failwith "unexpected quarantine"
@@ -2927,7 +2927,7 @@ let ``native delivery batch has stable item identity and authoritative merge fie
     let name, bytes = bridge.CreateBatch(Fixture.route, readback, facts)
     let repeatedName, repeatedBytes = bridge.CreateBatch(Fixture.route, readback, facts)
     Assert.Equal(name, repeatedName)
-    Assert.Equal<byte array>(bytes, repeatedBytes)
+    Assert.Equal<byte>(bytes, repeatedBytes)
     use document = JsonDocument.Parse bytes
     let root = document.RootElement
     Assert.Equal("fsgg.telemetry.ingest/1", root.GetProperty("schema").GetString())

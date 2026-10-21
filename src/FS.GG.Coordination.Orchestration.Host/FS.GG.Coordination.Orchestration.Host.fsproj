@@ -21,6 +21,7 @@
     <Compile Include="HostInitialization.fs" />
     <Compile Include="HostedWriterRuntime.fs" />
     <Compile Include="AguiReadOnlyProjection.fs" />
+    <Compile Include="OrdinaryAssignmentAdmission.fs" />
     <Compile Include="RemoteExecutorProvider.fs" />
     <Compile Include="LocalExecutorTransport.fs" />
     <Compile Include="HostExecutorRelay.fs" />

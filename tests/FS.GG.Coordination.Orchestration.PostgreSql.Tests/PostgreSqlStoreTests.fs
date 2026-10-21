@@ -1142,7 +1142,7 @@ type PostgreSqlStoreTests() =
             let! readBack = store.Read(candidate.CandidateId, cancellationToken)
 
             match readBack with
-            | Ok value -> Assert.Equal<byte array>(bytes, value.Bytes)
+            | Ok value -> Assert.Equal<byte>(bytes, value.Bytes)
             | Error reason -> failwith reason
 
             let! existing =
@@ -1289,7 +1289,7 @@ type PostgreSqlStoreTests() =
             match readBack with
             | Ok value ->
                 Assert.Equal(retainedUntil, value.Candidate.RetainUntil)
-                Assert.Equal<byte array>(expired.Bytes, value.Bytes)
+                Assert.Equal<byte>(expired.Bytes, value.Bytes)
             | Error reason -> failwith reason
 
             let! stale = extension.ExtendRetention(expired, receipt, retainedUntil, cancellationToken)
@@ -1389,7 +1389,7 @@ type PostgreSqlStoreTests() =
                 candidateStore.Read(candidate.Candidate.CandidateId, cancellationToken)
 
             match recoveredCandidate with
-            | Ok stored -> Assert.Equal<byte array>(candidate.Bytes, stored.Bytes)
+            | Ok stored -> Assert.Equal<byte>(candidate.Bytes, stored.Bytes)
             | Error error -> failwith error
         }
 
@@ -1486,7 +1486,7 @@ type PostgreSqlStoreTests() =
                 restoredCandidates.Read(before.Candidate.CandidateId, cancellationToken)
 
             match beforeRead with
-            | Ok stored -> Assert.Equal<byte array>(before.Bytes, stored.Bytes)
+            | Ok stored -> Assert.Equal<byte>(before.Bytes, stored.Bytes)
             | Error error -> failwith error
 
             let! afterRead =
@@ -2249,7 +2249,7 @@ type PostgreSqlStoreTests() =
                     $"UPDATE fsgg_orchestration.subscription_reservation SET deadline='{reservation.Deadline:O}' WHERE reservation_id='{reservation.ReservationId}'"
 
             let! restoredInput = restoredTransport.ReadInput(inputDigest, cancellationToken)
-            Assert.Equal<byte array>(input, restoredInput |> Result.defaultWith failwith)
+            Assert.Equal<byte>(input, restoredInput |> Result.defaultWith failwith)
 
             let! restoredWorkspace =
                 restoredTransport.ReadWorkspaceManifest(
@@ -2257,12 +2257,12 @@ type PostgreSqlStoreTests() =
                     cancellationToken
                 )
 
-            Assert.Equal<byte array>(workspaceBytes, restoredWorkspace |> Result.defaultWith failwith)
+            Assert.Equal<byte>(workspaceBytes, restoredWorkspace |> Result.defaultWith failwith)
 
             let! restoredRoute =
                 restoredTransport.ReadRoute(assignmentId, attemptId, cancellationToken)
 
-            Assert.Equal<byte array>(routeBytes, restoredRoute |> Result.defaultWith failwith)
+            Assert.Equal<byte>(routeBytes, restoredRoute |> Result.defaultWith failwith)
 
             let! restoredAccounting =
                 restoredTransport.ReadSubscription(reservation.ReservationId, cancellationToken)
@@ -2270,7 +2270,7 @@ type PostgreSqlStoreTests() =
             let restoredReservationBytes, restoredSettlementBytes =
                 restoredAccounting |> Result.defaultWith failwith
 
-            Assert.Equal<byte array>(reservationBytes, restoredReservationBytes)
+            Assert.Equal<byte>(reservationBytes, restoredReservationBytes)
 
             let restoredSettlement =
                 restoredSettlementBytes.Value
@@ -2763,8 +2763,15 @@ type PostgreSqlStoreTests() =
             Assert.Equal(SubscriptionReserved, admittedAfterRelease)
         }
 
-    [<Fact>]
-    member _.``main admission preparer retries lost output against one durable PostgreSQL binding``() =
+    [<Theory>]
+    [<InlineData(false,"none")>]
+    [<InlineData(true,"none")>]
+    [<InlineData(true,"artifact-staged")>]
+    [<InlineData(true,"route-bound")>]
+    [<InlineData(true,"launch-intent-recorded")>]
+    [<InlineData(true,"subscription-reserved")>]
+    [<InlineData(true,"launch-output-lost")>]
+    member _.``main admission preparer retries lost output against one durable PostgreSQL binding``(ordinaryRoute: bool, interruption: string) =
         task {
             let! dataSource, identity = Fixture.reset ()
             use dataSource = dataSource
@@ -2820,9 +2827,82 @@ type PostgreSqlStoreTests() =
                 }
 
             let input = Encoding.UTF8.GetBytes "Prepare the bounded PostgreSQL admission."
+            let root = Directory.CreateTempSubdirectory("ordinary-main-pg-").FullName
+            let repository = Path.Combine(root, "repository")
+            Directory.CreateDirectory repository |> ignore
+            let git arguments =
+                let start =
+                    ProcessStartInfo("git", WorkingDirectory=repository, UseShellExecute=false,
+                                     RedirectStandardOutput=true, RedirectStandardError=true)
+                arguments |> List.iter start.ArgumentList.Add
+                use child = Process.Start start
+                let output = child.StandardOutput.ReadToEnd()
+                let error = child.StandardError.ReadToEnd()
+                child.WaitForExit()
+                Assert.True(child.ExitCode = 0, error)
+                output.Trim()
+            let request, artifact =
+                if not ordinaryRoute then request, None
+                else
+                    git ["init"; "--initial-branch=main"] |> ignore
+                    git ["config"; "user.name"; "Fixture"] |> ignore
+                    git ["config"; "user.email"; "fixture@example.invalid"] |> ignore
+                    Directory.CreateDirectory(Path.Combine(repository, "docs")) |> ignore
+                    File.WriteAllText(Path.Combine(repository, "docs/item.md"), "base\n")
+                    git ["add"; "."] |> ignore
+                    git ["commit"; "-m"; "base"] |> ignore
+                    let baseline = git ["rev-parse"; "HEAD"]
+                    let request =
+                        { request with
+                            BaselineObjectId = baseline
+                            RequestedModel = "fixture-model"
+                            RequestedEffort = "high"
+                        }
+                    let source: FS.GG.Coordination.Core.OrdinaryAssignment.Source =
+                        {
+                            Repository = request.RepositoryBinding
+                            Revision = baseline
+                            Path = "docs/item.md"
+                            Sha256 = File.ReadAllBytes(Path.Combine(repository, "docs/item.md")) |> RunnerWire.sha256
+                        }
+                    let bound, bytes =
+                        FS.GG.Coordination.Orchestration.Host.Tests.HostTests.MainOrdinaryFixture.create
+                            request workItem "pilot" input source
+                    let bytes =
+                        if interruption <> "none" then bytes
+                        else
+                            // Whitespace changes object bytes, not semantic assignment identity.
+                            // Cross the maintained 1MiB content-frame boundary with valid evidence.
+                            let artifact = OrdinaryAssignmentWire.parseArtifact bytes |> Result.defaultWith failwith
+                            let evidence = Convert.FromBase64String artifact.EvidenceBase64
+                            let padded = Array.append evidence (Array.create 820000 32uy)
+                            let paddedArtifact =
+                                { artifact with
+                                    EvidenceBase64 = Convert.ToBase64String padded
+                                }
+                            let bytes = OrdinaryAssignmentWire.encode paddedArtifact
+                            Assert.True(bytes.Length > ExecutorWire.maximumContentBytes && bytes.Length <= OrdinaryAssignmentWire.maximumArtifactBytes)
+                            bytes
+                    bound, Some bytes
+            let prepare =
+                match artifact with
+                | None -> MainAdmissionPreparer.prepare
+                | Some bytes ->
+                    fun clock journal executions sessions work principal request input token ->
+                        MainAdmissionPreparer.prepareOrdinary clock journal executions sessions work principal request input bytes token
+
+            if List.contains interruption ["artifact-staged"; "route-bound"; "launch-intent-recorded"; "subscription-reserved"] then
+                let bytes = artifact |> Option.get
+                let! interrupted =
+                    MainAdmissionPreparer.prepareOrdinaryWithCheckpoint
+                        TimeProvider.System journal executions executions workItem "pilot" request input bytes
+                        (fun phase -> if phase = interruption then Error("fixture-interruption:" + phase) else Ok())
+                        CancellationToken.None
+                Assert.Equal(Error("fixture-interruption:" + interruption), interrupted)
+                // Retry identical authority after each actual durable interruption prefix.
 
             let! first =
-                MainAdmissionPreparer.prepare
+                prepare
                     TimeProvider.System
                     journal
                     executions
@@ -2836,7 +2916,7 @@ type PostgreSqlStoreTests() =
             let firstBytes = first |> Result.defaultWith failwith
 
             let! retry =
-                MainAdmissionPreparer.prepare
+                prepare
                     TimeProvider.System
                     journal
                     executions
@@ -2878,7 +2958,7 @@ type PostgreSqlStoreTests() =
             Assert.Equal(
                 preparation.Binding,
                 route
-                |> Result.bind ExecutorWire.parseRouteBinding
+                |> Result.bind QualifiedExecutorWire.parseRoute |> Result.map (fun (binding,_,_) -> binding)
                 |> Result.defaultWith failwith
             )
 
@@ -2905,7 +2985,7 @@ type PostgreSqlStoreTests() =
             )
 
             let! changed =
-                MainAdmissionPreparer.prepare
+                prepare
                     TimeProvider.System
                     journal
                     executions
@@ -2919,6 +2999,201 @@ type PostgreSqlStoreTests() =
                     CancellationToken.None
 
             Assert.True(Result.isError changed)
+            match artifact with
+            | None -> ()
+            | Some bytes ->
+                let objectDigest = RunnerWire.sha256 bytes
+                let reference = route |> Result.bind OrdinaryAssignmentWire.reference |> Result.defaultWith failwith |> Option.get
+                Assert.Equal(objectDigest, reference.ArtifactSha256)
+                Assert.NotEqual(reference.AssignmentSha256, objectDigest)
+                let changedReference =
+                    { reference with
+                        ArtifactSha256 = String.replicate 64 "f"
+                        Digest = ""
+                    }
+                let changedBytes =
+                    OrdinaryAssignmentWire.encode
+                        { changedReference with
+                            Digest = RunnerWire.sha256(OrdinaryAssignmentWire.encode changedReference)
+                        }
+                let! substitution = (executions :> IExecutorCommandStore).BindRoute(changedBytes, CancellationToken.None)
+                Assert.True(Result.isError substitution)
+                let! stored = (executions :> IExecutorCommandStore).ReadInput(objectDigest, CancellationToken.None)
+                Assert.True(bytes.AsSpan().SequenceEqual((stored |> Result.defaultWith failwith).AsSpan()))
+                let resolver = PostgreSqlExecutorBindingResolver(executions, executions, request.ProcessOperationId, request.AttemptId) :> IExecutorBindingResolver
+                let! resolved = resolver.Resolve(preparation.LaunchIntent, CancellationToken.None)
+                Assert.True(Result.isOk resolved)
+                let mutable repositoryDirectory = DirectoryInfo AppContext.BaseDirectory
+                let mutable remainingAncestors = 64
+                while not (isNull repositoryDirectory)
+                      && not (File.Exists(Path.Combine(repositoryDirectory.FullName, "FS.GG.Coordination.sln")))
+                      && remainingAncestors > 0 do
+                    repositoryDirectory <- repositoryDirectory.Parent
+                    remainingAncestors <- remainingAncestors - 1
+                Assert.True(
+                    not (isNull repositoryDirectory)
+                    && File.Exists(Path.Combine(repositoryDirectory.FullName, "FS.GG.Coordination.sln")),
+                    "maintained repository root must exist within the bounded ancestor walk"
+                )
+                let repoRoot = repositoryDirectory.FullName
+                let runner = Path.Combine(repoRoot, "src/FS.GG.Coordination.Orchestration.Runner.Client/bin/Release/net10.0/linux-x64/fsgg-coord-orchestration-runner")
+                Assert.True(File.Exists runner, "maintained packaged runner must exist")
+                let codex = Path.Combine(root, "codex-controlled")
+                let scriptTemplate =
+                    """#!/bin/sh
+if [ "$1" = --version ]; then echo 'codex-cli 0.154.0'; exit 0; fi
+if [ "$1" = login ]; then echo 'Logged in using ChatGPT'; exit 0; fi
+workspace=''; final=''
+while [ $# -gt 0 ]; do
+ if [ "$1" = -C ]; then workspace="$2"; shift 2
+ elif [ "$1" = --output-last-message ]; then final="$2"; shift 2
+ else shift; fi
+done
+printf 'spawn\n' >> '__SPAWNS__'
+printf '%s\n' '{"type":"thread.started","thread_id":"thread-ordinary-pg"}'
+cat >/dev/null
+cd "$workspace"
+printf 'candidate\n' > docs/item.md
+printf '{"status":"completed","summary":"ordinary controlled fixture"}\n' > "$final"
+printf '%s\n' '{"type":"turn.completed","usage":{"input_tokens":1,"cached_input_tokens":0,"output_tokens":1,"reasoning_output_tokens":0}}'
+"""
+                let spawns = Path.Combine(root, "spawns")
+                File.WriteAllText(codex, scriptTemplate.Replace("__SPAWNS__", spawns))
+                File.SetUnixFileMode(codex, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute)
+                let directory name = Directory.CreateDirectory(Path.Combine(root, name)).FullName
+                let configuration: LocalExecutorConfiguration =
+                    {
+                        RunnerExecutable = runner
+                        RepositoryRoot = repository
+                        WorkspaceRoot = directory "workspaces"
+                        InputRoot = directory "inputs"
+                        StateRoot = directory "state"
+                        ArtifactRoot = directory "artifacts"
+                        CodexExecutable = codex
+                        ExpectedCodexVersion = Some "0.154.0"
+                        ExecutorBinding = request.ExecutorBinding
+                        Telemetry = None
+                    }
+                use horizon = new CancellationTokenSource(TimeSpan.FromSeconds 60.)
+                let timer = Stopwatch.StartNew()
+                let observedReferences = ResizeArray<string * string * string>()
+                let mutable loseLaunchOutput = interruption = "launch-output-lost"
+                let mutable originalLaunchFrames: byte array list option = None
+                let track (transport: LocalExecutorTransport) =
+                    { new IAuthenticatedExecutorTransport with
+                        member _.Exchange(frames, token) =
+                            task {
+                                let control = List.last frames
+                                let command, _, _ = QualifiedExecutorWire.parseCommand control |> Result.defaultWith failwith
+                                let reference = OrdinaryAssignmentWire.reference control |> Result.defaultWith failwith |> Option.get
+                                observedReferences.Add((command.Kind, reference.AssignmentSha256, reference.ArtifactSha256))
+                                if command.Kind = "launch" && originalLaunchFrames.IsNone then
+                                    originalLaunchFrames <- Some(frames |> List.map Array.copy)
+                                let! result = (transport :> IAuthenticatedExecutorTransport).Exchange(frames, token)
+                                if command.Kind = "launch" && loseLaunchOutput then
+                                    loseLaunchOutput <- false
+                                    return result |> Result.map(fun _ -> {Frames=[]})
+                                else return result
+                            }
+                    }
+                use transport = new LocalExecutorTransport(configuration)
+                let provider = RemoteExecutorProvider(executions, resolver, track transport) :> IExecutionProvider
+                let! readiness = provider.ObserveReadiness horizon.Token
+                match readiness.Authentication with
+                | Authenticated _ -> ()
+                | other -> failwithf "ordinary fresh readiness refused: %A" other
+                Assert.False(File.Exists spawns, "readiness must not invoke the controlled provider")
+                let! launched = provider.Launch(preparation.LaunchIntent, horizon.Token)
+                let! observation =
+                    task {
+                        match launched with
+                        | LaunchStarted value -> return value
+                        | LaunchAmbiguous _ when interruption = "launch-output-lost" ->
+                            // Reconcile the uncertain launch; never retry its original effect.
+                            let! reconciled = provider.Reconcile(preparation.LaunchIntent, horizon.Token)
+                            match reconciled with
+                            | Reconciled value -> return value
+                            | other -> return failwithf "ordinary unknown launch did not reconcile: %A" other
+                        | other -> return failwithf "ordinary positive launch refused: %A" other
+                    }
+                let! startRecorded =
+                    (executions :> IExecutionSessionJournal).AppendAttempt(
+                        request.ProcessOperationId, request.AttemptId, 1L, StartObserved observation, horizon.Token)
+                Assert.Equal(Appended, startRecorded)
+                let mutable terminal = observation
+                let mutable observationRevision = 2L
+                while terminal.Lifecycle = SessionLifecycle.Running && timer.Elapsed < TimeSpan.FromSeconds 30. do
+                    do! Task.Delay(50, horizon.Token)
+                    let! observed = provider.Observe(terminal.Session, horizon.Token)
+                    terminal <- observed |> Result.defaultWith failwith
+                    // Match ExecutionActor.Observe: record the genuine provider result
+                    // before resolving the next command against the advanced journal.
+                    let! recorded =
+                        (executions :> IExecutionSessionJournal).AppendAttempt(
+                            request.ProcessOperationId, request.AttemptId, observationRevision,
+                            ObservationRecorded terminal, horizon.Token)
+                    Assert.Equal(Appended, recorded)
+                    observationRevision <- observationRevision + 1L
+                Assert.Equal(SessionLifecycle.Succeeded, terminal.Lifecycle)
+                Assert.Single(File.ReadAllLines spawns) |> ignore
+                (transport :> IDisposable).Dispose()
+                use replacement = new LocalExecutorTransport(configuration)
+                let recovered = RemoteExecutorProvider(executions, resolver, track replacement) :> IExecutionProvider
+                // Replay the exact original command independently of later journal
+                // revisions. It already exists and grants no renewed reservation.
+                let originalFrames = originalLaunchFrames |> Option.get
+                let originalControl = List.last originalFrames
+                let originalCommand, _, originalDigest = QualifiedExecutorWire.parseCommand originalControl |> Result.defaultWith failwith
+                let! persistedReplay = (executions :> IExecutorCommandStore).PersistCommand(originalControl, horizon.Token)
+                match persistedReplay with
+                | CommandDuplicate revision -> Assert.Equal(originalCommand.ExpectedRevision, revision)
+                | other -> failwithf "identical original command replay changed: %A" other
+                let! exactReplay = (track replacement).Exchange(originalFrames, horizon.Token)
+                let replayFrames = (exactReplay |> Result.defaultWith failwith).Frames
+                let replayResponse = Assert.Single<ExecutorResponse>(replayFrames |> List.choose(fun frame -> ExecutorWire.parseResponse frame |> Result.toOption))
+                Assert.Equal(originalCommand.CommandId, replayResponse.CommandId)
+                Assert.Equal(originalDigest, replayResponse.BodySha256)
+                Assert.Equal(ProviderSessionReference.value observation.Session, replayResponse.ProviderSessionReference)
+                Assert.Equal("succeeded", replayResponse.Lifecycle)
+                Assert.True(replayFrames |> List.exists(fun frame ->
+                    ExecutorWire.parseReceipt frame |> Result.toOption
+                    |> Option.exists(fun receipt -> receipt.Disposition = "duplicate" && not receipt.ProcessCreationObserved)))
+                Assert.Single(File.ReadAllLines spawns) |> ignore
+                // A semantic duplicate at a later revision belongs to the actual
+                // coordinator, which reconciles rather than requests a new launch.
+                let coordinator = ExecutionSessionCoordinator(recovered, executions, TimeProvider.System)
+                let! duplicate = coordinator.Launch(preparation.LaunchIntent, horizon.Token)
+                let duplicateState =
+                    match duplicate with
+                    | SessionAdvanced state | SessionDuplicate state -> state
+                    | other -> failwithf "ordinary coordinator replay refused: %A" other
+                Assert.Equal(preparation.LaunchIntent, duplicateState.Intent)
+                Assert.Equal(Some observation.Session, duplicateState.Observation |> Option.map _.Session)
+                let! retainedReservation = (executions :> IExecutorCommandStore).ReadSubscription(request.ExecutionReservationId, horizon.Token)
+                Assert.Equal(preparation.ExecutionReservation,
+                    retainedReservation |> Result.bind(fun (bytes, _) -> SubscriptionAccountingCodec.decodeReservation bytes) |> Result.defaultWith failwith)
+                Assert.Single(File.ReadAllLines spawns) |> ignore
+                let! durableRoute = (executions :> IExecutorCommandStore).ReadRoute(request.ProcessOperationId, request.AttemptId, horizon.Token)
+                Assert.Equal(reference, durableRoute |> Result.bind OrdinaryAssignmentWire.reference |> Result.defaultWith failwith |> Option.get)
+                let! reconciled = recovered.Reconcile(preparation.LaunchIntent, horizon.Token)
+                match reconciled with
+                | Reconciled value -> Assert.Equal(observation.Session, value.Session)
+                | other -> failwithf "ordinary replacement reconciliation failed: %A" other
+                let! observed = recovered.Observe(observation.Session, horizon.Token)
+                Assert.True(Result.isOk observed, sprintf "ordinary replacement observation refused: %A" observed)
+                let! cancelled = recovered.Cancel(observation.Session, horizon.Token)
+                match cancelled with
+                | CancelUnknown reason -> failwithf "ordinary replacement cancellation became unknown: %s" reason
+                | _ -> ()
+                for kind in ["readiness"; "launch"; "observe"; "reconcile"; "cancel"] do
+                    Assert.Contains(kind, observedReferences |> Seq.map(fun (kind, _, _) -> kind))
+                for _, semantic, content in observedReferences do
+                    Assert.Equal(reference.AssignmentSha256, semantic)
+                    Assert.Equal(reference.ArtifactSha256, content)
+                Assert.Single(File.ReadAllLines spawns) |> ignore
+                Assert.Equal(preparation.Budget.ExecutionDeadline, preparation.LaunchIntent.Limits.Deadline)
+                Assert.True(OrdinaryAssignmentAdmission.outcomeReadiness bytes |> Result.isError)
+
         }
 
     [<Theory>]

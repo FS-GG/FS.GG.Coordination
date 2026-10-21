@@ -256,10 +256,23 @@ module MainHostComposition =
                     match candidate with
                     | Error reason -> return Error reason
                     | Ok value ->
-                        let! qualification =
-                            github.CheckProtectedHead(route.BranchRef, value.Candidate.HeadSha, token)
-
-                        return qualification |> Result.map ignore
+                        let! storedRoute=(executions :> IExecutorCommandStore).ReadRoute(Id.operationValue route.ProcessOperationId,Id.attemptValue route.AttemptId,token)
+                        let! ordinaryOutcome =
+                            task {
+                                match storedRoute |> Result.bind FS.GG.Coordination.Orchestration.Runner.Protocol.OrdinaryAssignmentWire.reference with
+                                | Error reason -> return Error reason
+                                | Ok None -> return Ok()
+                                | Ok(Some reference) ->
+                                    let! bytes=(executions :> IExecutorCommandStore).ReadInput(reference.ArtifactSha256,token)
+                                    return bytes |> Result.bind(fun bytes ->
+                                        if FS.GG.Coordination.Orchestration.Runner.Protocol.RunnerWire.sha256 bytes<>reference.ArtifactSha256 then Error "ordinary-acceptance-content-drift"
+                                        else OrdinaryAssignmentAdmission.outcomeReadiness bytes)
+                            }
+                        match ordinaryOutcome with
+                        | Error reason -> return Error reason
+                        | Ok() ->
+                            let! qualification = github.CheckProtectedHead(route.BranchRef,value.Candidate.HeadSha,token)
+                            return qualification |> Result.map ignore
             }
 
         let hosted = HostedWriterProviderAdapter.Create callbacks.Calls
@@ -352,7 +365,17 @@ type MainProductionAdmission
                 |> Convert.ToHexString
                 |> fun value -> value.ToLowerInvariant()
 
-            Ok(preparation, admissionDigest)
+            MainRouteAdmission.retainedReference bytes |> Result.map(fun reference -> preparation,admissionDigest,reference)
+
+    let validateRetainedReference (preparation: MainRoutePreparation) expected token =
+        task {
+            let! stored=(executions :> IExecutorCommandStore).ReadRoute(preparation.LaunchIntent.Key.AssignmentId,preparation.LaunchIntent.Key.AttemptId,token)
+            return
+                match stored,expected with
+                | Error "execution-route-binding-not-found",None -> Ok()
+                | _ -> stored |> Result.bind FS.GG.Coordination.Orchestration.Runner.Protocol.OrdinaryAssignmentWire.reference |> Result.bind(fun actual ->
+                    if actual=expected then Ok() else Error "ordinary-preparation-durable-reference-conflict")
+        }
 
     let bind preparation admissionDigest =
         lock gate (fun () ->
@@ -914,17 +937,21 @@ type MainProductionAdmission
             task {
                 match decode bytes with
                 | Error reason -> return Error reason
-                | Ok(preparation, digest) ->
-                    match bind preparation digest with
+                | Ok(preparation, digest, reference) ->
+                    let! retained=validateRetainedReference preparation reference token
+                    match retained with
                     | Error reason -> return Error reason
-                    | Ok(value, _) -> return! value.Workflow.Prepare(preparation, token)
+                    | Ok() ->
+                        match bind preparation digest with
+                        | Error reason -> return Error reason
+                        | Ok(value, _) -> return! value.Workflow.Prepare(preparation, token)
             }
 
         member _.RecoverPaused(bytes, token) =
             task {
                 match decode bytes with
                 | Error reason -> return Error reason
-                | Ok(preparation, digest) ->
+                | Ok(preparation, digest, reference) ->
                     // Validate every immutable preparation field against the durable
                     // Core and execution journals before starting or caching a graph.
                     // A canonical but altered recovery document therefore cannot
@@ -940,7 +967,11 @@ type MainProductionAdmission
                             principal
                         )
 
-                    let! validated = validator.ValidatePausedBinding(preparation, token)
+                    let! retained=validateRetainedReference preparation reference token
+                    let! validated =
+                        match retained with
+                        | Error reason -> Task.FromResult(Error reason)
+                        | Ok() -> validator.ValidatePausedBinding(preparation, token)
 
                     match validated with
                     | Error reason -> return Error reason

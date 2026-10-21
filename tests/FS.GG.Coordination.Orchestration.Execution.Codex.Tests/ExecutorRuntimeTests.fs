@@ -2602,3 +2602,261 @@ type ExecutorRuntimeTests() =
         let nativeEvent = native.RootElement.GetProperty("events").EnumerateArray() |> Seq.head
         Assert.Equal(admission.OriginalItemId, nativeEvent.GetProperty("itemId").GetString())
         Assert.Equal(admission.InvocationId, nativeEvent.GetProperty("invocationId").GetString())
+
+
+/// Exercises the runner projection only; authoritative domain verification belongs to the Host tests.
+type OrdinaryAssignmentRuntimeTests() =
+    [<Theory>]
+    [<InlineData(false)>]
+    [<InlineData(true)>]
+    member _.``ordinary runner refuses obligation drift then releases one controlled invocation and preserves launch identity``(reconcileTerminal: bool) =
+        task {
+            let repository, baseline = RuntimeFixture.repo()
+            let root = Directory.CreateTempSubdirectory("ordinary-runtime-").FullName
+            let directory name = Directory.CreateDirectory(Path.Combine(root, name)).FullName
+            let input = Encoding.UTF8.GetBytes "mandatory ordinary context: edit the bounded documentation candidate"
+            let digest = RuntimeFixture.sha input
+            let manifest = RuntimeFixture.manifest baseline digest
+            let manifestBytes = ExecutorWire.encodeWorkspaceManifest manifest
+            let original = RuntimeFixture.command (RuntimeFixture.sha manifestBytes) digest baseline "launch" null
+            let original =
+                { original with
+                    RequestedModel = "fixture-model"
+                    RequestedEffort = "high"
+                }
+            let command =
+                { original with
+                    BodySha256 = ExecutorWire.commandV2Digest original
+                }
+            let artifact: OrdinaryAssignmentArtifact =
+                {
+                    Schema = OrdinaryAssignmentWire.artifactSchema
+                    AssignmentSha256 = String.replicate 64 "a"
+                    EvidenceBase64 = Convert.ToBase64String(Encoding.UTF8.GetBytes "isolated runner projection fixture; Host verification is separate")
+                    WorkItemPersistenceId = command.WorkItemPersistenceId
+                    Principal = "fixture-principal"
+                    AssignmentId = command.AssignmentId
+                    AttemptId = command.AttemptId
+                    Generation = command.Generation
+                    ReservationId = Guid.NewGuid()
+                    RecordedAt = command.RecordedAt
+                    Deadline = command.Deadline
+                    MaximumRuntimeSeconds = command.MaximumRuntimeSeconds
+                    MaximumAttempts = 1
+                    InputSha256 = digest
+                    Workspace = manifest.Workspace
+                    RepositoryBinding = manifest.RepositoryBinding
+                    BaselineObjectId = baseline
+                    AllowedPaths = manifest.AllowedPaths
+                    Validations = manifest.Validations
+                    Model = command.RequestedModel
+                    Effort = command.RequestedEffort
+                    Context = [|"mandatory ordinary context"|]
+                    Tools = [|"git"|]
+                    Effects = [|"workspace-edit"|]
+                    Outputs = [|"candidate"; "validation-evidence"|]
+                    Reviews = [|"independent-source-review"|]
+                    AcceptanceOwner = "Main candidate and independent review acceptance"
+                }
+            let options: ExecutorRuntimeOptions =
+                {
+                    RepositoryRoot = repository
+                    WorkspaceRoot = directory "workspaces"
+                    InputRoot = directory "inputs"
+                    StateRoot = directory "state"
+                    ArtifactRoot = directory "artifacts"
+                    CodexExecutable = RuntimeFixture.successfulCodex root digest command.CandidateId
+                    ExecutorBinding = command.ExecutorBinding
+                    MaximumFrameBytes = 2 * ExecutorWire.maximumContentBytes
+                    Telemetry = None
+                }
+            let runtime = ExecutorRuntime(options, TimeProvider.System)
+            let content (digest: string) (bytes: byte array) =
+                let manifest: ExecutorInputManifest =
+                    {
+                        Schema = ExecutorWire.inputManifestSchema
+                        InputDigest = digest
+                        MediaType = "application/json"
+                        SizeBytes = bytes.LongLength
+                        ChunkBytes = ExecutorWire.maximumContentBytes
+                    }
+                let chunk: ExecutorContent =
+                    {
+                        Schema = ExecutorWire.contentSchema
+                        CommandId = command.CommandId
+                        InputDigest = digest
+                        Offset = 0L
+                        Final = true
+                        ContentBase64 = Convert.ToBase64String bytes
+                    }
+                [ExecutorWire.encodeInputManifest manifest; ExecutorWire.encodeContent chunk]
+            let invoke (runtime: ExecutorRuntime) (artifact: OrdinaryAssignmentArtifact) (command: ExecutorCommandV2) includeArtifact =
+                task {
+                    let artifactBytes = OrdinaryAssignmentWire.encode artifact
+                    let reference =
+                        OrdinaryAssignmentWire.wrap OrdinaryAssignmentWire.commandSchema artifact.AssignmentSha256
+                            (RunnerWire.sha256 artifactBytes) (ExecutorWire.encodeCommandV2 command)
+                        |> Result.defaultWith failwith
+                    Assert.True(ExecutorWire.parseCommandV2 (ExecutorWire.encodeCommandV2 command) |> Result.isOk)
+                    Assert.True(ExecutorWire.parseCommandV2 reference |> Result.isError, "historical peer must refuse the new envelope")
+                    let artifactFrames = if includeArtifact then content (RunnerWire.sha256 artifactBytes) artifactBytes else []
+                    let frames = content digest input @ artifactFrames @ [manifestBytes; reference]
+                    use incoming = new MemoryStream(RuntimeFixture.frames(List.toArray frames))
+                    use outgoing = new MemoryStream()
+                    use horizon = new CancellationTokenSource(TimeSpan.FromSeconds 20.)
+                    do! runtime.Run(incoming, outgoing, horizon.Token)
+                    return RuntimeFixture.readFrames(outgoing.ToArray())
+                }
+            let mutations: (OrdinaryAssignmentArtifact -> OrdinaryAssignmentArtifact) list =
+                [
+                    (fun a -> { a with AssignmentId = Guid.NewGuid() })
+                    (fun a -> { a with AttemptId = Guid.NewGuid() })
+                    (fun a -> { a with Generation = a.Generation + 1L })
+                    (fun a -> { a with Deadline = a.Deadline.AddMinutes 1. })
+                    (fun a -> { a with MaximumRuntimeSeconds = a.MaximumRuntimeSeconds + 1L })
+                    (fun a -> { a with MaximumAttempts = 2 })
+                    (fun a -> { a with InputSha256 = String.replicate 64 "c" })
+                    (fun a -> { a with Model = "changed-model" })
+                    (fun a -> { a with Effort = "changed-effort" })
+                    (fun a -> { a with BaselineObjectId = String.replicate 40 "c" })
+                    (fun a -> { a with AllowedPaths = [|"outside/**"|] })
+                    (fun a -> { a with Validations = [|"python3 journey.py"|] })
+                    (fun a -> { a with Context = [|"missing mandatory context"|] })
+                    (fun a -> { a with Tools = [|"python3"|] })
+                    (fun a -> { a with Outputs = Array.empty })
+                    (fun a -> { a with Reviews = Array.empty })
+                ]
+            for ordinal, mutate in List.indexed mutations do
+                // Each independent authority mutation owns its input/state census.
+                // Positive launch/replacement below retain their common durable identity.
+                let mutationOptions =
+                    { options with
+                        InputRoot = directory($"mutation-{ordinal}-inputs")
+                        StateRoot = directory($"mutation-{ordinal}-state")
+                        WorkspaceRoot = directory($"mutation-{ordinal}-workspaces")
+                        ArtifactRoot = directory($"mutation-{ordinal}-artifacts")
+                    }
+                let mutationRuntime = ExecutorRuntime(mutationOptions, TimeProvider.System)
+                let! frames = invoke mutationRuntime (mutate artifact) command true
+                Assert.True(frames |> List.exists(fun bytes ->
+                    ExecutorWire.parseOperationOutcome bytes |> Result.toOption
+                    |> Option.exists(fun outcome -> outcome.Disposition = "refused")))
+                Assert.False(File.Exists(Path.Combine(root, "spawns")))
+            let! missing = invoke runtime artifact command false
+            Assert.True(missing |> List.exists(fun bytes -> ExecutorWire.parseOperationOutcome bytes |> Result.isOk))
+            Assert.False(File.Exists(Path.Combine(root, "spawns")))
+            // Crash after durable launch-intent persistence: reconcile without another invocation.
+            let prefix0 =
+                { command with
+                    AttemptId = Guid.NewGuid()
+                    CommandId = Guid.NewGuid()
+                    BodySha256 = ""
+                }
+            let prefix =
+                { prefix0 with
+                    BodySha256 = ExecutorWire.commandV2Digest prefix0
+                }
+            let prefixArtifact = { artifact with AttemptId = prefix.AttemptId }
+            let prefixBytes = OrdinaryAssignmentWire.encode prefixArtifact
+            let prefixControl =
+                OrdinaryAssignmentWire.wrap OrdinaryAssignmentWire.commandSchema prefixArtifact.AssignmentSha256
+                    (RunnerWire.sha256 prefixBytes) (ExecutorWire.encodeCommandV2 prefix)
+                |> Result.defaultWith failwith
+            let prefixDirectory = Path.Combine(options.StateRoot, "executor-control", prefix.AssignmentId.ToString("N"), prefix.AttemptId.ToString("N"), string prefix.Generation)
+            Directory.CreateDirectory prefixDirectory |> ignore
+            File.WriteAllBytes(Path.Combine(prefixDirectory, "launch-command.json"), prefixControl)
+            let! interrupted = invoke (ExecutorRuntime(options, TimeProvider.System)) prefixArtifact prefix true
+            Assert.True(interrupted |> List.exists(fun bytes ->
+                ExecutorWire.parseReceipt bytes |> Result.toOption
+                |> Option.exists(fun receipt -> receipt.Disposition = "duplicate")))
+            Assert.False(File.Exists(Path.Combine(root, "spawns")))
+            let! first = invoke runtime artifact command true
+            let started = first |> List.pick(fun bytes -> ExecutorWire.parseResponse bytes |> Result.toOption)
+            Assert.Equal("running", started.Lifecycle)
+            let mutable terminal = started
+            let horizon = Stopwatch.StartNew()
+            while terminal.Lifecycle = "running" && horizon.Elapsed < TimeSpan.FromSeconds 10. do
+                do! Task.Delay 50
+                let observe0 =
+                    { command with
+                        CommandId = Guid.NewGuid()
+                        Kind = if reconcileTerminal then "reconcile" else "observe"
+                        ProviderSessionReference = if reconcileTerminal then null else started.ProviderSessionReference
+                        BodySha256 = ""
+                    }
+                let observe = { observe0 with BodySha256 = ExecutorWire.commandV2Digest observe0 }
+                let! frames = invoke runtime artifact observe true
+                terminal <- frames |> List.pick(fun bytes -> ExecutorWire.parseResponse bytes |> Result.toOption)
+            Assert.Equal("succeeded", terminal.Lifecycle)
+            Assert.Single(File.ReadAllLines(Path.Combine(root, "spawns"))) |> ignore
+            let replacement = ExecutorRuntime(options, TimeProvider.System)
+            let! duplicate = invoke replacement artifact command true
+            Assert.True(duplicate |> List.exists(fun bytes ->
+                ExecutorWire.parseReceipt bytes |> Result.toOption
+                |> Option.exists(fun receipt -> receipt.Disposition = "duplicate")))
+            Assert.Single(File.ReadAllLines(Path.Combine(root, "spawns"))) |> ignore
+            let recovered = duplicate |> List.pick(fun bytes -> ExecutorWire.parseResponse bytes |> Result.toOption)
+            Assert.Equal("succeeded", recovered.Lifecycle)
+            Assert.Equal(started.ProviderSessionReference, recovered.ProviderSessionReference)
+            let commandFor kind =
+                let unsigned =
+                    { command with
+                        CommandId = Guid.NewGuid()
+                        Kind = kind
+                        ProviderSessionReference = if kind = "cancel" || kind = "observe" then started.ProviderSessionReference else null
+                        BodySha256 = ""
+                    }
+                { unsigned with BodySha256 = ExecutorWire.commandV2Digest unsigned }
+            let! reconciliation = invoke replacement artifact (commandFor "reconcile") true
+            let reconciled = reconciliation |> List.pick(fun bytes -> ExecutorWire.parseResponse bytes |> Result.toOption)
+            Assert.Equal(started.ProviderSessionReference, reconciled.ProviderSessionReference)
+            Assert.Equal("succeeded", reconciled.Lifecycle)
+            let! observation = invoke replacement artifact (commandFor "observe") true
+            let observed = observation |> List.pick(fun bytes -> ExecutorWire.parseResponse bytes |> Result.toOption)
+            Assert.Equal(started.ProviderSessionReference, observed.ProviderSessionReference)
+            Assert.Equal("succeeded", observed.Lifecycle)
+            let! cancellation = invoke replacement artifact (commandFor "cancel") true
+            Assert.True(cancellation |> List.exists(fun bytes ->
+                ExecutorWire.parseOperationOutcome bytes |> Result.toOption
+                |> Option.exists(fun outcome -> outcome.Disposition = "refused" && outcome.Reason = "executor-session-already-terminal")))
+            let assertUnknownCancellation () =
+                task {
+                    let! frames = invoke (ExecutorRuntime(options, TimeProvider.System)) artifact (commandFor "cancel") true
+                    Assert.True(frames |> List.exists(fun bytes ->
+                        ExecutorWire.parseOperationOutcome bytes |> Result.toOption
+                        |> Option.exists(fun outcome -> outcome.Disposition = "unknown")))
+                    Assert.Single(File.ReadAllLines(Path.Combine(root, "spawns"))) |> ignore
+                }
+            let sessionPath = Path.Combine(options.StateRoot, "executor-control", command.AssignmentId.ToString("N"), command.AttemptId.ToString("N"), string command.Generation, "provider-session.json")
+            let retainedSession = File.ReadAllBytes sessionPath
+            for invalid in [| [||]; System.Text.Encoding.UTF8.GetBytes "[\"fsgg.executor-provider-session/1\",\"wrong\",\"codex-thread:substituted\",\"wrong\"]" |] do
+                File.WriteAllBytes(sessionPath, invalid)
+                let! refused = invoke (ExecutorRuntime(options, TimeProvider.System)) artifact command true
+                Assert.False(refused |> List.exists(fun bytes -> ExecutorWire.parseResponse bytes |> Result.isOk))
+                do! assertUnknownCancellation ()
+                Assert.Single(File.ReadAllLines(Path.Combine(root, "spawns"))) |> ignore
+            File.Delete sessionPath
+            let! missing = invoke (ExecutorRuntime(options, TimeProvider.System)) artifact command true
+            Assert.False(missing |> List.exists(fun bytes -> ExecutorWire.parseResponse bytes |> Result.isOk))
+            do! assertUnknownCancellation ()
+            File.WriteAllBytes(sessionPath, retainedSession)
+            let artifactPath = Path.Combine(options.ArtifactRoot, command.CandidateId.ToString("N") + ".manifest.json")
+            let retainedArtifact = File.ReadAllBytes artifactPath
+            let originalArtifact = retainedArtifact |> ExecutorWire.parseArtifactManifest |> Result.defaultWith failwith
+            let driftedArtifact = { originalArtifact with CommandId = Guid.NewGuid(); ManifestSha256 = "" }
+            File.WriteAllBytes(artifactPath, ExecutorWire.encodeArtifactManifest { driftedArtifact with ManifestSha256 = ExecutorWire.artifactManifestDigest driftedArtifact })
+            let! drifted = invoke (ExecutorRuntime(options, TimeProvider.System)) artifact command true
+            Assert.False(drifted |> List.exists(fun bytes -> ExecutorWire.parseResponse bytes |> Result.isOk))
+            File.Delete artifactPath
+            let! noTerminal = invoke (ExecutorRuntime(options, TimeProvider.System)) artifact command true
+            Assert.False(noTerminal |> List.exists(fun bytes -> ExecutorWire.parseResponse bytes |> Result.isOk))
+            do! assertUnknownCancellation ()
+            File.WriteAllBytes(artifactPath, retainedArtifact)
+            Assert.Single(File.ReadAllLines(Path.Combine(root, "spawns"))) |> ignore
+            let changed = { artifact with Principal = "different-principal" }
+            let! conflict = invoke replacement changed command true
+            Assert.True(conflict |> List.exists(fun bytes ->
+                ExecutorWire.parseOperationOutcome bytes |> Result.toOption
+                |> Option.exists(fun outcome -> outcome.Disposition = "refused")))
+            Assert.Single(File.ReadAllLines(Path.Combine(root, "spawns"))) |> ignore
+        }

@@ -1823,3 +1823,286 @@ let ``local child mode exposes no legacy runner HTTP route`` () =
         shutdown.Cancel()
         do! server.WaitAsync(TimeSpan.FromSeconds 2.)
     }
+
+[<Fact>]
+let ``ordinary complete evidence roundtrip preserves independent authoritative verification`` () =
+    let authority=OrdinaryAssignmentFixtures.authority [OrdinaryAssignmentFixtures.framework;OrdinaryAssignmentFixtures.product]
+    let snapshot=OrdinaryAssignmentFixtures.snapshot authority
+    let decision=FS.GG.Coordination.Core.OrdinaryAssignmentPolicy.select snapshot |> OrdinaryAssignmentFixtures.accepted
+    let evidence: OrdinaryAssignmentAdmission.Evidence={Authority=authority;Snapshot=snapshot;Decision=decision}
+    let bytes=OrdinaryAssignmentAdmission.encodeEvidence evidence
+    let decoded=OrdinaryAssignmentAdmission.decodeEvidence bytes |> Result.defaultWith failwith
+    Assert.Equal(evidence,decoded)
+    FS.GG.Coordination.Core.OrdinaryAssignmentVerifier.verify decoded.Authority decoded.Snapshot decoded.Decision
+    |> OrdinaryAssignmentFixtures.accepted
+    let omission={decoded with Authority={decoded.Authority with Works=[OrdinaryAssignmentFixtures.framework]}}
+    FS.GG.Coordination.Core.OrdinaryAssignmentVerifier.verify omission.Authority omission.Snapshot omission.Decision
+    |> OrdinaryAssignmentFixtures.refused
+    let truncated=bytes[0..bytes.Length-2]
+    Assert.True(OrdinaryAssignmentAdmission.decodeEvidence truncated |> Result.isError)
+    Assert.True(OrdinaryAssignmentAdmission.decodeEvidence (Array.zeroCreate (2*1024*1024+1)) |> Result.isError)
+
+/// Shared actual-Main fixture builder. The caller supplies its real baseline file provenance.
+module MainOrdinaryFixture =
+    open FS.GG.Coordination.Core.OrdinaryAssignment
+
+    let create (request: MainAdmissionPreparationRequest) workItem principal (input: byte array) (source: Source) =
+        let budget = SubscriptionPilot.createBudget request.SelectedAt
+        let baseWork = OrdinaryAssignmentFixtures.framework
+        let documentationComponent: Component =
+            {
+                Id = "documentation"
+                Root = "docs"
+                Language = "markdown"
+                Commands = Set.ofArray request.Validations
+                Sources = [source]
+            }
+        let work: Requirements =
+            { baseWork with
+                Key = "ordinary-main"
+                Identity = Board workItem
+                Workspace =
+                    { baseWork.Workspace with
+                        Workspace = request.Workspace
+                        Provider = "codex"
+                        Repositories =
+                            [
+                                {
+                                    Identity = request.RepositoryBinding
+                                    Revision = request.BaselineObjectId
+                                }
+                            ]
+                        Components = [documentationComponent]
+                        Sources = [source]
+                    }
+                Attempt = Id.attempt request.AttemptId
+                Generation = Some(Id.generation 1L)
+                SelectedAt = request.SelectedAt
+                Deadline = Some budget.ExecutionDeadline
+                Recovery =
+                    Some {
+                        OriginalStartedAt = request.SelectedAt
+                        OriginalDeadline = budget.ExecutionDeadline
+                        MaxAttempts = 1
+                        AttemptOrdinal = 1
+                    }
+                Dependencies = Set.empty
+                RequiredChecks = Set.ofArray request.Validations
+                Capabilities = set["git";"codex"]
+                Tools = set["git"]
+                Skills = Set.empty
+                Context = set[Encoding.UTF8.GetString input]
+                AllowedPaths = Set.ofArray request.AllowedPaths
+                AuthorizedEffects = set["workspace-edit"]
+                RequiredOutputs = set["candidate";"validation-evidence"]
+                RequiredReviews = set["independent-source-review"]
+                Demand = Map.ofList["task-slots",Some 1L]
+            }
+        let profile: ExecutionProfile =
+            { OrdinaryAssignmentFixtures.frameworkProfile with
+                Id = "ordinary-codex"
+                Version = "ordinary-codex/1"
+                Requested =
+                    {
+                        Model = request.RequestedModel
+                        Effort = request.RequestedEffort
+                        Runtime = "codex"
+                    }
+                Resolved = None
+                Observed = None
+                Economics = None
+                AdditionalDemand = Map.empty
+                Capabilities =
+                    work.Capabilities
+                    |> Seq.map(fun capability ->
+                        let observation: CapabilityObservation =
+                            {
+                                Available = true
+                                Evidence = Some source
+                            }
+                        capability, observation)
+                    |> Map.ofSeq
+                Tools = work.Tools
+                Skills = work.Skills
+                Context = work.Context
+                Effects = work.AuthorizedEffects
+                Outputs = work.RequiredOutputs
+                Reviews = work.RequiredReviews
+            }
+        let authority =
+            bindAuthority {
+                Version = "ordinary-authority/1"
+                Works = [work]
+                Completeness =
+                    {
+                        ExpectedWorkKeys = set[work.Key]
+                        Sources = [source]
+                        SourceBound = true
+                        ManifestSha256 = ""
+                    }
+            }
+        let project =
+            ProjectOrchestrator.initial (Id.project request.ProjectId) 2 1
+            |> fun current -> ProjectOrchestrator.evolve current ProjectResumed
+        let snapshot: FS.GG.Coordination.Core.OrdinaryAssignment.Snapshot =
+            { OrdinaryAssignmentFixtures.snapshot authority with
+                Works = [work]
+                Profiles = [profile]
+                Now = request.SelectedAt
+                Capacity = Map.ofList["task-slots",Some 2L]
+                RecoveryHeadroom = Map.ofList["task-slots",Some 1L]
+                Reservations = []
+                Project = project
+                SatisfiedDependencies = Set.empty
+            }
+        let decision = FS.GG.Coordination.Core.OrdinaryAssignmentPolicy.select snapshot |> OrdinaryAssignmentFixtures.accepted
+        let assignment = Assert.Single(decision.Selected)
+        let evidence: OrdinaryAssignmentAdmission.Evidence =
+            {
+                Authority = authority
+                Snapshot = snapshot
+                Decision = decision
+            }
+        let artifact: OrdinaryAssignmentArtifact =
+            {
+                Schema = OrdinaryAssignmentWire.artifactSchema
+                AssignmentSha256 = assignment.AssignmentSha256
+                EvidenceBase64 = OrdinaryAssignmentAdmission.encodeEvidence evidence |> Convert.ToBase64String
+                WorkItemPersistenceId = WorkItemIdentity.persistenceId workItem
+                Principal = principal
+                AssignmentId = request.ProcessOperationId
+                AttemptId = request.AttemptId
+                Generation = 1L
+                ReservationId = Id.reservationValue assignment.Specification.Reservation
+                RecordedAt = request.SelectedAt
+                Deadline = budget.ExecutionDeadline
+                MaximumRuntimeSeconds = int64 budget.MaximumRuntime.TotalSeconds
+                MaximumAttempts = budget.AttemptLimit
+                InputSha256 = RunnerWire.sha256 input
+                Workspace = request.Workspace
+                RepositoryBinding = request.RepositoryBinding
+                BaselineObjectId = request.BaselineObjectId
+                AllowedPaths = request.AllowedPaths
+                Validations = request.Validations
+                Model = request.RequestedModel
+                Effort = request.RequestedEffort
+                Context = Set.toArray work.Context
+                Tools = Set.toArray work.Tools
+                Effects = Set.toArray work.AuthorizedEffects
+                Outputs = Set.toArray work.RequiredOutputs
+                Reviews = Set.toArray work.RequiredReviews
+                AcceptanceOwner = "Main candidate and independent review acceptance"
+            }
+        let bytes = OrdinaryAssignmentWire.encode artifact
+        OrdinaryAssignmentAdmission.verify bytes |> Result.defaultWith failwith |> ignore
+        OrdinaryAssignmentAdmission.validateProjection artifact assignment |> Result.defaultWith failwith
+        {request with ReservationId=artifact.ReservationId}, bytes
+
+
+[<Fact>]
+let ``ordinary Main independently binds authority actual identity bytes and original budget before route persistence`` () =
+    task {
+        let original=Fixture.preparationRequest()
+        let request =
+            { original with
+                RequestedModel = "fixture-model"
+                RequestedEffort = "high"
+                RepositoryBinding = "FS-GG/FS.GG.Coordination"
+                BaselineObjectId = "69a582f98813922ff8801f84d7f7980fb1b77f84"
+            }
+        let source: FS.GG.Coordination.Core.OrdinaryAssignment.Source =
+            {
+                Repository = request.RepositoryBinding
+                Revision = request.BaselineObjectId
+                Path = "docs/roadmaps/learn-ordinary-assignment-kernel.md"
+                Sha256 = "c1cb39b84cb50a559a89b447fb30885c85bb9ace3a8fb97e565e34af2b4d411b"
+            }
+        let input=Encoding.UTF8.GetBytes "mandatory ordinary context and source-only bounded documentation acceptance"
+        let request,bytes=MainOrdinaryFixture.create request Fixture.permit.SubjectId "pilot-route" input source
+        let artifact=OrdinaryAssignmentWire.parseArtifact bytes |> Result.defaultWith failwith
+        let journal=Fixture.MemoryJournal()
+        let executor=Fixture.MemoryExecutor(fun () -> journal.State)
+        let prepare bytes = MainAdmissionPreparer.prepareOrdinary (Fixture.FixedClock()) journal executor executor Fixture.permit.SubjectId "pilot-route" request input bytes CancellationToken.None
+        let! first=prepare bytes
+        let firstBytes=first |> Result.defaultWith failwith
+        let! duplicate=prepare bytes
+        Assert.Equal<byte>(firstBytes,duplicate |> Result.defaultWith failwith)
+        let reference=MainRouteAdmission.retainedReference firstBytes |> Result.defaultWith failwith |> Option.get
+        Assert.Equal(artifact.AssignmentSha256,reference.AssignmentSha256)
+        Assert.Equal(RunnerWire.sha256 bytes,reference.ArtifactSha256)
+        Assert.NotEqual(reference.AssignmentSha256,reference.ArtifactSha256)
+        Assert.Equal(1,executor.AttemptCount)
+        let preparation=MainRouteAdmission.decode Fixture.permit.SubjectId "pilot-route" firstBytes |> Result.defaultWith failwith
+        use preparedDocument = JsonDocument.Parse(ReadOnlyMemory firstBytes)
+        let retainedRouteBytes =
+            preparedDocument.RootElement.GetProperty("routeBindingBase64").GetString()
+            |> Convert.FromBase64String
+        let reconstructed =
+            MainRouteAdmission.encodeBound (MainRouteAdmission.commandId preparation) preparation retainedRouteBytes
+        Assert.Equal<byte>(firstBytes, reconstructed)
+        let historical = MainRouteAdmission.encode (MainRouteAdmission.commandId preparation) preparation
+        let historicalDecoded =
+            MainRouteAdmission.decode Fixture.permit.SubjectId "pilot-route" historical
+            |> Result.defaultWith(fun reason -> failwith("historical-plain-decode:" + reason))
+        Assert.True((preparation = historicalDecoded), "historical plain preparation changed")
+        Assert.Equal<byte>(historical, MainRouteAdmission.encode (MainRouteAdmission.commandId historicalDecoded) historicalDecoded)
+        let plainRoute = ExecutorWire.encodeRouteBinding preparation.Binding
+        Assert.Equal<byte>(historical, MainRouteAdmission.encodeBound (MainRouteAdmission.commandId preparation) preparation plainRoute)
+        let noncanonicalPlainRoute = Array.append [|32uy|] plainRoute
+        let noncanonicalPlain =
+            MainRouteAdmission.encodeBound (MainRouteAdmission.commandId preparation) preparation noncanonicalPlainRoute
+        Assert.True(MainRouteAdmission.decode Fixture.permit.SubjectId "pilot-route" noncanonicalPlain |> Result.isError)
+        let causalAdmission =
+            ExecutionCausalAdmission.create
+                preparation.Binding.WorkItemPersistenceId preparation.Binding.WorkItemPersistenceId
+                preparation.Binding.AssignmentId preparation.Binding.AttemptId preparation.Binding.Generation
+                preparation.LaunchIntent.RecordedAt ExecutionCausalAdmission.unclassified None
+            |> Result.defaultWith failwith
+        let causalRoute = QualifiedExecutorWire.wrapRoute preparation.Binding causalAdmission |> Result.defaultWith failwith
+        let causalPreparation =
+            MainRouteAdmission.encodeBound (MainRouteAdmission.commandId preparation) preparation causalRoute
+        let causalDecoded =
+            MainRouteAdmission.decode Fixture.permit.SubjectId "pilot-route" causalPreparation
+            |> Result.defaultWith(fun reason -> failwith("historical-causal-decode:" + reason))
+        Assert.True((preparation = causalDecoded), "historical causal preparation changed")
+        let reconstructedCausal =
+            MainRouteAdmission.encodeBound (MainRouteAdmission.commandId causalDecoded) causalDecoded causalRoute
+        Assert.Equal<byte>(causalPreparation, reconstructedCausal)
+        let noncanonicalCausalRoute = Array.append [|32uy|] causalRoute
+        let noncanonicalCausal =
+            MainRouteAdmission.encodeBound (MainRouteAdmission.commandId preparation) preparation noncanonicalCausalRoute
+        Assert.True(MainRouteAdmission.decode Fixture.permit.SubjectId "pilot-route" noncanonicalCausal |> Result.isError)
+        // Canonical preparation bytes remain strict while the validated route wrapper survives.
+        let noncanonical = Array.append [|32uy|] firstBytes
+        Assert.True(MainRouteAdmission.decode Fixture.permit.SubjectId "pilot-route" noncanonical |> Result.isError)
+        let malformedRoute = Array.append retainedRouteBytes [|0uy|]
+        let malformed = MainRouteAdmission.encodeBound (MainRouteAdmission.commandId preparation) preparation malformedRoute
+        Assert.True(MainRouteAdmission.decode Fixture.permit.SubjectId "pilot-route" malformed |> Result.isError)
+        Assert.Equal(request.SelectedAt,preparation.LaunchIntent.RecordedAt)
+        Assert.Equal(SubscriptionPilot.createBudget request.SelectedAt,preparation.Budget)
+        Assert.True(OrdinaryAssignmentAdmission.outcomeReadiness bytes |> Result.isError)
+        let mutations: (OrdinaryAssignmentArtifact -> OrdinaryAssignmentArtifact) list=[
+            fun a -> {a with AssignmentSha256=String.replicate 64 "e"}
+            fun a -> {a with EvidenceBase64="not-base64"}
+            fun a -> {a with Principal="wrong-principal"}
+            fun a -> {a with Generation=a.Generation+1L}
+            fun a -> {a with ReservationId=Guid.NewGuid()}
+            fun a -> {a with InputSha256=String.replicate 64 "c"}
+            fun a -> {a with Model="changed-model"}
+            fun a -> {a with RecordedAt=a.RecordedAt.AddSeconds 1.}
+            fun a -> {a with Deadline=a.Deadline.AddMinutes 1.}
+            fun a -> {a with MaximumRuntimeSeconds=a.MaximumRuntimeSeconds+1L}
+            fun a -> {a with MaximumAttempts=2}
+            fun a -> {a with Validations=[|"python3 journey.py"|]}
+            fun a -> {a with Context=Array.empty}
+            fun a -> {a with Reviews=Array.empty}]
+        for mutate in mutations do
+            let fresh=Fixture.MemoryJournal()
+            let freshExecutions=Fixture.MemoryExecutor(fun () -> fresh.State)
+            let changed=OrdinaryAssignmentWire.encode(mutate artifact)
+            let! refused=MainAdmissionPreparer.prepareOrdinary (Fixture.FixedClock()) fresh freshExecutions freshExecutions Fixture.permit.SubjectId "pilot-route" request input changed CancellationToken.None
+            Assert.True(Result.isError refused)
+            Assert.Equal(0,freshExecutions.AttemptCount)
+        let! missing=prepare Array.empty
+        Assert.True(Result.isError missing)
+    }

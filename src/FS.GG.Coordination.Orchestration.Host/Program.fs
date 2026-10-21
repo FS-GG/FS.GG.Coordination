@@ -102,7 +102,11 @@ let main arguments =
                 let executions = PostgreSqlExecutionStore(options)
 
                 match
-                    MainAdmissionPreparer.prepare
+                    (match configuration.OrdinaryAssignmentFile with
+                     | None -> MainAdmissionPreparer.prepare
+                     | Some path -> fun clock workItems executions journal work principal request input token ->
+                         let artifact=readBounded FS.GG.Coordination.Orchestration.Runner.Protocol.OrdinaryAssignmentWire.maximumArtifactBytes path
+                         MainAdmissionPreparer.prepareOrdinary clock workItems executions journal work principal request input artifact token)
                         TimeProvider.System
                         workItems
                         executions
