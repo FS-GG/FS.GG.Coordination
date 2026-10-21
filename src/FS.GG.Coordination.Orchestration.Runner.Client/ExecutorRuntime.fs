@@ -609,6 +609,73 @@ type ExecutorRuntime
                 None
         | _ -> None
 
+    let providerSessionPath (command: ExecutorCommandV2) =
+        Path.Combine(options.StateRoot, "executor-control", command.AssignmentId.ToString("N"),
+                     command.AttemptId.ToString("N"), command.Generation.ToString(CultureInfo.InvariantCulture),
+                     "provider-session.json")
+
+    // Retain the observed session before replying. A spawn receipt alone still cannot
+    // establish terminal recovery; the exact launch and verified artifact are required.
+    let persistProviderSession (selected: Supervised) command (session: ProviderSessionReference) =
+        let path = providerSessionPath command
+        let launchDigest = File.ReadAllBytes(Path.Combine(Path.GetDirectoryName path, "launch-command.json")) |> RunnerWire.sha256
+        let fields = [| "fsgg.executor-provider-session/1"; launchDigest; ProviderSessionReference.value session; selected.Command.CommandId.ToString("D") |]
+        let checksum = JsonSerializer.SerializeToUtf8Bytes fields |> RunnerWire.sha256
+        let bytes = JsonSerializer.SerializeToUtf8Bytes(Array.append fields [|checksum|])
+        let temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp"
+        try
+            let streamOptions = FileStreamOptions(Mode = FileMode.CreateNew, Access = FileAccess.Write, Share = FileShare.None, BufferSize = 4096, Options = FileOptions.WriteThrough)
+            if OperatingSystem.IsLinux() || OperatingSystem.IsMacOS() then
+                streamOptions.UnixCreateMode <- Nullable(UnixFileMode.UserRead ||| UnixFileMode.UserWrite)
+            use stream = new FileStream(temporary, streamOptions)
+            stream.Write bytes
+            stream.Flush true
+            stream.Close()
+            try File.Move(temporary, path, false)
+            with :? IOException ->
+                let existing = FileInfo path
+                if not existing.Exists || not (isNull existing.LinkTarget) || existing.Length < 1L || existing.Length > 4096L
+                   || not (File.ReadAllBytes(path).AsSpan().SequenceEqual(bytes.AsSpan())) then
+                    raise (InvalidDataException "executor-provider-session-conflict")
+        finally
+            if File.Exists temporary then File.Delete temporary
+
+    let recoveredTerminal (selected: Supervised) controlBytes (command: ExecutorCommandV2) causal =
+        match verifiedArtifact selected command.CandidateId with
+        | Some artifact when matchesDurableLaunch controlBytes command causal ->
+            try
+                let path = providerSessionPath command
+                let info = FileInfo path
+                if not info.Exists || not (isNull info.LinkTarget) || info.Length < 1L || info.Length > 4096L then None
+                else
+                    let bytes = File.ReadAllBytes path
+                    let fields = JsonSerializer.Deserialize<string array>(bytes)
+                    let launchDigest = File.ReadAllBytes(Path.Combine(Path.GetDirectoryName path, "launch-command.json")) |> RunnerWire.sha256
+                    if isNull fields || fields.Length <> 5 || fields[0] <> "fsgg.executor-provider-session/1"
+                       || fields[1] <> launchDigest
+                       || fields[3] <> artifact.Manifest.CommandId.ToString("D")
+                       || (JsonSerializer.SerializeToUtf8Bytes(fields[..3]) |> RunnerWire.sha256) <> fields[4]
+                       || not (bytes.AsSpan().SequenceEqual((JsonSerializer.SerializeToUtf8Bytes fields).AsSpan())) then
+                        None
+                    else
+                        let session = fields[2]
+                        match ProviderSessionReference.create session with
+                        | Error _ -> None
+                        | Ok _ when not (isNull command.ProviderSessionReference) && command.ProviderSessionReference <> session -> None
+                        | Ok _ ->
+                            let candidate = Some { CandidateId = artifact.Manifest.CandidateId; HeadSha = artifact.Manifest.HeadObjectId; TreeSha = artifact.Manifest.TreeObjectId }
+                            Some(artifact,
+                                response command "session-observation" "Codex" "codex-subscription-exec/1"
+                                    "unknown" "durable-artifact-recovery" true session "succeeded"
+                                    command.RequestedModel command.RequestedEffort command.RequestedModel command.RequestedEffort
+                                    [] [] (unknownUsage "durable-artifact-recovery")
+                                    (CostNotApplicable "codex-chatgpt-subscription-no-per-invocation-price")
+                                    (CostUnknown "broader-monetary-attribution-unavailable") candidate
+                                    "completed-artifact-recovered-after-runner-replacement")
+            with
+            | :? IOException | :? UnauthorizedAccessException | :? JsonException -> None
+        | _ -> None
+
     let ensureReadiness (value: Supervised) =
         task {
             match value.Readiness with
@@ -875,11 +942,23 @@ type ExecutorRuntime
                                             receipt command "duplicate" false "launch-intent-already-persisted"
                                         ))
 
-                                let! _ = ensureReadiness selected
-                                let! reconciled = selected.Provider.Reconcile(intent, CancellationToken.None)
+                                let! reconciled =
+                                    task {
+                                        match recoveredTerminal selected controlBytes replyCommand causal with
+                                        | Some(artifact, terminal) ->
+                                            do! writeFrame output (ExecutorWire.encodeArtifactManifest artifact.Manifest)
+                                            do! writeFrame output (ExecutorWire.encodeResponse terminal)
+                                            return None
+                                        | None ->
+                                            let! _ = ensureReadiness selected
+                                            let! result = selected.Provider.Reconcile(intent, CancellationToken.None)
+                                            return Some result
+                                    }
 
                                 match reconciled with
-                                | Reconciled observation ->
+                                | None -> ()
+                                | Some(Reconciled observation) ->
+                                    persistProviderSession selected command observation.Session
                                     selected.Session <- Some observation.Session
 
                                     do!
@@ -888,7 +967,7 @@ type ExecutorRuntime
                                             (ExecutorWire.encodeResponse (
                                                 observationResponse command selected.Readiness observation
                                             ))
-                                | ConfirmedAbsent ->
+                                | Some ConfirmedAbsent ->
                                     do!
                                         writeFrame
                                             output
@@ -900,7 +979,7 @@ type ExecutorRuntime
                                                     None
                                                     "executor-persisted-launch-local-absence-not-authoritative"
                                             ))
-                                | ReconcileUnknown reason ->
+                                | Some(ReconcileUnknown reason) ->
                                     do!
                                         writeFrame
                                             output
@@ -950,6 +1029,7 @@ type ExecutorRuntime
 
                                     match launched with
                                     | LaunchStarted observation ->
+                                        persistProviderSession selected command observation.Session
                                         selected.Session <- Some observation.Session
 
                                         do!
@@ -1135,38 +1215,44 @@ type ExecutorRuntime
                                     RecordedAt = command.RecordedAt
                                 }
 
-                            let! _ = ensureReadiness selected
-                            let! reconciled = selected.Provider.Reconcile(intent, CancellationToken.None)
+                            match recoveredTerminal selected controlBytes replyCommand causal with
+                            | Some(artifact, terminal) ->
+                                do! writeFrame output (ExecutorWire.encodeArtifactManifest artifact.Manifest)
+                                do! writeFrame output (ExecutorWire.encodeResponse terminal)
+                            | None ->
+                                let! _ = ensureReadiness selected
+                                let! reconciled = selected.Provider.Reconcile(intent, CancellationToken.None)
 
-                            match reconciled with
-                            | Reconciled observation ->
-                                selected.Session <- Some observation.Session
+                                match reconciled with
+                                | Reconciled observation ->
+                                    persistProviderSession selected command observation.Session
+                                    selected.Session <- Some observation.Session
 
-                                do!
-                                    writeFrame
-                                        output
-                                        (ExecutorWire.encodeResponse (
-                                            observationResponse command selected.Readiness observation
-                                        ))
-                            | ConfirmedAbsent ->
-                                do!
-                                    writeFrame
-                                        output
-                                        (ExecutorWire.encodeOperationOutcome (
-                                            operation
-                                                command
-                                                "reconcile"
-                                                "unknown"
-                                                None
-                                                "executor-local-absence-not-authoritative"
-                                        ))
-                            | ReconcileUnknown reason ->
-                                do!
-                                    writeFrame
-                                        output
-                                        (ExecutorWire.encodeOperationOutcome (
-                                            operation command "reconcile" "unknown" None reason
-                                        ))
+                                    do!
+                                        writeFrame
+                                            output
+                                            (ExecutorWire.encodeResponse (
+                                                observationResponse command selected.Readiness observation
+                                            ))
+                                | ConfirmedAbsent ->
+                                    do!
+                                        writeFrame
+                                            output
+                                            (ExecutorWire.encodeOperationOutcome (
+                                                operation
+                                                    command
+                                                    "reconcile"
+                                                    "unknown"
+                                                    None
+                                                    "executor-local-absence-not-authoritative"
+                                            ))
+                                | ReconcileUnknown reason ->
+                                    do!
+                                        writeFrame
+                                            output
+                                            (ExecutorWire.encodeOperationOutcome (
+                                                operation command "reconcile" "unknown" None reason
+                                            ))
                         | "cancel" ->
                             match ProviderSessionReference.create command.ProviderSessionReference with
                             | Error reason ->
@@ -1177,7 +1263,10 @@ type ExecutorRuntime
                                             operation command "cancel" "refused" None reason
                                         ))
                             | Ok session ->
-                                let! cancelled = selected.Provider.Cancel(session, CancellationToken.None)
+                                let! cancelled =
+                                    match recoveredTerminal selected controlBytes replyCommand causal with
+                                    | Some _ -> Task.FromResult(CancelRefused "executor-session-already-terminal")
+                                    | None -> selected.Provider.Cancel(session, CancellationToken.None)
 
                                 match cancelled with
                                 | CancelAccepted ->

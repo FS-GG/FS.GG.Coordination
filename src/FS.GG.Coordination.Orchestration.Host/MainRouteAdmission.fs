@@ -306,9 +306,12 @@ module MainRouteAdmission =
     /// Retain the exact durable route wrapper in the existing bounded preparation field.
     let encodeBound commandId preparation (routeBytes: byte array) =
         let historical=encode commandId preparation
-        let document=System.Text.Json.Nodes.JsonNode.Parse(Encoding.UTF8.GetString historical)
-        document["routeBindingBase64"] <- System.Text.Json.Nodes.JsonValue.Create(Convert.ToBase64String routeBytes)
-        JsonSerializer.SerializeToUtf8Bytes(document,options)
+        match ExecutorWire.parseRouteBinding routeBytes with
+        | Ok binding when routeBytes.AsSpan().SequenceEqual((ExecutorWire.encodeRouteBinding binding).AsSpan()) -> historical
+        | _ ->
+            let document=System.Text.Json.Nodes.JsonNode.Parse(Encoding.UTF8.GetString historical)
+            document["routeBindingBase64"] <- System.Text.Json.Nodes.JsonValue.Create(Convert.ToBase64String routeBytes)
+            JsonSerializer.SerializeToUtf8Bytes(document,options)
 
     let retainedReference (bytes: byte array) =
         try

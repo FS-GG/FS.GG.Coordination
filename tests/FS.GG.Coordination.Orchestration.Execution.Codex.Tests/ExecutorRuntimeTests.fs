@@ -2793,6 +2793,49 @@ type OrdinaryAssignmentRuntimeTests() =
                 ExecutorWire.parseReceipt bytes |> Result.toOption
                 |> Option.exists(fun receipt -> receipt.Disposition = "duplicate")))
             Assert.Single(File.ReadAllLines(Path.Combine(root, "spawns"))) |> ignore
+            let recovered = duplicate |> List.pick(fun bytes -> ExecutorWire.parseResponse bytes |> Result.toOption)
+            Assert.Equal("succeeded", recovered.Lifecycle)
+            Assert.Equal(started.ProviderSessionReference, recovered.ProviderSessionReference)
+            let commandFor kind =
+                let unsigned =
+                    { command with
+                        CommandId = Guid.NewGuid()
+                        Kind = kind
+                        ProviderSessionReference = if kind = "cancel" || kind = "observe" then started.ProviderSessionReference else null
+                        BodySha256 = ""
+                    }
+                { unsigned with BodySha256 = ExecutorWire.commandV2Digest unsigned }
+            let! reconciliation = invoke replacement artifact (commandFor "reconcile") true
+            let reconciled = reconciliation |> List.pick(fun bytes -> ExecutorWire.parseResponse bytes |> Result.toOption)
+            Assert.Equal(started.ProviderSessionReference, reconciled.ProviderSessionReference)
+            Assert.Equal("succeeded", reconciled.Lifecycle)
+            let! cancellation = invoke replacement artifact (commandFor "cancel") true
+            Assert.True(cancellation |> List.exists(fun bytes ->
+                ExecutorWire.parseOperationOutcome bytes |> Result.toOption
+                |> Option.exists(fun outcome -> outcome.Reason = "executor-session-already-terminal")))
+            let sessionPath = Path.Combine(options.StateRoot, "executor-control", command.AssignmentId.ToString("N"), command.AttemptId.ToString("N"), string command.Generation, "provider-session.json")
+            let retainedSession = File.ReadAllBytes sessionPath
+            for invalid in [| [||]; System.Text.Encoding.UTF8.GetBytes "[\"fsgg.executor-provider-session/1\",\"wrong\",\"codex-thread:substituted\",\"wrong\"]" |] do
+                File.WriteAllBytes(sessionPath, invalid)
+                let! refused = invoke (ExecutorRuntime(options, TimeProvider.System)) artifact command true
+                Assert.False(refused |> List.exists(fun bytes -> ExecutorWire.parseResponse bytes |> Result.isOk))
+                Assert.Single(File.ReadAllLines(Path.Combine(root, "spawns"))) |> ignore
+            File.Delete sessionPath
+            let! missing = invoke (ExecutorRuntime(options, TimeProvider.System)) artifact command true
+            Assert.False(missing |> List.exists(fun bytes -> ExecutorWire.parseResponse bytes |> Result.isOk))
+            File.WriteAllBytes(sessionPath, retainedSession)
+            let artifactPath = Path.Combine(options.ArtifactRoot, command.CandidateId.ToString("N") + ".manifest.json")
+            let retainedArtifact = File.ReadAllBytes artifactPath
+            let originalArtifact = retainedArtifact |> ExecutorWire.parseArtifactManifest |> Result.defaultWith failwith
+            let driftedArtifact = { originalArtifact with CommandId = Guid.NewGuid(); ManifestSha256 = "" }
+            File.WriteAllBytes(artifactPath, ExecutorWire.encodeArtifactManifest { driftedArtifact with ManifestSha256 = ExecutorWire.artifactManifestDigest driftedArtifact })
+            let! drifted = invoke (ExecutorRuntime(options, TimeProvider.System)) artifact command true
+            Assert.False(drifted |> List.exists(fun bytes -> ExecutorWire.parseResponse bytes |> Result.isOk))
+            File.Delete artifactPath
+            let! noTerminal = invoke (ExecutorRuntime(options, TimeProvider.System)) artifact command true
+            Assert.False(noTerminal |> List.exists(fun bytes -> ExecutorWire.parseResponse bytes |> Result.isOk))
+            File.WriteAllBytes(artifactPath, retainedArtifact)
+            Assert.Single(File.ReadAllLines(Path.Combine(root, "spawns"))) |> ignore
             let changed = { artifact with Principal = "different-principal" }
             let! conflict = invoke replacement changed command true
             Assert.True(conflict |> List.exists(fun bytes ->

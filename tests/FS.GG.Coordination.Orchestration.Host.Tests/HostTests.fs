@@ -2047,6 +2047,7 @@ let ``ordinary Main independently binds authority actual identity bytes and orig
         Assert.True((preparation = historicalDecoded), "historical plain preparation changed")
         Assert.Equal<byte>(historical, MainRouteAdmission.encode (MainRouteAdmission.commandId historicalDecoded) historicalDecoded)
         let plainRoute = ExecutorWire.encodeRouteBinding preparation.Binding
+        Assert.Equal<byte>(historical, MainRouteAdmission.encodeBound (MainRouteAdmission.commandId preparation) preparation plainRoute)
         let noncanonicalPlainRoute = Array.append [|32uy|] plainRoute
         let noncanonicalPlain =
             MainRouteAdmission.encodeBound (MainRouteAdmission.commandId preparation) preparation noncanonicalPlainRoute
