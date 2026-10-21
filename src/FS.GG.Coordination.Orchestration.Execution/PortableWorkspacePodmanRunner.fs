@@ -4,6 +4,8 @@ open System
 open System.Diagnostics
 open System.Globalization
 open System.IO
+open System.Runtime.InteropServices
+open Microsoft.Win32.SafeHandles
 open System.Security.Cryptography
 open System.Text
 open System.Text.Json
@@ -310,6 +312,111 @@ module private PortablePodmanRuntime =
         else
             Error "portable-source-tree-refused"
 
+    // Only a public, validated Git tree is made readable to the fixed non-root
+    // container user. Parent state/execution directories remain private. Linux
+    // descriptors prevent links, FIFOs or substituted directory paths from being
+    // followed or chmodded while applying that tree's exact executable classes.
+    [<StructLayout(LayoutKind.Explicit, Size = 256)>]
+    type private SnapshotStat =
+        struct
+            [<FieldOffset(0)>]
+            val mutable Mask: uint32
+            [<FieldOffset(16)>]
+            val mutable Links: uint32
+            [<FieldOffset(28)>]
+            val mutable Mode: uint16
+        end
+
+    [<DllImport("libc", EntryPoint = "open", SetLastError = true)>]
+    extern int private openSnapshot(string path, int flags)
+
+    [<DllImport("libc", EntryPoint = "openat", SetLastError = true)>]
+    extern int private openSnapshotAt(int parent, string name, int flags)
+
+    [<DllImport("libc", EntryPoint = "statx", SetLastError = true)>]
+    extern int private snapshotStat(int descriptor, string path, int flags, uint32 mask, SnapshotStat& value)
+
+    [<DllImport("libc", EntryPoint = "fchmod", SetLastError = true)>]
+    extern int private chmodSnapshot(int descriptor, uint32 mode)
+
+    let private readableSnapshot (entries: string array) (root: string) =
+        try
+            if not (OperatingSystem.IsLinux()) then
+                invalidOp "portable-source-access-platform-refused"
+
+            let files = Collections.Generic.Dictionary<string, uint32>(StringComparer.Ordinal)
+            let directories = Collections.Generic.HashSet<string>(StringComparer.Ordinal)
+            directories.Add "" |> ignore
+
+            for entry in entries do
+                let separator = entry.IndexOf('\t')
+                let mode = entry[.. separator - 1].Split(' ')[0]
+                let relative = entry[separator + 1 ..]
+                // Re-use parseTreeEntries' closed regular Git modes and segments.
+                // Also bind the eventual physical path before opening any entry.
+                let full = Path.GetFullPath(Path.Combine(root, relative))
+                if not (full.StartsWith(root + string Path.DirectorySeparatorChar, StringComparison.Ordinal)) then
+                    invalidOp "portable-source-path-refused"
+                files.Add(relative, if mode = "100755" then 0o755u else 0o644u)
+                let mutable parent = Path.GetDirectoryName relative
+                while not (String.IsNullOrEmpty parent) do
+                    directories.Add parent |> ignore
+                    parent <- Path.GetDirectoryName parent
+
+            // O_RDONLY | O_NONBLOCK | O_NOFOLLOW | O_CLOEXEC; directory opens also
+            // require O_DIRECTORY. Non-blocking open rejects FIFO substitution
+            // through the descriptor type check without waiting for a writer.
+            let flags = 0x800 ||| 0x20000 ||| 0x80000
+            let own descriptor =
+                if descriptor < 0 then invalidOp "portable-source-entry-open-refused"
+                new SafeFileHandle(nativeint descriptor, true)
+            let number (handle: SafeFileHandle) = handle.DangerousGetHandle().ToInt32()
+            let check handle expectedType =
+                let mutable value = SnapshotStat()
+                if snapshotStat(number handle, "", 0x1000, 0x7u, &value) <> 0
+                   || value.Mask &&& 0x7u <> 0x7u
+                   || value.Mode &&& 0xf000us <> expectedType
+                   || (expectedType = 0x8000us && value.Links <> 1u) then
+                    invalidOp "portable-source-entry-type-refused"
+            use anchor = own (openSnapshot(root, flags ||| 0x10000))
+            check anchor 0x4000us
+
+            let walk apply =
+                let seen = Collections.Generic.HashSet<string>(StringComparer.Ordinal)
+                let rec directory (handle: SafeFileHandle) relative =
+                    // Enumerate the held directory, not a mutable pathname or a
+                    // directory link. Each child is opened relative to that FD.
+                    let heldPath = "/proc/self/fd/" + string (number handle)
+                    for path in Directory.EnumerateFileSystemEntries heldPath do
+                        let name = Path.GetFileName path
+                        let child = if relative = "" then name else relative + "/" + name
+                        if directories.Contains child then
+                            use opened = own (openSnapshotAt(number handle, name, flags ||| 0x10000))
+                            check opened 0x4000us
+                            directory opened child
+                        elif files.ContainsKey child then
+                            use opened = own (openSnapshotAt(number handle, name, flags))
+                            check opened 0x8000us
+                            if not (seen.Add child) then invalidOp "portable-source-duplicate-refused"
+                            if apply && chmodSnapshot(number opened, files[child]) <> 0 then
+                                invalidOp "portable-source-access-refused"
+                        else
+                            invalidOp "portable-source-unexpected-entry-refused"
+                    if apply && chmodSnapshot(number handle, 0o755u) <> 0 then
+                        invalidOp "portable-source-access-refused"
+                directory anchor ""
+                if seen.Count <> files.Count then invalidOp "portable-source-missing-entry-refused"
+
+            // Validate the complete extracted tree before any public-mode change;
+            // repeat descriptor/type checks while applying, with no link traversal.
+            walk false
+            walk true
+            Ok()
+        with
+        | :? IOException
+        | :? UnauthorizedAccessException
+        | :? InvalidOperationException as error -> Error error.Message
+
     let snapshotDigest maximumBytes root =
         try
             let files =
@@ -364,6 +471,12 @@ module private PortablePodmanRuntime =
                 if Directory.Exists executionRoot || File.Exists executionRoot then
                     return Error { Reason = "portable-runtime-execution-root-exists"; Helper = None }
                 else
+                    Directory.CreateDirectory executionRoot |> ignore
+                    if not (OperatingSystem.IsWindows()) then
+                        File.SetUnixFileMode(
+                            executionRoot,
+                            UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute
+                        )
                     Directory.CreateDirectory snapshot |> ignore
                     Directory.CreateDirectory output |> ignore
 
@@ -411,7 +524,7 @@ module private PortablePodmanRuntime =
                         | Ok treeResult, Ok entryResult ->
                             match parseTreeEntries entryResult.StandardOutput with
                             | Error reason -> return Error { Reason = reason; Helper = Some entryResult }
-                            | Ok _ ->
+                            | Ok treeEntries ->
                                 let! archived =
                                     runGit
                                         runtime
@@ -444,16 +557,19 @@ module private PortablePodmanRuntime =
                                     match requireSuccess "portable-source-extract-refused" extracted with
                                     | Error reason -> return Error { Reason = reason; Helper = Some extracted }
                                     | Ok _ ->
-                                        match snapshotDigest runtime.MaximumSnapshotBytes snapshot with
+                                        match readableSnapshot treeEntries snapshot with
                                         | Error reason -> return Error { Reason = reason; Helper = None }
-                                        | Ok digest ->
-                                            File.WriteAllText(
-                                                Path.Combine(executionRoot, "source-tree"),
-                                                text treeResult
-                                            )
+                                        | Ok() ->
+                                            match snapshotDigest runtime.MaximumSnapshotBytes snapshot with
+                                            | Error reason -> return Error { Reason = reason; Helper = None }
+                                            | Ok digest ->
+                                                File.WriteAllText(
+                                                    Path.Combine(executionRoot, "source-tree"),
+                                                    text treeResult
+                                                )
 
-                                            File.WriteAllText(Path.Combine(executionRoot, "snapshot-sha256"), digest)
-                                            return Ok(snapshot, output, text treeResult, digest)
+                                                File.WriteAllText(Path.Combine(executionRoot, "snapshot-sha256"), digest)
+                                                return Ok(snapshot, output, text treeResult, digest)
                         | Error _, _ ->
                             return
                                 Error

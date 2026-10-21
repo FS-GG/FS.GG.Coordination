@@ -4,6 +4,7 @@ open System
 open System.IO
 open System.Text
 open System.Text.Json
+open System.Text.Json.Nodes
 open System.Threading
 open System.Threading.Tasks
 open FS.GG.Coordination.Orchestration.Execution
@@ -1237,6 +1238,21 @@ elif args and args[0] == "create":
     pathlib.Path("create-args.json").write_text(json.dumps(args))
     volumes = [args[index + 1] for index, value in enumerate(args) if value == "--volume"]
     output = pathlib.Path([value for value in volumes if value.endswith(":/output:rw")][0].split(":/output:rw")[0])
+    source = pathlib.Path([value for value in volumes if value.endswith(":/source:ro")][0].split(":/source:ro")[0])
+    import hashlib, stat
+    expected = json.loads((pathlib.Path(sys.argv[0]).parent / "expected-public-source.json").read_text())
+    assert stat.S_IMODE(source.stat().st_mode) == 0o755
+    assert stat.S_IMODE(source.parent.stat().st_mode) == 0o700
+    assert stat.S_IMODE(pathlib.Path.cwd().stat().st_mode) == 0o700
+    for directory, directories, files in os.walk(source, followlinks=False):
+        assert stat.S_IMODE(pathlib.Path(directory).stat().st_mode) == 0o755
+        for name in directories:
+            assert not pathlib.Path(directory, name).is_symlink()
+    for name, mode in [(".gitignore", 0o644), ("eng/bootstrap-gates/compiler-and-tests.sh", 0o755)]:
+        path = source / name
+        assert stat.S_IMODE(path.stat().st_mode) == mode
+        assert hashlib.sha256(path.read_bytes()).hexdigest() == expected[name]
+    pathlib.Path("public-source-observed.json").write_text(json.dumps({"fixedUser":"32768:32768","nonownerAccess":True,"privateAncestors":True}))
     output.joinpath("verified.txt").write_bytes(b"verified")
     output.joinpath("generated").mkdir()
     output.joinpath("generated", "artifact.txt").write_bytes(b"container-owned")
@@ -1284,9 +1300,58 @@ else:
                     child.WaitForExit()
                     value
 
+                // Run actual tar under umask077, without changing this test
+                // host's process-wide umask. Root0700 is the corresponding
+                // Directory.CreateDirectory result under that caller policy.
+                let maskedTar = Path.Combine(temporary, "masked-tar.py")
+                File.WriteAllText(
+                    maskedTar,
+                    """#!/usr/bin/python3
+import os, pathlib, shutil, subprocess, sys
+args = sys.argv[1:]
+root = pathlib.Path(args[args.index("--directory") + 1])
+os.umask(0o077)
+os.chmod(root, 0o700)
+completed = subprocess.run(["/usr/bin/tar"] + args, check=False)
+if completed.returncode:
+    raise SystemExit(completed.returncode)
+# The regression must originate at genuinely masked extraction, not helper
+# constants. The production runner has not normalized anything at this point.
+assert root.stat().st_mode & 0o777 == 0o700
+assert (root / ".gitignore").stat().st_mode & 0o777 == 0o600
+assert (root / "eng/bootstrap-gates/compiler-and-tests.sh").stat().st_mode & 0o777 == 0o700
+pathlib.Path("masked-extraction-observed").write_text("077")
+case = pathlib.Path(sys.argv[0]).stem
+outside = pathlib.Path(sys.argv[0]).parent / "outside-snapshot"
+if case == "symlink-file":
+    (root / ".gitignore").unlink()
+    (root / ".gitignore").symlink_to(outside / "sentinel")
+elif case == "symlink-directory":
+    (root / "eng").rename(outside / "held-eng")
+    (root / "eng").symlink_to(outside, target_is_directory=True)
+elif case == "fifo-file":
+    (root / ".gitignore").unlink()
+    os.mkfifo(root / ".gitignore", 0o600)
+elif case == "foreign-file":
+    (root / "foreign-file").write_text("not in Git")
+elif case == "missing-file":
+    (root / ".gitignore").unlink()
+"""
+                )
+                File.SetUnixFileMode(maskedTar, enum<UnixFileMode> 0o700)
+                let publicSource = JsonObject()
+                for relative in [ ".gitignore"; "eng/bootstrap-gates/compiler-and-tests.sh" ] do
+                    publicSource[relative] <-
+                        File.ReadAllBytes(Path.Combine(repository, relative))
+                        |> Security.Cryptography.SHA256.HashData
+                        |> Convert.ToHexString
+                        |> _.ToLowerInvariant()
+                File.WriteAllText(Path.Combine(temporary, "expected-public-source.json"), publicSource.ToJsonString())
+
                 let runtime =
                     { runtimePolicy () with
                         PodmanExecutable = script
+                        TarExecutable = maskedTar
                         StateRoot = stateRoot
                         MaximumSnapshotBytes = 512UL * 1024UL * 1024UL
                     }
@@ -1323,6 +1388,8 @@ else:
                     Assert.True(observed.VerificationObserved)
                     Assert.True(observed.SourceTree.IsSome)
                     Assert.True(observed.SnapshotSha256.IsSome)
+                    Assert.Equal("077", File.ReadAllText(Path.Combine(stateRoot, "masked-extraction-observed")))
+                    Assert.True(File.Exists(Path.Combine(stateRoot, "public-source-observed.json")))
 
                     let createArguments = File.ReadAllText(Path.Combine(stateRoot, "create-args.json"))
 
@@ -1355,6 +1422,69 @@ else:
                     Assert.Contains("0:0", ownershipCommands[1])
 
                     Assert.False(Directory.Exists(Path.Combine(stateRoot, "executions", request.ContainerName)))
+
+                    // Exercise the real RunAsync -> prepareSnapshot seam for
+                    // each rejected extracted shape. No create/image operation
+                    // may occur and no outside target may be chmodded.
+                    let outside = Path.Combine(temporary, "outside-snapshot")
+                    Directory.CreateDirectory outside |> ignore
+                    let sentinel = Path.Combine(outside, "sentinel")
+                    File.WriteAllText(sentinel, "outside unchanged")
+                    File.SetUnixFileMode(sentinel, enum<UnixFileMode> 0o640)
+                    for scenario in [ "symlink-file"; "symlink-directory"; "fifo-file"; "foreign-file"; "missing-file" ] do
+                        let injectedTar = Path.Combine(temporary, scenario + ".py")
+                        File.Copy(maskedTar, injectedTar)
+                        File.SetUnixFileMode(injectedTar, enum<UnixFileMode> 0o700)
+                        let rejectedRoot = Path.Combine(temporary, scenario + "-state")
+                        let rejectedRuntime = { runtime with TarExecutable = injectedTar; StateRoot = rejectedRoot }
+                        let rejectedRequest = { request with ContainerName = "fsgg-" + scenario }
+                        let rejectedRunner = PortableWorkspacePodmanRunner rejectedRuntime :> IPortableProcessRunner
+                        let! rejected = rejectedRunner.RunAsync(rejectedRequest, CancellationToken.None)
+                        Assert.False(rejected.ExecutionStarted)
+                        Assert.True(rejected.Refusal.IsSome)
+                        Assert.Equal(PortableProcessRefusalStage.SourceSnapshot, rejected.Refusal.Value.Stage)
+                        let expectedReason =
+                            match scenario with
+                            | "fifo-file" -> "portable-source-entry-type-refused"
+                            | "foreign-file" -> "portable-source-unexpected-entry-refused"
+                            | "missing-file" -> "portable-source-missing-entry-refused"
+                            | _ -> "portable-source-entry-open-refused"
+                        Assert.Equal(expectedReason, rejected.Refusal.Value.Reason)
+                        Assert.False(File.Exists(Path.Combine(rejectedRoot, "create-args.json")))
+                        Assert.Equal("outside unchanged", File.ReadAllText sentinel)
+                        Assert.Equal(enum<UnixFileMode> 0o640, File.GetUnixFileMode sentinel)
+                        let source = Path.Combine(rejectedRoot, "executions", rejectedRequest.ContainerName, "source")
+                        Assert.Equal(enum<UnixFileMode> 0o700, File.GetUnixFileMode source)
+                        if scenario = "symlink-directory" then
+                            Directory.Delete(Path.Combine(outside, "held-eng"), true)
+                        // Remove the FIFO before ordinary fixture cleanup; never
+                        // attempt a content read of the rejected special file.
+                        if scenario = "fifo-file" then File.Delete(Path.Combine(source, ".gitignore"))
+
+                    let escapedGit = Path.Combine(temporary, "escaped-tree-git.py")
+                    File.WriteAllText(
+                        escapedGit,
+                        """#!/usr/bin/python3
+import os, subprocess, sys
+args = sys.argv[1:]
+if "ls-tree" in args:
+    data = subprocess.check_output(["/usr/bin/git"] + args)
+    sys.stdout.buffer.write(data + b"100644 blob " + b"0" * 40 + b"\t../outside-snapshot/sentinel\0")
+else:
+    os.execv("/usr/bin/git", ["/usr/bin/git"] + args)
+"""
+                    )
+                    File.SetUnixFileMode(escapedGit, enum<UnixFileMode> 0o700)
+                    let escapedRoot = Path.Combine(temporary, "escaped-tree-state")
+                    let escapedRuntime = { runtime with GitExecutable = escapedGit; StateRoot = escapedRoot }
+                    let escapedRequest = { request with ContainerName = "fsgg-escaped-tree" }
+                    let escapedRunner = PortableWorkspacePodmanRunner escapedRuntime :> IPortableProcessRunner
+                    let! escaped = escapedRunner.RunAsync(escapedRequest, CancellationToken.None)
+                    Assert.False(escaped.ExecutionStarted)
+                    Assert.Equal("portable-source-tree-refused", escaped.Refusal.Value.Reason)
+                    Assert.False(File.Exists(Path.Combine(escapedRoot, "masked-extraction-observed")))
+                    Assert.False(File.Exists(Path.Combine(escapedRoot, "create-args.json")))
+                    Assert.Equal(enum<UnixFileMode> 0o640, File.GetUnixFileMode sentinel)
 
                     let reclaimRefusedScript = Path.Combine(temporary, "reclaim-refused-podman-shim.py")
                     File.Copy(script, reclaimRefusedScript)
