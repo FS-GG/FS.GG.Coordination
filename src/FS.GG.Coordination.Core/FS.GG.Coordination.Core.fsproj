@@ -8,6 +8,12 @@
     <Compile Include="WorkflowSelection.fsi" />
     <Compile Include="WorkflowSelection.fs" />
     <Compile Include="Orchestration.fs" />
+    <Compile Include="OrdinaryAssignment.fsi" />
+    <Compile Include="OrdinaryAssignment.fs" />
+    <Compile Include="OrdinaryAssignmentPolicy.fsi" />
+    <Compile Include="OrdinaryAssignmentPolicy.fs" />
+    <Compile Include="OrdinaryAssignmentVerifier.fsi" />
+    <Compile Include="OrdinaryAssignmentVerifier.fs" />
     <Compile Include="OrchestrationPersistence.fs" />
     <Compile Include="Library.fsi" />
     <Compile Include="Library.fs" />
