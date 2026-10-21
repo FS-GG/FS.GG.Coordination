@@ -2584,6 +2584,25 @@ class FutureTraceJoinedControls(unittest.TestCase):
                 self.assertEqual(original,(slot/'command.json').read_bytes())
                 self.assertEqual(3,len([e for e in events if e.startswith('measure-')]))
 
+    def test_lossless_entrypoint_and_actual_measured_handshake_never_reopen_unbounded_inputs(self):
+        read=Path.read_bytes
+        def guard(selected):
+            def bounded(path):
+                if path in selected:raise AssertionError('unbounded selected input reread: '+path.name)
+                return read(path)
+            return patch.object(Path,'read_bytes',bounded)
+        with tempfile.TemporaryDirectory() as directory:
+            spec,descriptor,approved,_,_,_,_=self.lossless_command_fixture(Path(directory));slot=Path(spec['operationRoot']);events=[]
+            sha=hashlib.sha256(read(approved)).hexdigest()
+            selected={descriptor,approved,slot/'input.json',slot/'command.json',slot/'measurement.subject.json',
+                      Path(spec['proofInputs']['bootstrapEvidence']),Path(spec['proofInputs']['admission'])}
+            with self.lossless_command_adapters(events) as errors,guard(selected):
+                self.assertEqual(0,module.execute_proc_command(descriptor,approved,sha),errors.getvalue())
+        with tempfile.TemporaryDirectory() as directory,self.measured_caller(Path(directory),runtime=True) as fixture:
+            run,spec,store,approved,events=fixture;slot=Path(spec['operationRoot'])
+            with guard({approved,slot/'input.json',slot/'command.json'}):result=run()
+            self.assertTrue(store.phases['normal']['sealed']);self.assertEqual(1,events.count('popen-inert'))
+
     def test_lossless_real_entrypoint_refuses_unselected_crossed_and_consumed_before_effects(self):
         for mutation in ('default-disabled','flag-false','authority','bootstrap-profile','bootstrap-closure','source-closure',
                          'native-get','publication','descriptor-profile','consumed','canonical-input','input-drift'):
@@ -2663,6 +2682,20 @@ class FutureTraceJoinedControls(unittest.TestCase):
             self.assertIn('original monitor failure',result['firstCause']['message'])
             self.assertEqual(['inert final sibling close failure'],[e['message'] for e in result['additionalFailures']])
             self.assertFalse(result['commandAccepted']);self.assertEqual('qualification-failed-or-unknown',result['sendState'])
+
+    def test_lossless_retains_prepared_bytes_through_canonical_state_update(self):
+        with tempfile.TemporaryDirectory() as directory:
+            spec,descriptor,approved,_,_,_,_=self.lossless_command_fixture(Path(directory));slot=Path(spec['operationRoot']);events=[]
+            original=module.proc_private_record;changed=b'{"sendState":"consumed-unknown"}'
+            def concurrent(path,*args,**kwargs):
+                result=original(path,*args,**kwargs)
+                if Path(path)==slot/'dispatch-input.json':(slot/'command.json').write_bytes(changed)
+                return result
+            with self.lossless_command_adapters(events),patch.object(module,'proc_private_record',side_effect=concurrent):
+                self.assertEqual(1,module.execute_proc_command(descriptor,approved,hashlib.sha256(approved.read_bytes()).hexdigest()))
+            self.assertEqual(changed,(slot/'command.json').read_bytes())
+            self.assertTrue((slot/'dispatch-input.json').is_file()) # genuine partial claim is retained, never replayed
+            self.assertFalse((slot/'lossless-traces').exists());self.assertFalse(any(e.startswith('measure-') for e in events))
 
     def store(self,root,**changes):
         spec={'role':'qualification','request':{'nativeGet':False},'operationRoot':str(root),

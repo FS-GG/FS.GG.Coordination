@@ -1491,7 +1491,7 @@ def proc_trace_semantics(spec,slot,authority_path,source_records,tracer_pid=None
     roots=set(records)-set(births)
     if len(roots)!=1 or set(records)!=roots|set(births):raise ValueError('PROC complete traced process/thread birth join unavailable')
     root_pid=next(iter(roots));states={root_pid:{'cwd':[str(Path(spec['operationRoot']))],'fds':{0:'/dev/null',1:str(Path(slot)/'measurement.tracer.log'),2:str(Path(slot)/'measurement.tracer.log')},'cloexec':set(),'controller':False,'client':False}}
-    bootstrap=json.loads(Path(spec['proofInputs']['bootstrapEvidence']).read_bytes());cgroup=Path(bootstrap['capacity']['directory'])
+    bootstrap=json.loads(proc_current_input_bytes(spec,spec['proofInputs']['bootstrapEvidence']));cgroup=Path(bootstrap['capacity']['directory'])
     kernel_inputs={str(cgroup/name) for name in ('cpu.max','memory.max','memory.current')}|{'/proc/self/cgroup','/proc/self/mountinfo','/proc/sys/kernel/random/boot_id'}
     actors=set(records)|({apparatus_pid} if apparatus_pid is not None else set());root_exec=False
     path_indices={'open':(0,),'openat':(1,),'openat2':(1,),'stat':(0,),'lstat':(0,),'stat64':(0,),'lstat64':(0,),
@@ -1586,7 +1586,7 @@ def proc_trace_semantics(spec,slot,authority_path,source_records,tracer_pid=None
                 if clocked:
                     if (len(argv)!=12 or argv[:6]!=[os.path.realpath(sys.executable),'-I','-S','-B',str(Path(__file__).resolve()),'command']
                             or argv[6]!='--proc-measured-controller' or argv[7]!=str(Path(spec['operationRoot'])/'input.json')
-                            or argv[8]!=str(authority_path) or argv[9]!=hashlib.sha256(Path(authority_path).read_bytes()).hexdigest()
+                            or argv[8]!=str(authority_path) or argv[9]!=hashlib.sha256(proc_current_input_bytes(spec,authority_path)).hexdigest()
                             or not argv[10].isdigit() or argv[11] not in ('normal','controller','session')):
                         raise ValueError('PROC actual root exec argv outside closed measured role')
                     state['fds'][int(argv[10])]='pipe:measurement-handshake'
@@ -2088,7 +2088,7 @@ def proc_private_record(path,value,deadline,*,exclusive=False,expected=None,cap=
         parts.append(raw)
     raw=b''.join(parts)+b'\n'
     if time.monotonic()>=deadline:raise TimeoutError('PROC original private serialization deadline')
-    if expected is not None and (path.is_symlink() or path.stat().st_size!=len(expected) or path.read_bytes()!=expected):raise ValueError('PROC measurement collector state drift')
+    if expected is not None and (path.is_symlink() or path.stat().st_size!=len(expected) or proc_lossless_input_bytes(path,maximum=cap)!=expected):raise ValueError('PROC measurement collector state drift')
     destination=path if exclusive else path.with_name(path.name+'.pending')
     fd=os.open(destination,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600);first=None;identity=None;offset=0
     try:
@@ -2111,7 +2111,7 @@ def proc_private_record(path,value,deadline,*,exclusive=False,expected=None,cap=
             if time.monotonic()>=deadline:raise TimeoutError('PROC original report close deadline')
             if proc_read_identity(destination)!=identity:raise ValueError('PROC private report destination identity drift')
             if not exclusive:
-                if expected is not None and (path.is_symlink() or path.stat().st_size!=len(expected) or path.read_bytes()!=expected):raise ValueError('PROC measurement collector changed before replace')
+                if expected is not None and (path.is_symlink() or path.stat().st_size!=len(expected) or proc_lossless_input_bytes(path,maximum=cap)!=expected):raise ValueError('PROC measurement collector changed before replace')
                 if time.monotonic()>=deadline:raise TimeoutError('PROC original report replace deadline')
                 os.replace(destination,path)
                 destination=path
@@ -2343,17 +2343,19 @@ def proc_lossless_runtime_digest(spec):
     return hashlib.sha256(b'fsgg.proc.lossless-qualification-profile/1\0'+raw).hexdigest()
 
 
-def proc_lossless_input_bytes(path):
+def proc_lossless_input_bytes(path,*,maximum=256*1024):
+    if type(maximum) is not int or not 0<maximum<=192*1024**2:
+        raise ValueError('PROC selected input byte cap')
     path=Path(path)
     if any(p.is_symlink() for p in (path,*path.parents)):
         raise ValueError('PROC lossless original input alias')
     fd=os.open(path,os.O_RDONLY|os.O_NONBLOCK|os.O_NOFOLLOW);first=None
     try:
         row=os.fstat(fd)
-        if not stat.S_ISREG(row.st_mode) or not 0<row.st_size<=256*1024:
+        if not stat.S_ISREG(row.st_mode) or not 0<row.st_size<=maximum:
             raise ValueError('PROC lossless original input kind/size')
-        raw=os.read(fd,256*1024+1)
-        if len(raw)!=row.st_size or len(raw)>256*1024:
+        raw=os.read(fd,maximum+1)
+        if len(raw)!=row.st_size or len(raw)>maximum:
             raise ValueError('PROC lossless original input changed/oversized')
         return raw
     except BaseException as error:first=error;raise
@@ -2372,6 +2374,10 @@ def proc_lossless_runtime_inputs(spec,descriptor,authority_path,authority_sha,au
         raise ValueError('PROC lossless adjacent original input/authority drift')
     proc_command_preflight(spec,now=time.monotonic())
     return raw
+
+
+def proc_current_input_bytes(spec,path,*,maximum=256*1024):
+    return proc_lossless_input_bytes(path,maximum=maximum) if proc_lossless_runtime_spec(spec) else Path(path).read_bytes()
 
 # Historical exact bytes already declared in ordinal 4's retained read closure.
 # These are prospective SOURCE inputs, never a refresh of that consumed operation.
@@ -2758,7 +2764,7 @@ def proc_measured_handshake(spec,descriptor,authority_path,authority_sha,fd,phas
     if proc_lossless_runtime_spec(spec) and 'futureTrace' not in proof:
         raise ValueError('PROC lossless runtime handshake cannot downgrade to raw')
     if 'futureTrace' in proof:
-        future=proof['futureTrace'];authority_raw=Path(authority_path).read_bytes()
+        future=proof['futureTrace'];authority_raw=proc_current_input_bytes(spec,authority_path)
         if (future is None or hashlib.sha256(authority_raw).hexdigest()!=authority_sha
                 or json.loads(authority_raw).get('futureTraceSourceProfile')!=future.get('profile')
                 or future.get('sourceClosureSha256')!=proc_future_source_closure_digest(proc_future_source_closure(spec))
@@ -2769,7 +2775,7 @@ def proc_measured_handshake(spec,descriptor,authority_path,authority_sha,fd,phas
         expected_fields.add('futureTrace')
     if (set(proof)!=expected_fields
             or proof['bootId']!=boot or proof['phase']!=phase or proof['authoritySha256']!=authority_sha
-            or proof['descriptorSha256']!=hashlib.sha256(Path(descriptor).read_bytes()).hexdigest()
+            or proof['descriptorSha256']!=hashlib.sha256(proc_current_input_bytes(spec,descriptor)).hexdigest()
             or proof['subjectWorkDeadline']!=spec['workDeadline']-10):raise ValueError('PROC measured bootstrap binding unavailable')
     tracer=proc_actor(os.getppid());self_row=proc_actor(os.getpid());apparatus=proc_actor(proof['apparatus']['pid'])
     for row,expected in ((tracer,proof['tracer']),(apparatus,proof['apparatus'])):
@@ -2781,7 +2787,7 @@ def proc_measured_handshake(spec,descriptor,authority_path,authority_sha,fd,phas
         raise ValueError('PROC actual traced subject/parent executable relation unavailable')
     root=Path(spec['operationRoot']);slot=root if phase=='normal' else root/('control-'+phase)
     if proof['slot']!=str(slot) or proc_directory_identity(root) is None:raise ValueError('PROC measured fixed artifact slot')
-    state=json.loads((root/'command.json').read_bytes())
+    state=json.loads(proc_current_input_bytes(spec,root/'command.json',maximum=MAX_OUTPUT))
     if state.get('sendState')!='measurement-started' or state.get('descriptorSha256')!=proof['descriptorSha256']:
         raise ValueError('PROC measured role lacks original exclusive measurement claim')
     # The actual closed entry consumes the ready artifact once. It is not another
@@ -2885,9 +2891,9 @@ def proc_control_retirement_evidence(spec,slot,descriptor,authority_path,authori
             or proof is None or child is None or record.get('measurementBinding')!=proof
             or proof['phase']!=phase or proof['slot']!=str(slot)
             or proof['bootId']!=Path('/proc/sys/kernel/random/boot_id').read_text().strip()
-            or proof['descriptorSha256']!=hashlib.sha256(Path(descriptor).read_bytes()).hexdigest()
+            or proof['descriptorSha256']!=hashlib.sha256(proc_current_input_bytes(spec,descriptor)).hexdigest()
             or proof['authoritySha256']!=authority_sha
-            or hashlib.sha256(Path(authority_path).read_bytes()).hexdigest()!=authority_sha
+            or hashlib.sha256(proc_current_input_bytes(spec,authority_path)).hexdigest()!=authority_sha
             or proof['subjectWorkDeadline']!=spec['workDeadline']-10):
         raise ValueError('PROC actual negative-control input/phase/origin binding unavailable')
     apparatus=proc_actor(os.getpid());tracer=record['tracer'];ready=record['subjectReadiness']
@@ -3008,7 +3014,7 @@ def proc_measure_once(spec,authority,bootstrap,descriptor,authority_path,authori
         if fresh is None or fresh['start']!=tracer['start']:raise ValueError('PROC tracer pidfd original birth drift')
         apparatus=proc_actor(os.getpid())
         proof={'bootId':Path('/proc/sys/kernel/random/boot_id').read_text().strip(),'apparatus':apparatus,'tracer':tracer,
-               'descriptorSha256':hashlib.sha256(Path(descriptor).read_bytes()).hexdigest(),'authoritySha256':authority_sha,
+               'descriptorSha256':hashlib.sha256(proc_current_input_bytes(spec,descriptor)).hexdigest(),'authoritySha256':authority_sha,
                'phase':phase,'slot':str(slot),'subjectWorkDeadline':subject_deadline}
         if trace_store is not None:proof['futureTrace']=trace_store.context()
         wire=json.dumps(proof,sort_keys=True).encode()
@@ -3016,8 +3022,8 @@ def proc_measure_once(spec,authority,bootstrap,descriptor,authority_path,authori
         os.close(write_fd);write_fd=None
         while True:
             if trace_store is not None:trace_store.drain(phase)
-            if (hashlib.sha256(Path(descriptor).read_bytes()).hexdigest()!=authority['descriptorSha256']
-                    or hashlib.sha256(Path(authority_path).read_bytes()).hexdigest()!=authority_sha
+            if (hashlib.sha256(proc_current_input_bytes(spec,descriptor)).hexdigest()!=authority['descriptorSha256']
+                    or hashlib.sha256(proc_current_input_bytes(spec,authority_path)).hexdigest()!=authority_sha
                     or proc_directory_identity(root)!=authority['canonicalOperationIdentity']
                     or proc_directory_identity(root.parent)!=authority['canonicalQualificationLineageIdentity']
                     or proc_directory_identity(PROC_OPERATION_BASE/str(os.geteuid()))!=authority['canonicalBaseIdentity']):
@@ -3101,7 +3107,7 @@ def proc_measure_once(spec,authority,bootstrap,descriptor,authority_path,authori
         failed=slot/'measurement.subject.json'
         try:
             if failed.is_file() and not failed.is_symlink() and 0<failed.stat().st_size<=MAX_OUTPUT:
-                detail=json.loads(failed.read_bytes())
+                detail=json.loads(proc_current_input_bytes(spec,failed,maximum=MAX_OUTPUT))
                 error.proc_subject_failure=detail.get('firstCause')
                 error.proc_subject_result=detail
         except BaseException as read_error:additional.append(failure_record(read_error))
@@ -3133,17 +3139,17 @@ def proc_measure_once(spec,authority,bootstrap,descriptor,authority_path,authori
         record['controlRetirement']=retirement
         # The original observation remains immutable; this separate bounded join is
         # a fixed control artifact, never a replacement successful normal trace.
-        proc_private_record(slot/'measurement.control-proof.json',{'apparatusSha256':hashlib.sha256((slot/'measurement.apparatus.json').read_bytes()).hexdigest(),
+        proc_private_record(slot/'measurement.control-proof.json',{'apparatusSha256':hashlib.sha256(proc_current_input_bytes(spec,slot/'measurement.apparatus.json',maximum=MAX_OUTPUT)).hexdigest(),
             'retirement':retirement,'expectedTracerAbort':True},spec['totalDeadline'],exclusive=True)
     return record
 
 
 def proc_kernel_child(descriptor,authority_path,authority_sha):
-    spec=json.loads(Path(descriptor).read_bytes());proc_command_preflight(spec,now=time.monotonic())
+    spec=json.loads(proc_lossless_input_bytes(descriptor));proc_command_preflight(spec,now=time.monotonic())
     root=Path(spec['operationRoot']);slot=root/'control-session'
     if not sys.flags.isolated or not sys.flags.no_site or not sys.dont_write_bytecode or sys.flags.optimize or spec['role']!='qualification':
         raise ValueError('PROC closed unoptimized kernel child role')
-    if hashlib.sha256(Path(authority_path).read_bytes()).hexdigest()!=authority_sha:raise ValueError('PROC kernel child root input drift')
+    if hashlib.sha256(proc_current_input_bytes(spec,authority_path)).hexdigest()!=authority_sha:raise ValueError('PROC kernel child root input drift')
     ready=json.loads(proc_private_artifact(slot/'measurement.ready.json',8192));parent=proc_actor(os.getppid());actual=proc_actor(os.getpid())
     if (parent is None or actual is None or parent['pid']!=ready['subject']['pid'] or parent['start']!=ready['subject']['start']
             or actual['tracerPid']!=ready['tracer']['pid'] or parent['tracerPid']!=actual['tracerPid']
@@ -3223,7 +3229,7 @@ def proc_native_qualification(owner,spec,slot,env,check,header,deadline,destinat
 def proc_measured_entry(descriptor,authority_path,authority_sha,fd,phase):
     if not sys.flags.isolated or not sys.flags.no_site or not sys.dont_write_bytecode or sys.flags.optimize:
         raise ValueError('PROC measured actual interpreter flags')
-    spec=json.loads(Path(descriptor).read_bytes());proc_command_preflight(spec,now=time.monotonic())
+    spec=json.loads(proc_lossless_input_bytes(descriptor));proc_command_preflight(spec,now=time.monotonic())
     if dict(os.environ)!=spec['environment'] or os.getcwd()!=spec['operationRoot']:
         raise ValueError('PROC measured inherited environment/cwd differs from fixed profile')
     if os.readlink('/proc/self/fd/0')!='/dev/null':raise ValueError('PROC measured input must be dev-null')
@@ -3275,7 +3281,8 @@ def proc_qualification_apparatus(spec,descriptor,authority_path,authority_sha,au
     for path in (root/'input.json',root/'command.json'):
         if path.is_symlink() or not path.is_file():raise ValueError('PROC root-prepared measurement state missing')
     raw=proc_lossless_runtime_inputs(spec,descriptor,authority_path,authority_sha,authority) if lossless else Path(descriptor).read_bytes()
-    prepared=json.loads(proc_lossless_input_bytes(root/'command.json') if lossless else (root/'command.json').read_bytes())
+    prepared_raw=proc_lossless_input_bytes(root/'command.json') if lossless else (root/'command.json').read_bytes()
+    prepared=json.loads(prepared_raw)
     original_input=proc_lossless_input_bytes(root/'input.json') if lossless else (root/'input.json').read_bytes()
     if (original_input!=raw or prepared.get('sendState')!='prepared-no-send'
             or prepared.get('descriptorSha256')!=hashlib.sha256(raw).hexdigest()
@@ -3288,7 +3295,7 @@ def proc_qualification_apparatus(spec,descriptor,authority_path,authority_sha,au
     state={'schema':RESULT_SCHEMA,'operation':spec['operation'],'originalOperation':PROC_ORIGINAL,
            'descriptorSha256':hashlib.sha256(raw).hexdigest(),'sendState':'measurement-started','commandAccepted':False,
            'publicationAuthorized':False,'rootAccepted':False,'qualificationAccepted':False}
-    state_raw=proc_private_record(root/'command.json',state,spec['totalDeadline'],expected=(root/'command.json').read_bytes())
+    state_raw=proc_private_record(root/'command.json',state,spec['totalDeadline'],expected=prepared_raw if lossless else (root/'command.json').read_bytes())
     try:
         if trace_profile is not None:trace_store=ProcFutureTraceStore(spec,trace_profile,source_closure_sha=source_closure_sha)
         for phase in ('controller','session'):
@@ -3305,7 +3312,7 @@ def proc_qualification_apparatus(spec,descriptor,authority_path,authority_sha,au
         else:records.append(proc_measure_once(spec,authority,bootstrap,descriptor,authority_path,authority_sha,'normal',trace_store=trace_store))
         output=root/'measurement.subject.json'
         if output.is_symlink() or not 0<output.stat().st_size<=MAX_OUTPUT:raise ValueError('PROC complete measured subject result unavailable')
-        subject=json.loads(output.read_bytes())
+        subject=json.loads(proc_current_input_bytes(spec,output,maximum=MAX_OUTPUT))
         if subject.get('commandAccepted') is not True or subject.get('firstCause') is not None or subject.get('additionalFailures')!=[]:
             raise ValueError('PROC measured canonical controller failed')
         if trace_store is None:trace=proc_trace_evidence(spec,root,authority_path,records[-1]['tracer']['pid'],apparatus_pid=os.getpid())
@@ -3346,7 +3353,7 @@ def proc_qualification_apparatus(spec,descriptor,authority_path,authority_sha,au
         if trace_store is not None:
             state['futureTraceManifest']=trace_store.finish();state['futureTraceSourceOnly']=not lossless
             if lossless:state['losslessRuntimeProfile']=dict(spec['traceRuntimeProfile'])
-        state['subjectResult']={'sha256':hashlib.sha256(output.read_bytes()).hexdigest(),'bytes':output.stat().st_size}
+        state['subjectResult']={'sha256':hashlib.sha256(proc_current_input_bytes(spec,output,maximum=MAX_OUTPUT)).hexdigest(),'bytes':output.stat().st_size}
         state['sendState']='qualification-completed';state['qualificationAccepted']=False
         state['qualificationBoundary']=('Complete subject measurement, root acceptance remains separate.' if trace_store is None
             else 'Complete lossless subject measurement; native/root acceptance remains separate.' if lossless
@@ -3402,10 +3409,7 @@ def execute_proc_command(descriptor, authority_path, authority_sha, *, measureme
     """Existing canonical input/result slots, one shared owner, no send replay."""
     first=None; additional=[]; receipt=None; spec=None; result=None; claimed=False; sensitive=None; qualification_header=None; retirement={'receipt':None}
     def read_regular(path,cap):
-        p=Path(path)
-        if any(x.is_symlink() for x in (p,*p.parents)) or not p.is_file() or not 0<p.stat().st_size<=cap:
-            raise ValueError('PROC selected descriptor/authority unsafe')
-        return p.read_bytes()
+        return proc_lossless_input_bytes(path,maximum=cap)
     def persist(path,value,exclusive=False):
         if measurement is not None and path.name=='command.json':path=path.with_name('measurement.subject.json')
         deadline=spec['totalDeadline'] if spec is not None else time.monotonic()
