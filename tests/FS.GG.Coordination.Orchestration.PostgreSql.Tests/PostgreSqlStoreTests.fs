@@ -3023,10 +3023,19 @@ type PostgreSqlStoreTests() =
                 let resolver = PostgreSqlExecutorBindingResolver(executions, executions, request.ProcessOperationId, request.AttemptId) :> IExecutorBindingResolver
                 let! resolved = resolver.Resolve(preparation.LaunchIntent, CancellationToken.None)
                 Assert.True(Result.isOk resolved)
-                let rec findRoot (directory: DirectoryInfo) =
-                    if File.Exists(Path.Combine(directory.FullName, "FS.GG.Coordination.sln")) then directory.FullName
-                    else findRoot directory.Parent
-                let repoRoot = findRoot(DirectoryInfo AppContext.BaseDirectory)
+                let mutable repositoryDirectory = DirectoryInfo AppContext.BaseDirectory
+                let mutable remainingAncestors = 64
+                while not (isNull repositoryDirectory)
+                      && not (File.Exists(Path.Combine(repositoryDirectory.FullName, "FS.GG.Coordination.sln")))
+                      && remainingAncestors > 0 do
+                    repositoryDirectory <- repositoryDirectory.Parent
+                    remainingAncestors <- remainingAncestors - 1
+                Assert.True(
+                    not (isNull repositoryDirectory)
+                    && File.Exists(Path.Combine(repositoryDirectory.FullName, "FS.GG.Coordination.sln")),
+                    "maintained repository root must exist within the bounded ancestor walk"
+                )
+                let repoRoot = repositoryDirectory.FullName
                 let runner = Path.Combine(repoRoot, "src/FS.GG.Coordination.Orchestration.Runner.Client/bin/Release/net10.0/linux-x64/fsgg-coord-orchestration-runner")
                 Assert.True(File.Exists runner, "maintained packaged runner must exist")
                 let codex = Path.Combine(root, "codex-controlled")
