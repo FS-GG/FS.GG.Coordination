@@ -2502,7 +2502,8 @@ class FutureTraceJoinedControls(unittest.TestCase):
         slot=lineage/'attempt-5';slot.mkdir(mode=0o700)
         for name in ('home','tmp'):(slot/name).mkdir(mode=0o700)
         spec.update(profile='proc-pair-client-qualification',role='qualification',operation=operation,
-                    qualificationAttempt=5,traceRuntimeProfile=runtime,operationRoot=str(slot))
+                    qualificationAttempt=5,traceRuntimeProfile=runtime,operationRoot=str(slot),
+                    cpuAffinity=[min(os.sched_getaffinity(0))])
         spec['environment'].update(HOME=str(slot/'home'),TMPDIR=str(slot/'tmp'))
         spec['request']={'method':'GET','endpoint':'repos/'+module.PROC_REPOSITORY,'apiVersion':'2026-03-10',
                          'body':None,'requestLimit':5,'nativeGet':False,'credentialReference':None,'cases':list(module.PROC_QUALIFICATION_CASES)}
@@ -2539,6 +2540,7 @@ class FutureTraceJoinedControls(unittest.TestCase):
         """Keep real command/preflight/apparatus/store/parser; no process can launch."""
         from types import SimpleNamespace
         original_readlink=module.os.readlink;original_close=module.ProcFutureTraceStore.close
+        observed_cpu=min(os.sched_getaffinity(0))
         stdout=io.StringIO();stderr=io.StringIO()
         proxy=SimpleNamespace(**vars(module.sys))
         proxy.flags=SimpleNamespace(isolated=1,no_site=1,optimize=0)
@@ -2562,6 +2564,7 @@ class FutureTraceJoinedControls(unittest.TestCase):
                 'rootAccepted':True,'qualificationAccepted':True}))
             return {'tracer':{'pid':20},'subjectReadiness':{'subject':{'pid':10}}}
         with patch.object(module,'sys',proxy),patch.object(module.os,'readlink',side_effect=lambda p,*a,**k:'/dev/null' if str(p)=='/proc/self/fd/0' else original_readlink(p,*a,**k)),\
+             patch.object(module.os,'sched_getaffinity',return_value={observed_cpu}),\
              patch.object(module,'proc_bootstrap_evidence',side_effect=bootstrap),patch.object(module,'proc_read_drift',side_effect=reads),\
              patch.object(module,'proc_capacity_evidence'),patch.object(module,'proc_measure_once',side_effect=observe),\
              patch.object(module.ProcFutureTraceStore,'close',close),patch('subprocess.Popen',side_effect=AssertionError('no tracer/client/native actor')):
@@ -2583,6 +2586,19 @@ class FutureTraceJoinedControls(unittest.TestCase):
                 self.assertEqual(1,module.execute_proc_command(descriptor,approved,hashlib.sha256(approved.read_bytes()).hexdigest()))
                 self.assertEqual(original,(slot/'command.json').read_bytes())
                 self.assertEqual(3,len([e for e in events if e.startswith('measure-')]))
+
+    def test_lossless_real_entrypoint_selects_one_cpu_from_multicpu_fixture_origin(self):
+        cpu=min(os.sched_getaffinity(0))
+        with tempfile.TemporaryDirectory() as directory:
+            # Simulate a hosted runner without widening this test process's affinity.
+            with patch.object(module.os,'sched_getaffinity',return_value={cpu,cpu+100000}):
+                spec,descriptor,approved,_,_,_,_=self.lossless_command_fixture(Path(directory))
+            self.assertEqual([cpu],spec['cpuAffinity'])
+            events=[]
+            with self.lossless_command_adapters(events) as errors:
+                self.assertEqual(0,module.execute_proc_command(descriptor,approved,hashlib.sha256(approved.read_bytes()).hexdigest()),errors.getvalue())
+            self.assertEqual(['controller','session','normal'],[e[8:] for e in events if e.startswith('measure-')])
+            self.assertFalse(json.loads((Path(spec['operationRoot'])/'command.json').read_text())['qualificationAccepted'])
 
     def test_lossless_entrypoint_and_actual_measured_handshake_never_reopen_unbounded_inputs(self):
         read=Path.read_bytes
