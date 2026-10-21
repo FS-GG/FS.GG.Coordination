@@ -1,3 +1,5 @@
+#nowarn "9" // Explicit Linux statx ABI layout, matching the existing Host interop convention.
+
 namespace FS.GG.Coordination.Orchestration.Execution
 
 open System
