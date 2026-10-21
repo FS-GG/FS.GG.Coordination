@@ -19,7 +19,7 @@ module OrdinaryAssignmentVerifier =
                 else Ok(int64 nodes*20L)
         with :? ArgumentException as ex -> Error(NeedsDecomposition [ex.Message])
 
-    let verify (authority: OrdinaryAssignment.Authority) (snapshot: OrdinaryAssignment.Snapshot) (decision: OrdinaryAssignment.Decision) =
+    let verify (authority: OrdinaryAssignment.AuthoritativeObligations) (snapshot: OrdinaryAssignment.Snapshot) (decision: OrdinaryAssignment.Decision) =
         match boundedDecision decision with
         | Error error -> Error error
         | Ok decisionCost ->
@@ -107,7 +107,10 @@ module OrdinaryAssignmentVerifier =
                         require (decision.Selected.Length <= SchedulerReservation.available snapshot.Project - snapshot.Project.RecoveryCapacity) "scheduler-recovery-slots"
                         for a in decision.Selected do require (not (Map.containsKey a.Specification.Reservation snapshot.Project.Reservations)) "reservation-replay"
                         let economics = snapshot.Profiles |> List.map _.Economics
-                        let comparable = not economics.IsEmpty && (economics |> List.forall Option.isSome) && (economics |> List.choose id |> List.map (fun e -> e.Currency,e.ProvenanceClass) |> Set.ofList |> Set.count)=1
+                        let comparable =
+                            not economics.IsEmpty && (economics |> List.forall Option.isSome)
+                            && (economics |> List.choose id |> List.forall (fun e -> not (String.IsNullOrWhiteSpace e.Currency) && not (String.IsNullOrWhiteSpace e.ProvenanceClass)))
+                            && (economics |> List.choose id |> List.map (fun e -> e.Currency,e.ProvenanceClass) |> Set.ofList |> Set.count)=1
                         match decision.Preference with
                         | NonEconomicFallback -> require (not comparable) "preference-fallback-unexplained"
                         | Economic(currency,provenance,cost,duration,rework) ->

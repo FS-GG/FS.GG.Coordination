@@ -37,7 +37,7 @@ module OrdinaryAssignment =
         RecoverySupported: bool; Economics: Economics option }
     /// Completeness is supplied by the authoritative producer, not inferred by the planner.
     type Completeness = { ExpectedWorkKeys: Set<string>; Sources: Source list; SourceBound: bool; ManifestSha256: string }
-    type Authority = { Version: string; Works: Requirements list; Completeness: Completeness }
+    type AuthoritativeObligations = { Version: string; Works: Requirements list; Completeness: Completeness }
     type Reservation = { Id: ReservationId; Work: WorkIdentity; Demand: Resources; Paths: Set<string>; TerminalState: string }
     type Snapshot = {
         Version: string; AuthoritySha256: string; Works: Requirements list; Profiles: ExecutionProfile list
@@ -63,15 +63,15 @@ module OrdinaryAssignment =
     val canonicalMeasure: value: 'a -> int * int
     val canonicalSize: value: 'a -> int
     val digest: value: 'a -> string
-    val authorityDigest: Authority -> string
+    val authorityDigest: AuthoritativeObligations -> string
     val snapshotDigest: Snapshot -> string
     val assignmentDigest: Assignment -> string
-    val bindAuthority: Authority -> Authority
+    val bindAuthority: AuthoritativeObligations -> AuthoritativeObligations
     val bindAssignment: Assignment -> Assignment
     val knownNonnegative: Resources -> bool
     val addResources: Resources -> Resources -> Resources
     val pathsConflict: Set<string> -> Set<string> -> bool
     val requirementsErrors: Requirements -> string list
-    val validateAuthority: Authority -> Result<Authority, Refusal>
+    val validateAuthority: AuthoritativeObligations -> Result<AuthoritativeObligations, Refusal>
     val snapshotEvaluationBound: Snapshot -> int64
     val validateSnapshot: Snapshot -> Result<Snapshot, Refusal>

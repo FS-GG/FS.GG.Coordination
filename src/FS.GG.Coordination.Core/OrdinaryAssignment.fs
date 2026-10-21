@@ -37,7 +37,7 @@ module OrdinaryAssignment =
         RecoverySupported: bool; Economics: Economics option }
     /// Completeness is supplied by the authoritative producer, not inferred by the planner.
     type Completeness = { ExpectedWorkKeys: Set<string>; Sources: Source list; SourceBound: bool; ManifestSha256: string }
-    type Authority = { Version: string; Works: Requirements list; Completeness: Completeness }
+    type AuthoritativeObligations = { Version: string; Works: Requirements list; Completeness: Completeness }
     type Reservation = { Id: ReservationId; Work: WorkIdentity; Demand: Resources; Paths: Set<string>; TerminalState: string }
     type Snapshot = {
         Version: string; AuthoritySha256: string; Works: Requirements list; Profiles: ExecutionProfile list
@@ -119,10 +119,10 @@ module OrdinaryAssignment =
     let canonicalSize value = canonicalMeasure value |> fst
     let digest value = encode (box value) |> fst |> SHA256.HashData |> Convert.ToHexStringLower
     let private orderedWorks works = works |> List.sortBy (fun (w: Requirements) -> w.Key)
-    let authorityDigest (authority: Authority) = digest (authority.Version, orderedWorks authority.Works, authority.Completeness.ExpectedWorkKeys, authority.Completeness.Sources |> List.sort, authority.Completeness.SourceBound)
+    let authorityDigest (authority: AuthoritativeObligations) = digest (authority.Version, orderedWorks authority.Works, authority.Completeness.ExpectedWorkKeys, authority.Completeness.Sources |> List.sort, authority.Completeness.SourceBound)
     let snapshotDigest (snapshot: Snapshot) = digest { snapshot with Works = orderedWorks snapshot.Works; Profiles = snapshot.Profiles |> List.sortBy (fun p -> p.Id); Reservations = snapshot.Reservations |> List.sortBy (fun r -> r.Id) }
     let assignmentDigest (assignment: Assignment) = digest { assignment with AssignmentSha256 = "" }
-    let bindAuthority (authority: Authority) = { authority with Completeness = { authority.Completeness with ManifestSha256 = authorityDigest authority } }
+    let bindAuthority (authority: AuthoritativeObligations) = { authority with Completeness = { authority.Completeness with ManifestSha256 = authorityDigest authority } }
     let bindAssignment (assignment: Assignment) = { assignment with AssignmentSha256 = assignmentDigest assignment }
     let knownNonnegative (resources: Resources) =
         resources.Count<=64 && (resources |> Map.forall (fun unitName value ->
@@ -168,7 +168,7 @@ module OrdinaryAssignment =
           if w.Assessment.MissingFacts.Count>0 then "assessment-missing-facts"
           if w.Assessment.Difficulty<0 || w.Assessment.Difficulty>100 || w.Assessment.Uncertainty<0 || w.Assessment.Uncertainty>100 || w.Assessment.EffectRisk<0 || w.Assessment.EffectRisk>100 then "assessment-range"
           if [w.Dependencies.Count;w.RequiredChecks.Count;w.Capabilities.Count;w.Tools.Count;w.Skills.Count;w.Context.Count;w.RequiredOutputs.Count;w.RequiredReviews.Count] |> List.sum > 128 then "obligation-bound" ]
-    let validateAuthority (authority: Authority) =
+    let validateAuthority (authority: AuthoritativeObligations) =
         try
             canonicalSize authority |> ignore
             let errors =

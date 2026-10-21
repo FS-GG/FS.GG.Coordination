@@ -75,7 +75,7 @@ module OrdinaryAssignmentFixtures =
     let frameworkProfile = profile "framework-dotnet" (set ["dotnet"]) 1L
     let productProfile = profile "product-python-node" product.Capabilities 2L
     let authority works = bindAuthority {Version="ordinary-authority/1";Works=works;Completeness={ExpectedWorkKeys=works |> List.map _.Key |> Set.ofList;Sources=sources;SourceBound=true;ManifestSha256=""}}
-    let snapshot (authority: Authority) =
+    let snapshot (authority: AuthoritativeObligations) =
         let heldId = Id.reservation (Guid.Parse "90000000-0000-0000-0000-000000000001")
         let project = ProjectOrchestrator.initial (Id.project(Guid.Parse "90000000-0000-0000-0000-000000000002")) 4 1
         let project = ProjectOrchestrator.evolve project ProjectResumed
@@ -279,3 +279,19 @@ type OrdinaryAssignmentPolicyTests() =
         match OrdinaryAssignmentPolicy.select s with
         | Error(NeedsDecomposition reasons) -> Assert.Contains(reasons,fun reason -> reason.Contains("whole-call-evaluation-bound"))
         | other -> failwithf "expected pre-proof held-path work refusal, got %A" other
+
+    [<Fact>]
+    member _.``empty economic unit and provenance labels select ordinary fallback independently verified``() =
+        let a=authority [framework;product]
+        for currency,provenance in ["","declared-fixture/1";"   ","declared-fixture/1";"fixture-currency","";"fixture-currency"," \t "] do
+            let original=snapshot a
+            let profiles=original.Profiles |> List.map (fun profile ->
+                {profile with Economics=Some {profile.Economics.Value with Currency=currency;ProvenanceClass=provenance}})
+            let s={original with Profiles=profiles}
+            let d=OrdinaryAssignmentPolicy.select s |> accepted
+            Assert.Equal(2,d.Selected.Length)
+            Assert.Equal(NonEconomicFallback,d.Preference)
+            OrdinaryAssignmentVerifier.verify a s d |> accepted
+            // Matching empty strings are not independent evidence of comparable units.
+            let forged={d with Preference=Economic(currency,provenance,3L,200L,20L)}
+            OrdinaryAssignmentVerifier.verify a s forged |> refused

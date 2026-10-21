@@ -46,7 +46,10 @@ module OrdinaryAssignmentPolicy =
     let private comparable (profiles: ExecutionProfile list) =
         let values = profiles |> List.map _.Economics
         if values.IsEmpty || values |> List.exists Option.isNone then false
-        else values |> List.choose id |> List.map (fun e -> e.Currency,e.ProvenanceClass) |> Set.ofList |> Set.count = 1
+        else
+            let known=values |> List.choose id
+            (known |> List.forall (fun e -> not (String.IsNullOrWhiteSpace e.Currency) && not (String.IsNullOrWhiteSpace e.ProvenanceClass)))
+            && (known |> List.map (fun e -> e.Currency,e.ProvenanceClass) |> Set.ofList |> Set.count)=1
 
     let select (snapshot: OrdinaryAssignment.Snapshot) : Result<OrdinaryAssignment.Decision, OrdinaryAssignment.Refusal> =
         match validateSnapshot snapshot with
