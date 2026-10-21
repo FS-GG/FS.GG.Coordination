@@ -31,6 +31,7 @@
     <Compile Include="MainRouteAdmission.fs" />
     <Compile Include="MainTerminalEvidence.fs" />
     <Compile Include="MainAdmissionPreparer.fs" />
+    <Compile Include="OrdinaryAssignmentProjection.fs" />
     <Compile Include="FixedNativeCapabilityDiagnostic.fs" />
     <Compile Include="LearningInstalledReadinessSource.fs" />
     <Compile Include="LearningJournalReadinessSource.fs" />
