@@ -29,6 +29,7 @@ type ExecutorRuntimeOptions =
 type private Supervised =
     {
         Command: ExecutorCommandV2
+        ControlBytes: byte array
         CausalAdmission: ExecutionCausalAdmission option
         Manifest: ExecutorWorkspaceManifest
         Provider: IExecutionProvider
@@ -399,8 +400,10 @@ type ExecutorRuntime
             observation.Candidate
             ""
 
-    let build (command: ExecutorCommandV2) causal (manifest: ExecutorWorkspaceManifest) =
-        if
+    let build (controlBytes: byte array) (command: ExecutorCommandV2) causal (manifest: ExecutorWorkspaceManifest) =
+        if OrdinaryAssignmentLaunchGate.validate options.InputRoot controlBytes command manifest |> Result.isError then
+            Error "ordinary-launch-gate-refused"
+        elif
             manifest.Workspace <> command.Workspace
             || manifest.InputDigest <> command.InputDigest
         then
@@ -466,6 +469,7 @@ type ExecutorRuntime
 
                 {
                     Command = command
+                    ControlBytes = controlBytes
                     CausalAdmission = causal
                     Manifest = manifest
                     Provider = provider
@@ -474,7 +478,7 @@ type ExecutorRuntime
                     Readiness = None
                 })
 
-    let persistLaunch (command: ExecutorCommandV2) causal =
+    let persistLaunch (controlBytes: byte array) (command: ExecutorCommandV2) causal =
         let directory =
             Path.Combine(
                 options.StateRoot,
@@ -486,10 +490,7 @@ type ExecutorRuntime
 
         Directory.CreateDirectory directory |> ignore
         let path = Path.Combine(directory, "launch-command.json")
-        let bytes =
-            match causal with
-            | None -> ExecutorWire.encodeCommandV2 command
-            | Some admission -> QualifiedExecutorWire.wrapCommand command admission |> Result.defaultWith invalidOp
+        let bytes = controlBytes
 
         try
             use stream =
@@ -502,20 +503,21 @@ type ExecutorRuntime
                     FileOptions.WriteThrough
                 )
 
-            stream.Write bytes
+            stream.Write(bytes,0,bytes.Length)
             stream.Flush(true)
             NewLaunch
         with :? IOException ->
             try
-                let existing = File.ReadAllBytes path |> QualifiedExecutorWire.parseCommand
+                let existingBytes = File.ReadAllBytes path
+                let existing = existingBytes |> QualifiedExecutorWire.parseCommand
 
                 match existing with
-                | Ok(value, priorCausal, _) when sameAuthority value command && priorCausal = causal -> ExistingLaunch
+                | Ok(value, priorCausal, _) when sameAuthority value command && priorCausal = causal && OrdinaryAssignmentLaunchGate.sameReference existingBytes controlBytes -> ExistingLaunch
                 | _ -> ConflictingLaunch
             with _ ->
                 ConflictingLaunch
 
-    let matchesDurableLaunch (command: ExecutorCommandV2) causal =
+    let matchesDurableLaunch (controlBytes: byte array) (command: ExecutorCommandV2) causal =
         let path =
             Path.Combine(
                 options.StateRoot,
@@ -537,8 +539,9 @@ type ExecutorRuntime
             then
                 false
             else
-                match File.ReadAllBytes path |> QualifiedExecutorWire.parseCommand with
-                | Ok(launch, priorCausal, _) -> launch.Kind = "launch" && sameAuthority launch command && priorCausal = causal
+                let existingBytes=File.ReadAllBytes path
+                match existingBytes |> QualifiedExecutorWire.parseCommand with
+                | Ok(launch, priorCausal, _) -> launch.Kind = "launch" && sameAuthority launch command && priorCausal = causal && OrdinaryAssignmentLaunchGate.sameReference existingBytes controlBytes
                 | Error _ -> false
         with _ ->
             false
@@ -616,14 +619,8 @@ type ExecutorRuntime
                 return readiness
         }
 
-    let handleCommand (output: Stream) (command: ExecutorCommandV2) causal =
-        let replyCommand =
-            match causal with
-            | None -> command
-            | Some admission ->
-                let digest = QualifiedExecutorWire.wrapCommand command admission |> Result.bind QualifiedExecutorWire.parseCommand
-                             |> Result.map (fun (_, _, digest) -> digest) |> Result.defaultWith invalidOp
-                { command with BodySha256 = digest }
+    let handleCommand (output: Stream) (controlBytes: byte array) (digest: string) (command: ExecutorCommandV2) causal =
+        let replyCommand = {command with BodySha256=digest}
         let receipt (_: ExecutorCommandV2) = receipt replyCommand
         let operation (_: ExecutorCommandV2) = operation replyCommand
         let response (_: ExecutorCommandV2) = response replyCommand
@@ -753,7 +750,7 @@ type ExecutorRuntime
                         Error "executor-session-capacity-refused"
                     | _ ->
                         match manifests.TryGetValue command.WorkspaceManifestSha256 with
-                        | true, manifest -> build command causal manifest
+                        | true, manifest -> build controlBytes command causal manifest
                         | _ -> Error "executor-workspace-manifest-missing"
 
                 match supervised with
@@ -769,7 +766,7 @@ type ExecutorRuntime
                         else
                             sessions.GetOrAdd(itemKey, value)
 
-                    if not (sameAuthority selected.Command command) || selected.CausalAdmission <> causal then
+                    if not (sameAuthority selected.Command command) || selected.CausalAdmission <> causal || not(OrdinaryAssignmentLaunchGate.sameReference selected.ControlBytes controlBytes) then
                         do!
                             writeFrame
                                 output
@@ -850,7 +847,7 @@ type ExecutorRuntime
                                     RecordedAt = command.RecordedAt
                                 }
 
-                            match persistLaunch command causal with
+                            match persistLaunch controlBytes command causal with
                             | ConflictingLaunch ->
                                 do!
                                     writeFrame
@@ -995,7 +992,7 @@ type ExecutorRuntime
                                 ProviderSessionReference.create command.ProviderSessionReference,
                                 verifiedArtifact selected command.CandidateId
                             with
-                            | Ok session, Some artifact when matchesDurableLaunch command causal ->
+                            | Ok session, Some artifact when matchesDurableLaunch controlBytes command causal ->
                                 // Keep terminal recovery replayable. A response may be lost after the
                                 // replacement has reconstructed it, so every later exact observation
                                 // continues to use the verified durable artifact instead of an empty
@@ -1383,10 +1380,10 @@ type ExecutorRuntime
 
                                         stream.Close()
                                         File.Move(temporary, completed, false)
-                    | value when value = ExecutorWire.commandSchemaV2 || value = ExecutorWire.commandSchemaV3 || value = ExecutorWire.commandSchemaV4 || value = QualifiedExecutorWire.commandSchema ->
+                    | value when value = ExecutorWire.commandSchemaV2 || value = ExecutorWire.commandSchemaV3 || value = ExecutorWire.commandSchemaV4 || value = QualifiedExecutorWire.commandSchema || value = OrdinaryAssignmentWire.commandSchema ->
                         match QualifiedExecutorWire.parseCommand bytes with
                         | Error reason -> raise (InvalidDataException reason)
-                        | Ok(command, causal, _) ->
+                        | Ok(command, causal, digest) ->
                             let completed = running |> Seq.filter _.IsCompleted |> Seq.toArray
 
                             if completed.Length > 0 then
@@ -1401,7 +1398,7 @@ type ExecutorRuntime
                             running.Add(
                                 task {
                                     do! Task.Yield()
-                                    do! handleCommand output command causal
+                                    do! handleCommand output bytes digest command causal
                                 }
                             )
                     | _ -> raise (InvalidDataException "executor-frame-schema-refused")

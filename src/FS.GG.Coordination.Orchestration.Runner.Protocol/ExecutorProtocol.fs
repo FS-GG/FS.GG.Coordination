@@ -1027,7 +1027,7 @@ module QualifiedExecutorWire =
     let commandDigest (value: QualifiedExecutorCommand) = encode { value with BodySha256 = "" } |> RunnerWire.sha256
     let encodeRoute = encode<QualifiedExecutorRoute>
     let encodeCommand = encode<QualifiedExecutorCommand>
-    let parseRoute (bytes: byte array) =
+    let private parseRouteHistorical (bytes: byte array) =
         match ExecutorWire.parseRouteBinding bytes with
         | Ok value -> Ok(value, None, value.BindingSha256)
         | Error _ ->
@@ -1041,17 +1041,26 @@ module QualifiedExecutorWire =
                     Ok(binding, Some admission, value.BindingSha256)
                 | _ -> Error "qualified-executor-route-refused")
     /// Retains the exact decoded admission bytes after the ordinary route validation succeeds.
+    let parseRoute (bytes: byte array) =
+        OrdinaryAssignmentWire.reference bytes |> Result.bind (function
+            | None -> parseRouteHistorical bytes
+            | Some envelope when envelope.Schema=OrdinaryAssignmentWire.routeSchema ->
+                OrdinaryAssignmentWire.payload envelope |> Result.bind parseRouteHistorical
+                |> Result.map (fun (value, causal, _) -> value, causal, envelope.Digest)
+            | _ -> Error "ordinary-route-schema-refused")
+
     let parseRouteWithAdmissionBytes (bytes: byte array) =
         parseRoute bytes |> Result.bind (fun (binding, admission, digest) ->
             match admission with
             | None -> Ok(binding, None, digest)
             | Some admission ->
-                decode<QualifiedExecutorRoute> bytes |> Result.bind (fun retained ->
+                (OrdinaryAssignmentWire.reference bytes |> Result.bind (function None -> Ok bytes | Some v -> OrdinaryAssignmentWire.payload v))
+                |> Result.bind decode<QualifiedExecutorRoute> |> Result.bind (fun retained ->
                     try
                         let raw = Convert.FromBase64String retained.AdmissionBase64
                         Ok(binding, Some(admission, raw), digest)
                     with :? FormatException -> Error "qualified-executor-route-refused"))
-    let parseCommand (bytes: byte array) =
+    let private parseCommandHistorical (bytes: byte array) =
         match ExecutorWire.parseCommandV2 bytes with
         | Ok value -> Ok(value, None, value.BodySha256)
         | Error _ ->
@@ -1066,6 +1075,14 @@ module QualifiedExecutorWire =
                       && (isNull command.LearningOriginalItemId || command.LearningOriginalItemId = admission.OriginalItemId) ->
                     Ok(command, Some admission, value.BodySha256)
                 | _ -> Error "qualified-executor-command-refused")
+    let parseCommand (bytes: byte array) =
+        OrdinaryAssignmentWire.reference bytes |> Result.bind (function
+            | None -> parseCommandHistorical bytes
+            | Some envelope when envelope.Schema=OrdinaryAssignmentWire.commandSchema ->
+                OrdinaryAssignmentWire.payload envelope |> Result.bind parseCommandHistorical
+                |> Result.map (fun (value, causal, _) -> value, causal, envelope.Digest)
+            | _ -> Error "ordinary-command-schema-refused")
+
     let wrapRoute binding admission =
         let value = { Schema = routeSchema; BindingSha256 = ""; Binding = binding; AdmissionBase64 = ExecutionCausalAdmission.encode admission |> Convert.ToBase64String }
         let bytes = encodeRoute { value with BindingSha256 = routeDigest value }

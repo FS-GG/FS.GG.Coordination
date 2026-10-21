@@ -73,49 +73,72 @@ type PostgreSqlExecutorBindingResolver
                             && workspaceManifest.BaselineObjectId = route.BaselineObjectId
                             && workspaceManifest.RepositoryBinding = route.RepositoryBinding
                             ->
-                            let! learning =
-                                match learningStore with
-                                | None -> Task.FromResult(Ok None)
-                                | Some source ->
-                                    task {
-                                        let! result = source.ReadLearningExecution(assignmentId, attemptId, token)
-                                        return
-                                            match result with
-                                            | Ok value -> Ok(Some value)
-                                            | Error "learning-execution-binding-missing" -> Ok None
-                                            | Error reason -> Error reason
-                                    }
-
-                            match learning with
-                            | Error reason -> return Error reason
-                            | Ok learning ->
-                            let inputManifest =
-                                {
-                                    Schema = ExecutorWire.inputManifestSchema
-                                    InputDigest = state.Intent.InputDigest
-                                    MediaType = "text/markdown; charset=utf-8"
-                                    SizeBytes = inputBytes.LongLength
-                                    ChunkBytes = ExecutorWire.maximumContentBytes
+                            let! ordinary =
+                                task {
+                                    match OrdinaryAssignmentWire.reference bytes with
+                                    | Error reason -> return Error reason
+                                    | Ok None -> return Ok()
+                                    | Ok(Some reference) ->
+                                        let! storedArtifact=store.ReadInput(reference.ArtifactSha256,token)
+                                        return storedArtifact |> Result.bind(fun artifactBytes ->
+                                            if RunnerWire.sha256 artifactBytes<>reference.ArtifactSha256 then Error "ordinary-stored-object-drift"
+                                            else OrdinaryAssignmentAdmission.verify artifactBytes
+                                                 |> Result.bind(fun (artifact,assignment) ->
+                                                     if artifact.AssignmentSha256<>reference.AssignmentSha256
+                                                        || artifact.AssignmentId<>state.Intent.Key.AssignmentId
+                                                        || artifact.AttemptId<>state.Intent.Key.AttemptId
+                                                        || artifact.Generation<>state.Intent.Key.Generation
+                                                        || artifact.InputSha256<>state.Intent.InputDigest
+                                                        || artifact.Deadline<>state.Intent.Limits.Deadline
+                                                        || artifact.RecordedAt<>state.Intent.RecordedAt then Error "ordinary-stored-route-drift"
+                                                     else OrdinaryAssignmentAdmission.validateProjection artifact assignment))
                                 }
+                            match ordinary with
+                            | Error reason -> return Error reason
+                            | Ok() ->
+                                let! learning =
+                                    match learningStore with
+                                    | None -> Task.FromResult(Ok None)
+                                    | Some source ->
+                                        task {
+                                            let! result = source.ReadLearningExecution(assignmentId, attemptId, token)
+                                            return
+                                                match result with
+                                                | Ok value -> Ok(Some value)
+                                                | Error "learning-execution-binding-missing" -> Ok None
+                                                | Error reason -> Error reason
+                                        }
 
-                            return
-                                Ok(
-                                    state.Intent,
+                                match learning with
+                                | Error reason -> return Error reason
+                                | Ok learning ->
+                                let inputManifest =
                                     {
-                                        WorkItemPersistenceId = route.WorkItemPersistenceId
-                                        RouteOperationId = route.ProcessOperationId
-                                        CandidateId = route.CandidateId
-                                        ExpectedRevision = stream.Revision
-                                        ExecutorBinding = route.ExecutorBinding
-                                        WorkspaceManifest = workspaceManifest
-                                        InputManifest = inputManifest
-                                        InputBytes = inputBytes
-                                        ParentAttemptId = route.ParentAttemptId
-                                        ParentGeneration = route.ParentGeneration
-                                        TelemetryRelation = route.TelemetryRelation
-                                        LearningExecutionBinding = learning
+                                        Schema = ExecutorWire.inputManifestSchema
+                                        InputDigest = state.Intent.InputDigest
+                                        MediaType = "text/markdown; charset=utf-8"
+                                        SizeBytes = inputBytes.LongLength
+                                        ChunkBytes = ExecutorWire.maximumContentBytes
                                     }
-                                )
+
+                                return
+                                    Ok(
+                                        state.Intent,
+                                        {
+                                            WorkItemPersistenceId = route.WorkItemPersistenceId
+                                            RouteOperationId = route.ProcessOperationId
+                                            CandidateId = route.CandidateId
+                                            ExpectedRevision = stream.Revision
+                                            ExecutorBinding = route.ExecutorBinding
+                                            WorkspaceManifest = workspaceManifest
+                                            InputManifest = inputManifest
+                                            InputBytes = inputBytes
+                                            ParentAttemptId = route.ParentAttemptId
+                                            ParentGeneration = route.ParentGeneration
+                                            TelemetryRelation = route.TelemetryRelation
+                                            LearningExecutionBinding = learning
+                                        }
+                                    )
                         | _ -> return Error "execution-route-workspace-binding-refused"
                     | _ -> return Error "execution-route-input-unavailable"
                 | _ -> return Error "execution-route-authority-refused"
@@ -414,11 +437,32 @@ type RemoteExecutorProvider
     let encodeBoundCommand (intent: LaunchIntent) (commandValue: ExecutorCommandV2) token =
         task {
             let! route = store.ReadRoute(intent.Key.AssignmentId, intent.Key.AttemptId, token)
-            return route |> Result.bind QualifiedExecutorWire.parseRoute
-                         |> Result.bind (fun (_, causal, _) ->
-                             match causal with
-                             | None -> Ok(ExecutorWire.encodeCommandV2 commandValue)
-                             | Some admission -> QualifiedExecutorWire.wrapCommand commandValue admission)
+            return route |> Result.bind(fun routeBytes ->
+                QualifiedExecutorWire.parseRoute routeBytes |> Result.bind(fun (_,causal,_) ->
+                    let inner=match causal with None -> Ok(ExecutorWire.encodeCommandV2 commandValue) | Some admission -> QualifiedExecutorWire.wrapCommand commandValue admission
+                    inner |> Result.bind(fun bytes ->
+                        OrdinaryAssignmentWire.reference routeBytes |> Result.bind(function
+                        | None -> Ok bytes
+                        | Some reference -> OrdinaryAssignmentWire.wrap OrdinaryAssignmentWire.commandSchema reference.AssignmentSha256 reference.ArtifactSha256 bytes))))
+        }
+
+    let ordinaryContentFrames (commandId: Guid) (commandBytes: byte array) token =
+        task {
+            match OrdinaryAssignmentWire.reference commandBytes with
+            | Error reason -> return Error reason
+            | Ok None -> return Ok []
+            | Ok(Some reference) ->
+                let! stored=store.ReadInput(reference.ArtifactSha256,token)
+                return stored |> Result.bind(fun bytes ->
+                    if bytes.Length>OrdinaryAssignmentWire.maximumArtifactBytes || RunnerWire.sha256 bytes<>reference.ArtifactSha256 then Error "ordinary-transport-content-refused"
+                    else
+                        let manifest: ExecutorInputManifest={Schema=ExecutorWire.inputManifestSchema;InputDigest=reference.ArtifactSha256;
+                            MediaType="application/vnd.fsgg.ordinary-assignment+json";SizeBytes=bytes.LongLength;ChunkBytes=ExecutorWire.maximumContentBytes}
+                        let chunks=bytes |> Array.chunkBySize ExecutorWire.maximumContentBytes
+                        let frames=chunks |> Array.mapi(fun i chunk -> ExecutorWire.encodeContent {
+                            Schema=ExecutorWire.contentSchema;CommandId=commandId;InputDigest=reference.ArtifactSha256;
+                            Offset=int64(i*ExecutorWire.maximumContentBytes);Final=(i=chunks.Length-1);ContentBase64=Convert.ToBase64String chunk}) |> Array.toList
+                        Ok(ExecutorWire.encodeInputManifest manifest::frames))
         }
 
     let invoke kind intent binding session token =
@@ -437,9 +481,11 @@ type RemoteExecutorProvider
             let expectedManifest =
                 RunnerWire.serialize binding.WorkspaceManifest |> RunnerWire.sha256
 
+            let! ordinaryFrames = ordinaryContentFrames commandValue.CommandId commandBytes token
+
             let! persisted =
-                match commandBytesResult, inputPrepared, manifestPrepared with
-                | Ok _, Ok(), Ok digest when digest = expectedManifest -> store.PersistCommand(commandBytes, token)
+                match commandBytesResult, inputPrepared, manifestPrepared, ordinaryFrames with
+                | Ok _, Ok(), Ok digest, Ok _ when digest = expectedManifest -> store.PersistCommand(commandBytes, token)
                 | _ -> Task.FromResult(CommandRefused "executor-bound-input-preparation-refused")
 
             match persisted with
@@ -448,7 +494,7 @@ type RemoteExecutorProvider
             | CommandPersisted _
             | CommandDuplicate _ ->
                 let frames =
-                    if kind = "launch" then
+                    if kind = "launch" || (ordinaryFrames |> Result.toOption |> Option.exists (List.isEmpty >> not)) then
                         [
                             ExecutorWire.encodeInputManifest binding.InputManifest
                             ExecutorWire.encodeContent
@@ -469,7 +515,7 @@ type RemoteExecutorProvider
                         // the exact workspace authority without replaying the launch or its input.
                         [ ExecutorWire.encodeWorkspaceManifest binding.WorkspaceManifest; commandBytes ]
 
-                let! exchanged = transport.Exchange(frames, token)
+                let! exchanged = transport.Exchange((ordinaryFrames |> Result.defaultValue []) @ frames, token)
 
                 match exchanged with
                 | Error reason -> return Error reason
@@ -549,7 +595,11 @@ type RemoteExecutorProvider
                         bytes
                     ]
 
-                let! exchanged = transport.Exchange(frames, token)
+                let! ordinaryFrames=ordinaryContentFrames value.CommandId bytes token
+                let! exchanged =
+                    match ordinaryFrames with
+                    | Error reason -> Task.FromResult(Error reason)
+                    | Ok artifactFrames -> transport.Exchange(artifactFrames @ frames,token)
 
                 match exchanged with
                 | Error reason -> return Error reason

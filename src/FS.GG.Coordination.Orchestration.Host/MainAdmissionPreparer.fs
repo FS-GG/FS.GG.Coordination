@@ -14,6 +14,9 @@ open FS.GG.Coordination.Orchestration.Pilot
 open FS.GG.Coordination.Orchestration.PostgreSql
 open FS.GG.Coordination.Orchestration.Runner.Protocol
 
+[<assembly: System.Runtime.CompilerServices.InternalsVisibleTo("FS.GG.Coordination.Orchestration.PostgreSql.Tests")>]
+do ()
+
 [<CLIMutable>]
 type MainAdmissionPreparationRequest =
     {
@@ -386,6 +389,8 @@ module MainAdmissionPreparer =
         (request: MainAdmissionPreparationRequest)
         (inputBytes: byte array)
         (causalDeclaration: ExecutionCausalDeclaration option)
+        (ordinary: byte array option)
+        (checkpoint: string -> Result<unit,string>)
         (beforeLaunch:
             PlanningSnapshot ->
             Generation ->
@@ -450,6 +455,24 @@ module MainAdmissionPreparer =
                     return Error "main-admission-preparation-admission-conflict"
                 | Ok admittedState ->
                     let generation = admittedState.State.Generation
+                    match ordinary with
+                    | None -> ()
+                    | Some bytes ->
+                        let artifact,assignment=OrdinaryAssignmentAdmission.verify bytes |> Result.defaultWith(fun e -> raise(TelemetryParentRefused e))
+                        OrdinaryAssignmentAdmission.validateProjection artifact assignment |> Result.defaultWith(fun e -> raise(TelemetryParentRefused e))
+                        let evidence=Convert.FromBase64String artifact.EvidenceBase64 |> OrdinaryAssignmentAdmission.decodeEvidence |> Result.defaultWith(fun e -> raise(TelemetryParentRefused e))
+                        if Id.projectValue evidence.Snapshot.Project.ProjectId<>request.ProjectId || artifact.WorkItemPersistenceId<>WorkItemIdentity.persistenceId workItemId || artifact.Principal<>principal
+                           || artifact.AssignmentId<>request.ProcessOperationId || artifact.AttemptId<>request.AttemptId
+                           || artifact.Generation<>Id.generationValue generation || artifact.ReservationId<>request.ReservationId
+                           || artifact.RecordedAt<>request.SelectedAt || artifact.Deadline<>budget.ExecutionDeadline
+                           || artifact.MaximumRuntimeSeconds<>int64 budget.MaximumRuntime.TotalSeconds || artifact.MaximumAttempts<>budget.AttemptLimit
+                           || artifact.InputSha256<>RunnerWire.sha256 inputBytes || artifact.Workspace<>request.Workspace
+                           || artifact.RepositoryBinding<>request.RepositoryBinding || artifact.BaselineObjectId<>request.BaselineObjectId
+                           || Set.ofArray artifact.AllowedPaths<>Set.ofArray request.AllowedPaths
+                           || Set.ofArray artifact.Validations<>Set.ofArray request.Validations
+                           || artifact.Model<>request.RequestedModel || artifact.Effort<>request.RequestedEffort then
+                            raise(TelemetryParentRefused "ordinary-main-binding-refused")
+
                     let! parentResult = selectTelemetryParent workItems workItemId request.AttemptId generation token
                     let parent = parentResult |> Result.defaultWith (fun reason -> raise (TelemetryParentRefused reason))
                     let! causal =
@@ -650,11 +673,27 @@ module MainAdmissionPreparer =
                                         match causal with
                                         | None -> ExecutorWire.encodeRouteBinding binding
                                         | Some admission -> QualifiedExecutorWire.wrapRoute binding admission |> Result.defaultWith (fun reason -> raise (TelemetryParentRefused reason))
+                                    let! bindingBytes =
+                                        task {
+                                            match ordinary with
+                                            | None -> return bindingBytes
+                                            | Some bytes ->
+                                                let artifact,_=OrdinaryAssignmentAdmission.verify bytes |> Result.defaultWith(fun e -> raise(TelemetryParentRefused e))
+                                                let digest=RunnerWire.sha256 bytes
+                                                let manifest: ExecutorInputManifest={Schema=ExecutorWire.inputManifestSchema;InputDigest=digest;
+                                                    MediaType="application/vnd.fsgg.ordinary-assignment+json";SizeBytes=bytes.LongLength;ChunkBytes=ExecutorWire.maximumContentBytes}
+                                                let! staged=executions.StageInput(ExecutorWire.encodeInputManifest manifest,bytes,token)
+                                                staged |> Result.defaultWith(fun e -> raise(TelemetryParentRefused e))
+                                                checkpoint "artifact-staged" |> Result.defaultWith(fun e -> raise(TelemetryParentRefused e))
+                                                return OrdinaryAssignmentWire.wrap OrdinaryAssignmentWire.routeSchema artifact.AssignmentSha256 digest bindingBytes
+                                                       |> Result.defaultWith(fun e -> raise(TelemetryParentRefused e))
+                                        }
                                     let! bound = executions.BindRoute(bindingBytes, token)
 
                                     match bound with
                                     | Error reason -> return Error reason
                                     | Ok _ ->
+                                        checkpoint "route-bound" |> Result.defaultWith(fun e -> raise(TelemetryParentRefused e))
                                         let! preIntent = beforeLaunch snapshot generation launch token
 
                                         match preIntent with
@@ -674,6 +713,7 @@ module MainAdmissionPreparer =
                                               return Error "main-admission-preparation-launch-intent-conflict"
                                           | Appended
                                           | DuplicateEvent ->
+                                            checkpoint "launch-intent-recorded" |> Result.defaultWith(fun e -> raise(TelemetryParentRefused e))
                                             let! reserved =
                                                 executions.ReserveSubscription(
                                                     SubscriptionAccountingCodec.encodeReservation executionReservation,
@@ -685,6 +725,7 @@ module MainAdmissionPreparer =
                                             match reserved with
                                             | SubscriptionReserved
                                             | SubscriptionDuplicate ->
+                                                checkpoint "subscription-reserved" |> Result.defaultWith(fun e -> raise(TelemetryParentRefused e))
                                                 let! verified = HostedWriterJournal.recover workItems workItemId token
 
                                                 match verified with
@@ -751,9 +792,10 @@ module MainAdmissionPreparer =
                                                             }
 
                                                         let bytes =
-                                                            MainRouteAdmission.encode
+                                                            MainRouteAdmission.encodeBound
                                                                 (MainRouteAdmission.commandId preparation)
                                                                 preparation
+                                                                bindingBytes
 
                                                         match MainRouteAdmission.decode workItemId principal bytes with
                                                         | Ok decoded when decoded = preparation -> return Ok bytes
@@ -775,6 +817,8 @@ module MainAdmissionPreparer =
         request
         (inputBytes: byte array)
         causalDeclaration
+        (ordinary: byte array option)
+        (checkpoint: string -> Result<unit,string>)
         (beforeLaunch:
             PlanningSnapshot ->
             Generation ->
@@ -817,7 +861,7 @@ module MainAdmissionPreparer =
             | Ok _, Ok _ ->
                 task {
                     try
-                        return! prepareBounded clock workItems executions executionJournal workItemId principal request inputBytes causalDeclaration beforeLaunch token
+                        return! prepareBounded clock workItems executions executionJournal workItemId principal request inputBytes causalDeclaration ordinary checkpoint beforeLaunch token
                     with TelemetryParentRefused reason ->
                         return Error reason
                 }
@@ -825,17 +869,30 @@ module MainAdmissionPreparer =
             | _, Error reason -> Task.FromResult(Error reason)
 
     let internal prepareWithPreIntent clock workItems executions executionJournal workItemId principal request inputBytes beforeLaunch token =
-        prepareQualifiedWithPreIntent clock workItems executions executionJournal workItemId principal request inputBytes None beforeLaunch token
+        prepareQualifiedWithPreIntent clock workItems executions executionJournal workItemId principal request inputBytes None None (fun _ -> Ok()) beforeLaunch token
 
     /// Explicit source-only qualified preparation; ordinary callers retain their historical route.
     let prepareCausal clock workItems executions executionJournal workItemId principal request inputBytes declaration token =
-        prepareQualifiedWithPreIntent clock workItems executions executionJournal workItemId principal request inputBytes (Some declaration)
+        prepareQualifiedWithPreIntent clock workItems executions executionJournal workItemId principal request inputBytes (Some declaration) None (fun _ -> Ok())
             (fun _ _ _ _ -> Task.FromResult(Ok())) token
 
     let prepare clock workItems executions executionJournal workItemId principal request inputBytes token =
         prepareWithPreIntent
             clock workItems executions executionJournal workItemId principal request inputBytes
             (fun _ _ _ _ -> Task.FromResult(Ok())) token
+
+    /// The attachment is mandatory for this entry; historical routes remain separately decoded.
+    let internal prepareOrdinaryWithCheckpoint clock workItems executions executionJournal workItemId principal request inputBytes artifactBytes checkpoint token =
+        match OrdinaryAssignmentAdmission.verify artifactBytes with
+        | Error reason -> Task.FromResult(Error reason)
+        | Ok(artifact, assignment) ->
+            match OrdinaryAssignmentAdmission.validateProjection artifact assignment with
+            | Error reason -> Task.FromResult(Error reason)
+            | Ok() -> prepareQualifiedWithPreIntent clock workItems executions executionJournal workItemId principal request inputBytes None (Some artifactBytes) checkpoint
+                        (fun _ _ _ _ -> Task.FromResult(Ok())) token
+
+    let prepareOrdinary clock workItems executions executionJournal workItemId principal request inputBytes artifactBytes token =
+        prepareOrdinaryWithCheckpoint clock workItems executions executionJournal workItemId principal request inputBytes artifactBytes (fun _ -> Ok()) token
 
     let writeAtomicPrivate (path: string) (bytes: byte array) =
         let directory = Path.GetDirectoryName path

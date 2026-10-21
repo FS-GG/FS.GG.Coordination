@@ -84,6 +84,7 @@ type MainAdmissionPreparerConfiguration =
         RequestFile: string
         InputFile: string
         OutputFile: string
+        OrdinaryAssignmentFile: string option
     }
 
 type InstalledAdoptionVerificationConfiguration =
@@ -812,6 +813,7 @@ module HostConfiguration =
                             "--request-file"
                             "--input-file"
                             "--output-file"
+                            "--ordinary-assignment-file"
                         ])
                     arguments
 
@@ -864,6 +866,7 @@ module HostConfiguration =
                         RequestFile = requestFile
                         InputFile = inputFile
                         OutputFile = outputFile
+                        OrdinaryAssignmentFile = optionalValue "--ordinary-assignment-file" arguments
                     }
             | _ -> return! Error "invalid-preparer-configuration"
         }
