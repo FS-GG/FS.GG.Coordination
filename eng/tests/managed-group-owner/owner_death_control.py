@@ -22,8 +22,9 @@ def inside(scratch):
     root = os.path.realpath(scratch); python = os.path.realpath(sys.executable)
     digest = hashlib.sha256(pathlib.Path(python).read_bytes()).hexdigest()
     pidfile = os.path.join(root, 'member')
+    program = os.path.join(root, 'member.py'); pathlib.Path(program).write_text(MEMBER)
     profile = {'schema': mg.PROFILE_SCHEMA, 'name': 'owner-death', 'root': root, 'executable': {'path': python, 'sha256': digest},
-               'leaderImages': [digest], 'argv': [python, '-I', '-S', '-c', MEMBER, pidfile], 'cwd': root, 'environmentKeys': ['PATH'],
+               'leaderImages': [digest], 'argv': [python, '-I', '-S', program, pidfile], 'cwd': root, 'environmentKeys': ['PATH'],
                'containment': 'cgroup2-delegated', 'limits': {'pidsMax': None, 'memoryMaxBytes': None, 'stdoutBytes': 4096, 'stderrBytes': 4096},
                'retirement': {'onLeaderExit': 'require-empty', 'leaderExitSettleSeconds': 0, 'termGraceSeconds': 1, 'cleanupSeconds': 5}}
 

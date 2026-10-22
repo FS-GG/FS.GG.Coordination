@@ -107,9 +107,14 @@ class Base(unittest.TestCase):
         return os.path.join(self.root, f'out-{self.count}')
 
     def profile(self, code='pass', args=(), **changes):
+        # argv admits no control characters, so multi-line programs travel as files.
+        program = ['-c', code]
+        if '\n' in code:
+            path = os.path.join(self.root, f'program-{len(os.listdir(self.root))}.py')
+            pathlib.Path(path).write_text(code); program = [path]
         value = {'schema': mg.PROFILE_SCHEMA, 'name': 'control', 'root': self.root,
                  'executable': {'path': PYTHON, 'sha256': PYTHON_SHA}, 'leaderImages': [PYTHON_SHA],
-                 'argv': [PYTHON, '-I', '-S', '-c', code, *args], 'cwd': self.root,
+                 'argv': [PYTHON, '-I', '-S', *program, *args], 'cwd': self.root,
                  'environmentKeys': sorted(ENV), 'containment': 'cgroup2-delegated',
                  'limits': {'pidsMax': None, 'memoryMaxBytes': None, 'stdoutBytes': 1 << 20, 'stderrBytes': 1 << 20},
                  'retirement': {'onLeaderExit': 'require-empty', 'leaderExitSettleSeconds': 0.5,
