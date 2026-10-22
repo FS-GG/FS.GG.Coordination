@@ -40,6 +40,7 @@ POLL_SECONDS = 0.05
 SAMPLE = 32
 KNOWN_LIMIT = 65536
 PR_SET_NO_NEW_PRIVS = 38
+PF_EXITING = 0x4
 HEX64 = re.compile(r'[0-9a-f]{64}')
 NAME = re.compile(r'[a-z0-9][a-z0-9.-]{0,63}')
 ENV_KEY = re.compile(r'[A-Za-z_][A-Za-z0-9_]{0,127}')
@@ -162,7 +163,8 @@ def _stat(pid):
     try:
         text = pathlib.Path(f'/proc/{pid}/stat').read_text()
         a = text[text.rindex(')') + 2:].split()
-        return {'pid': pid, 'state': a[0], 'ppid': int(a[1]), 'pgid': int(a[2]), 'sid': int(a[3]), 'start': int(a[19])}
+        return {'pid': pid, 'state': a[0], 'ppid': int(a[1]), 'pgid': int(a[2]), 'sid': int(a[3]), 'start': int(a[19]),
+                'exiting': bool(int(a[6]) & PF_EXITING)}
     except (FileNotFoundError, ProcessLookupError, ValueError, IndexError):
         return None
 
@@ -318,7 +320,7 @@ def _pidfd_signal(pid, start, sig, inside, mount):
 
 def _alive(pid, start):
     row = _stat(pid)
-    return row is not None and row['start'] == start and row['state'] != 'Z'
+    return row is not None and row['start'] == start and row['state'] not in ('Z', 'X') and not row['exiting']
 
 
 def _remove_tree(top, until):
@@ -586,8 +588,12 @@ def _contained(profile, env, deadline, out_dir, receipt, write_receipt, refuse, 
                     escaped.setdefault((pid, row['start']), os.path.relpath(directory, droot))
                 reason = reason or 'contained member escaped managed group'
         for pid, start in known.items():
-            if pid not in tree and _alive(pid, start) and (pid, start) not in escaped:
-                # Same birth, alive and absent from the whole delegated root: a privileged escape.
+            if pid in tree or (pid, start) in escaped:
+                continue
+            # An exiting task leaves cgroup.procs before it turns zombie, so absence alone is not an
+            # escape: require the same live, non-exiting birth whose own cgroup is outside the root.
+            row = _identity(pid, lambda directory: not _within(directory, droot), mount)
+            if row is not None and row['start'] == start and not row['exiting']:
                 escaped[(pid, start)] = 'outside-delegated-root'
                 reason = reason or 'contained member escaped managed group'
         return reason
