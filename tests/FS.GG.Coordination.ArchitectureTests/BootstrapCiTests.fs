@@ -1148,6 +1148,7 @@ let ``bootstrap control surface stays typed thin and bounded`` () =
     // The host-executor cohort adds three lines: measured 861 -> 864.
     // Callback source preparation, failure evidence retention and exact focused census add nine lines: 864 -> 873.
     // The original and forward Execution pair inert controls add one comment and two invocations: measured 873 -> 876.
+    // The managed-group owner controls add one invocation, consuming the spare line: 876 -> 877.
     Assert.InRange(gateLines, 1, 877)
     // Producer invocations add eight distinct lines; the compiler subject guard adds one.
     // Focused host-allocation tests add three: start time, test invocation, and fresh TRX census.
@@ -1155,7 +1156,8 @@ let ``bootstrap control surface stays typed thin and bounded`` () =
     // Focused host-executor tests add three distinct lines: measured 646 -> 649.
     // Callback pairing adds nine distinct guarded lines: 649 -> 658.
     // The same three lines are distinct: 658 -> 661.
-    Assert.InRange(uniqueGateLines, 1, 661)
+    // The managed-group owner invocation is one more distinct line: 661 -> 662.
+    Assert.InRange(uniqueGateLines, 1, 662)
     // One shared source orchestrator has its own bound; retain both legacy caps.
     Assert.InRange(lineCount "eng/bootstrap-gates/source-preflight.sh", 1, 160)
     Assert.DoesNotContain("requiredRunFragments", core)
