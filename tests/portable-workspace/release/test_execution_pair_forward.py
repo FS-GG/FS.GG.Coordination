@@ -1735,7 +1735,7 @@ def cli_world(world, hub, authority, tmp, *, bind=None):
     admission_path.write_text(json.dumps(enabled_admission(world)))
     context = {'GITHUB_EVENT_NAME': 'workflow_dispatch', 'GITHUB_REPOSITORY': F.REPOSITORY, 'GITHUB_REF': 'refs/heads/main', 'GITHUB_RUN_ATTEMPT': '1',
                'GITHUB_ACTOR': OPERATOR, 'GITHUB_SHA': PUBLISHER, 'GITHUB_RUN_ID': str(RUN), 'OPERATION': world.selection['operation'], 'GH_TOKEN': 'gh',
-               'ORDINARY_LEDGER_TOKEN': 'ledger', 'NUGET_API_KEY': 'nuget', 'POLICY_TOKEN': 'policy', 'FSGG_SHARED_HELPER_ROOT': str(E.helper_root)}
+               'GITHUB_ACTIONS': '', 'ORDINARY_LEDGER_TOKEN': 'ledger', 'NUGET_API_KEY': 'nuget', 'POLICY_TOKEN': 'policy', 'FSGG_SHARED_HELPER_ROOT': str(E.helper_root)}
 
     class Gate:
         def __init__(self, publisher, api, ref):
@@ -1842,6 +1842,12 @@ def cli_wiring_controls(tmp):
     with cli_world(w, h, a, Path(tempfile.mkdtemp(dir=tmp))) as cli:
         code, err = cli('packages', '--workdir', str(Path(tempfile.mkdtemp(dir=tmp)) / 'w'))
     assert code == 1 and h.pushes == []
+    # The local helper override is refused inside a hosted run.
+    w = World(Path(tempfile.mkdtemp(dir=tmp)))
+    h, a = Hub(w), Authority()
+    with cli_world(w, h, a, Path(tempfile.mkdtemp(dir=tmp))) as cli, patch.dict(os.environ, {'GITHUB_ACTIONS': 'true'}):
+        code, err = cli('packages', '--workdir', str(Path(tempfile.mkdtemp(dir=tmp)) / 'w'))
+    assert code == 1 and 'override is not admitted' in err and a.journal is None and h.pushes == []
     count('cli-wiring')
 
 
@@ -1873,6 +1879,12 @@ def publisher_binding_controls(tmp):
         git('commit', '-q', '-am', 'code')
         c = git('rev-parse', 'HEAD')
         must_refuse('publisher code differs from candidate source', CLI.bind_publisher, sel, c)
+        # A renamed-away closure file lists its old path under --no-renames (rename detection would hide it).
+        git('checkout', '-q', '-b', 'renamed', b)
+        git('mv', 'eng/execution_pair_forward.py', 'docs-moved.py')
+        git('commit', '-q', '-m', 'rename')
+        must_refuse('closure file renamed away', CLI.bind_publisher, sel, git('rev-parse', 'HEAD'))
+        git('checkout', '-q', 'main')
         git('checkout', '-q', '--orphan', 'other')
         git('commit', '-q', '--allow-empty', '-m', 'unrelated')
         unrelated = git('rev-parse', 'HEAD')

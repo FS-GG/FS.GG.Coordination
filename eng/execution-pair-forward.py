@@ -51,13 +51,15 @@ def git(*args) -> str:
 def bind_publisher(selection: dict, publisher_sha: str) -> None:
     source = selection["source"]
     ancestor = subprocess.run(["git", "merge-base", "--is-ancestor", source, publisher_sha], capture_output=True, timeout=60).returncode == 0
-    paths = git("diff", "--name-only", source, publisher_sha).splitlines()
+    paths = git("diff", "--name-only", "--no-renames", source, publisher_sha).splitlines()
     F.bind_publisher(selection, publisher_sha, paths, ancestor=ancestor, tree=git("rev-parse", source + "^{tree}"))
 
 
 def helper_root(admission: dict, workdir: pathlib.Path) -> pathlib.Path:
     override = os.environ.get("FSGG_SHARED_HELPER_ROOT")
     if override:
+        # A local checkout override is for controls only: it is never honoured inside a hosted run.
+        F.require(not os.environ.get("GITHUB_ACTIONS"), "the shared helper root override is not admitted in a hosted run")
         F.helper_digest_report(pathlib.Path(override), admission["sharedHelper"])
         return pathlib.Path(override)
     return F.fetch_shared_helper(admission["sharedHelper"], workdir / "shared-helper")
