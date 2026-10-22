@@ -1,0 +1,295 @@
+name: execution-pair-forward-publish
+run-name: "PAIR forward ${{ inputs.mode }} ${{ inputs.operation }} @ ${{ github.sha }}"
+
+# Dormant forward Execution pair publication route (Coordination #1043).
+#
+# Nothing here is entitled merely by existing. Every job first requires the exact
+# admission state from eng/execution-pair-forward-admission.json: the committed state
+# is `disabled`, so each credential-bearing job fails before any credential exists.
+# The original 0.3.0 operation, workflow and admission are not read or changed.
+#
+# Credential isolation by job:
+#   preflight   read-only; policy-read App token only; no package, journal or release write.
+#   packages    ordinary-ledger App token + GitHub Packages write + NuGet Trusted Publishing;
+#               no release/tag write. Effects 1-4 of the shared protected journal.
+#   public-load read-only anonymous public package execution; no secrets at all.
+#   finalize    ordinary-ledger App token + contents:write + policy-read App token;
+#               no package or NuGet credential. Effects 5-13 of the same journal.
+# A rerun is refused (attempt must be 1); no step retries a mutation.
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: preflight (read-only) or publish (packages, public-load, finalize)
+        required: true
+        default: preflight
+        type: choice
+        options:
+          - preflight
+          - publish
+      operation:
+        description: Exact forward operation identity from the admission selection
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: execution-pair-forward
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    name: preflight
+    if: github.ref == 'refs/heads/main' && github.actor == 'EHotwagner'
+    runs-on: ubuntu-24.04
+    environment: execution-pair-forward
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: read
+      packages: read
+    env:
+      PYTHONOPTIMIZE: '0'
+      PYTHONDONTWRITEBYTECODE: '1'
+      OPERATION: ${{ inputs.operation }}
+    steps:
+      - name: Check out the exact publisher without persisted credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Require a selected or enabled admission before any credential exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          state="$(python3 eng/execution-pair-forward.py state)"
+          if test "$state" = disabled; then
+            echo "::error::forward route is disabled; no selection is admitted"
+            exit 1
+          fi
+      - name: Require the existing scoped App bindings for the complete protection read
+        shell: bash
+        env:
+          RULESET_APP_ID: ${{ secrets.FSGG_DISPATCH_APP_ID }}
+          RULESET_APP_PRIVATE_KEY: ${{ secrets.FSGG_DISPATCH_APP_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          if test -z "${RULESET_APP_ID:-}" || test -z "${RULESET_APP_PRIVATE_KEY:-}"; then
+            echo "::error::ruleset App bindings are missing; complete protection evidence is unavailable"
+            exit 1
+          fi
+      - name: Mint a repository-scoped read-only token solely for the complete protection read
+        id: policy
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          app-id: ${{ secrets.FSGG_DISPATCH_APP_ID }}
+          private-key: ${{ secrets.FSGG_DISPATCH_APP_PRIVATE_KEY }}
+          owner: FS-GG
+          repositories: FS.GG.Coordination
+          permission-administration: read
+      - name: Authenticate candidate, four receivers, occupancy, policy and journal destination
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          POLICY_TOKEN: ${{ steps.policy.outputs.token }}
+        run: |
+          set -euo pipefail
+          python3 eng/execution-pair-forward.py preflight --workdir "$RUNNER_TEMP/forward-preflight"
+      - name: Retain the preflight receipt
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: execution-pair-forward-preflight-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/forward-preflight/preflight-receipt.json
+          if-no-files-found: warn
+          retention-days: 30
+
+  packages:
+    name: packages
+    if: inputs.mode == 'publish' && github.ref == 'refs/heads/main' && github.actor == 'EHotwagner'
+    needs: preflight
+    runs-on: ubuntu-24.04
+    environment: execution-pair-forward
+    timeout-minutes: 75
+    permissions:
+      contents: read
+      actions: read
+      packages: write
+      id-token: write
+    env:
+      PYTHONOPTIMIZE: '0'
+      PYTHONDONTWRITEBYTECODE: '1'
+      DOTNET_CLI_TELEMETRY_OPTOUT: 1
+      DOTNET_NOLOGO: 1
+      DOTNET_PROCESSOR_COUNT: 4
+      OPERATION: ${{ inputs.operation }}
+    steps:
+      - name: Check out the exact publisher without persisted credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Require the enabled admission and exact publisher binding before any credential exists
+        id: admitted
+        shell: bash
+        run: |
+          set -euo pipefail
+          if test "$(python3 eng/execution-pair-forward.py state)" != enabled; then
+            echo "::error::forward route is not enabled"
+            exit 1
+          fi
+          python3 eng/execution-pair-forward.py bind --workdir "$RUNNER_TEMP/forward-bind"
+          python3 - >> "$GITHUB_OUTPUT" <<'PY_FORWARD_USER'
+          import json
+          print('nuget_user=' + json.load(open('eng/execution-pair-forward-admission.json'))['selection']['namespaceEntitlement']['nugetUser'])
+          PY_FORWARD_USER
+      - name: Set up the pinned .NET SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          global-json-file: global.json
+      - name: Mint the ordinary protected-journal writer token
+        id: ledger
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          app-id: ${{ vars.FSGG_ORDINARY_LEDGER_APP_ID }}
+          private-key: ${{ secrets.FSGG_ORDINARY_LEDGER_APP_PRIVATE_KEY }}
+          owner: FS-GG
+          repositories: FS.GG.Coordination.Authority
+          permission-contents: write
+      - name: Bind the proved ledger installation
+        shell: bash
+        env:
+          ACTUAL_INSTALLATION_ID: ${{ steps.ledger.outputs.installation-id }}
+          EXPECTED_INSTALLATION_ID: ${{ secrets.FSGG_ORDINARY_LEDGER_INSTALLATION_ID }}
+        run: test -n "$EXPECTED_INSTALLATION_ID" && test "$ACTUAL_INSTALLATION_ID" = "$EXPECTED_INSTALLATION_ID"
+      - name: Exchange nuget.org Trusted Publishing identity
+        id: nuget
+        uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841
+        with:
+          user: ${{ steps.admitted.outputs.nuget_user }}
+      - name: Operate the four package effects on the shared protected journal
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ORDINARY_LEDGER_TOKEN: ${{ steps.ledger.outputs.token }}
+          NUGET_API_KEY: ${{ steps.nuget.outputs.NUGET_API_KEY }}
+        run: |
+          set -euo pipefail
+          python3 eng/execution-pair-forward.py packages --workdir "$RUNNER_TEMP/forward-packages"
+
+  public-load:
+    name: public-load
+    if: inputs.mode == 'publish' && github.ref == 'refs/heads/main' && github.actor == 'EHotwagner'
+    needs: packages
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      actions: read
+    env:
+      PYTHONOPTIMIZE: '0'
+      PYTHONDONTWRITEBYTECODE: '1'
+      DOTNET_CLI_TELEMETRY_OPTOUT: 1
+      DOTNET_NOLOGO: 1
+      DOTNET_PROCESSOR_COUNT: 4
+      OPERATION: ${{ inputs.operation }}
+    steps:
+      - name: Check out the exact publisher without persisted credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Require the enabled admission and exact publisher binding
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(python3 eng/execution-pair-forward.py state)" = enabled
+          python3 eng/execution-pair-forward.py bind --workdir "$RUNNER_TEMP/forward-bind"
+      - name: Set up the pinned .NET SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          global-json-file: global.json
+      - name: Execute the identical public packages with no credential and no write
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 eng/execution-pair-forward.py public-load --workdir "$RUNNER_TEMP/forward-public"
+      - name: Retain the public-load receipt for finalization
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: execution-pair-forward-public-load-${{ github.run_id }}-1
+          path: ${{ runner.temp }}/forward-public/public-load-receipt.json
+          if-no-files-found: error
+          retention-days: 90
+
+  finalize:
+    name: finalize
+    if: inputs.mode == 'publish' && github.ref == 'refs/heads/main' && github.actor == 'EHotwagner'
+    needs: public-load
+    runs-on: ubuntu-24.04
+    environment: execution-pair-forward
+    timeout-minutes: 75
+    permissions:
+      contents: write
+      actions: read
+      packages: read
+    env:
+      PYTHONOPTIMIZE: '0'
+      PYTHONDONTWRITEBYTECODE: '1'
+      OPERATION: ${{ inputs.operation }}
+    steps:
+      - name: Check out the exact publisher without persisted credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Require the enabled admission and exact publisher binding before any credential exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          if test "$(python3 eng/execution-pair-forward.py state)" != enabled; then
+            echo "::error::forward route is not enabled"
+            exit 1
+          fi
+          python3 eng/execution-pair-forward.py bind --workdir "$RUNNER_TEMP/forward-bind"
+      - name: Mint the ordinary protected-journal writer token
+        id: ledger
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          app-id: ${{ vars.FSGG_ORDINARY_LEDGER_APP_ID }}
+          private-key: ${{ secrets.FSGG_ORDINARY_LEDGER_APP_PRIVATE_KEY }}
+          owner: FS-GG
+          repositories: FS.GG.Coordination.Authority
+          permission-contents: write
+      - name: Bind the proved ledger installation
+        shell: bash
+        env:
+          ACTUAL_INSTALLATION_ID: ${{ steps.ledger.outputs.installation-id }}
+          EXPECTED_INSTALLATION_ID: ${{ secrets.FSGG_ORDINARY_LEDGER_INSTALLATION_ID }}
+        run: test -n "$EXPECTED_INSTALLATION_ID" && test "$ACTUAL_INSTALLATION_ID" = "$EXPECTED_INSTALLATION_ID"
+      - name: Mint a repository-scoped read-only token solely for the tag-protection read
+        id: policy
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          app-id: ${{ secrets.FSGG_DISPATCH_APP_ID }}
+          private-key: ${{ secrets.FSGG_DISPATCH_APP_PRIVATE_KEY }}
+          owner: FS-GG
+          repositories: FS.GG.Coordination
+          permission-administration: read
+      - name: Operate the remaining nine effects on the same protected journal
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ORDINARY_LEDGER_TOKEN: ${{ steps.ledger.outputs.token }}
+          POLICY_TOKEN: ${{ steps.policy.outputs.token }}
+        run: |
+          set -euo pipefail
+          python3 eng/execution-pair-forward.py finalize --workdir "$RUNNER_TEMP/forward-finalize"

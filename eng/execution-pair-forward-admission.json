@@ -1,0 +1,73 @@
+{
+  "schema": "fsgg.coordination.execution-pair-forward-admission/1",
+  "profile": "execution-pair-forward",
+  "enabled": false,
+  "proposedVersion": "0.3.1",
+  "original": {
+    "version": "0.3.0",
+    "operation": "publish-execution-pair-030-b11fb121-four38484632631",
+    "tag": "execution/v0.3.0",
+    "retained": true
+  },
+  "effects": [
+    "github:FS.GG.Execution.Contracts",
+    "github:FS.GG.Execution.Processes",
+    "nuget:FS.GG.Execution.Contracts",
+    "nuget:FS.GG.Execution.Processes",
+    "tag",
+    "draft",
+    "asset:FS.GG.Execution.Contracts",
+    "asset:FS.GG.Execution.Processes",
+    "asset:manifest",
+    "asset:consumer-qualification",
+    "asset:readback",
+    "asset:publication-journal",
+    "promote"
+  ],
+  "stages": {
+    "packages": [
+      "github:FS.GG.Execution.Contracts",
+      "github:FS.GG.Execution.Processes",
+      "nuget:FS.GG.Execution.Contracts",
+      "nuget:FS.GG.Execution.Processes"
+    ],
+    "finalize": [
+      "github:FS.GG.Execution.Contracts",
+      "github:FS.GG.Execution.Processes",
+      "nuget:FS.GG.Execution.Contracts",
+      "nuget:FS.GG.Execution.Processes",
+      "tag",
+      "draft",
+      "asset:FS.GG.Execution.Contracts",
+      "asset:FS.GG.Execution.Processes",
+      "asset:manifest",
+      "asset:consumer-qualification",
+      "asset:readback",
+      "asset:publication-journal",
+      "promote"
+    ]
+  },
+  "sharedHelper": {
+    "repository": "FS-GG/.github",
+    "commit": "61526e947ff595c5eb416efd810ce3c1348bedc5",
+    "files": {
+      "scripts/release_successor_execution.py": "038661268f3a933419401c850fde024dd390879ab919c0eeadbc279994378dea",
+      "scripts/release_successor_journal.py": "16a41b86465eb9651d3758b2d5ffc842525c39d86cc313232bb3e0bfb45f19ee",
+      "scripts/release_successor_provider.py": "ca1f54fa7414fb6b0626e87cab8be45d888f0f0e306b5e1b3c468e835ff67096",
+      "scripts/release_successor_admission.py": "17073aa84dcec104742bc507af5b8f82ba08e1e07ba24aa05149238f60a490f6",
+      "scripts/release-successor-publish.py": "cb5500e3ef92691d2515110e6abd0e38f833656ac52b6f45f9e85102f3bdbf33",
+      "scripts/authority-state-import.py": "ccf87a351daa6e83fe313a09bde0854c88abae54146eb11e24c0903c014f5197",
+      "scripts/fsgg_feed.py": "f7650429432417af72168c288cdee347b338328848870cb4f2f18d6b62d0733f"
+    },
+    "boundIntentFence": null
+  },
+  "liveEffects": {
+    "environment": null,
+    "ledgerApp": null,
+    "nugetTrustedPublishing": null,
+    "occupancyFence": null,
+    "oldWriterFence": null,
+    "operationAdmission": null
+  },
+  "selection": null
+}

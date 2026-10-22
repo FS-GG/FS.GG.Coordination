@@ -15,6 +15,9 @@ python3 -I -S -B eng/tests/utel-callback-fixture/test_census.py
 python3 eng/utel-callback-fixture.py prepare
 dotnet restore FS.GG.Coordination.sln --locked-mode
 PYTHONDONTWRITEBYTECODE=1 python3 eng/tests/choreo-c2-tlc-retry/test_diagnostics.py -v DiagnosticControls.test_bootstrap_base_retains_command_cause_before_fixture_scratch_cleanup CommandInterfaceControls MutableTempCensusControls FutureSourceClosureControls FutureTraceJoinedControls
+# The original 0.3.0 pair controls and the dormant forward pair route run inert against the exact pinned shared journal engine.
+PYTHONDONTWRITEBYTECODE=1 python3 tests/portable-workspace/release/test_execution_pair_release.py
+PYTHONDONTWRITEBYTECODE=1 FSGG_REQUIRE_CLEAN_CANDIDATE=1 python3 tests/portable-workspace/release/test_execution_pair_forward.py
 dotnet build FS.GG.Coordination.sln --configuration Release --no-restore --warnaserror
 host_tests_started_ns="$(date +%s%N)"
 dotnet test tests/FS.GG.Coordination.Orchestration.Execution.Tests/FS.GG.Coordination.Orchestration.Execution.Tests.fsproj --configuration Release --no-build --no-restore --filter FullyQualifiedName~PortableHostAllocationTests --logger "trx;LogFileName=portable-host-allocation.trx" --results-directory "$RUNNER_TEMP/compiler-and-tests-portable-host-allocation"

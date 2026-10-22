@@ -1,0 +1,114 @@
+# Forward Execution pair publication route
+
+Status: **complete dormant source route with inert controls; live effects
+disabled**. The committed admission (`eng/execution-pair-forward-admission.json`)
+is `disabled`: no version is selected, every live-effect prerequisite is absent and
+every credential-bearing job fails before a credential exists. The original
+`0.3.0` operation, its admission, publisher, attempts, ordinals 1–5 and
+historical Unknowns are neither read nor changed by this route; a repository
+control pins the original admission and publisher bytes.
+
+This route publishes a **newly selected** coherent
+`FS.GG.Execution.Contracts`/`FS.GG.Execution.Processes` pair, never `0.3.0`.
+`0.3.1` is only the committed proposal. The final version is selected after
+authoritative occupancy and must be strictly newer than every observed feed
+version and `execution/v*` tag, including `0.3.0`.
+
+## One source cut, one rule
+
+`eng/callable-cli-release.fsx --profile execution-pair-forward --version V`
+prepares and verifies the pair with the existing member inspection, deterministic
+double-pack and coherent Contracts dependency checks, overriding only
+`PackageVersion`. The original `execution-pair` profile still accepts exactly
+`0.3.0`, and the forward profile refuses it; the two version rules are disjoint
+(`forwardVersionPattern` in the script equals `FORWARD_VERSION_PATTERN` in
+`eng/execution_pair_forward.py`, checked by a control, and the shared harness
+reuses the module rule).
+
+The existing prepare workflow selects the profile from `version`. A forward
+candidate, its installed load and its four receiver cases run at **one exact
+source**: the executor must equal candidate source A. The publisher B may differ
+from A only by the admission file; `bind` enforces ancestry, tree and that delta.
+
+## Admission states
+
+| State | Meaning |
+|---|---|
+| `disabled` | no selection (committed state) |
+| `selected` | complete reviewable selection; only the read-only `preflight` may run |
+| `enabled` | additionally every `liveEffects` prerequisite (environment, ledger App, NuGet Trusted Publishing, occupancy fence, old-writer fence, operation admission) and the shared `boundIntentFence` carry retained evidence |
+
+`enabled` is refused unless all of that is present. Root establishes those facts;
+this route never creates them.
+
+## Thirteen ordered durable effects
+
+The protected ordered-effect journal engine is the unchanged shared helper pinned
+by commit and per-file SHA-256 in the admission (`sharedHelper`); there is no
+second journal algorithm. Order, one effect at a time:
+
+1. `github:` Contracts, 2. `github:` Processes (GitHub Packages, byte-exact readback)
+3. `nuget:` Contracts, 4. `nuget:` Processes (identical retained inputs; nuget.org may add only its repository signature)
+5. `tag` (lightweight, candidate source), 6. `draft` release
+7–12. assets: both packages, manifest, consumer qualification, readback, publication journal
+13. `promote` (non-latest)
+
+Each effect is observed before and after its single send; a verified effect is
+re-observed on every transition. Generated assets are pure functions of
+authenticated retained inputs, so a recovery invocation reproduces them byte for
+byte. They are not part of the journal content identity.
+
+## Credential-isolated jobs
+
+| Job | May | May not |
+|---|---|---|
+| `preflight` | read candidate, receivers, occupancy, policy (administration **read** App token), journal destination | any write |
+| `packages` | ledger App token, GitHub Packages write, NuGet Trusted Publishing; effects 1–4 | tag, release, contents write |
+| `public-load` | anonymous public package restore/build/load, no secrets | any credential or write |
+| `finalize` | ledger App token, contents write, policy read; effects 5–13 | package or NuGet credential |
+
+`finalize` starts only from a journal whose package window is verified and only
+with the successful `public-load` job and receipt artifact of the same run. A
+stage originates only effects whose credential it holds; the fresh per-effect
+admission refuses the rest before any intent exists, and `ready()` proves every
+send is possible (credentials, retained bytes, staged assets) before the first
+intent, because an intent that cannot be sent is a permanent Unknown.
+
+## Guards
+
+* **Preflight**: candidate archive authenticated through the maintained
+  extractor; four distinct receiver cases joined to the exact candidate
+  (`pair_consumers`); strict occupancy (four cells, version indexes, tag list, tag,
+  release; a full page or unreadable response never means absence); complete tag
+  policy through the maintained predicate (ruleset 21633398); journal unused.
+  The first irreversible job repeats the receiver, occupancy and candidate joins.
+* **Per-effect admission**: exact publisher run (path, event, attempt 1, actor,
+  `main` head equals the publisher) before every intent, dispatch and settlement;
+  a fresh policy read before the tag.
+* **Send fence**: a send is legal only for the intent this invocation just wrote,
+  once. An intent inherited from a prior invocation is never a permit.
+* **No automatic mutation retries**: a lost, refused or unapplied send leaves the
+  effect in `intent`; later invocations only observe. There is no workflow retry
+  and a rerun (attempt greater than 1) is refused.
+
+## Verification
+
+```text
+PYTHONDONTWRITEBYTECODE=1 python3 tests/portable-workspace/release/test_execution_pair_forward.py
+PYTHONDONTWRITEBYTECODE=1 python3 tests/portable-workspace/release/test_execution_pair_release.py
+dotnet fsi eng/validate-github-immutable-execution-pins.fsx
+```
+
+The forward controls run the exact pinned engine against an in-memory GitHub,
+feed and journal; every guard has a paired causal control that removes that
+single guard and shows the harm. They also prepare a real forward candidate and
+verify its reproducibility. Set `FSGG_SHARED_HELPER_ROOT` to a checkout of the
+pinned helper commit to avoid the (digest-verified) fetch.
+
+## Not established here
+
+Actual publication, downloaded-only adoption and rollback, Linux containment,
+hosted receiver runs of the forward candidate, the shared bound-intent fence in
+`FS-GG/.github`, the protected environment, App installations, Trusted Publishing
+policy, occupancy and old-writer fencing, and any operation admission remain with
+the parent obligations. Nothing here sends, tags, publishes or dispatches.

@@ -236,7 +236,7 @@ def pair_consumers(admission: dict, root: Path) -> dict:
             pair_sdk_bundled_input(case, c, json.loads(profile_raw), source_locks_raw,
                                    member('proc6-state/proof/sdk-core-input.json') if case == 'fsquint-s1' else None)
             if case.endswith('s1'):
-                package_hashes = admission['packages']; version = '0.3.0'
+                package_hashes = admission['packages']; version = admission['version']
             elif case == 'sdd-rollback':
                 package_hashes = {'FS.GG.Execution.Contracts':'62b1f85b8622d6719f086d73f4dbf29bd251dbb083a9b9588535d6b86531665d',
                                   'FS.GG.Execution.Processes':'20d09f3bc71c78c46809931a8d1f7b4009d381fb0c4f203db2d7c846266e4f41'}; version = '0.2.0'

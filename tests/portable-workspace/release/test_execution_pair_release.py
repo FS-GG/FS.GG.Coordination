@@ -60,7 +60,7 @@ def installed_isolation_diagnostic_controls(version, installed_mode="candidate")
                     references={row.attrib['Include']:row.attrib['Version'] for row in ET.parse(root/'PairInstalled.fsproj').getroot().findall('.//PackageReference')}
                     assert references=={'FSharp.Core':'[10.1.302]', **{id:'['+version+']' for id in IDS}}
                     smoke=(root/'Program.fs').read_text()
-                    assert ('let textFactory: ITextProcessSessionFactory = ProcessSessions.createTextFactory()' in smoke)==(version=='0.3.0')
+                    assert ('let textFactory: ITextProcessSessionFactory = ProcessSessions.createTextFactory()' in smoke)==(version!='0.2.0')
                     assert '.RunAsync' not in smoke and '.Prepare(' not in smoke
                     (root/'effective-isolation.txt').write_text('PAIR_EFFECTIVE_ISOLATION_OK\n')
                 if command[1]=='build':
@@ -353,7 +353,7 @@ def installed_version_preflight_controls():
                     with zipfile.ZipFile(archive,'w') as z:z.writestr('lib/net10.0/'+id+'.dll',id.encode())
                     rows.append({'packageId':id,'file':archive.name,'sha256':hashlib.sha256(archive.read_bytes()).hexdigest()})
                 manifest={'profile':'execution-pair','version':version,'tag':'execution/v'+version,'packages':rows}
-                if mode=='unsupported-version':manifest['version']='0.4.0'
+                if mode=='unsupported-version':manifest['version']='0.2.9'
                 if mode=='wrong-tag':manifest['tag']='execution/v0.1.0'
                 if mode=='wrong-contracts-file':rows[0]['file']=IDS[0]+'.0.1.0.nupkg'
                 if mode=='wrong-processes-file':rows[1]['file']=IDS[1]+'.0.1.0.nupkg'
@@ -366,7 +366,7 @@ def installed_version_preflight_controls():
                     except RuntimeError:refused=True
                 finally:check.__globals__['run']=original
                 assert refused and not calls and not (root/'proof.json').exists(),(version,mode)
-    for version in ('0.4.0','[0.3.0]','0.3.0\"/>'):
+    for version in ('0.2.9','0.3.01','0.3.1-rc1','[0.3.0]','0.3.0\"/>'):
         with tempfile.TemporaryDirectory(prefix='pair-version-project-test-') as temporary:
             root=Path(temporary)
             try:helper['write_pair_installed_project'](root,version);refused=False
@@ -387,7 +387,7 @@ def consumer_fixture(root, a):
                  'sdkVersion':'10.0.401','runtimeFrameworkVersion':'10.0.12','dotnetProfileSha256':hashlib.sha256(profile).hexdigest(),
                  'compilerInputs':['inert'],'compilerEvaluations':['inert'],'runtimeCopies':{},'cachePackageIdentities':[],
                  'sdkBundledInput':None,'actualLocks':[],'actualAssetHashes':[],'runtimeConfigurations':[{'runtimeVersion':'10.0.12','rollForward':'Disable'}]}
-        version='0.3.0' if case.endswith('s1') else '0.2.0' if case=='sdd-rollback' else '0.1.0'
+        version=a['version'] if case.endswith('s1') else '0.2.0' if case=='sdd-rollback' else '0.1.0'
         hashes=a['packages'] if case.endswith('s1') else {'FS.GG.Execution.Contracts':'62b1f85b8622d6719f086d73f4dbf29bd251dbb083a9b9588535d6b86531665d','FS.GG.Execution.Processes':'20d09f3bc71c78c46809931a8d1f7b4009d381fb0c4f203db2d7c846266e4f41'} if case=='sdd-rollback' else {'FsQuint':'e170d70a683321818944d86bb9c9e087323e01391738b3b4a621892ef91a2a8a','FsQuint.Tooling':'d2a58ae6431281e02fe19a26670225a5bd77c50450f473e4a8031c6fa47ebc79'}
         closure['packageVersions']={}
         for id,digest in hashes.items():
@@ -1136,6 +1136,7 @@ def main():
             with zipfile.ZipFile(readback/'candidate.zip','w') as z:z.writestr('execution-pair-release-manifest.json',json.dumps(m))
             a=json.loads((ROOT/'eng/execution-pair-release-admission.json').read_bytes());a['enabled']=mode=='enabled';a['operation']=None
             write(root/'eng/execution-pair-release-admission.json',a)
+            (root/'eng/execution_pair_forward.py').write_bytes((ROOT/'eng/execution_pair_forward.py').read_bytes())
             write(readback/'jobs.json',{'jobs':[{'id':2,'name':'foreign' if mode=='wrong-job' else 'Prepare the routine Execution pair without publication'}]})
             env={'READBACK_OUTPUT':str(readback),'ARCHIVE_SHA':'0'*64 if mode=='changed-archive' else hashlib.sha256((readback/'candidate.zip').read_bytes()).hexdigest(),
                  'SOURCE_A':'c'*40 if mode=='foreign-source' else 'a'*40,'CANDIDATE_VERSION':'0.2.0' if mode=='wrong-version' else '0.3.0','CANDIDATE_RUN':'1','CANDIDATE_ARTIFACT':'3'}
