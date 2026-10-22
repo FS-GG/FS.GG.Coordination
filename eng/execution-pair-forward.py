@@ -90,12 +90,18 @@ def clean_cwd() -> str:
     return _CLEAN_CWD
 
 
+def dotnet_env() -> dict:
+    """The environment for dotnet children: credentials reach them only as the explicit push argument."""
+    secret = ("TOKEN", "KEY", "SECRET", "PASSWORD")
+    return {name: value for name, value in os.environ.items() if not any(word in name.upper() for word in secret)}
+
+
 def push_runner(argv):
-    subprocess.run(argv, check=True, capture_output=True, text=True, timeout=900, cwd=clean_cwd())
+    subprocess.run(argv, check=True, capture_output=True, text=True, timeout=900, cwd=clean_cwd(), env=dotnet_env())
 
 
 def verify_signature(path):
-    result = subprocess.run(["dotnet", "nuget", "verify", str(path), "--all"], capture_output=True, text=True, timeout=60, cwd=clean_cwd())
+    result = subprocess.run(["dotnet", "nuget", "verify", str(path), "--all"], capture_output=True, text=True, timeout=60, cwd=clean_cwd(), env=dotnet_env())
     F.require(result.returncode == 0, "repository signature verification failed")
 
 

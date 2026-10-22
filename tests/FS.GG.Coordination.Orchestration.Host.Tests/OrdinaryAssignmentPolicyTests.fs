@@ -15,7 +15,7 @@ module OrdinaryAssignmentFixtures =
     let sources = [
         source "src/FS.GG.Coordination.Core/Orchestration.fs" "d71a62d971eb1e73ac2283f2fb3e7b6cf78a49f44b02f441740891c73c361eb4"
         source "tests/FS.GG.Coordination.UnitTests/OrchestrationTests.fs" "60a4887417372543f6133cd1aabfa7d1077d4699e748eb6ff6353dcc3b562d41"
-        source "eng/bootstrap-gates/compiler-and-tests.sh" "97dc9e10c6268a6fef80fc026fc51a676eb567c416b32aa64ea4dfc4acf999bb"
+        source "eng/bootstrap-gates/compiler-and-tests.sh" "7f37b9f2eabf5f05121a7fa355c43ea420775444f22f89e33f09556f725e675b"
         source "tests/FS.GG.Coordination.Orchestration.Execution.Tests/PortableWorkspaceExecutorTests.fs" "4b158b683d1823f497d56556a7ca4703c0e07da2438910aec74e85e2985c2ce5"
         source "tests/portable-workspace/executor/composed/frontend/app.mjs" "eb540909e6779d9b06d7c9ef56b41202d9588c2caa0903caa47724f1cbb3ec95"
         source "tests/portable-workspace/executor/composed/backend/service.py" "d7aa14a616776e319b0811a9701f274b942beb733a88375c02dd41ccefb5bc87"

@@ -1031,6 +1031,19 @@ def fence_controls(tmp):
     stale = mj.read()
     assert journal.compare_and_swap(stale, plan[0].identity, 'intent')
     assert journal.compare_and_swap(stale, plan[1].identity, 'intent') is False and fence.armed == plan[0].identity
+    # Arming happens through the journal write itself: a second winning intent before the first is dispatched is refused,
+    # and a settled (non-intent) transition never re-arms.
+    fence = F.SendFence()
+    mj = MemoryJournal(cid)
+    journal = F.FencedJournal(mj, fence)
+    assert journal.compare_and_swap(mj.read(), plan[0].identity, 'intent') and fence.armed == plan[0].identity
+    must_refuse('second intent before dispatch', journal.compare_and_swap, mj.read(), plan[1].identity, 'intent')
+    assert fence.armed == plan[0].identity
+    fence = F.SendFence()
+    journal = F.FencedJournal(MemoryJournal(cid), fence)
+    assert journal.compare_and_swap(journal.read(), plan[0].identity, 'intent')
+    fence.consume(plan[0].identity)
+    assert journal.compare_and_swap(journal.read(), plan[0].identity, 'verified') and fence.armed is None
     count('fence')
 
 
@@ -1168,6 +1181,10 @@ def stage_window_controls(tmp):
     plan = F.plan_effects(E, world.selection, candidate, generated, 'finalize')
     provider = F.PairProvider(E, HubAPI(hub), world.selection, candidate, transport=HubTransport(hub), github_token='gh', runner=hub.push, allowed=F.sendable('finalize'),
                               generated=generated, asset_dir=world.tmp / 'assets')
+    # The prefix check is the only thing between a finalize run and a stuck intent when admission allows everything.
+    must_refuse('finalize start with an unverified package window', F.run_stage, E, 'finalize', F.content_id(world.selection), plan, journal, AllowAll(), provider,
+                sleep=lambda _: None, clock=Clock(), report=lambda m: None)
+    assert journal.cas == [] and journal.state.effects == {} and hub.pushes == [], 'prefix check did not stop the finalize start'
     with neutralized(F, 'prefix_verified', lambda *a, **k: None):
         must_refuse('stuck intent', F.run_stage, E, 'finalize', F.content_id(world.selection), plan, journal, AllowAll(), provider, sleep=lambda _: None, clock=Clock(),
                     report=lambda m: None)
@@ -1949,11 +1966,15 @@ def closure_controls():
     count('hermetic-python')
     # dotnet runs from a clean directory outside the checkout.
     CLI = cli_module()
-    seen = []
-    with patch.object(CLI.subprocess, 'run', lambda *a, **k: (seen.append(k.get('cwd')), subprocess.CompletedProcess(a[0], 0, '', ''))[1]):
+    seen, envs = [], []
+    secrets = {'GH_TOKEN': 'g', 'GITHUB_TOKEN': 'g', 'ORDINARY_LEDGER_TOKEN': 'l', 'NUGET_API_KEY': 'n', 'POLICY_TOKEN': 'p', 'ACTIONS_RUNTIME_TOKEN': 'a'}
+    with patch.dict(os.environ, {**secrets, 'PATH': os.environ.get('PATH', ''), 'DOTNET_NOLOGO': '1'}), \
+            patch.object(CLI.subprocess, 'run', lambda *a, **k: (seen.append(k.get('cwd')), envs.append(k.get('env')), subprocess.CompletedProcess(a[0], 0, '', ''))[2]):
         CLI.push_runner(['dotnet', 'nuget', 'push', 'x'])
         CLI.verify_signature(Path('x'))
     assert len(seen) == 2 and all(c and not Path(c).resolve().is_relative_to(ROOT) for c in seen), seen
+    # The push child never inherits a credential: the key travels only as the explicit argument.
+    assert len(envs) == 2 and all(e is not None and not (set(e) & set(secrets)) and e.get('DOTNET_NOLOGO') == '1' and e.get('PATH') for e in envs), 'a dotnet child inherits a credential or loses its toolchain environment'
     count('dotnet-clean-cwd')
     # Causal: a publisher that starts reading a file outside the closure is found by this scan.
     probe = 'x = ROOT / "eng/not-in-closure.py"'
@@ -2127,6 +2148,57 @@ def api_class_controls(tmp):
     count('api-class')
 
 
+def redirect_controls(tmp):
+    """Credentials never follow a redirect to another origin, and no redirect may leave https."""
+    import urllib.error
+    import urllib.request
+    handler = F._NoCredentialRedirect()
+
+    def follow(location, *, unredirected=False):
+        request = urllib.request.Request('https://api.github.com/repos/x/releases/assets/1')
+        if unredirected:
+            request.add_unredirected_header('Authorization', 'Bearer secret')
+        else:
+            request.add_header('Authorization', 'Bearer secret')
+            request.add_header('Accept', 'application/octet-stream')
+        return handler.redirect_request(request, io.BytesIO(b''), 302, 'Found', {}, location)
+
+    def credentials(new):
+        return [v for h in (new.headers, new.unredirected_hdrs) for k, v in h.items() if k.lower() == 'authorization']
+
+    # Good: a same-origin https redirect keeps the credential and the other headers.
+    same = follow('https://api.github.com/repos/x/releases/assets/2')
+    assert credentials(same) == ['Bearer secret'] and same.get_header('Accept') == 'application/octet-stream'
+    # Cross-origin: the credential is dropped while the redirect itself is still followed.
+    for unredirected in (False, True):
+        cross = follow('https://objects.githubusercontent.com/blob', unredirected=unredirected)
+        assert cross is not None and cross.full_url == 'https://objects.githubusercontent.com/blob'
+        assert credentials(cross) == [], 'a cross-origin redirect carried the Authorization header'
+    assert follow('https://api.github.com.evil.example/x').get_header('Authorization') is None
+    # A redirect off https is refused outright (a downgrade would expose the request in clear text).
+    for location in ('http://api.github.com/repos/x/releases/assets/2', 'http://objects.githubusercontent.com/blob', 'ftp://objects.githubusercontent.com/blob'):
+        must_refuse('non-https redirect', follow, location, exceptions=(urllib.error.HTTPError,))
+    # Both authenticated transports are built with this handler: removing it from either would pass every check above.
+    handlers = []
+
+    class Stop(BaseException):
+        pass
+
+    def spy(*args):
+        handlers.append(args)
+        raise Stop
+
+    with patch.object(F.urllib.request, 'build_opener', spy):
+        for call in (lambda: F.UrllibTransport().get('https://api.github.com/x', headers={'Authorization': 'Bearer t'}),
+                     lambda: F.make_api_class(engine())('token').download_asset(7)):
+            try:
+                call()
+            except Stop:
+                pass
+    assert len(handlers) == 2 and all(F._NoCredentialRedirect in args for args in handlers), 'an authenticated transport follows redirects with credentials'
+    count('redirect-credentials')
+
+
 def original_route_controls():
     """The forward route neither reads nor rewrites any original 0.3.0 identity."""
     source = (ROOT / 'eng/execution_pair_forward.py').read_text() + (ROOT / 'eng/execution-pair-forward.py').read_text()
@@ -2153,6 +2225,7 @@ def main():
         acquisition_controls(fresh())
         preflight_controls(fresh())
         api_class_controls(fresh())
+        redirect_controls(fresh())
         closure_controls()
         resume_controls(fresh())
         release_dispatch_reads_nothing_controls(fresh())
