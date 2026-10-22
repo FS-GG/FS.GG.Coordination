@@ -8,6 +8,7 @@ if [[ -n "$(git status --porcelain --untracked-files=all)" ]]; then
   echo "COMPILER_AND_TESTS_REFUSED identity-bound qualification requires a clean committed candidate; run focused tests while editing, then commit before this full gate" >&2
   exit 3
 fi
+bash eng/tests/managed-group-owner/run-ci.sh
 export FSGG_UTEL_CALLBACK_SOURCE="$RUNNER_TEMP/utel-callback-source"
 export FSGG_UTEL_CALLBACK_EVIDENCE="$RUNNER_TEMP/compiler-and-tests/callback-pair"
 trap 'python3 eng/utel-callback-fixture.py retain "$?"' EXIT
