@@ -373,13 +373,17 @@ def installed_version_preflight_controls():
             except RuntimeError:refused=True
             assert refused and not (root/'PairInstalled.fsproj').exists()
 
-def consumer_fixture(root, a):
-    """Synthetic byte/native records only; never an accepted hosted proof."""
+def consumer_fixture(root, a, sources=None):
+    """Synthetic byte/native records only; never an accepted hosted proof.
+
+    sources selects forward S1 receivers through the maintained table; None keeps the original receivers.
+    """
     helper=runpy.run_path(str(ROOT/'eng/write-callable-cli-release-readback.py'))
+    table,lockmap=helper['pair_receiver_table'](sources)
     q={'executor':'7'*40,'runId':17,'workflowSha256':'8'*64,'cases':{}}
     a['consumerQualification']=q
     native_jobs=[]
-    for index,(case,(repository,receiver,count)) in enumerate(helper['PAIR_RECEIVERS'].items()):
+    for index,(case,(repository,receiver,count)) in enumerate(table.items()):
         job_id=30+index;artifact_id=40+index
         profile=json.dumps({'installation':'/inert/proc6-dotnet','hostPath':'/inert/proc6-dotnet/dotnet','fixtureOnly':True}).encode()
         closure={'physicalSourceExclusionEstablished':True,'networkReachable':True,'hardContainment':False,
@@ -398,7 +402,7 @@ def consumer_fixture(root, a):
             closure['actualAssetHashes'].append({'packageId':id,'contentHash':'fixture-normalized'})
         source_pins={'receiverSource':receiver,'locks':[]}
         if case=='fsquint-s1':
-            core=copy.deepcopy(helper['PAIR_SDK_CORE']);lockmap=helper['PAIR_SDK_SOURCE_LOCKS']
+            core=copy.deepcopy(helper['PAIR_SDK_CORE'])
             entry={'framework':'net10.0','packageId':'FSharp.Core','entry':{'type':'Direct','requested':'[10.1.401, )','resolved':core['version'],'contentHash':core['contentHash']}}
             source_pins['locks']=[{'path':path,'sha256':digest,'entries':[copy.deepcopy(entry)]} for path,digest in lockmap.items()]
             binding={'sdkVersion':'10.0.401','sdkSourcePath':'/inert/proc6-dotnet/sdk/10.0.401/FSharp/library-packs/FSharp.Core.10.1.401.nupkg','coldFeedPath':'/inert/proc6-feed/FSharp.Core.10.1.401.nupkg','expected':core,'assemblyPayloads':{'lib/netstandard2.0/FSharp.Core.dll':'26d0e3e00c769b9b6e9d8c1925885f7c16a51c605f795093386a25b909012991',core['dllRelativePath']:core['dllSha256']},'sourceLockPinsSha256':hashlib.sha256(json.dumps(source_pins).encode()).hexdigest(),'implicitFallbackEnabled':False,'sameVersionPublicSubstitutionAccepted':False}
