@@ -16,7 +16,7 @@ TMPDIR="$scratch" PYTHONDONTWRITEBYTECODE=1 "$python" -I -B "$here/test_managed_
 "$python" -I -B "$here/mutation_proof.py" --scratch "$scratch/refusal" --mode refusal
 
 status=0
-bash "$here/delegated-unit.sh" "fsgg-mg-suite-$$" TMPDIR="$scratch" PYTHONDONTWRITEBYTECODE=1 \
+bash "$here/delegated-unit.sh" "fsgg-mg-suite-$$" --owner-sets-no-new-privileges TMPDIR="$scratch" PYTHONDONTWRITEBYTECODE=1 \
   FSGG_MANAGED_GROUP_REQUIRE_CONTAINMENT=1 FSGG_MANAGED_GROUP_REQUIRE_BCL="$require" -- \
   "$python" -I -B "$here/test_managed_group_owner.py" || status=$?
 if [[ "$status" == 4 && "$require" == 0 ]]; then

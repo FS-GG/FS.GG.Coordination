@@ -237,6 +237,9 @@ class ContainmentControls(Base):
         self.assertEqual([n for n in sorted(os.listdir(droot)) if os.path.isdir(os.path.join(droot, n))], [mg.SUPERVISOR])
 
     def test_success_binds_birth_and_contains_leader(self):
+        if REQUIRE:  # otherwise the no_new_privs assertion below cannot be attributed to the owner
+            owner_nnp = [l.split(':')[1].strip() for l in pathlib.Path('/proc/self/status').read_text().splitlines() if l.startswith('NoNewPrivs:')]
+            self.assertEqual(owner_nnp, ['0'], 'containment controls must run without inherited no_new_privs')
         receipt = self.run_group(self.profile('import sys,time; print("hello"); print("warn", file=sys.stderr); time.sleep(0.3)'))
         self.assertEqual(receipt['outcome'], 'succeeded')
         self.assertEqual(receipt['custody'], 'contained')

@@ -43,7 +43,7 @@ def execute(owner, tests, containment, scratch, timeout):
     if containment:
         env['FSGG_MANAGED_GROUP_REQUIRE_CONTAINMENT'] = '1'
         unit = 'fsgg-mg-proof-' + uuid.uuid4().hex[:12]
-        command = ['bash', str(UNIT), unit, *(f'{k}={v}' for k, v in sorted(env.items())), '--', *command]
+        command = ['bash', str(UNIT), unit, '--owner-sets-no-new-privileges', *(f'{k}={v}' for k, v in sorted(env.items())), '--', *command]
     started = time.monotonic()
     try:
         done = subprocess.run(command, env={**os.environ, **env}, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=timeout)

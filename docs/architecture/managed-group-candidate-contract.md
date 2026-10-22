@@ -210,7 +210,8 @@ gate:
 
 - **Refusal controls** (8) run everywhere and verify that nothing is launched.
 - **Containment controls** (14) run in a fresh delegated unit and are required on
-  GitHub-hosted runners. They cover success with birth binding, `no_new_privs` and
+  GitHub-hosted runners. That unit omits `NoNewPrivileges=yes` (and the control checks
+  this), so the leader's `no_new_privs` can only come from the owner. They cover success with birth binding, `no_new_privs` and
   exact streams; a setsid/double-fork descendant under both policies; escape to a
   sibling cgroup and to the supervisor leaf; early non-zero and zero exits; a deadline
   kill of a SIGTERM-ignoring tree; a real EBUSY removal failure that is reported, not
