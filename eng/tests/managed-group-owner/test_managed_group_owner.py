@@ -307,29 +307,30 @@ class ContainmentControls(Base):
         self.assertTrue(gone_within(grandchild))
         self.assert_clean(receipt)
 
-    def test_cgroup_escape_is_refused_and_retired(self):
-        expected = {'sibling': {'escape-sibling'}, 'supervisor': None, 'nested': {'fsgg-supervisor/escape-nested'},
-                    'hop-sibling': {'escape-sibling'}, 'hop-supervisor': None, 'hop-nested': {'fsgg-supervisor/escape-nested'}}
-        for target, created in expected.items():
-            with self.subTest(target=target):
-                pidfile = os.path.join(self.root, 'escaped-' + target)
-                profile = self.profile(ESCAPE, [target, pidfile])
-                receipt = self.failed(profile, seconds=8)
-                self.assertIn('contained member escaped managed group', receipt['firstCause'])
-                self.assertEqual(receipt['custody'], 'escaped-retired')
-                names = {c['cgroup'] for c in receipt['createdCgroups']}
-                self.assertTrue(all(c['removed'] for c in receipt['createdCgroups']))
-                if created is None:
-                    self.assertGreaterEqual(receipt['retirement']['quarantined'], 1)
-                    self.assertTrue(all(n.startswith(mg.QUARANTINE_PREFIX) for n in names))
-                else:
-                    self.assertEqual(names, created)
-                escaped = int(pathlib.Path(pidfile).read_text())
-                self.assertTrue(gone_within(escaped))
-                program = profile['argv'][3]
-                survivors = [p for p in os.listdir('/proc') if p.isdigit() and program.encode() in self.cmdline(p)]
-                self.assertEqual(survivors, [])
-                self.assert_clean(receipt)
+    def escape(self, target, created):
+        pidfile = os.path.join(self.root, 'escaped-' + target)
+        profile = self.profile(ESCAPE, [target, pidfile])
+        receipt = self.failed(profile, seconds=3)
+        self.assertIn('contained member escaped managed group', receipt['firstCause'])
+        self.assertEqual(receipt['custody'], 'escaped-retired')
+        names = {c['cgroup'] for c in receipt['createdCgroups']}
+        self.assertTrue(all(c['removed'] for c in receipt['createdCgroups']))
+        if created is None:
+            self.assertGreaterEqual(receipt['retirement']['quarantined'], 1)
+            self.assertTrue(all(n.startswith(mg.QUARANTINE_PREFIX) for n in names))
+        else:
+            self.assertEqual(names, created)
+        self.assertTrue(gone_within(int(pathlib.Path(pidfile).read_text())))
+        program = profile['argv'][3]
+        self.assertEqual([p for p in os.listdir('/proc') if p.isdigit() and program.encode() in self.cmdline(p)], [])
+        self.assert_clean(receipt)
+
+    def test_escape_sibling(self): self.escape('sibling', {'escape-sibling'})
+    def test_escape_supervisor(self): self.escape('supervisor', None)
+    def test_escape_nested(self): self.escape('nested', {'fsgg-supervisor/escape-nested'})
+    def test_escape_hop_sibling(self): self.escape('hop-sibling', {'escape-sibling'})
+    def test_escape_hop_supervisor(self): self.escape('hop-supervisor', None)
+    def test_escape_hop_nested(self): self.escape('hop-nested', {'fsgg-supervisor/escape-nested'})
 
     @staticmethod
     def cmdline(pid):
@@ -430,13 +431,13 @@ class ContainmentControls(Base):
 
     def test_output_cap_is_enforced(self):
         receipt = self.failed(self.profile('import sys,time; sys.stdout.write("x"*10000); sys.stdout.flush(); time.sleep(30)',
-                                           limits={'stdoutBytes': 100}))
+                                           limits={'stdoutBytes': 100}), seconds=4)
         self.assertIn('stdout byte cap exceeded', receipt['firstCause'])
         self.assertEqual(receipt['streams']['stdout'], {**receipt['streams']['stdout'], 'bytes': 100, 'capped': True})
         self.assert_clean(receipt)
 
     def test_leader_image_outside_profile_is_refused(self):
-        receipt = self.failed(self.profile('import time; time.sleep(30)', leaderImages=['0' * 64]))
+        receipt = self.failed(self.profile('import time; time.sleep(30)', leaderImages=['0' * 64]), seconds=4)
         self.assertIn('leader image not-admitted', receipt['firstCause'])
         self.assertEqual(receipt['leader']['imageSha256'], PYTHON_SHA)
         self.assert_clean(receipt)

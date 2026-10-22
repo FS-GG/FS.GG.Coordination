@@ -13,7 +13,7 @@ require=0
 [[ "${GITHUB_ACTIONS:-}" == true || "${FSGG_MANAGED_GROUP_REQUIRE_CONTAINMENT:-}" == 1 ]] && require=1
 
 TMPDIR="$scratch" PYTHONDONTWRITEBYTECODE=1 "$python" -I -B "$here/test_managed_group_owner.py" RefusalControls
-"$python" -I -B "$here/mutation_proof.py" --scratch "$scratch/refusal" --mode refusal
+"$python" -I -B "$here/mutation_proof.py" --scratch "$scratch/refusal" --mode refusal --baseline-proven
 
 status=0
 bash "$here/delegated-unit.sh" "fsgg-mg-suite-$$" --owner-sets-no-new-privileges TMPDIR="$scratch" PYTHONDONTWRITEBYTECODE=1 \
@@ -25,4 +25,4 @@ if [[ "$status" == 4 && "$require" == 0 ]]; then
 fi
 [[ "$status" == 0 ]] || { echo "managed-group containment controls failed (status $status)" >&2; exit 1; }
 "$python" -I -B "$here/owner_death_control.py" outside "$scratch/owner-death"
-"$python" -I -B "$here/mutation_proof.py" --scratch "$scratch/all" --mode all
+"$python" -I -B "$here/mutation_proof.py" --scratch "$scratch/all" --mode all --baseline-proven

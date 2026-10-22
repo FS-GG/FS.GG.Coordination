@@ -235,7 +235,7 @@ gate:
 
 - **Refusal-level controls** (9) run everywhere. They verify that nothing is launched,
   and that a pidfd signal refuses an unrecorded birth or a foreign cgroup.
-- **Containment controls** (16) run in a fresh delegated unit and are required on
+- **Containment controls** (21) run in a fresh delegated unit and are required on
   GitHub-hosted runners. That unit omits `NoNewPrivileges=yes` (and the control checks
   this), so the leader's `no_new_privs` can only come from the owner. They cover success with birth binding, `no_new_privs` and
   exact streams; a setsid/double-fork descendant under both policies; escape to a
@@ -252,7 +252,9 @@ gate:
   must still retire the SIGTERM-ignoring member.
 - **Mutation proof** (`mutation_proof.py`): 25 single-fragment mutants. Each must fail
   its named controls (a hang counts only for the mutant that removes the deadline)
-  while the unmutated owner passes them. Six refusal-level mutants also run locally.
+  while the unmutated owner passes them; the unmutated suite passes first in the same
+  invocation, and each mutant runs only its named controls to keep the gate within its
+  20-minute budget. Six refusal-level mutants also run locally.
   The sweep, quarantine, created-cgroup kill, residue reporting and stage guarding each
   have their own mutant.
 

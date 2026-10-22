@@ -20,12 +20,12 @@ MUTANTS = [
     ('environment-unchecked', "_require(isinstance(env, dict) and sorted(env) == profile['environmentKeys']", "_require(True or sorted(env) == profile['environmentKeys']", [R + 'test_environment_mismatch_refuses']),
     ('signal-start-unchecked', "if row is None or row['start'] != start or row['state'] == 'Z':\n            return 'identity-changed'", "if row is None:\n            return 'identity-changed'", [R + 'test_signal_requires_recorded_birth_and_cgroup']),
     ('signal-scope-unchecked', "if directory is None or not inside(directory):\n            return 'scope-changed'", "if False:\n            return 'scope-changed'", [R + 'test_signal_requires_recorded_birth_and_cgroup']),
-    ('cgroup-kill-skipped', "_write(os.path.join(leaf, 'cgroup.kill'), b'1'); retire['cgroupKill'] = True", "retire['cgroupKill'] = True", [C + 'test_session_escape_stays_contained_and_require_empty_refuses', C + 'test_deadline_kills_stubborn_group']),
-    ('escape-census-blind', "escaped.setdefault((pid, row['start']), os.path.relpath(directory, droot))\n                reason = reason or 'contained member escaped managed group'", 'pass', [C + 'test_cgroup_escape_is_refused_and_retired']),
-    ('sweep-disabled', "stage('sweep', sweep)", 'True', [C + 'test_cgroup_escape_is_refused_and_retired']),
-    ('quarantine-skipped', 'if internal:', 'if False:', [C + 'test_cgroup_escape_is_refused_and_retired']),
-    ('created-cgroup-kill-skipped', "_write(os.path.join(top, 'cgroup.kill'), b'1'); retire['createdCgroupKills'] += 1", "retire['createdCgroupKills'] += 1", [C + 'test_cgroup_escape_is_refused_and_retired']),
-    ('created-cgroup-kept', "_remove_tree(top, end); entry['removed'] = True", "entry['removed'] = True", [C + 'test_cgroup_escape_is_refused_and_retired']),
+    ('cgroup-kill-skipped', "_write(os.path.join(leaf, 'cgroup.kill'), b'1'); retire['cgroupKill'] = True", "retire['cgroupKill'] = True", [C + 'test_session_escape_stays_contained_and_require_empty_refuses']),
+    ('escape-census-blind', "escaped.setdefault((pid, row['start']), os.path.relpath(directory, droot))\n                reason = reason or 'contained member escaped managed group'", 'pass', [C + 'test_escape_sibling']),
+    ('sweep-disabled', "stage('sweep', sweep)", 'True', [C + 'test_escape_hop_sibling']),
+    ('quarantine-skipped', 'if internal:', 'if False:', [C + 'test_escape_supervisor', C + 'test_escape_hop_supervisor']),
+    ('created-cgroup-kill-skipped', "_write(os.path.join(top, 'cgroup.kill'), b'1'); retire['createdCgroupKills'] += 1", "retire['createdCgroupKills'] += 1", [C + 'test_escape_sibling', C + 'test_escape_hop_nested']),
+    ('created-cgroup-kept', "_remove_tree(top, end); entry['removed'] = True", "entry['removed'] = True", [C + 'test_escape_sibling']),
     ('root-residual-ignored', "receipt['residualInRoot'] is None or receipt['residualInRoot']\n", 'False\n', [C + 'test_residue_left_in_root_is_reported_not_hidden']),
     ('grace-unguarded', "stage('grace', lambda: wait(", "(lambda label, action: action())('grace', lambda: wait(", [C + 'test_output_sink_failure_during_retirement_still_kills']),
     ('launch-outside-leaf', "os.write(fd, b'0')", 'pass', [C + 'test_success_binds_birth_and_contains_leader']),
@@ -68,6 +68,8 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--scratch', required=True); parser.add_argument('--mode', choices=('refusal', 'all'), required=True)
     parser.add_argument('--timeout', type=float, default=90)
+    parser.add_argument('--baseline-proven', action='store_true',
+                        help='the unmutated suite already passed in this invocation; do not rerun it per mutant')
     args = parser.parse_args()
     scratch = pathlib.Path(args.scratch); scratch.mkdir(parents=True, exist_ok=True)
     source = OWNER.read_text()
@@ -77,10 +79,10 @@ def main():
         if source.count(old) != 1:
             raise SystemExit(f'mutation {name}: fragment occurs {source.count(old)} times')
         containment = any(t.startswith(C) for t in tests)
-        baseline = execute(OWNER, tests, containment, scratch, args.timeout)
+        baseline = {'code': 0, 'tail': 'suite passed earlier in this invocation'} if args.baseline_proven else execute(OWNER, tests, containment, scratch, args.timeout)
         directory = scratch / ('mutant-' + name); shutil.rmtree(directory, ignore_errors=True); directory.mkdir()
         mutant = directory / 'managed_group_owner.py'; mutant.write_text(source.replace(old, new))
-        outcome = execute(mutant, tests, containment, scratch, 30 if name in HANG_KILLS else args.timeout)
+        outcome = execute(mutant, tests, containment, scratch, 12 if name in HANG_KILLS else args.timeout)
         # A mutant is killed only by a failing control (unittest exit 1). A hang counts only
         # where the mutation removes the deadline itself.
         killed = baseline['code'] == 0 and (outcome['code'] == 1 or (name in HANG_KILLS and outcome['code'] == 'timeout'))
