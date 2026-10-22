@@ -61,7 +61,38 @@ PAIR_SDK_SOURCE_LOCKS = {
 }
 
 
-def pair_sdk_bundled_input(case, closure, profile, source_locks_raw, binding_raw):
+# A newer coherent pair cannot be received by the fixed original S1 commits: they pin the
+# original version exactly ([0.3.0] with locked restores). A forward selection therefore names
+# its own S1 receiver commits and their seven SDK-Core source-lock digests; repositories, cases,
+# fixture populations and both rollback receivers stay fixed. None keeps the original table.
+PAIR_FORWARD_RECEIVER_CASES = ('sdd-s1', 'fsquint-s1')
+
+
+def pair_receiver_table(sources=None):
+    """Return the effective (receivers, SDK source locks); a forward override replaces only S1 commits."""
+    if sources is None:
+        return dict(PAIR_RECEIVERS), dict(PAIR_SDK_SOURCE_LOCKS)
+    def require(ok, reason):
+        if not ok: refuse('forward receiver sources ' + reason)
+    require(isinstance(sources, dict) and set(sources) == set(PAIR_FORWARD_RECEIVER_CASES), 'population differs')
+    require(isinstance(sources['sdd-s1'], dict) and set(sources['sdd-s1']) == {'commit'}, 'sdd-s1 shape differs')
+    require(isinstance(sources['fsquint-s1'], dict) and set(sources['fsquint-s1']) == {'commit', 'coreLocks'}, 'fsquint-s1 shape differs')
+    table = dict(PAIR_RECEIVERS)
+    for case in PAIR_FORWARD_RECEIVER_CASES:
+        commit = sources[case]['commit']
+        sha(commit, 40)
+        repository, _, count = PAIR_RECEIVERS[case]
+        require(set(commit) != {'0'} and commit not in {row[1] for row in PAIR_RECEIVERS.values()}, case + ' must not reuse a fixed original receiver')
+        table[case] = (repository, commit, count)
+    locks = sources['fsquint-s1']['coreLocks']
+    require(isinstance(locks, dict) and set(locks) == set(PAIR_SDK_SOURCE_LOCKS), 'SDK source-lock population differs')
+    for digest in locks.values():
+        sha(digest, 64)
+    return table, dict(locks)
+
+
+def pair_sdk_bundled_input(case, closure, profile, source_locks_raw, binding_raw, source_locks=None):
+    source_locks = PAIR_SDK_SOURCE_LOCKS if source_locks is None else source_locks
     def require(ok, reason):
         if not ok: refuse('four receiver SDK Core ' + reason)
     if case != 'fsquint-s1':
@@ -81,7 +112,7 @@ def pair_sdk_bundled_input(case, closure, profile, source_locks_raw, binding_raw
     pins = json.loads(source_locks_raw)
     original = {'type':'Direct','requested':'[10.1.401, )','resolved':spec['version'],'contentHash':spec['contentHash']}
     captured = [lock for lock in pins['locks'] if any(e['packageId'] == 'FSharp.Core' for e in lock['entries'])]
-    require(len(captured) == 7 and {v['path']:v['sha256'] for v in captured} == PAIR_SDK_SOURCE_LOCKS, 'immutable seven-source-lock population differs')
+    require(len(captured) == 7 and {v['path']:v['sha256'] for v in captured} == source_locks, 'immutable seven-source-lock population differs')
     for lock in captured:
         rows = [e for e in lock['entries'] if e['packageId'] == 'FSharp.Core']
         require(rows == [{'framework':'net10.0','packageId':'FSharp.Core','entry':original}], 'immutable original Core lock row differs')
@@ -93,7 +124,7 @@ def pair_sdk_bundled_input(case, closure, profile, source_locks_raw, binding_raw
     locks = [v for v in closure['actualLocks'] if any(e['packageId'] == 'FSharp.Core' for e in v['entries'])]
     require(len(locks) == 3 and {v['path'] for v in locks} == compiled, 'selected compiled lock population differs')
     for lock in locks:
-        require(lock['sha256'] == PAIR_SDK_SOURCE_LOCKS[lock['path']] and lock['generatedForThisReceiver'] is False
+        require(lock['sha256'] == source_locks[lock['path']] and lock['generatedForThisReceiver'] is False
                 and [e for e in lock['entries'] if e['packageId'] == 'FSharp.Core'] == [{'framework':'net10.0','packageId':'FSharp.Core','entry':original}], 'actual Core lock differs from original source')
     assets = [v for v in closure['actualAssetHashes'] if v['packageId'] == 'FSharp.Core']
     require(len(assets) == 3 and {v['path'] for v in assets} == {str(Path(p).parent/'obj/project.assets.json') for p in compiled}
@@ -126,8 +157,12 @@ def pair_consumer_selection(admission: dict) -> dict:
     return q
 
 
-def pair_consumers(admission: dict, root: Path) -> dict:
-    """Join authenticated native downloads; never execute or extract their contents."""
+def pair_consumers(admission: dict, root: Path, receiver_sources=None) -> dict:
+    """Join authenticated native downloads; never execute or extract their contents.
+
+    receiver_sources is None for the original pair; a forward pair passes its selected S1 receivers.
+    """
+    receivers, sdk_source_locks = pair_receiver_table(receiver_sources)
     import re
     import stat
     import zipfile
@@ -150,7 +185,7 @@ def pair_consumers(admission: dict, root: Path) -> dict:
     require(len({j['id'] for j in jobs['jobs']}) == len(jobs['jobs']), 'duplicate native job')
     results = {}; runner_ids = set(); transfer_identity = None
     for case, selected in q['cases'].items():
-        repository, receiver, count = PAIR_RECEIVERS[case]
+        repository, receiver, count = receivers[case]
         matching = [j for j in jobs['jobs'] if j['name'] == 'Installed receiver ' + case]
         require(len(matching) == 1, 'named native job absent/duplicated')
         job = matching[0]
@@ -234,7 +269,8 @@ def pair_consumers(admission: dict, root: Path) -> dict:
             require(c['runtimeConfigurations'] and all(r['runtimeVersion'] == '10.0.12' and r['rollForward'] == 'Disable' for r in c['runtimeConfigurations']), 'built runtime configs differ')
             require(all(type(lock['schemaVersion']) is int and lock['schemaVersion'] in (1, 2) for lock in c['actualLocks']), 'typed lock schema must be 1 or 2')
             pair_sdk_bundled_input(case, c, json.loads(profile_raw), source_locks_raw,
-                                   member('proc6-state/proof/sdk-core-input.json') if case == 'fsquint-s1' else None)
+                                   member('proc6-state/proof/sdk-core-input.json') if case == 'fsquint-s1' else None,
+                                   sdk_source_locks)
             if case.endswith('s1'):
                 package_hashes = admission['packages']; version = admission['version']
             elif case == 'sdd-rollback':

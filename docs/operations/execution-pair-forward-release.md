@@ -39,6 +39,35 @@ checkout. Unrelated repository history therefore cannot strand a partly publishe
 pair, and a control scans the publisher sources and workflow to prove the closure
 is exactly what they read.
 
+## Forward receivers
+
+The four receiver cases keep their repositories, fixture populations and both
+rollback receivers. The two fixed original S1 receivers (`FS.GG.SDD` `d0bb4059`,
+`FsQuint` `708587f2`) cannot receive a forward pair: they pin the pair at exactly
+`[0.3.0]` and restore in locked mode, so a forward candidate feed cannot satisfy them.
+A forward selection therefore names its own S1 receiver commits in
+`selection.receiverSources`:
+
+```json
+{"sdd-s1": {"commit": "<40 hex>"},
+ "fsquint-s1": {"commit": "<40 hex>", "coreLocks": {"<the seven FsQuint lock paths>": "<sha256>"}}}
+```
+
+The value must be an object (null is refused), and neither commit may be any of the four
+fixed original receivers. `coreLocks` replaces the seven pinned
+FsQuint SDK-Core source-lock digests (the same seven paths). The selection is part
+of the content identity, and the maintained four-receiver join checks every observed
+receiver commit and lock digest against it. The original pair still joins only the
+fixed original table.
+
+The packed bytes embed `RepositoryCommit` = source A, so the receiver lock content
+hashes exist only after A is fixed. Order: prepare the candidate at A; create each
+receiver commit by changing only the pair version pin and its regenerated locks
+against those exact candidate packages; run `execution-pair-consumers` at A with
+those commits and their trees as `consumer_sources` (`sdd_source`, `sdd_tree`,
+`fsquint_source`, `fsquint_tree`); record both in the selection. `main` must stay
+at A from candidate preparation through the receiver run.
+
 ## Admission states
 
 | State | Meaning |
@@ -147,7 +176,8 @@ pinned helper commit to avoid the (digest-verified) fetch.
 ## Not established here
 
 Actual publication, downloaded-only adoption and rollback, Linux containment,
-hosted receiver runs of the forward candidate, the protected environment, App
+the forward S1 receiver commits in `FS.GG.SDD` and `FsQuint` (created for each
+candidate), hosted receiver runs of the forward candidate, the protected environment, App
 installations, Trusted Publishing policy, occupancy and old-writer fencing, and any
 operation admission remain with the parent obligations. Nothing here sends, tags,
 publishes or dispatches.

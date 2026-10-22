@@ -41,6 +41,11 @@ SOURCE, TREE, PUBLISHER, RUN, OPERATOR = '7' * 40, 'b' * 40, '9' * 40, 4242, 'EH
 POLICY_HASH = '5182bb35a6dd682cef84ac9ce4210cfd09f38b7410d8c9cf9bae42866bcb81da'
 ORIGINAL_ADMISSION_SHA256 = 'f0859d88276effeaf3a3b038b79b448809557cb7b8c6e32d509b2bd791e20826'
 ORIGINAL_PUBLISHER_SHA256 = 'ac736727db6dbf7a4d4c16d8daea9e9e684a2bca32c970389b4df80324a44908'
+READBACK = runpy.run_path(str(ROOT / 'eng/write-callable-cli-release-readback.py'))
+# Synthetic forward S1 receivers: the fixed originals pin exactly 0.3.0 and cannot receive a forward pair.
+FORWARD_RECEIVERS = {'sdd-s1': {'commit': 'd' * 40},
+                     'fsquint-s1': {'commit': 'e' * 40, 'coreLocks': {path: ('a' if 'Execution' not in path else 'c') * 63 + str(n)
+                                                                      for n, path in enumerate(READBACK['PAIR_SDK_SOURCE_LOCKS'])}}}
 
 
 def count(name):
@@ -145,14 +150,14 @@ class World:
                  archiveSha256=sha(self.archive), manifestSha256=sha((self.directory / F.ASSET_NAMES['manifest']).read_bytes()),
                  packages={row['packageId']: row['sha256'] for row in rows})
         self.receivers = self.tmp / 'fixture-receivers'
-        LEGACY['consumer_fixture'](self.receivers, a)
+        LEGACY['consumer_fixture'](self.receivers, a, FORWARD_RECEIVERS)
         n = a['namespaceEntitlement']
         n['publisherWorkflow'] = F.PUBLISH_WORKFLOW
         self.selection = {'operation': f'publish-execution-pair-forward-{version}-{SOURCE[:12]}', 'version': version, 'tag': 'execution/v' + version,
                           'source': SOURCE, 'tree': TREE, 'operator': OPERATOR, 'journal': {'id': f'execution-pair-{version}-{SOURCE[:12]}-01'},
                           'candidate': {'runId': 1, 'jobId': 2, 'artifactId': 3, 'archiveSha256': a['archiveSha256'], 'manifestSha256': a['manifestSha256'],
                                         'packages': a['packages']},
-                          'consumerQualification': a['consumerQualification'], 'namespaceEntitlement': n,
+                          'consumerQualification': a['consumerQualification'], 'receiverSources': copy.deepcopy(FORWARD_RECEIVERS), 'namespaceEntitlement': n,
                           'tagProtection': {'rulesetId': F.RULESET_ID, 'policySha256': POLICY_HASH}}
         F.validate_selection(self.selection)
         self.candidate = F.Candidate(self.directory, self.selection)
@@ -588,6 +593,19 @@ def selection_controls(tmp):
         'namespace-workflow': lambda s: s['namespaceEntitlement'].update(publisherWorkflow=F.PREPARE_WORKFLOW),
         'namespace-unaccepted': lambda s: s['namespaceEntitlement'].update(accepted=False),
         'protection-ruleset': lambda s: s['tagProtection'].update(rulesetId=7), 'extra-key': lambda s: s.update(extra=1),
+        'receiver-sources-missing': lambda s: s.pop('receiverSources'),
+        'receiver-sources-null': lambda s: s.update(receiverSources=None),
+        'receiver-sources-rollback-commit': lambda s: s['receiverSources']['sdd-s1'].update(commit=READBACK['PAIR_RECEIVERS']['sdd-rollback'][1]),
+        'receiver-sources-original-sdd': lambda s: s['receiverSources']['sdd-s1'].update(commit=READBACK['PAIR_RECEIVERS']['sdd-s1'][1]),
+        'receiver-sources-original-fsquint': lambda s: s['receiverSources']['fsquint-s1'].update(commit=READBACK['PAIR_RECEIVERS']['fsquint-s1'][1]),
+        'receiver-sources-zero': lambda s: s['receiverSources']['sdd-s1'].update(commit='0' * 40),
+        'receiver-sources-short': lambda s: s['receiverSources']['sdd-s1'].update(commit='d' * 39),
+        'receiver-sources-rollback-case': lambda s: s['receiverSources'].update({'sdd-rollback': {'commit': 'f' * 40}}),
+        'receiver-sources-case-missing': lambda s: s['receiverSources'].pop('fsquint-s1'),
+        'receiver-sources-extra-field': lambda s: s['receiverSources']['sdd-s1'].update(repository='FS-GG/Other'),
+        'receiver-sources-lock-missing': lambda s: s['receiverSources']['fsquint-s1']['coreLocks'].pop('src/FsQuint/packages.lock.json'),
+        'receiver-sources-lock-extra': lambda s: s['receiverSources']['fsquint-s1']['coreLocks'].update({'other/packages.lock.json': 'a' * 64}),
+        'receiver-sources-lock-hex': lambda s: s['receiverSources']['fsquint-s1']['coreLocks'].update({'src/FsQuint/packages.lock.json': 'A' * 64}),
     }
     for label, mutate in faults.items():
         broken = copy.deepcopy(sel)
@@ -600,7 +618,8 @@ def selection_controls(tmp):
     base = F.content_id(sel)
     for label, mutate in {'receivers': lambda s: s['consumerQualification']['cases']['sdd-s1'].update(archiveSha256='e' * 64),
                           'journal': lambda s: s['journal'].update(id='execution-pair-0.3.1-777777777777-02'),
-                          'candidate': lambda s: s['candidate'].update(archiveSha256='e' * 64), 'version': lambda s: s.update(version='0.3.2')}.items():
+                          'candidate': lambda s: s['candidate'].update(archiveSha256='e' * 64), 'version': lambda s: s.update(version='0.3.2'),
+                          'receiver-sources': lambda s: s['receiverSources']['sdd-s1'].update(commit='f' * 40)}.items():
         other = copy.deepcopy(sel)
         mutate(other)
         assert F.content_id(other) != base, label
@@ -823,10 +842,47 @@ def acquisition_controls(tmp):
     other['candidate']['archiveSha256'] = 'c' * 64
     must_refuse('receivers observed another candidate', F.acquire_receivers, HubTransport(hub), 'gh', other, Path(tempfile.mkdtemp(dir=tmp)))
     # Causal: with the maintained candidate/receiver join removed, receivers that observed another candidate are accepted.
-    fake = {'pair_consumers': lambda admission, root: {'cases': {c: {'runnerId': n} for n, c in enumerate(sel['consumerQualification']['cases'])}}, 'pair_consumer_selection': lambda a: None}
+    fake = {'pair_consumers': lambda admission, root, sources: {'cases': {c: {'runnerId': n} for n, c in enumerate(sel['consumerQualification']['cases'])}}, 'pair_consumer_selection': lambda a: None}
     with neutralized(F, 'readback_module', lambda: fake):
         accepted = F.acquire_receivers(HubTransport(hub), 'gh', other, Path(tempfile.mkdtemp(dir=tmp)))
     assert len(accepted['cases']) == 4
+    # Forward receivers are the selected S1 commits: evidence from the fixed original receivers
+    # (which pin exactly 0.3.0) is refused, and so is evidence for any other selected commit.
+    original_receivers = Path(tempfile.mkdtemp(dir=tmp)) / 'original-receivers'
+    shadow = copy.deepcopy(LEGACY['admission']())
+    shadow.update(source=SOURCE, archiveSha256=sel['candidate']['archiveSha256'], packages=dict(sel['candidate']['packages']), version=sel['version'])
+    LEGACY['consumer_fixture'](original_receivers, shadow)
+    stale = copy.deepcopy(sel)
+    stale['consumerQualification'] = shadow['consumerQualification']
+    stale_world = copy.copy(world)
+    stale_world.receivers, stale_world.selection = original_receivers, stale
+    stale_hub = Hub(stale_world)
+    must_refuse('receivers from the fixed original-version commits', F.acquire_receivers, HubTransport(stale_hub), 'gh', stale,
+                Path(tempfile.mkdtemp(dir=tmp)))
+    # A null override would select the original table inside the shared helper; acquisition refuses it directly.
+    nulled = copy.deepcopy(stale)
+    nulled['receiverSources'] = None
+    must_refuse('null receiver sources at acquisition', F.acquire_receivers, HubTransport(stale_hub), 'gh', nulled, Path(tempfile.mkdtemp(dir=tmp)))
+    # Causal: dropping the selected receiver override lets the original-version receiver evidence through.
+    real = F.readback_module()
+    dropped = dict(real, pair_consumers=lambda admission, root, sources: real['pair_consumers'](admission, root))
+    with neutralized(F, 'readback_module', lambda: dropped):
+        assert len(F.acquire_receivers(HubTransport(stale_hub), 'gh', stale, Path(tempfile.mkdtemp(dir=tmp)))['cases']) == 4
+    for case in ('sdd-s1', 'fsquint-s1'):
+        moved = copy.deepcopy(sel)
+        moved['receiverSources'][case]['commit'] = 'f' * 40
+        must_refuse('receiver evidence for another selected ' + case + ' commit', F.acquire_receivers, HubTransport(hub), 'gh', moved,
+                    Path(tempfile.mkdtemp(dir=tmp)))
+    moved = copy.deepcopy(sel)
+    moved['receiverSources']['fsquint-s1']['coreLocks']['src/FsQuint.Tooling/packages.lock.json'] = 'f' * 64
+    must_refuse('receiver evidence for other selected SDK source locks', F.acquire_receivers, HubTransport(hub), 'gh', moved,
+                Path(tempfile.mkdtemp(dir=tmp)))
+    # The original pair keeps its fixed receivers: forward-receiver evidence is not an original proof.
+    forward_root = Path(tempfile.mkdtemp(dir=tmp)) / 'forward-evidence'
+    F.acquire_receivers(HubTransport(hub), 'gh', sel, forward_root)
+    must_refuse('forward receivers under the original table', F.guarded, real['pair_consumers'], F.selection_as_pair_admission(sel),
+                forward_root / 'receivers', reason='original table')
+    count('acquisition-forward-receivers')
     count('acquisition')
 
 

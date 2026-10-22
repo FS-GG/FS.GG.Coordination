@@ -239,7 +239,7 @@ def validate_shared_helper(pin) -> dict:
 
 def validate_selection(selection) -> dict:
     keys = {"operation", "version", "tag", "source", "tree", "operator", "journal", "candidate",
-            "consumerQualification", "namespaceEntitlement", "tagProtection"}
+            "consumerQualification", "receiverSources", "namespaceEntitlement", "tagProtection"}
     _object(selection, keys, "forward selection")
     version = selection["version"]
     require(forward_version_allowed(version), "forward version must be a newer stable release than 0.3.0")
@@ -268,6 +268,11 @@ def validate_selection(selection) -> dict:
     receivers = readback_module()["pair_consumer_selection"]
     guarded(receivers, {"consumerQualification": q}, reason="four receiver selection differs")
     require(q["runId"] != candidate["runId"], "receiver run must be separate from candidate preparation")
+    # The fixed original S1 receivers pin exactly 0.3.0 with locked restores and cannot receive a
+    # newer pair; the selection names its own S1 receiver commits (rollback receivers stay fixed).
+    # None would select the original table inside the shared helper: a forward selection must name its own.
+    require(isinstance(selection["receiverSources"], dict), "forward receiver sources must be selected")
+    guarded(readback_module()["pair_receiver_table"], selection["receiverSources"], reason="forward receiver sources differ")
     n = _object(selection["namespaceEntitlement"], {"accepted", "packageIds", "nugetUser", "githubRepository", "publisherWorkflow", "evidenceSha256"}, "namespace")
     require(n["accepted"] is True and n["packageIds"] == sorted(IDS) and n["githubRepository"] == REPOSITORY
             and n["publisherWorkflow"] == PUBLISH_WORKFLOW and type(n["nugetUser"]) is str
@@ -503,6 +508,7 @@ def content_id(selection: dict) -> str:
     descriptor = {"schema": SCHEMA_OPERATION, "operation": selection["operation"], "version": selection["version"], "tag": selection["tag"],
                   "source": selection["source"], "tree": selection["tree"], "journal": selection["journal"]["id"],
                   "candidate": selection["candidate"], "receivers": sha256_hex(canonical(q)),
+                  "receiverSources": sha256_hex(canonical(selection["receiverSources"])),
                   "tagProtection": selection["tagProtection"], "nugetUser": selection["namespaceEntitlement"]["nugetUser"]}
     return "sha256:" + sha256_hex(canonical(descriptor))
 
@@ -1173,7 +1179,9 @@ def acquire_receivers(transport, token: str, selection: dict, workdir) -> dict:
         _fetch(transport, f"{api}/artifacts/{row['artifactId']}", token, root / f"{case}.artifact.json", MAX_JSON, what=f"{case} artifact")
         _fetch(transport, f"{api}/jobs/{row['jobId']}/logs", token, root / f"{case}.job.log", 8388608, what=f"{case} job log")
         _fetch(transport, f"{api}/artifacts/{row['artifactId']}/zip", token, root / f"{case}.zip", 33554432, what=f"{case} archive")
-    proof = guarded(readback_module()["pair_consumers"], selection_as_pair_admission(selection), root, reason="four receiver proofs differ")
+    require(isinstance(selection["receiverSources"], dict), "forward receiver sources must be selected")
+    proof = guarded(readback_module()["pair_consumers"], selection_as_pair_admission(selection), root, selection["receiverSources"],
+                    reason="four receiver proofs differ")
     require(sorted(proof["cases"]) == sorted(q["cases"]) and len({r["runnerId"] for r in proof["cases"].values()}) == 4,
             "receiver cases are not four distinct hosted observations")
     return proof
