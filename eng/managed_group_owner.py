@@ -12,19 +12,20 @@ cgroup v2 leaf instead of a process group:
 
 * containment: every member is born inside a fresh leaf ``fsgg-mg-<id>`` under an
   exclusive delegated cgroup v2 root. setsid/double-fork does not leave a cgroup.
-  A member that moves itself elsewhere inside the delegated root is an escape:
-  refused (failure) and retired by pidfd. The leader runs with no_new_privs, so
-  members cannot gain the privilege needed to leave the delegated root.
+  A process anywhere else in the delegated root (except the owner) is an escape:
+  the run fails, and retirement sweeps the whole root (cgroup.kill of member-made
+  cgroups, quarantine-and-kill for the root and supervisor cgroups). The leader runs
+  with no_new_privs, so members cannot gain the privilege needed to leave the root.
 * birth: the leader is the owner's unreaped child, so its pidfd binds the exact
-  birth; members are identified by (pid, start ticks) and every member signal is
-  sent through a pidfd whose identity was re-checked after opening.
-* retirement: SIGTERM by pidfd, bounded grace, then the kernel's atomic
-  ``cgroup.kill``; emptiness is the kernel's ``populated 0``; the leaf is removed and
-  a removal failure is reported, never hidden.
+  birth; members are identified by (pid, start ticks, cgroup) and every signal is
+  sent through a pidfd whose start ticks and cgroup were re-checked after opening.
+* retirement: SIGTERM by pidfd, bounded grace, then the kernel's ``cgroup.kill``;
+  emptiness is the kernel's ``populated 0`` plus a final census of the whole root;
+  every stage is separately guarded, and a removal failure is reported, never hidden.
 
-Containment that cannot be established refuses before launch. Supervisor-death
-cleanup is supplied by the enclosing delegated unit (see the contract document);
-this module does not claim it.
+Containment that cannot be established refuses before launch. Members share the
+owner's uid, so leaf limits are cooperative and supervisor-death cleanup belongs to
+the enclosing delegated unit (see the contract document); this module claims neither.
 """
 import ctypes, errno, hashlib, json, os, pathlib, re, select, signal, stat, subprocess, sys, threading, time, uuid
 
@@ -34,6 +35,7 @@ RECEIPT_SCHEMA = 'fsgg.managed-group-receipt/1'
 CONTAINMENT = 'cgroup2-delegated'
 SUPERVISOR = 'fsgg-supervisor'
 LEAF_PREFIX = 'fsgg-mg-'
+QUARANTINE_PREFIX = 'fsgg-quarantine-'
 POLL_SECONDS = 0.05
 SAMPLE = 32
 KNOWN_LIMIT = 65536
@@ -74,10 +76,13 @@ def canonical(value):
     return json.dumps(value, sort_keys=True, separators=(',', ':'), ensure_ascii=True).encode()
 
 
-def sha256_file(path):
+def sha256_file(path, until=None):
+    """SHA-256 of a file; raise TimeoutError once ``until`` (monotonic) has passed."""
     digest = hashlib.sha256()
     with open(path, 'rb') as source:
         for block in iter(lambda: source.read(1048576), b''):
+            if until is not None and time.monotonic() >= until:
+                raise TimeoutError('original deadline exhausted while hashing ' + path)
             digest.update(block)
     return digest.hexdigest()
 
@@ -89,6 +94,11 @@ def sha256_fd(fd):
         if not block:
             return digest.hexdigest()
         digest.update(block); offset += len(block)
+
+
+# Hash of this file when it was imported (the receipt's owner identity).
+OWNER_PATH = os.path.abspath(__file__)
+OWNER_SHA256 = sha256_file(OWNER_PATH)
 
 
 def _require(ok, code, detail=''):
@@ -145,6 +155,7 @@ def validate_profile(profile):
     return profile, hashlib.sha256(canonical(profile)).hexdigest()
 
 
+
 # ---------------------------------------------------------------- /proc and cgroupfs
 
 def _stat(pid):
@@ -172,8 +183,12 @@ def _cgroup2_mount():
     return found[0] if len(found) == 1 else None
 
 
-def _own_cgroup(mount):
-    lines = [l for l in _read('/proc/self/cgroup').splitlines() if l.startswith('0::')]
+def _cgroup_dir(pid, mount):
+    """Absolute cgroup v2 directory of ``pid`` ('self' allowed), or None when unknown."""
+    try:
+        lines = [l for l in _read(f'/proc/{pid}/cgroup').splitlines() if l.startswith('0::')]
+    except (FileNotFoundError, ProcessLookupError, PermissionError):
+        return None
     if len(lines) != 1:
         return None
     relative = os.path.relpath(lines[0][3:], mount[1])
@@ -203,6 +218,10 @@ def _tree(top):
     return found
 
 
+def _dirs(top):
+    return {directory for directory, _, _ in os.walk(top)}
+
+
 def _write(path, data):
     fd = os.open(path, os.O_WRONLY | os.O_CLOEXEC)
     try:
@@ -214,7 +233,7 @@ def _write(path, data):
 def probe(delegated_root=None):
     """Report whether stable descendant containment is available. Never mutates."""
     result = {'schema': CONTRACT_SCHEMA, 'containment': CONTAINMENT, 'available': False, 'refusal': None,
-              'delegatedRoot': None, 'ownerCgroup': None, 'kernel': os.uname().release, 'controllers': []}
+              'delegatedRoot': None, 'ownerCgroup': None, 'cgroupMount': None, 'kernel': os.uname().release, 'controllers': []}
 
     def refuse(code):
         result['refusal'] = code
@@ -233,7 +252,8 @@ def probe(delegated_root=None):
         mount = None
     if mount is None:
         return refuse('cgroup2-unavailable')
-    own = _own_cgroup(mount)
+    result['cgroupMount'] = list(mount)
+    own = _cgroup_dir('self', mount)
     if own is None:
         return refuse('owner-cgroup-unknown')
     result['ownerCgroup'] = own
@@ -259,10 +279,22 @@ def probe(delegated_root=None):
     return result
 
 
-# ---------------------------------------------------------------- run
+# ---------------------------------------------------------------- identity and signals
 
-def _pidfd_signal(pid, start, sig):
-    """Signal only through a pidfd whose process still has the recorded start ticks."""
+def _identity(pid, inside, mount):
+    """The stat row of a live pid whose start ticks are stable around a cgroup read accepted by ``inside``."""
+    first = _stat(pid)
+    if first is None or first['state'] == 'Z':
+        return None
+    directory = _cgroup_dir(pid, mount)
+    second = _stat(pid)
+    if second is None or second['start'] != first['start'] or directory is None or not inside(directory):
+        return None
+    return first
+
+
+def _pidfd_signal(pid, start, sig, inside, mount):
+    """Signal only through a pidfd whose process still has the recorded start ticks and an accepted cgroup."""
     try:
         fd = os.pidfd_open(pid)
     except (ProcessLookupError, OSError):
@@ -271,6 +303,9 @@ def _pidfd_signal(pid, start, sig):
         row = _stat(pid)
         if row is None or row['start'] != start or row['state'] == 'Z':
             return 'identity-changed'
+        directory = _cgroup_dir(pid, mount)
+        if directory is None or not inside(directory):
+            return 'scope-changed'
         signal.pidfd_send_signal(fd, sig)
         return 'sent'
     except ProcessLookupError:
@@ -299,6 +334,8 @@ def _remove_tree(top, until):
             time.sleep(0.02)
 
 
+# ---------------------------------------------------------------- run
+
 def run(profile, *, env, deadline, out_dir, delegated_root=None, control=None):
     """Run one managed group to bounded completion. Return the receipt or raise Refused/GroupFailed.
 
@@ -315,16 +352,19 @@ def run(profile, *, env, deadline, out_dir, delegated_root=None, control=None):
     _require(_plain_absolute(out_dir) and _within(out_dir, root) and out_dir != root, 'out-dir-invalid')
     parent = os.path.dirname(out_dir)
     _require(os.path.realpath(parent) == parent and os.path.isdir(parent) and not os.path.lexists(out_dir), 'out-dir-invalid')
-    os.mkdir(out_dir, 0o700)
+    try:
+        os.mkdir(out_dir, 0o700)
+    except OSError as error:
+        raise Refused('out-dir-invalid', describe(error))
     receipt = {'schema': RECEIPT_SCHEMA, 'contract': CONTRACT_SCHEMA,
-               'owner': {'path': os.path.abspath(__file__), 'sha256': sha256_file(__file__)},
+               'owner': {'path': OWNER_PATH, 'sha256': OWNER_SHA256},
                'profile': profile, 'profileSha256': profile_sha, 'invocationId': uuid.uuid4().hex, 'bootId': None,
                'containment': {'mode': CONTAINMENT, 'delegatedRoot': None, 'leaf': None, 'limitsApplied': {},
-                               'noNewPrivileges': True, 'ownerDeathCleanup': 'delegated-unit-not-claimed-by-owner'},
+                               'limitsBinding': 'cooperative-leaf-files', 'ownerDeathCleanup': 'delegated-unit-not-claimed-by-owner'},
                'launch': {'attempted': False, 'launched': False, 'error': None},
                'leader': None, 'exit': None, 'members': {'observed': 0, 'sample': []}, 'escaped': [],
-               'residualAfterLeaderExit': [], 'foreignCgroups': [], 'streams': {}, 'retirement': None,
-               'cleanup': 'not-started', 'custody': 'no-child', 'outcome': None, 'refusal': None,
+               'residualAfterLeaderExit': [], 'residualInRoot': None, 'createdCgroups': [], 'streams': {},
+               'retirement': None, 'cleanup': 'not-started', 'custody': 'no-child', 'outcome': None, 'refusal': None,
                'firstCause': None, 'additionalFailures': [], 'timing': {'deadlineInSeconds': round(deadline - started, 3)}}
 
     def write_receipt():
@@ -345,7 +385,10 @@ def run(profile, *, env, deadline, out_dir, delegated_root=None, control=None):
     exe_fd = None
     try:
         try:
-            receipt['bootId'] = _read('/proc/sys/kernel/random/boot_id').strip()
+            try:
+                receipt['bootId'] = _read('/proc/sys/kernel/random/boot_id').strip()
+            except OSError:
+                pass
             _require(time.monotonic() < deadline, 'deadline-exhausted')
             _require(threading.active_count() == 1, 'owner-not-single-threaded')
             _require(signal.getitimer(signal.ITIMER_REAL) == (0.0, 0.0), 'owner-alarm-active')
@@ -356,32 +399,37 @@ def run(profile, *, env, deadline, out_dir, delegated_root=None, control=None):
             _require(os.path.realpath(path) == path, 'executable-invalid', 'symlinked path')
             try:
                 exe_fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+                info = os.fstat(exe_fd)
+                _require(stat.S_ISREG(info.st_mode) and info.st_mode & 0o111, 'executable-invalid', 'not a regular executable file')
+                digest = sha256_fd(exe_fd)
             except OSError as error:
                 raise Refused('executable-invalid', describe(error))
-            info = os.fstat(exe_fd)
-            _require(stat.S_ISREG(info.st_mode) and info.st_mode & 0o111, 'executable-invalid', 'not a regular executable file')
-            _require(sha256_fd(exe_fd) == profile['executable']['sha256'], 'executable-identity-mismatch')
+            _require(digest == profile['executable']['sha256'], 'executable-identity-mismatch')
             available = probe(delegated_root)
             _require(available['available'], 'containment-unavailable', str(available['refusal']))
-            droot = available['delegatedRoot']
+            droot, mount = available['delegatedRoot'], tuple(available['cgroupMount'])
             receipt['containment']['delegatedRoot'] = droot
-            strays = sorted(pid for pid in _tree(droot) if pid != os.getpid())
-            children = sorted(n for n in os.listdir(droot) if os.path.isdir(os.path.join(droot, n)) and n != SUPERVISOR)
-            _require(not strays and not children, 'delegated-root-not-exclusive',
-                     json.dumps({'processes': strays[:SAMPLE], 'cgroups': children[:SAMPLE]}))
+            try:
+                strays = sorted(pid for pid in _tree(droot) if pid != os.getpid())
+                children = sorted(n for n in os.listdir(droot) if os.path.isdir(os.path.join(droot, n)) and n != SUPERVISOR)
+                nested = sorted(os.path.relpath(d, droot) for d in _dirs(os.path.join(droot, SUPERVISOR)))[1:] if os.path.isdir(os.path.join(droot, SUPERVISOR)) else []
+            except OSError as error:
+                raise Refused('containment-unavailable', describe(error))
+            _require(not strays and not children and not nested, 'delegated-root-not-exclusive',
+                     json.dumps({'processes': strays[:SAMPLE], 'cgroups': (children + nested)[:SAMPLE]}))
             for controller, wanted in (('pids', profile['limits']['pidsMax']), ('memory', profile['limits']['memoryMaxBytes'])):
                 _require(wanted is None or controller in available['controllers'], 'limit-unenforceable', controller)
             leaf = _prepare(profile, droot, available['ownerCgroup'], receipt)
         except Refused as refusal:
             raise refuse(refusal)
-        return _contained(profile, env, deadline, out_dir, receipt, write_receipt, droot, leaf, exe_fd, hook, started)
+        return _contained(profile, env, deadline, out_dir, receipt, write_receipt, refuse, droot, mount, leaf, exe_fd, hook, started)
     finally:
         if exe_fd is not None:
             os.close(exe_fd)
 
 
 def _prepare(profile, droot, own, receipt):
-    """Move the owner to the supervisor leaf, enable requested controllers and create the fresh leaf.
+    """Move the owner to the supervisor cgroup, enable requested controllers and create the fresh leaf.
 
     Any failure here is a refusal: nothing has been launched and the fresh leaf is removed.
     """
@@ -405,7 +453,8 @@ def _prepare(profile, droot, own, receipt):
             _write(os.path.join(leaf, 'memory.max'), str(limits['memoryMaxBytes']).encode())
             applied['memory.max'] = _read(os.path.join(leaf, 'memory.max')).strip()
             if os.path.exists(os.path.join(leaf, 'memory.swap.max')):
-                _write(os.path.join(leaf, 'memory.swap.max'), b'0'); applied['memory.swap.max'] = '0'
+                _write(os.path.join(leaf, 'memory.swap.max'), b'0')
+                applied['memory.swap.max'] = _read(os.path.join(leaf, 'memory.swap.max')).strip()
         receipt['containment']['leaf'] = os.path.relpath(leaf, droot)
         return leaf
     except OSError as error:
@@ -417,22 +466,46 @@ def _prepare(profile, droot, own, receipt):
         raise Refused('containment-unavailable', describe(error))
 
 
-def _contained(profile, env, deadline, out_dir, receipt, write_receipt, droot, leaf, exe_fd, hook, started):
+def _contained(profile, env, deadline, out_dir, receipt, write_receipt, refuse, droot, mount, leaf, exe_fd, hook, started):
     limits, retirement = profile['limits'], profile['retirement']
     owner, supervisor = os.getpid(), os.path.join(droot, SUPERVISOR)
-    libc = ctypes.CDLL(None, use_errno=True)
+    quarantine = os.path.join(droot, QUARANTINE_PREFIX + receipt['invocationId'])
     additional = receipt['additionalFailures']
     primary = None; child = None; pidfd = None; leader_exit_at = None
     known = {}; escaped = {}
-    preexisting = {n for n in os.listdir(droot) if os.path.isdir(os.path.join(droot, n))}
-    streams = {name: {'bytes': 0, 'capped': False, 'eof': False, 'sha256': hashlib.sha256(), 'fd': None, 'sink': None}
-               for name in ('stdout', 'stderr')}
+    preexisting = {droot, supervisor}
+    streams = {name: {'bytes': 0, 'capped': False, 'eof': False, 'sha256': hashlib.sha256(), 'fd': None,
+                      'sink': None, 'sinkError': None} for name in ('stdout', 'stderr')}
     caps = {'stdout': limits['stdoutBytes'], 'stderr': limits['stderrBytes']}
-    retire = {'termSignals': 0, 'cgroupKill': False, 'escapedKills': 0, 'populatedAfter': None,
-              'leaderReaped': False, 'leafRemoved': False, 'removeError': None}
+    retire = {'termSignals': 0, 'cgroupKill': False, 'createdCgroupKills': 0, 'quarantined': 0, 'escapedKills': 0,
+              'ownerRelocated': False, 'populatedAfter': None, 'leaderReaped': False, 'leafRemoved': False, 'removeError': None}
+    in_leaf = lambda directory: _within(directory, leaf)
+    in_root_outside_leaf = lambda directory: _within(directory, droot) and not _within(directory, leaf)
+
+    # Pre-launch output setup: a failure here is still a refusal, and the fresh leaf is removed.
+    opened = []
+    try:
+        libc = ctypes.CDLL(None, use_errno=True)
+        for name in streams:
+            streams[name]['sink'] = open(os.path.join(out_dir, name + '.log'), 'xb', buffering=0)
+        out_r, out_w = os.pipe2(os.O_CLOEXEC); opened += [out_r, out_w]
+        err_r, err_w = os.pipe2(os.O_CLOEXEC); opened += [err_r, err_w]
+        os.set_blocking(out_r, False); os.set_blocking(err_r, False)
+    except OSError as error:
+        for fd in opened:
+            os.close(fd)
+        for s in streams.values():
+            if s['sink'] is not None:
+                s['sink'].close()
+        try:
+            os.rmdir(leaf)
+        except OSError as cleanup:
+            additional.append('leaf-remove:' + describe(cleanup))
+        raise refuse(Refused('output-unavailable', describe(error)))
+    streams['stdout']['fd'], streams['stderr']['fd'] = out_r, err_r
 
     def context():
-        return {'leaf': leaf, 'delegatedRoot': droot, 'supervisor': supervisor,
+        return {'leaf': leaf, 'delegatedRoot': droot, 'supervisor': supervisor, 'outDir': out_dir,
                 'leaderPid': child.pid if child else None, 'known': dict(known), 'escaped': dict(escaped)}
 
     def leader_exited():
@@ -446,52 +519,76 @@ def _contained(profile, env, deadline, out_dir, receipt, write_receipt, droot, l
     def drain(until):
         """Copy available output under the caps; wait at most until ``until`` or POLL_SECONDS."""
         timeout = max(0.0, min(POLL_SECONDS, until - time.monotonic()))
-        fds = [s['fd'] for s in streams.values() if s['fd'] is not None]
-        if pidfd is not None and leader_exit_at is None:
-            fds.append(pidfd)
-        if not fds:
+        readers = {s['fd']: name for name, s in streams.items() if s['fd'] is not None}
+        watched = list(readers) + ([pidfd] if pidfd is not None and leader_exit_at is None else [])
+        if not watched:
             time.sleep(timeout); return
-        ready, _, _ = select.select(fds, [], [], timeout)
-        if pidfd in ready:
-            leader_exited()
-        for name, s in streams.items():
-            if s['fd'] is None or s['fd'] not in ready:
-                continue
+        poller = select.poll()
+        for fd in watched:
+            poller.register(fd, select.POLLIN)
+        for fd, _ in poller.poll(timeout * 1000):
+            if fd == pidfd:
+                leader_exited(); continue
+            name = readers[fd]; s = streams[name]
             try:
-                block = os.read(s['fd'], 65536)
+                block = os.read(fd, 65536)
             except BlockingIOError:
                 continue
+            except OSError as error:
+                os.close(fd); s['fd'] = None
+                raise RuntimeError(name + ' read failed: ' + describe(error))
             if not block:
-                os.close(s['fd']); s['fd'] = None; s['eof'] = True
+                os.close(fd); s['fd'] = None; s['eof'] = True
                 continue
             kept = block[:max(0, caps[name] - s['bytes'])]
-            s['sink'].write(kept); s['sha256'].update(kept); s['bytes'] += len(kept)
+            if kept and s['sinkError'] is None:
+                try:
+                    view = memoryview(kept)
+                    while view:
+                        view = view[s['sink'].write(view):]
+                except OSError as error:
+                    s['sinkError'] = describe(error)  # keep reading so members never block on a full pipe
+                    raise RuntimeError(name + ' sink failed: ' + s['sinkError'])
+                s['sha256'].update(kept); s['bytes'] += len(kept)
             if len(kept) < len(block) and not s['capped']:
                 s['capped'] = True
                 raise RuntimeError(name + ' byte cap exceeded')
 
+    def relocate_owner():
+        if _cgroup_dir('self', mount) != supervisor:
+            _write(os.path.join(supervisor, 'cgroup.procs'), str(owner).encode()); retire['ownerRelocated'] = True
+            return True
+        return False
+
     def census():
-        """Record leaf members; return True when any process in the delegated root escaped the leaf."""
-        found = False
+        """Record leaf members; return a failure reason when the delegated root holds anything else."""
+        reason = None
         tree = _tree(droot)
         for pid, directory in tree.items():
-            row = _stat(pid)
-            if row is None:
+            if pid == owner:
+                if directory != supervisor:
+                    relocate_owner(); reason = reason or 'owner cgroup tampered by a member'
                 continue
             if _within(directory, leaf):
-                if known.get(pid) != row['start']:
-                    if len(known) >= KNOWN_LIMIT:
-                        raise RuntimeError('member census bound exceeded')
-                    known[pid] = row['start']; receipt['members']['observed'] += 1
-                    if len(receipt['members']['sample']) < SAMPLE:
-                        receipt['members']['sample'].append({k: row[k] for k in ('pid', 'start', 'ppid', 'pgid', 'sid')})
-            elif not (pid == owner and directory == supervisor):
-                escaped.setdefault((pid, row['start']), os.path.relpath(directory, droot)); found = True
+                row = _identity(pid, in_leaf, mount)
+                if row is None or known.get(pid) == row['start']:
+                    continue
+                if len(known) >= KNOWN_LIMIT:
+                    raise RuntimeError('member census bound exceeded')
+                known[pid] = row['start']; receipt['members']['observed'] += 1
+                if len(receipt['members']['sample']) < SAMPLE:
+                    receipt['members']['sample'].append({k: row[k] for k in ('pid', 'start', 'ppid', 'pgid', 'sid')})
+            else:
+                row = _identity(pid, in_root_outside_leaf, mount)
+                if row is not None:
+                    escaped.setdefault((pid, row['start']), os.path.relpath(directory, droot))
+                reason = reason or 'contained member escaped managed group'
         for pid, start in known.items():
-            if pid not in tree and _alive(pid, start):
-                # Same birth, alive, absent from the whole delegated root: privileged escape.
-                escaped.setdefault((pid, start), 'outside-delegated-root'); found = True
-        return found
+            if pid not in tree and _alive(pid, start) and (pid, start) not in escaped:
+                # Same birth, alive and absent from the whole delegated root: a privileged escape.
+                escaped[(pid, start)] = 'outside-delegated-root'
+                reason = reason or 'contained member escaped managed group'
+        return reason
 
     def members():
         rows = []
@@ -512,11 +609,6 @@ def _contained(profile, env, deadline, out_dir, receipt, write_receipt, droot, l
             raise OSError(ctypes.get_errno(), 'no_new_privs refused')
 
     try:
-        for name in streams:
-            streams[name]['sink'] = open(os.path.join(out_dir, name + '.log'), 'xb')
-        out_r, out_w = os.pipe2(os.O_CLOEXEC); err_r, err_w = os.pipe2(os.O_CLOEXEC)
-        streams['stdout']['fd'], streams['stderr']['fd'] = out_r, err_r
-        os.set_blocking(out_r, False); os.set_blocking(err_r, False)
         receipt['launch']['attempted'] = True
         try:
             child = subprocess.Popen(profile['argv'], executable=f'/proc/self/fd/{exe_fd}', pass_fds=(exe_fd,),
@@ -542,7 +634,7 @@ def _contained(profile, env, deadline, out_dir, receipt, write_receipt, droot, l
                                          if l.startswith('NoNewPrivs:')][0]
             with open(f'/proc/{child.pid}/cmdline', 'rb') as source:
                 leader['cmdline'] = [p.decode('utf-8', 'replace') for p in source.read(65536).split(b'\x00')[:-1]][:256]
-            leader['imageSha256'] = sha256_file(f'/proc/{child.pid}/exe')
+            leader['imageSha256'] = sha256_file(f'/proc/{child.pid}/exe', until=deadline)
             leader['image'] = 'admitted' if leader['imageSha256'] in profile['leaderImages'] else 'not-admitted'
         except (FileNotFoundError, ProcessLookupError, IndexError):
             leader['image'] = 'unobserved-leader-exited'
@@ -558,8 +650,9 @@ def _contained(profile, env, deadline, out_dir, receipt, write_receipt, droot, l
             raise RuntimeError('leader lacks no_new_privs')
         while True:
             hook('poll', context())
-            if census():
-                raise RuntimeError('contained member escaped managed group')
+            reason = census()
+            if reason:
+                raise RuntimeError(reason)
             if leader_exited():
                 break
             if time.monotonic() >= deadline:
@@ -568,11 +661,13 @@ def _contained(profile, env, deadline, out_dir, receipt, write_receipt, droot, l
         hook('leader-exit-observed', context())
         settle = min(time.monotonic() + retirement['leaderExitSettleSeconds'], deadline)
         while _populated(leaf) and time.monotonic() < settle:
-            if census():
-                raise RuntimeError('contained member escaped managed group')
+            reason = census()
+            if reason:
+                raise RuntimeError(reason)
             drain(settle)
-        if census():
-            raise RuntimeError('contained member escaped managed group')
+        reason = census()
+        if reason:
+            raise RuntimeError(reason)
         residual = members()
         receipt['residualAfterLeaderExit'] = residual[:SAMPLE]
         if residual and retirement['onLeaderExit'] == 'require-empty':
@@ -583,7 +678,8 @@ def _contained(profile, env, deadline, out_dir, receipt, write_receipt, droot, l
     except BaseException as error:
         primary = error
     finally:
-        # Retirement runs for every outcome. No hook, census or report failure may interrupt it.
+        # Retirement runs for every outcome. Each stage is guarded on its own, so no hook,
+        # census, output or cgroup failure can skip a later stage such as cgroup.kill.
         stop_at = time.monotonic()
         end = min(stop_at, deadline) + retirement['cleanupSeconds']
         receipt['timing']['stopSeconds'] = round(stop_at - started, 3)
@@ -595,62 +691,111 @@ def _contained(profile, env, deadline, out_dir, receipt, write_receipt, droot, l
             else:
                 additional.append(label + ':' + describe(error))
 
+        def stage(label, action):
+            try:
+                action()
+                return True
+            except BaseException as error:
+                note(label, error)
+                return False
+
         def wait(condition, until):
             while condition() and time.monotonic() < until:
-                try:
-                    drain(until)
-                except RuntimeError as error:
-                    additional.append(describe(error))
-        try:
-            hook('before-retire', context())
-        except BaseException as error:
-            note('hook', error)
-        try:
-            try:
-                census()
-            except BaseException as error:
-                additional.append('census:' + describe(error))
+                drain(until)
+
+        def term():
             for pid in list(_tree(leaf)):
-                start = known.get(pid) or (_stat(pid) or {}).get('start')
-                if start is not None and _pidfd_signal(pid, start, signal.SIGTERM) == 'sent':
+                start = known.get(pid)
+                if pid != owner and start is not None and _pidfd_signal(pid, start, signal.SIGTERM, in_leaf, mount) == 'sent':
                     retire['termSignals'] += 1
-            for pid, start in list(escaped):
-                if _pidfd_signal(pid, start, signal.SIGKILL) == 'sent':
-                    retire['escapedKills'] += 1
-            wait(lambda: _populated(leaf), min(time.monotonic() + retirement['termGraceSeconds'], end))
+
+        def kill_leaf():
+            relocate_owner()  # the owner must never be inside the leaf it kills
             if _populated(leaf):
                 _write(os.path.join(leaf, 'cgroup.kill'), b'1'); retire['cgroupKill'] = True
-            wait(lambda: _populated(leaf) or any(_alive(p, s) for p, s in escaped), end)
-            retire['populatedAfter'] = _populated(leaf)
-            if child is not None:
+
+        def residue():
+            return {pid: directory for pid, directory in _tree(droot).items() if pid != owner and not _within(directory, leaf)}
+
+        def created_tops():
+            tops = []
+            for directory in sorted(_dirs(droot)):
+                if directory in preexisting or _within(directory, leaf) or any(_within(directory, t) for t in tops):
+                    continue
+                tops.append(directory)
+            return tops
+
+        def sweep():
+            """Retire everything in the delegated root outside the leaf until it is empty or the bound passes."""
+            while time.monotonic() < end:
+                relocate_owner()
                 try:
-                    child.wait(timeout=max(0.0, end - time.monotonic()))
-                    leader_exited(); retire['leaderReaped'] = True
-                except subprocess.TimeoutExpired:
+                    census()
+                except RuntimeError:
                     pass
-                wait(lambda: any(s['fd'] is not None for s in streams.values()), end)
-        except BaseException as error:
-            note('retire', error)
-        try:
-            hook('before-remove', context())
-        except BaseException as error:
-            note('hook', error)
+                outside = [key for key, where in escaped.items() if where == 'outside-delegated-root' and _alive(*key)]
+                for pid, start in outside:
+                    if _pidfd_signal(pid, start, signal.SIGKILL, lambda directory: True, mount) == 'sent':
+                        retire['escapedKills'] += 1
+                stray = residue()
+                if not stray and not outside and not _populated(leaf):
+                    return
+                if _populated(leaf):
+                    kill_leaf()
+                for top in created_tops():
+                    if _populated(top):
+                        _write(os.path.join(top, 'cgroup.kill'), b'1'); retire['createdCgroupKills'] += 1
+                internal = [pid for pid, directory in stray.items() if directory in preexisting]
+                if internal:
+                    # The kernel cannot kill the root or supervisor cgroup without killing the owner:
+                    # move those processes into a fresh quarantine cgroup and kill that instead.
+                    os.makedirs(quarantine, exist_ok=True)
+                    for pid in internal:
+                        try:
+                            _write(os.path.join(quarantine, 'cgroup.procs'), str(pid).encode()); retire['quarantined'] += 1
+                        except OSError:
+                            pass
+                    _write(os.path.join(quarantine, 'cgroup.kill'), b'1')
+                drain(min(end, time.monotonic() + POLL_SECONDS))
+
+        def reap():
+            try:
+                child.wait(timeout=max(0.0, end - time.monotonic()))
+                leader_exited(); retire['leaderReaped'] = True
+            except subprocess.TimeoutExpired:
+                pass
+
+        stage('hook', lambda: hook('before-retire', context()))
+        stage('census', census)
+        stage('term', term)
+        stage('grace', lambda: wait(lambda: _populated(leaf), min(time.monotonic() + retirement['termGraceSeconds'], end)))
+        stage('kill', kill_leaf)
+        stage('sweep', sweep)
+        stage('settle', lambda: wait(lambda: _populated(leaf), end))
+        stage('populated', lambda: retire.__setitem__('populatedAfter', _populated(leaf)))
+        if child is not None:
+            stage('reap', reap)
+            stage('drain', lambda: wait(lambda: any(s['fd'] is not None for s in streams.values()), end))
+        stage('hook', lambda: hook('before-remove', context()))
+        stage('residue', lambda: receipt.__setitem__('residualInRoot', [
+            {'pid': p, 'cgroup': os.path.relpath(d, droot)} for p, d in sorted(residue().items())][:SAMPLE + 1]))
         escaped_alive = [key for key in escaped if _alive(*key)]
         receipt['escaped'] = [{'pid': p, 'start': s, 'cgroup': where, 'aliveAfterRetirement': (p, s) in escaped_alive}
                               for (p, s), where in list(escaped.items())[:SAMPLE]]
-        try:
-            _remove_tree(leaf, end); retire['leafRemoved'] = True
-        except OSError as error:
-            retire['removeError'] = describe(error)
-        for name in sorted(os.listdir(droot)):
-            path = os.path.join(droot, name)
-            if os.path.isdir(path) and name not in preexisting and path != leaf:
-                entry = {'cgroup': name, 'removed': False}
+
+        def remove():
+            try:
+                _remove_tree(leaf, end); retire['leafRemoved'] = True
+            except OSError as error:
+                retire['removeError'] = describe(error)
+            for top in created_tops():
+                entry = {'cgroup': os.path.relpath(top, droot), 'removed': False}
                 try:
-                    _remove_tree(path, end); entry['removed'] = True
+                    _remove_tree(top, end); entry['removed'] = True
                 except OSError as error:
                     entry['error'] = describe(error)
-                receipt['foreignCgroups'].append(entry)
+                receipt['createdCgroups'].append(entry)
+        stage('remove', remove)
         receipt['retirement'] = retire
         for name, s in streams.items():
             if s['fd'] is not None:
@@ -660,24 +805,26 @@ def _contained(profile, env, deadline, out_dir, receipt, write_receipt, droot, l
                     s['sink'].close()
                 except BaseException as error:
                     additional.append('output-close:' + describe(error))
-            receipt['streams'][name] = {'bytes': s['bytes'], 'capped': s['capped'], 'eof': s['eof'], 'sha256': s['sha256'].hexdigest()}
+            receipt['streams'][name] = {'bytes': s['bytes'], 'capped': s['capped'], 'eof': s['eof'],
+                                        'sinkError': s['sinkError'], 'sha256': s['sha256'].hexdigest()}
         if pidfd is not None:
             os.close(pidfd)
-        if retire['populatedAfter'] is not False or escaped_alive or (child is not None and not retire['leaderReaped']):
+        if (retire['populatedAfter'] is not False or receipt['residualInRoot'] is None or receipt['residualInRoot']
+                or escaped_alive or (child is not None and not retire['leaderReaped'])):
             receipt['cleanup'] = 'unknown'
-        elif not retire['leafRemoved'] or any(not f['removed'] for f in receipt['foreignCgroups']):
+        elif not retire['leafRemoved'] or any(not c['removed'] for c in receipt['createdCgroups']):
             receipt['cleanup'] = 'observed-empty-remove-failed'
         else:
             receipt['cleanup'] = 'observed-empty-removed'
         if escaped:
-            receipt['custody'] = 'escaped-unretired' if escaped_alive else 'escaped-retired'
+            unretired = escaped_alive or receipt['residualInRoot'] is None or bool(receipt['residualInRoot'])
+            receipt['custody'] = 'escaped-unretired' if unretired else 'escaped-retired'
         if primary is None and receipt['cleanup'] != 'observed-empty-removed':
             primary = RuntimeError('cleanup unqualified: ' + receipt['cleanup']
                                    + ('' if retire['removeError'] is None else ' (' + retire['removeError'] + ')'))
-        try:
-            hook('after-cleanup', context())
-        except BaseException as error:
-            note('hook', error)
+        if primary is None and not all(s['eof'] for s in receipt['streams'].values()):
+            primary = RuntimeError('output streams did not reach EOF within the cleanup bound')
+        stage('hook', lambda: hook('after-cleanup', context()))
         receipt['outcome'] = 'failed' if primary is not None else 'succeeded'
         receipt['firstCause'] = describe(primary) if primary is not None else None
         receipt['timing']['endSeconds'] = round(time.monotonic() - started, 3)

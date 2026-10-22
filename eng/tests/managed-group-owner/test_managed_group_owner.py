@@ -36,17 +36,30 @@ print('leader-done', flush=True)
 ESCAPE = r'''
 import os, signal, sys, time
 target, pidfile = sys.argv[1], sys.argv[2]
+hop = target.startswith('hop-')
+place = target[4:] if hop else target
 if os.fork() == 0:
     signal.signal(signal.SIGTERM, signal.SIG_IGN)
     relative = [l for l in open('/proc/self/cgroup').read().splitlines() if l.startswith('0::')][0][3:]
     droot = os.path.dirname('/sys/fs/cgroup' + relative)
-    destination = os.path.join(droot, 'escape-sibling' if target == 'sibling' else 'fsgg-supervisor')
-    if target == 'sibling': os.mkdir(destination)
+    destination = {'sibling': os.path.join(droot, 'escape-sibling'), 'supervisor': os.path.join(droot, 'fsgg-supervisor'),
+                   'nested': os.path.join(droot, 'fsgg-supervisor', 'escape-nested')}[place]
+    if place != 'supervisor': os.makedirs(destination, exist_ok=True)
     with open(os.path.join(destination, 'cgroup.procs'), 'w') as sink: sink.write('0')
     with open(pidfile + '.tmp', 'w') as sink: sink.write(str(os.getpid()))
     os.rename(pidfile + '.tmp', pidfile)
+    while hop:  # fork-hop: the recorded pid is always stale, only cgroup retirement can stop this
+        time.sleep(0.01)
+        if os.fork(): os._exit(0)
     time.sleep(300)
 time.sleep(300)
+'''
+CHATTY = r'''
+import os, signal, sys, time
+signal.signal(signal.SIGTERM, signal.SIG_IGN)
+os.fork()
+while True:
+    sys.stdout.write('x' * 512); sys.stdout.flush(); time.sleep(0.01)
 '''
 STUBBORN = r'''
 import os, signal, time
@@ -213,6 +226,22 @@ class RefusalControls(Base):
         finally:
             signal.setitimer(signal.ITIMER_REAL, 0); signal.signal(signal.SIGALRM, previous)
 
+    def test_signal_requires_recorded_birth_and_cgroup(self):
+        mount = mg._cgroup2_mount()
+        if mount is None:
+            self.skipTest('no cgroup2 mount')
+        child = subprocess.Popen([PYTHON, '-I', '-S', '-c', 'import time; time.sleep(30)'])
+        try:
+            start = mg._stat(child.pid)['start']
+            self.assertEqual(mg._pidfd_signal(child.pid, start + 1, signal.SIGTERM, lambda d: True, mount), 'identity-changed')
+            self.assertEqual(mg._pidfd_signal(child.pid, start, signal.SIGTERM, lambda d: False, mount), 'scope-changed')
+            time.sleep(0.2)
+            self.assertIsNone(child.poll(), 'an unverified identity or scope must never be signalled')
+            self.assertEqual(mg._pidfd_signal(child.pid, start, signal.SIGTERM, lambda d: True, mount), 'sent')
+            self.assertEqual(child.wait(5), -signal.SIGTERM)
+        finally:
+            child.kill(); child.wait()
+
     def test_out_dir_must_be_fresh_and_inside_root(self):
         profile = self.profile()
         for out in ('/tmp/outside-root-mg', self.root):
@@ -235,6 +264,9 @@ class ContainmentControls(Base):
         droot = receipt['containment']['delegatedRoot']
         self.assertFalse(os.path.exists(os.path.join(droot, receipt['containment']['leaf'])))
         self.assertEqual([n for n in sorted(os.listdir(droot)) if os.path.isdir(os.path.join(droot, n))], [mg.SUPERVISOR])
+        self.assertEqual(sorted(mg._dirs(droot)), [droot, os.path.join(droot, mg.SUPERVISOR)])
+        self.assertEqual(set(mg._tree(droot)), {os.getpid()}, 'the delegated root must hold only the owner')
+        self.assertEqual(receipt['residualInRoot'], [])
 
     def test_success_binds_birth_and_contains_leader(self):
         if REQUIRE:  # otherwise the no_new_privs assertion below cannot be attributed to the owner
@@ -276,19 +308,68 @@ class ContainmentControls(Base):
         self.assert_clean(receipt)
 
     def test_cgroup_escape_is_refused_and_retired(self):
-        for target in ('sibling', 'supervisor'):
+        expected = {'sibling': {'escape-sibling'}, 'supervisor': None, 'nested': {'fsgg-supervisor/escape-nested'},
+                    'hop-sibling': {'escape-sibling'}, 'hop-supervisor': None, 'hop-nested': {'fsgg-supervisor/escape-nested'}}
+        for target, created in expected.items():
             with self.subTest(target=target):
                 pidfile = os.path.join(self.root, 'escaped-' + target)
-                receipt = self.failed(self.profile(ESCAPE, [target, pidfile]), seconds=8)
+                profile = self.profile(ESCAPE, [target, pidfile])
+                receipt = self.failed(profile, seconds=8)
                 self.assertIn('contained member escaped managed group', receipt['firstCause'])
-                escaped = int(pathlib.Path(pidfile).read_text())
-                self.assertIn(escaped, [r['pid'] for r in receipt['escaped']])
                 self.assertEqual(receipt['custody'], 'escaped-retired')
-                self.assertGreaterEqual(receipt['retirement']['escapedKills'], 1)
+                names = {c['cgroup'] for c in receipt['createdCgroups']}
+                self.assertTrue(all(c['removed'] for c in receipt['createdCgroups']))
+                if created is None:
+                    self.assertGreaterEqual(receipt['retirement']['quarantined'], 1)
+                    self.assertTrue(all(n.startswith(mg.QUARANTINE_PREFIX) for n in names))
+                else:
+                    self.assertEqual(names, created)
+                escaped = int(pathlib.Path(pidfile).read_text())
                 self.assertTrue(gone_within(escaped))
-                if target == 'sibling':
-                    self.assertEqual(receipt['foreignCgroups'], [{'cgroup': 'escape-sibling', 'removed': True}])
+                program = profile['argv'][3]
+                survivors = [p for p in os.listdir('/proc') if p.isdigit() and program.encode() in self.cmdline(p)]
+                self.assertEqual(survivors, [])
                 self.assert_clean(receipt)
+
+    @staticmethod
+    def cmdline(pid):
+        try:
+            return pathlib.Path(f'/proc/{pid}/cmdline').read_bytes()
+        except OSError:
+            return b''
+
+    def test_residue_left_in_root_is_reported_not_hidden(self):
+        state = {}
+
+        def hook(event, context):
+            if event == 'before-remove':
+                state['helper'] = subprocess.Popen([PYTHON, '-I', '-S', '-c', 'import time; time.sleep(60)'])
+        try:
+            receipt = self.failed(self.profile('pass'), control=hook)
+            self.assertEqual(receipt['cleanup'], 'unknown')
+            self.assertIn('cleanup unqualified: unknown', receipt['firstCause'])
+            self.assertIn(state['helper'].pid, [r['pid'] for r in receipt['residualInRoot']])
+        finally:
+            if 'helper' in state:
+                state['helper'].kill(); state['helper'].wait()
+
+    def test_output_sink_failure_during_retirement_still_kills(self):
+        def hook(event, context):
+            if event == 'before-retire':
+                target = os.path.join(context['outDir'], 'stdout.log')
+                for fd in os.listdir('/proc/self/fd'):
+                    try:
+                        link = os.readlink(f'/proc/self/fd/{fd}')
+                    except OSError:
+                        continue
+                    if link == target:  # keep the descriptor number occupied, but make every write fail
+                        readonly = os.open('/dev/null', os.O_RDONLY); os.dup2(readonly, int(fd)); os.close(readonly)
+        receipt = self.failed(self.profile(CHATTY, retirement={'termGraceSeconds': 1.0}), seconds=1.5, control=hook)
+        self.assertIn('original deadline exhausted', receipt['firstCause'])
+        self.assertIsNotNone(receipt['streams']['stdout']['sinkError'])
+        self.assertTrue(any('sink failed' in f for f in receipt['additionalFailures']))
+        self.assertTrue(receipt['retirement']['cgroupKill'])
+        self.assert_clean(receipt)
 
     def test_early_exit_failure_is_reported_and_group_clean(self):
         receipt = self.failed(self.profile('raise SystemExit(3)'))

@@ -62,8 +62,8 @@ retirement is the kernel's **`cgroup.kill`**.
 
 The consumer runs on GitHub-hosted Ubuntu, which has systemd as PID 1, cgroup v2 and
 non-interactive sudo, so a transient unit with `Delegate=yes` is available. A cgroup
-also enforces `pids.max` and `memory.max` instead of sampling, and its membership does
-not change identity the way a PID namespace does. The local development container
+can also carry kernel limits instead of sampled ones (hard limits on the unit itself;
+see Boundaries), and its membership does not change identity the way a PID namespace does. The local development container
 (catatonit PID 1, root-owned cgroup namespace root, no sudo) cannot delegate a cgroup,
 so the owner refuses there with `containment-unavailable: delegated-root-invalid`. That
 is the intended behavior, not a fallback. The module is a sibling of the shared owner,
@@ -103,7 +103,7 @@ Profile `fsgg.managed-group-profile/1` uses closed keys at every level:
 | `cwd` | Absolute, symlink-free directory inside `root` |
 | `environmentKeys` | Sorted, exact key set of `env`. Values are not bound |
 | `containment` | `cgroup2-delegated` |
-| `limits` | `pidsMax` (null or 1–65536), `memoryMaxBytes` (null or at least 1 MiB; also sets `memory.swap.max=0`), `stdoutBytes`, `stderrBytes` (exact caps) |
+| `limits` | `pidsMax` (null or 1–65536) and `memoryMaxBytes` (null or at least 1 MiB; also sets `memory.swap.max=0`) are written to the leaf and read back. They are cooperative: members share the owner's uid and could raise them. `stdoutBytes` and `stderrBytes` are exact owner-side caps |
 | `retirement` | `onLeaderExit` (`require-empty` or `retire-members`), `leaderExitSettleSeconds` (0–30), `termGraceSeconds` (0–60, less than cleanup), `cleanupSeconds` (0.1–120) |
 
 The profile's identity is the SHA-256 of its canonical JSON, recorded as `profileSha256`.
@@ -114,10 +114,12 @@ Lifecycle:
    `deadline-invalid`, `deadline-exhausted`, `owner-not-single-threaded`,
    `owner-alarm-active`, `environment-mismatch`, `cwd-invalid`, `executable-invalid`,
    `executable-identity-mismatch`, `containment-unavailable:<probe reason>`,
-   `delegated-root-not-exclusive`, `limit-unenforceable:<controller>`. A refusal
-   receipt is written once `out_dir` exists.
+   `delegated-root-not-exclusive`, `limit-unenforceable:<controller>`,
+   `output-unavailable`. A refusal receipt is written once `out_dir` exists, and a leaf
+   created before the refusal is removed.
 2. **Root and leaf.** The delegated root must be a writable `domain` cgroup that
-   contains only the owner process and no other child cgroups. The owner moves itself
+   contains only the owner process and no cgroups other than `fsgg-supervisor`, which
+   must itself have no child cgroups. The owner moves itself
    to `fsgg-supervisor`, enables any requested controllers and creates a fresh leaf
    `fsgg-mg-<invocationId>`.
 3. **Birth.** The forked child joins the leaf and sets `no_new_privs` before exec. The
@@ -127,34 +129,53 @@ Lifecycle:
    of a live leader, a leader outside the leaf, or a leader without `no_new_privs` fails.
    A leader that exits before observation is recorded as `unobserved-leader-exited`;
    no image claim is made.
-4. **Supervision.** Every 50 ms the owner records leaf members by (PID, start ticks)
-   and reads the delegated root. Session or group detachment stays inside the leaf and
-   is not an escape. A process anywhere in the delegated root outside the leaf (other
-   than the owner in `fsgg-supervisor`), or a known member alive outside the root, is
-   an **escape**: the run fails with `contained member escaped managed group` and the
-   process is killed. Output goes through pipes with exact byte caps.
+4. **Supervision.** Every 50 ms the owner reads the whole delegated root and records
+   leaf members by (PID, start ticks), accepting a member only if its start ticks are
+   stable around a cgroup read inside the leaf. Session or group detachment stays inside
+   the leaf and is not an escape. Any process in the delegated root outside the leaf
+   (other than the owner in `fsgg-supervisor`), or a known member alive outside the
+   root, is an **escape**: the run fails with `contained member escaped managed group`.
+   If a member moves the owner, the owner moves itself back and the run fails with
+   `owner cgroup tampered by a member`. Output goes through pipes with exact byte caps.
 5. **Leader exit.** After the settle window, live members either fail the run
    (`require-empty`: `leader exited with live contained members`) or are recorded and
    retired (`retire-members`). A non-zero exit or signal fails the run. Reaching the
    deadline fails with `original deadline exhausted`.
-6. **Retirement (always).** The owner sends SIGTERM to leaf members and SIGKILL to
-   escapes, each through a pidfd whose start ticks are re-checked after opening. After
-   `termGraceSeconds` it writes `cgroup.kill`, waits for `populated 0`, reaps the
-   leader, drains streams to EOF and removes the leaf and any cgroups members created,
-   retrying EBUSY. Everything is bounded by `min(stop, deadline) + cleanupSeconds`.
+6. **Retirement (always).** Each stage below is guarded on its own, so a hook, census,
+   output-sink or cgroup error is recorded and the later stages still run:
+   - SIGTERM to recorded leaf members, through a pidfd whose start ticks and cgroup are
+     re-checked after opening (unrecorded members are left to `cgroup.kill`);
+   - `termGraceSeconds` of grace, then `cgroup.kill` on the leaf, after the owner has
+     confirmed it is not inside it;
+   - a sweep of the whole delegated root, until it is empty or the bound passes:
+     `cgroup.kill` on every cgroup members created (at any depth), and processes found
+     in the root or supervisor cgroup moved into a fresh `fsgg-quarantine-<id>` cgroup
+     that is then killed (the kernel cannot kill those cgroups without killing the
+     owner). Members alive outside the root get SIGKILL by pidfd;
+   - reaping the leader, draining streams to EOF and removing the leaf and every cgroup
+     created during the run (bottom-up, retrying EBUSY).
+
+   Everything is bounded by `min(stop, deadline) + cleanupSeconds`.
 7. **Result.** `cleanup` is `observed-empty-removed`, `observed-empty-remove-failed` or
-   `unknown`. `custody` is `contained`, `escaped-retired`, `escaped-unretired` or
-   `no-child`. Anything other than `observed-empty-removed` fails the run even if the
-   command succeeded (`cleanup unqualified: …`). Hook and report failures never replace
-   the first cause; they go to `additionalFailures`. `receipt.json`, `stdout.log` and
-   `stderr.log` are written to `out_dir`.
+   `unknown`; `unknown` covers a populated leaf, any process left in the delegated root
+   (`residualInRoot`), a live escape or an unreaped leader. `custody` is `contained`,
+   `escaped-retired`, `escaped-unretired` or `no-child`. Anything other than
+   `observed-empty-removed` fails the run even if the command succeeded
+   (`cleanup unqualified: …`), and so do streams that did not reach EOF. Hook and report
+   failures never replace the first cause; they go to `additionalFailures`.
+   `receipt.json`, `stdout.log` and `stderr.log` are written to `out_dir`.
 
 Boundaries that this contract does not claim:
 
 - Supervisor-death cleanup belongs to the enclosing unit (`KillMode=control-group`),
   and the receipt says so (`ownerDeathCleanup: delegated-unit-not-claimed-by-owner`).
-- Containment holds against unprivileged members. `no_new_privs` and the unit's
-  `NoNewPrivileges=yes` stop members from gaining privilege through sudo or setuid.
+- Containment targets cooperative-but-careless workloads: processes that detach,
+  daemonize or change session. Members run as the owner's uid, so a deliberately hostile
+  member could raise the leaf limits or signal the owner. Escapes from the leaf are
+  detected and retired, and `no_new_privs` (plus the unit's `NoNewPrivileges=yes`)
+  stops members gaining the privilege to leave the delegated root. Hard limits belong
+  on the unit, whose interface files stay root-owned: `-p TasksMax=` and `-p MemoryMax=`.
+  The unit is also the backstop for anything the owner cannot retire.
 - Members can use a pidfd to signal only processes they could already signal; stock
   Playwright's own negative-PID group kill stays the caller's accepted residual.
 - A member that forks and exits faster than the 50 ms census is retired by
@@ -172,7 +193,7 @@ sudo -n systemd-run --quiet --wait --pipe --collect --service-type=exec \
   --unit="fsgg-mg-templates-${RUN_ID}-${RUN_ATTEMPT}" \
   -p Delegate=yes -p User="$(id -un)" -p Group="$(id -gn)" -p NoNewPrivileges=yes \
   -p KillMode=control-group -p TimeoutStopSec=5 -p TasksAccounting=yes -p MemoryAccounting=yes \
-  -p RuntimeMaxSec=2400 -p WorkingDirectory="$PWD" \
+  -p TasksMax=<bound> -p MemoryMax=<bound> -p RuntimeMaxSec=2400 -p WorkingDirectory="$PWD" \
   --setenv=EVENT="$EVENT" … -- /usr/bin/python3 - <<'HOSTED_WASM'
 ```
 
@@ -208,12 +229,16 @@ refuses.
 `eng/tests/managed-group-owner/run-ci.sh` runs in the required `compiler-and-tests`
 gate:
 
-- **Refusal controls** (8) run everywhere and verify that nothing is launched.
-- **Containment controls** (14) run in a fresh delegated unit and are required on
+- **Refusal-level controls** (9) run everywhere. They verify that nothing is launched,
+  and that a pidfd signal refuses an unrecorded birth or a foreign cgroup.
+- **Containment controls** (16) run in a fresh delegated unit and are required on
   GitHub-hosted runners. That unit omits `NoNewPrivileges=yes` (and the control checks
   this), so the leader's `no_new_privs` can only come from the owner. They cover success with birth binding, `no_new_privs` and
   exact streams; a setsid/double-fork descendant under both policies; escape to a
-  sibling cgroup and to the supervisor leaf; early non-zero and zero exits; a deadline
+  sibling cgroup, the supervisor cgroup and a nested cgroup under the supervisor, each
+  also by a fork-hopping escapee whose recorded PID is always stale; residue left in the
+  root that must be reported as `unknown`; an output-sink failure during retirement
+  that must not skip `cgroup.kill`; early non-zero and zero exits; a deadline
   kill of a SIGTERM-ignoring tree; a real EBUSY removal failure that is reported, not
   hidden; a hook failure that does not replace the first cause; output caps; a
   non-admitted leader image; refusal for a non-exclusive root; `pids.max`
@@ -221,11 +246,14 @@ gate:
   (`dotnet fsi`) that detach with setsid.
 - **Owner-death control.** The owner SIGKILLs itself mid-run, and the delegated unit
   must still retire the SIGTERM-ignoring member.
-- **Mutation proof** (`mutation_proof.py`): 19 single-fragment mutants. Each must fail
-  its named controls while the unmutated owner passes them. Four refusal mutants also
-  run locally.
+- **Mutation proof** (`mutation_proof.py`): 25 single-fragment mutants. Each must fail
+  its named controls (a hang counts only for the mutant that removes the deadline)
+  while the unmutated owner passes them. Six refusal-level mutants also run locally.
+  The sweep, quarantine, created-cgroup kill, residue reporting and stage guarding each
+  have their own mutant.
 
 Unknowns: hosted Templates runtime behavior (browser support libraries, stock shutdown
-and the 27-case journey); the performance cost of hashing large leader images at birth;
+and the 27-case journey); the time cost of hashing large leader images at birth (bounded
+by the deadline, not measured);
 and cgroup behavior on hosts other than GitHub-hosted Ubuntu. These stay with
 C-J1/#4710 and the #1026 remainder.
