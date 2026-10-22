@@ -514,7 +514,13 @@ def version_controls():
 def committed_state_controls():
     a = F.load_admission()
     assert F.effective_state(a) == 'disabled' and a['selection'] is None and a['enabled'] is False
-    assert all(v is None for v in a['liveEffects'].values()) and a['sharedHelper']['boundIntentFence'] is None
+    assert all(v is None for v in a['liveEffects'].values())
+    # The shared bound-intent fence is pinned by the engine file itself (FS-GG/.github#4805); the route stays dormant.
+    fence = a['sharedHelper']['boundIntentFence']
+    assert fence == {'evidenceSha256': a['sharedHelper']['files']['scripts/release_successor_execution.py'],
+                     'reference': 'FS-GG/.github#4805 @ ' + a['sharedHelper']['commit']}
+    assert a['sharedHelper']['commit'] == '641072f56a40b384eb4ae611877a51ecb0685cd7' and F.effective_state(a) == 'disabled'
+    assert engine().execution.BOUND_INTENT_FENCE == 1, 'pinned engine lacks the bound-intent fence capability marker'
     assert a['original'] == {'version': '0.3.0', 'operation': F.ORIGINAL_OPERATION, 'tag': 'execution/v0.3.0', 'retained': True}
     assert len(F.EFFECT_IDS) == 13 == len(set(F.EFFECT_IDS)) and list(F.EFFECT_IDS) == a['effects']
     assert F.STAGES['packages'] == F.EFFECT_IDS[:4] and F.STAGES['finalize'] == F.EFFECT_IDS

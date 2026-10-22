@@ -147,7 +147,12 @@ pinned helper commit to avoid the (digest-verified) fetch.
 ## Not established here
 
 Actual publication, downloaded-only adoption and rollback, Linux containment,
-hosted receiver runs of the forward candidate, the shared bound-intent fence in
-`FS-GG/.github`, the protected environment, App installations, Trusted Publishing
-policy, occupancy and old-writer fencing, and any operation admission remain with
-the parent obligations. Nothing here sends, tags, publishes or dispatches.
+hosted receiver runs of the forward candidate, the protected environment, App
+installations, Trusted Publishing policy, occupancy and old-writer fencing, and any
+operation admission remain with the parent obligations. Nothing here sends, tags,
+publishes or dispatches.
+
+The shared bound-intent fence landed in `FS-GG/.github#4805` and is pinned by the
+admission (`sharedHelper.boundIntentFence`, evidence is the pinned engine file's own
+SHA-256). The route stays `disabled`; it still uses its invocation-local `SendFence`
+and does not yet pass `fence=` to the shared engine.
