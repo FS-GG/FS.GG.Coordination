@@ -111,7 +111,8 @@ The profile's identity is the SHA-256 of its canonical JSON, recorded as `profil
 Lifecycle:
 
 1. **Refusals before launch.** `profile-invalid`, `out-dir-invalid`, `root-invalid`,
-   `deadline-invalid`, `deadline-exhausted`, `owner-not-single-threaded`,
+   `deadline-invalid`, `deadline-exhausted`, `owner-not-single-threaded`, `owner-privileged`
+   (the owner must not run as uid 0),
    `owner-alarm-active`, `environment-mismatch`, `cwd-invalid`, `executable-invalid`,
    `executable-identity-mismatch`, `containment-unavailable:<probe reason>`,
    `delegated-root-not-exclusive`, `limit-unenforceable:<controller>`,
@@ -149,9 +150,11 @@ Lifecycle:
      confirmed it is not inside it;
    - a sweep of the whole delegated root, until it is empty or the bound passes:
      `cgroup.kill` on every cgroup members created (at any depth), and processes found
-     in the root or supervisor cgroup moved into a fresh `fsgg-quarantine-<id>` cgroup
+     in the root or supervisor cgroup (after a stable-birth check) moved into a fresh
+     `fsgg-quarantine-<id>` cgroup
      that is then killed (the kernel cannot kill those cgroups without killing the
-     owner). Members alive outside the root get SIGKILL by pidfd;
+     owner). Members alive outside the root get SIGKILL by pidfd. Each sweep item is
+     guarded on its own, so one failure is recorded and the sweep continues;
    - reaping the leader, draining streams to EOF and removing the leaf and every cgroup
      created during the run (bottom-up, retrying EBUSY).
 
@@ -159,7 +162,8 @@ Lifecycle:
 7. **Result.** `cleanup` is `observed-empty-removed`, `observed-empty-remove-failed` or
    `unknown`; `unknown` covers a populated leaf, any process left in the delegated root
    (`residualInRoot`), a live escape or an unreaped leader. `custody` is `contained`,
-   `escaped-retired`, `escaped-unretired` or `no-child`. Anything other than
+   `escaped-retired`, `escaped-unretired`, `unknown` (residue without a recorded escape)
+   or `no-child`. Anything other than
    `observed-empty-removed` fails the run even if the command succeeded
    (`cleanup unqualified: …`), and so do streams that did not reach EOF. Hook and report
    failures never replace the first cause; they go to `additionalFailures`.

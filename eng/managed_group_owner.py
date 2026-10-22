@@ -391,6 +391,8 @@ def run(profile, *, env, deadline, out_dir, delegated_root=None, control=None):
                 pass
             _require(time.monotonic() < deadline, 'deadline-exhausted')
             _require(threading.active_count() == 1, 'owner-not-single-threaded')
+            # A root owner could move or kill processes outside the delegated root by a recycled PID.
+            _require(os.geteuid() != 0, 'owner-privileged')
             _require(signal.getitimer(signal.ITIMER_REAL) == (0.0, 0.0), 'owner-alarm-active')
             _require(isinstance(env, dict) and sorted(env) == profile['environmentKeys']
                      and all(isinstance(v, str) and '\x00' not in v for v in env.values()), 'environment-mismatch')
@@ -725,38 +727,53 @@ def _contained(profile, env, deadline, out_dir, receipt, write_receipt, refuse, 
                 tops.append(directory)
             return tops
 
+        sweep_errors = set()
+
+        def attempt(label, action):
+            """Run one sweep item; record each distinct failure once and keep sweeping."""
+            try:
+                return action()
+            except Exception as error:
+                message = 'sweep-' + label + ':' + describe(error)
+                if message not in sweep_errors:
+                    sweep_errors.add(message); additional.append(message)
+                return None
+
+        def kill_created(top):
+            if _populated(top):
+                _write(os.path.join(top, 'cgroup.kill'), b'1'); retire['createdCgroupKills'] += 1
+
+        def quarantine_one(pid):
+            # Move only a process whose birth is stable while it sits in the root or supervisor cgroup.
+            if _identity(pid, lambda directory: directory in preexisting, mount) is not None:
+                _write(os.path.join(quarantine, 'cgroup.procs'), str(pid).encode()); retire['quarantined'] += 1
+
         def sweep():
             """Retire everything in the delegated root outside the leaf until it is empty or the bound passes."""
             while time.monotonic() < end:
-                relocate_owner()
-                try:
-                    census()
-                except RuntimeError:
-                    pass
+                attempt('relocate', relocate_owner)
+                attempt('census', census)
                 outside = [key for key, where in escaped.items() if where == 'outside-delegated-root' and _alive(*key)]
                 for pid, start in outside:
                     if _pidfd_signal(pid, start, signal.SIGKILL, lambda directory: True, mount) == 'sent':
                         retire['escapedKills'] += 1
-                stray = residue()
-                if not stray and not outside and not _populated(leaf):
+                stray = attempt('residue', residue)
+                leaf_populated = attempt('leaf', lambda: _populated(leaf))
+                if stray == {} and not outside and leaf_populated is False:
                     return
-                if _populated(leaf):
-                    kill_leaf()
-                for top in created_tops():
-                    if _populated(top):
-                        _write(os.path.join(top, 'cgroup.kill'), b'1'); retire['createdCgroupKills'] += 1
-                internal = [pid for pid, directory in stray.items() if directory in preexisting]
+                if leaf_populated is not False:
+                    attempt('leaf-kill', kill_leaf)
+                for top in attempt('created', created_tops) or []:
+                    attempt('created-kill', lambda top=top: kill_created(top))
+                internal = [pid for pid, directory in (stray or {}).items() if directory in preexisting]
                 if internal:
                     # The kernel cannot kill the root or supervisor cgroup without killing the owner:
                     # move those processes into a fresh quarantine cgroup and kill that instead.
-                    os.makedirs(quarantine, exist_ok=True)
+                    attempt('quarantine-create', lambda: os.makedirs(quarantine, exist_ok=True))
                     for pid in internal:
-                        try:
-                            _write(os.path.join(quarantine, 'cgroup.procs'), str(pid).encode()); retire['quarantined'] += 1
-                        except OSError:
-                            pass
-                    _write(os.path.join(quarantine, 'cgroup.kill'), b'1')
-                drain(min(end, time.monotonic() + POLL_SECONDS))
+                        attempt('quarantine-move', lambda pid=pid: quarantine_one(pid))
+                    attempt('quarantine-kill', lambda: _write(os.path.join(quarantine, 'cgroup.kill'), b'1'))
+                attempt('drain', lambda: drain(min(end, time.monotonic() + POLL_SECONDS)))
 
         def reap():
             try:
@@ -816,9 +833,11 @@ def _contained(profile, env, deadline, out_dir, receipt, write_receipt, refuse, 
             receipt['cleanup'] = 'observed-empty-remove-failed'
         else:
             receipt['cleanup'] = 'observed-empty-removed'
+        residue_left = receipt['residualInRoot'] is None or bool(receipt['residualInRoot'])
         if escaped:
-            unretired = escaped_alive or receipt['residualInRoot'] is None or bool(receipt['residualInRoot'])
-            receipt['custody'] = 'escaped-unretired' if unretired else 'escaped-retired'
+            receipt['custody'] = 'escaped-unretired' if escaped_alive or residue_left else 'escaped-retired'
+        elif residue_left and child is not None:
+            receipt['custody'] = 'unknown'
         if primary is None and receipt['cleanup'] != 'observed-empty-removed':
             primary = RuntimeError('cleanup unqualified: ' + receipt['cleanup']
                                    + ('' if retire['removeError'] is None else ' (' + retire['removeError'] + ')'))

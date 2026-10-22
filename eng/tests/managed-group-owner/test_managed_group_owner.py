@@ -348,6 +348,7 @@ class ContainmentControls(Base):
             receipt = self.failed(self.profile('pass'), control=hook)
             self.assertEqual(receipt['cleanup'], 'unknown')
             self.assertIn('cleanup unqualified: unknown', receipt['firstCause'])
+            self.assertEqual(receipt['custody'], 'unknown')
             self.assertIn(state['helper'].pid, [r['pid'] for r in receipt['residualInRoot']])
         finally:
             if 'helper' in state:
