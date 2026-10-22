@@ -95,8 +95,13 @@ let command, options =
 let source = required "--source" options
 let output = required "--output" options |> Path.GetFullPath
 let profile = options |> Map.tryFind "--profile" |> Option.defaultValue "cli"
-require (profile = "cli" || profile = "execution-pair") "profile must be cli or execution-pair"
-let version = options |> Map.tryFind "--version" |> Option.defaultValue (if profile = "execution-pair" then "0.3.0" else "0.1.1")
+require (profile = "cli" || profile = "execution-pair" || profile = "execution-pair-forward") "profile must be cli, execution-pair or execution-pair-forward"
+// The forward profile has no default: its version is selected after authoritative occupancy.
+let version = options |> Map.tryFind "--version" |> Option.defaultValue (if profile = "execution-pair" then "0.3.0" elif profile = "execution-pair-forward" then "" else "0.1.1")
+let isPair = profile = "execution-pair" || profile = "execution-pair-forward"
+let isForward = profile = "execution-pair-forward"
+// Must equal eng/execution_pair_forward.py FORWARD_VERSION; a repository control compares both.
+let forwardVersionPattern = "^(0\\.3\\.[1-9][0-9]*|0\\.([4-9]|[1-9][0-9]+)\\.(0|[1-9][0-9]*)|[1-9][0-9]*\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*))$"
 let packageId = "FS.GG.Coordination.Cli"
 let packageName = $"{packageId}.{version}.nupkg"
 let packagePath = Path.Combine(output, packageName)
@@ -134,6 +139,10 @@ let pairIds = [ "FS.GG.Execution.Contracts"; "FS.GG.Execution.Processes" ]
 let pairManifestPath = Path.Combine(output, "execution-pair-release-manifest.json")
 let pairTag = $"execution/v{version}"
 let pairProject id = Path.Combine(repo, "src", id, id + ".fsproj")
+// The original profile remains exactly 0.3.0; the forward profile is exactly disjoint from it.
+let requirePairVersion () =
+    if isForward then require (System.Text.RegularExpressions.Regex.IsMatch(version, forwardVersionPattern) && not (version.EndsWith "\n")) "forward Execution pair version must be a newer stable release than 0.3.0"
+    else require (version = "0.3.0") "only selected Execution pair 0.3.0 may be prepared"
 let pairFile id = $"{id}.{version}.nupkg"
 let pairPath id = Path.Combine(output, pairFile id)
 let localElement (parent: XElement) name =
@@ -141,6 +150,10 @@ let localElement (parent: XElement) name =
 let packageProperty (path: string) (name: string) =
     let document = XDocument.Load(path: string)
     document.Descendants(XName.Get name) |> Seq.exactlyOne |> _.Value
+
+let requirePairProject id =
+    let versionOk = isForward || packageProperty (pairProject id) "PackageVersion" = version
+    require (packageProperty (pairProject id) "PackageId" = id && versionOk && packageProperty (pairProject id) "IsPackable" = "true") "pair project metadata mismatch"
 
 let pairMembersSupported (id: string) (names: string array) =
     let metadata = names |> Array.filter (fun name -> name.StartsWith("package/services/metadata/core-properties/",StringComparison.Ordinal))
@@ -214,7 +227,7 @@ let inspectPairPackage (id: string) (path: string) =
     result
 
 let verifyPair () =
-    require (version = "0.3.0") "only selected Execution pair 0.3.0 may be prepared"
+    requirePairVersion ()
     require (File.Exists pairManifestPath) "pair manifest is missing"
     require (Set.ofArray(Directory.GetFiles(output) |> Array.map Path.GetFileName) = Set.ofList [pairFile pairIds[0];pairFile pairIds[1];Path.GetFileName pairManifestPath]) "pair candidate must contain exactly two packages and its manifest"
     use document = JsonDocument.Parse(File.ReadAllBytes pairManifestPath)
@@ -232,12 +245,12 @@ let verifyPair () =
     printfn "EXECUTION_PAIR_RELEASE_VERIFIED source=%s version=%s" source version
 
 let preparePair () =
-    require (version = "0.3.0") "only selected Execution pair 0.3.0 may be prepared"
+    requirePairVersion ()
     require (source.Length = 40 && source |> Seq.forall Uri.IsHexDigit) "source must be an exact 40-character Git SHA"
     require (capture repo "git" ["rev-parse";"HEAD"] = source && String.IsNullOrWhiteSpace(capture repo "git" ["status";"--porcelain"])) "pair source must be exact clean HEAD"
     require (String.IsNullOrWhiteSpace(capture repo "git" ["tag";"--list";pairTag])) "pair component tag already exists"
     for id in pairIds do
-        require (packageProperty (pairProject id) "PackageId" = id && packageProperty (pairProject id) "PackageVersion" = version && packageProperty (pairProject id) "IsPackable" = "true") "pair project metadata mismatch"
+        requirePairProject id
     require (not (Directory.Exists output) || Directory.GetFileSystemEntries(output).Length = 0) "pair output must be empty"
     Directory.CreateDirectory output |> ignore
     let scratch = Path.Combine(Path.GetTempPath(),"fsgg-execution-pair-" + Guid.NewGuid().ToString("N"))
@@ -247,7 +260,7 @@ let preparePair () =
         Directory.CreateDirectory second |> ignore
         for target in [first;second] do
             for id in pairIds do
-                run repo "dotnet" ["pack";pairProject id;"--configuration";"Release";"--output";target;"--no-restore";"-p:ContinuousIntegrationBuild=true";"-p:Deterministic=true";$"-p:RepositoryCommit={source}";"-p:RepositoryBranch=main"]
+                run repo "dotnet" (["pack";pairProject id;"--configuration";"Release";"--output";target;"--no-restore";"-p:ContinuousIntegrationBuild=true";"-p:Deterministic=true";$"-p:RepositoryCommit={source}";"-p:RepositoryBranch=main"] @ (if isForward then [$"-p:PackageVersion={version}"] else []))
                 canonicalize (Path.Combine(target,pairFile id))
         for id in pairIds do
             let a,b = File.ReadAllBytes(Path.Combine(first,pairFile id)),File.ReadAllBytes(Path.Combine(second,pairFile id))
@@ -278,18 +291,18 @@ let preparePair () =
         if Directory.Exists scratch then Directory.Delete(scratch,true)
 
 match command with
-| "inspect" when profile = "execution-pair" ->
-    require (version = "0.3.0") "only selected Execution pair 0.3.0 may be inspected"
+| "inspect" when isPair ->
+    requirePairVersion ()
     for id in pairIds do inspectPairPackage id (pairPath id) |> ignore
     printfn "EXECUTION_PAIR_MEMBERS_INSPECTED version=%s publicationAuthorized=false" version
-| "check-profile" when profile = "execution-pair" ->
-    require (version = "0.3.0") "only selected Execution pair 0.3.0 may be prepared"
+| "check-profile" when isPair ->
+    requirePairVersion ()
     for id in pairIds do
-        require (packageProperty (pairProject id) "PackageId" = id && packageProperty (pairProject id) "PackageVersion" = version && packageProperty (pairProject id) "IsPackable" = "true") "pair project metadata mismatch"
+        requirePairProject id
     checkPairMemberControls ()
     printfn "EXECUTION_PAIR_PROFILE_CHECKED version=%s publicationAuthorized=false" version
-| "prepare" when profile = "execution-pair" -> preparePair ()
-| "verify" when profile = "execution-pair" -> verifyPair ()
+| "prepare" when isPair -> preparePair ()
+| "verify" when isPair -> verifyPair ()
 | "prepare" ->
     require
         (Set.contains version (Set.ofList [ "0.1.1"; "0.1.2"; "0.1.3"; "0.1.4"; "0.1.5"; "0.1.6"; "0.1.7"; "0.2.0"; "0.2.1"; "0.3.0" ]))

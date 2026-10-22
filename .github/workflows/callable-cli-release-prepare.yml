@@ -395,13 +395,16 @@ jobs:
           test "$GITHUB_REF" = refs/heads/main
           test "$GITHUB_RUN_ATTEMPT" = 1
           [[ "$CANDIDATE_SOURCE" =~ ^[0-9a-f]{40}$ ]]
-          test "$CANDIDATE_VERSION" = 0.3.0
+          # The original 0.3.0 keeps its literal profile; any other version is the guarded
+          # forward profile, whose version rule the release script enforces itself.
+          if test "$CANDIDATE_VERSION" = 0.3.0; then profile=execution-pair; else profile=execution-pair-forward; fi
           test "$CANDIDATE_SOURCE" = "$GITHUB_SHA"
           test "$(git rev-parse HEAD)" = "$CANDIDATE_SOURCE"
           git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
           test "$(git rev-parse refs/remotes/origin/main)" = "$CANDIDATE_SOURCE"
           test -z "$(git status --porcelain)"
           test ! -e "$CANDIDATE_OUTPUT"
+          printf 'PAIR_PROFILE=%s\n' "$profile" >> "$GITHUB_ENV"
       - name: Run actual inert pair guards before costly preparation
         run: python3 tests/portable-workspace/release/test_execution_pair_release.py
       - name: Set up the pinned .NET SDK
@@ -415,12 +418,12 @@ jobs:
           CANDIDATE_VERSION: ${{ inputs.version }}
         run: |
           set -euo pipefail
-          dotnet fsi eng/callable-cli-release.fsx check-profile --profile execution-pair \
+          dotnet fsi eng/callable-cli-release.fsx check-profile --profile "$PAIR_PROFILE" \
             --source "$CANDIDATE_SOURCE" --version "$CANDIDATE_VERSION" --output "$CANDIDATE_OUTPUT"
           dotnet restore src/FS.GG.Execution.Processes/FS.GG.Execution.Processes.fsproj --locked-mode
-          dotnet fsi eng/callable-cli-release.fsx prepare --profile execution-pair \
+          dotnet fsi eng/callable-cli-release.fsx prepare --profile "$PAIR_PROFILE" \
             --source "$CANDIDATE_SOURCE" --version "$CANDIDATE_VERSION" --output "$CANDIDATE_OUTPUT"
-          dotnet fsi eng/callable-cli-release.fsx verify --profile execution-pair \
+          dotnet fsi eng/callable-cli-release.fsx verify --profile "$PAIR_PROFILE" \
             --source "$CANDIDATE_SOURCE" --version "$CANDIDATE_VERSION" --output "$CANDIDATE_OUTPUT"
       - name: Retain the original pair candidate
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -508,11 +511,15 @@ jobs:
           [[ "$CANDIDATE_RUN" =~ ^[1-9][0-9]{0,18}$ ]]
           [[ "$CANDIDATE_ARTIFACT" =~ ^[1-9][0-9]{0,18}$ ]]
           [[ "$ARCHIVE_SHA" =~ ^[0-9a-f]{64}$ ]]
-          test "$CANDIDATE_VERSION" = 0.3.0
+          # The version is written to the environment file below, so it must be exactly closed first.
+          python3 -I -B -c "import os,runpy,sys; v=os.environ['CANDIDATE_VERSION']; sys.exit(0 if v=='0.3.0' or runpy.run_path('eng/execution_pair_forward.py')['forward_version_allowed'](v) else 1)"
+          if test "$CANDIDATE_VERSION" = 0.3.0; then PAIR_PROFILE=execution-pair; else PAIR_PROFILE=execution-pair-forward; fi
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
           test "$(git rev-parse refs/remotes/origin/main)" = "$GITHUB_SHA"
           git merge-base --is-ancestor "$SOURCE_A" "$GITHUB_SHA"
+          # A forward candidate and its receivers run at one exact source: no executor delta.
+          if test "$PAIR_PROFILE" = execution-pair-forward; then test "$SOURCE_A" = "$GITHUB_SHA"; fi
           changed_paths="$(git diff --name-only "$SOURCE_A" "$GITHUB_SHA")"
           export CHANGED_PATHS="$changed_paths"
           python3 - <<'PY_CONSUMER_EXECUTOR_PATHS'
@@ -538,7 +545,7 @@ jobs:
           test ! -e "$CANDIDATE_OUTPUT"
           test ! -e "$READBACK_OUTPUT"
           mkdir "$CANDIDATE_OUTPUT" "$READBACK_OUTPUT"
-          for name in SOURCE_A CANDIDATE_VERSION CANDIDATE_RUN CANDIDATE_ARTIFACT ARCHIVE_SHA; do
+          for name in SOURCE_A CANDIDATE_VERSION CANDIDATE_RUN CANDIDATE_ARTIFACT ARCHIVE_SHA PAIR_PROFILE; do
             printf '%s=%s\n' "$name" "${!name}" >> "$GITHUB_ENV"
           done
       - name: Run actual shared pair guards before installed qualification
@@ -554,7 +561,7 @@ jobs:
           gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$CANDIDATE_ARTIFACT" > "$READBACK_OUTPUT/artifact.json"
           curl --fail --silent --show-error --location --max-time 120 --max-filesize 50331648 --header "Authorization: Bearer $GH_TOKEN" --header 'Accept: application/vnd.github+json' --output "$READBACK_OUTPUT/candidate.zip" "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/artifacts/$CANDIDATE_ARTIFACT/zip"
           python3 - <<'PY_PAIR_INSTALLED_BINDINGS'
-          import hashlib,json,os,pathlib,zipfile
+          import hashlib,json,os,pathlib,runpy,zipfile
           root=pathlib.Path(os.environ['READBACK_OUTPUT'])
           archive=root/'candidate.zip'
           assert 0<archive.stat().st_size<=50331648
@@ -565,7 +572,7 @@ jobs:
               raw=z.read(entry)
           manifest=json.loads(raw)
           version=os.environ['CANDIDATE_VERSION']
-          assert version=='0.3.0'
+          assert version=='0.3.0' or runpy.run_path('eng/execution_pair_forward.py')['forward_version_allowed'](version)
           assert manifest['version']==version
           assert manifest['tag']=='execution/v'+version
           assert manifest['sourceCommit']==os.environ['SOURCE_A']
@@ -589,7 +596,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          dotnet fsi eng/callable-cli-release.fsx verify --profile execution-pair \
+          dotnet fsi eng/callable-cli-release.fsx verify --profile "$PAIR_PROFILE" \
             --source "$SOURCE_A" --version "$CANDIDATE_VERSION" --output "$CANDIDATE_OUTPUT"
           python3 eng/test-callable-cli-installed-harness.py --execution-pair \
             "$CANDIDATE_OUTPUT" candidate "$READBACK_OUTPUT/candidate-load.json"
@@ -727,6 +734,7 @@ jobs:
       RECEIVER_SOURCE: ${{ needs.execution_pair_installed.outputs.sdd_source }}
       RECEIVER_TREE: "${{ needs.execution_pair_installed.outputs.sdd_tree }}"
       SOURCE_A: ${{ inputs.source }}
+      CANDIDATE_VERSION: ${{ inputs.version }}
       ARCHIVE_SHA: ${{ inputs.candidate_archive_sha256 }}
       PROOF_ARTIFACT_ID: ${{ needs.execution_pair_installed.outputs.proof_artifact_id }}
     steps:
@@ -871,7 +879,7 @@ jobs:
           if files!=expected_files or sum(p.stat().st_size for p in entries if p.is_file())>67108864:
               raise ValueError('unexpected transfer payload/source file')
           # Always bind S1 even for rollback: all jobs consume this successful acquisition.
-          fresh=original_pair(transfer/'candidate.zip',os.environ['ARCHIVE_SHA'],'0.3.0',os.environ['SOURCE_A'])
+          fresh=original_pair(transfer/'candidate.zip',os.environ['ARCHIVE_SHA'],os.environ['CANDIDATE_VERSION'],os.environ['SOURCE_A'])
           old=original_pair(transfer/'original-a/candidate.zip','6aedfb7e4eda796fdea3fc0326003a6f90f859352d7394d311f4c5d867687819','0.2.0','c6764ac0cd62cb14372c89c14234292315000380')
           feed=root/'proc6-feed';feed.mkdir(mode=0o700)
           selected=fresh if os.environ['CONSUMER_CASE'].endswith('s1') else old
@@ -1464,6 +1472,7 @@ jobs:
       RECEIVER_SOURCE: ${{ needs.execution_pair_installed.outputs.fsquint_source }}
       RECEIVER_TREE: "${{ needs.execution_pair_installed.outputs.fsquint_tree }}"
       SOURCE_A: ${{ inputs.source }}
+      CANDIDATE_VERSION: ${{ inputs.version }}
       ARCHIVE_SHA: ${{ inputs.candidate_archive_sha256 }}
       PROOF_ARTIFACT_ID: ${{ needs.execution_pair_installed.outputs.proof_artifact_id }}
     steps:
@@ -1608,7 +1617,7 @@ jobs:
           if files!=expected_files or sum(p.stat().st_size for p in entries if p.is_file())>67108864:
               raise ValueError('unexpected transfer payload/source file')
           # Always bind S1 even for rollback: all jobs consume this successful acquisition.
-          fresh=original_pair(transfer/'candidate.zip',os.environ['ARCHIVE_SHA'],'0.3.0',os.environ['SOURCE_A'])
+          fresh=original_pair(transfer/'candidate.zip',os.environ['ARCHIVE_SHA'],os.environ['CANDIDATE_VERSION'],os.environ['SOURCE_A'])
           old=original_pair(transfer/'original-a/candidate.zip','6aedfb7e4eda796fdea3fc0326003a6f90f859352d7394d311f4c5d867687819','0.2.0','c6764ac0cd62cb14372c89c14234292315000380')
           feed=root/'proc6-feed';feed.mkdir(mode=0o700)
           selected=fresh if os.environ['CONSUMER_CASE'].endswith('s1') else old
@@ -2201,6 +2210,7 @@ jobs:
       RECEIVER_SOURCE: c246d2cf12eeb04d6894bab7528c7929bb87a762
       RECEIVER_TREE: ""
       SOURCE_A: ${{ inputs.source }}
+      CANDIDATE_VERSION: ${{ inputs.version }}
       ARCHIVE_SHA: ${{ inputs.candidate_archive_sha256 }}
       PROOF_ARTIFACT_ID: ${{ needs.execution_pair_installed.outputs.proof_artifact_id }}
     steps:
@@ -2345,7 +2355,7 @@ jobs:
           if files!=expected_files or sum(p.stat().st_size for p in entries if p.is_file())>67108864:
               raise ValueError('unexpected transfer payload/source file')
           # Always bind S1 even for rollback: all jobs consume this successful acquisition.
-          fresh=original_pair(transfer/'candidate.zip',os.environ['ARCHIVE_SHA'],'0.3.0',os.environ['SOURCE_A'])
+          fresh=original_pair(transfer/'candidate.zip',os.environ['ARCHIVE_SHA'],os.environ['CANDIDATE_VERSION'],os.environ['SOURCE_A'])
           old=original_pair(transfer/'original-a/candidate.zip','6aedfb7e4eda796fdea3fc0326003a6f90f859352d7394d311f4c5d867687819','0.2.0','c6764ac0cd62cb14372c89c14234292315000380')
           feed=root/'proc6-feed';feed.mkdir(mode=0o700)
           selected=fresh if os.environ['CONSUMER_CASE'].endswith('s1') else old
@@ -2938,6 +2948,7 @@ jobs:
       RECEIVER_SOURCE: 34eeca981c136144ced73a3f98b5ce04218e89c7
       RECEIVER_TREE: ""
       SOURCE_A: ${{ inputs.source }}
+      CANDIDATE_VERSION: ${{ inputs.version }}
       ARCHIVE_SHA: ${{ inputs.candidate_archive_sha256 }}
       PROOF_ARTIFACT_ID: ${{ needs.execution_pair_installed.outputs.proof_artifact_id }}
     steps:
@@ -3082,7 +3093,7 @@ jobs:
           if files!=expected_files or sum(p.stat().st_size for p in entries if p.is_file())>67108864:
               raise ValueError('unexpected transfer payload/source file')
           # Always bind S1 even for rollback: all jobs consume this successful acquisition.
-          fresh=original_pair(transfer/'candidate.zip',os.environ['ARCHIVE_SHA'],'0.3.0',os.environ['SOURCE_A'])
+          fresh=original_pair(transfer/'candidate.zip',os.environ['ARCHIVE_SHA'],os.environ['CANDIDATE_VERSION'],os.environ['SOURCE_A'])
           old=original_pair(transfer/'original-a/candidate.zip','6aedfb7e4eda796fdea3fc0326003a6f90f859352d7394d311f4c5d867687819','0.2.0','c6764ac0cd62cb14372c89c14234292315000380')
           feed=root/'proc6-feed';feed.mkdir(mode=0o700)
           selected=fresh if os.environ['CONSUMER_CASE'].endswith('s1') else old

@@ -264,8 +264,18 @@ def check_execute_main_refusal(tool: pathlib.Path, output: pathlib.Path) -> int:
 
 
 def pair_version(version: str) -> str:
-    """Finite historical/current package profiles; never selects preparation/publication."""
-    if version not in ("0.2.0", "0.3.0"):
+    """Finite historical/current package profiles; never selects preparation/publication.
+
+    The original 0.3.0 and historical 0.2.0 stay literal. Newer coherent pairs are the
+    forward route's: its single version rule lives in eng/execution_pair_forward.py.
+    """
+    if version in ("0.2.0", "0.3.0"):
+        return version
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("execution_pair_forward_version", ROOT / "eng/execution_pair_forward.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    if not module.forward_version_allowed(version):
         raise RuntimeError("Execution pair version is outside the finite reviewed profiles")
     return version
 
@@ -382,7 +392,7 @@ def check_execution_pair(candidate: pathlib.Path, mode: str, output: pathlib.Pat
         config_path = root / "NuGet.Config"
         ET.ElementTree(config).write(config_path, encoding="utf-8", xml_declaration=True)
         project, properties = write_pair_installed_project(root,version)
-        typed_factory = ("let textFactory: ITextProcessSessionFactory = ProcessSessions.createTextFactory()\nif isNull (box textFactory) then failwith \"missing installed text factory\"\n" if version == "0.3.0" else "")
+        typed_factory = ("let textFactory: ITextProcessSessionFactory = ProcessSessions.createTextFactory()\nif isNull (box textFactory) then failwith \"missing installed text factory\"\n" if version != "0.2.0" else "")
         (root / "Program.fs").write_text("""open System
 open FS.GG.Execution.Contracts
 open FS.GG.Execution.Processes

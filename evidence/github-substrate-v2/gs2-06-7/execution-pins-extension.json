@@ -85,7 +85,7 @@
     {
       "kind": "workflow",
       "path": ".github/workflows/callable-cli-release-prepare.yml",
-      "sha256": "966b271ecc24c071b91779186d12b00ca113ae6952866d4a5ff94d39e4ecac59",
+      "sha256": "622cdae6bb074b68634952c83a08f488e80b0512133f63ce275f5c6c3b1b4c68",
       "externalReferences": [
         "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
         "actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68",
@@ -104,6 +104,19 @@
         "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
         "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1",
         "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+        "actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68",
+        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
+      ],
+      "localReferences": []
+    },
+    {
+      "kind": "workflow",
+      "path": ".github/workflows/execution-pair-forward-publish.yml",
+      "sha256": "3e16e3ef8eebad9c24792ae6877ce5f83f05d6081f54fd79292b3c51c849cf3c",
+      "externalReferences": [
+        "NuGet/login@8d196754b4036150537f80ac539e15c2f1028841",
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+        "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1",
         "actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68",
         "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
       ],
