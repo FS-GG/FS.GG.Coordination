@@ -1881,9 +1881,14 @@ def publisher_binding_controls(tmp):
         must_refuse('publisher code differs from candidate source', CLI.bind_publisher, sel, c)
         # A renamed-away closure file lists its old path under --no-renames (rename detection would hide it).
         git('checkout', '-q', '-b', 'renamed', b)
-        git('mv', 'eng/execution_pair_forward.py', 'docs-moved.py')
+        (repo / 'docs').mkdir()
+        git('mv', 'eng/execution_pair_forward.py', 'docs/moved.txt')
         git('commit', '-q', '-m', 'rename')
-        must_refuse('closure file renamed away', CLI.bind_publisher, sel, git('rev-parse', 'HEAD'))
+        renamed = git('rev-parse', 'HEAD')
+        must_refuse('closure file renamed away', CLI.bind_publisher, sel, renamed)
+        # Causal: git's default rename detection lists only the destination, which is not publisher surface.
+        default = git('diff', '--name-only', a, renamed).splitlines()
+        assert 'eng/execution_pair_forward.py' not in default and F.publication_delta_allowed(default), default
         git('checkout', '-q', 'main')
         git('checkout', '-q', '--orphan', 'other')
         git('commit', '-q', '--allow-empty', '-m', 'unrelated')
