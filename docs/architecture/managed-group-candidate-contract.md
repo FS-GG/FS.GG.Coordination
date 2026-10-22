@@ -171,7 +171,7 @@ The caller's step runs its Python in a fresh delegated unit, as the runner user:
 sudo -n systemd-run --quiet --wait --pipe --collect --service-type=exec \
   --unit="fsgg-mg-templates-${RUN_ID}-${RUN_ATTEMPT}" \
   -p Delegate=yes -p User="$(id -un)" -p Group="$(id -gn)" -p NoNewPrivileges=yes \
-  -p KillMode=control-group -p TasksAccounting=yes -p MemoryAccounting=yes \
+  -p KillMode=control-group -p TimeoutStopSec=5 -p TasksAccounting=yes -p MemoryAccounting=yes \
   -p RuntimeMaxSec=2400 -p WorkingDirectory="$PWD" \
   --setenv=EVENT="$EVENT" … -- /usr/bin/python3 - <<'HOSTED_WASM'
 ```

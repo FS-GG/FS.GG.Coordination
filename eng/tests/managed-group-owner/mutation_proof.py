@@ -12,6 +12,7 @@ OWNER = HERE.parents[1] / 'managed_group_owner.py'
 SUITE = HERE / 'test_managed_group_owner.py'
 UNIT = HERE / 'delegated-unit.sh'
 R, C = 'RefusalControls.', 'ContainmentControls.'
+HANG_KILLS = {'deadline-ignored'}
 MUTANTS = [
     ('executable-digest-unchecked', "_require(sha256_fd(exe_fd) == profile['executable']['sha256'], 'executable-identity-mismatch')", 'sha256_fd(exe_fd)', [R + 'test_executable_identity_mismatch_refuses_before_launch']),
     ('probe-unchecked', "_require(available['available'], 'containment-unavailable', str(available['refusal']))", 'pass', [R + 'test_containment_unavailable_refuses_before_launch']),
@@ -50,14 +51,17 @@ def execute(owner, tests, containment, scratch, timeout):
     except subprocess.TimeoutExpired as expired:
         code, output = 'timeout', (expired.stdout or b'').decode('utf-8', 'replace')
         if unit is not None:
-            subprocess.run(['sudo', '-n', 'systemctl', 'stop', unit + '.service'], timeout=60)
+            try:
+                subprocess.run(['sudo', '-n', 'systemctl', 'stop', unit + '.service'], timeout=30)
+            except subprocess.TimeoutExpired:
+                output += '\nunit stop timed out'
     return {'code': code, 'seconds': round(time.monotonic() - started, 2), 'tail': output[-1500:]}
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--scratch', required=True); parser.add_argument('--mode', choices=('refusal', 'all'), required=True)
-    parser.add_argument('--timeout', type=float, default=45)
+    parser.add_argument('--timeout', type=float, default=90)
     args = parser.parse_args()
     scratch = pathlib.Path(args.scratch); scratch.mkdir(parents=True, exist_ok=True)
     source = OWNER.read_text()
@@ -70,8 +74,10 @@ def main():
         baseline = execute(OWNER, tests, containment, scratch, args.timeout)
         directory = scratch / ('mutant-' + name); shutil.rmtree(directory, ignore_errors=True); directory.mkdir()
         mutant = directory / 'managed_group_owner.py'; mutant.write_text(source.replace(old, new))
-        outcome = execute(mutant, tests, containment, scratch, args.timeout)
-        killed = baseline['code'] == 0 and outcome['code'] != 0
+        outcome = execute(mutant, tests, containment, scratch, 30 if name in HANG_KILLS else args.timeout)
+        # A mutant is killed only by a failing control (unittest exit 1). A hang counts only
+        # where the mutation removes the deadline itself.
+        killed = baseline['code'] == 0 and (outcome['code'] == 1 or (name in HANG_KILLS and outcome['code'] == 'timeout'))
         results.append({'mutant': name, 'tests': tests, 'baseline': baseline['code'], 'mutantResult': outcome['code'],
                         'killed': killed, 'seconds': outcome['seconds'], **({} if killed else {'baselineTail': baseline['tail'], 'mutantTail': outcome['tail']})})
         print(f"{'KILLED ' if killed else 'SURVIVED'} {name}: baseline={baseline['code']} mutant={outcome['code']} ({outcome['seconds']}s)", flush=True)

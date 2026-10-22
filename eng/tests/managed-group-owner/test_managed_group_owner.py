@@ -276,7 +276,7 @@ class ContainmentControls(Base):
         for target in ('sibling', 'supervisor'):
             with self.subTest(target=target):
                 pidfile = os.path.join(self.root, 'escaped-' + target)
-                receipt = self.failed(self.profile(ESCAPE, [target, pidfile]))
+                receipt = self.failed(self.profile(ESCAPE, [target, pidfile]), seconds=8)
                 self.assertIn('contained member escaped managed group', receipt['firstCause'])
                 escaped = int(pathlib.Path(pidfile).read_text())
                 self.assertIn(escaped, [r['pid'] for r in receipt['escaped']])
