@@ -511,6 +511,8 @@ jobs:
           [[ "$CANDIDATE_RUN" =~ ^[1-9][0-9]{0,18}$ ]]
           [[ "$CANDIDATE_ARTIFACT" =~ ^[1-9][0-9]{0,18}$ ]]
           [[ "$ARCHIVE_SHA" =~ ^[0-9a-f]{64}$ ]]
+          # The version is written to the environment file below, so it must be exactly closed first.
+          python3 -c "import os,runpy; v=os.environ['CANDIDATE_VERSION']; assert v=='0.3.0' or runpy.run_path('eng/execution_pair_forward.py')['forward_version_allowed'](v)"
           if test "$CANDIDATE_VERSION" = 0.3.0; then PAIR_PROFILE=execution-pair; else PAIR_PROFILE=execution-pair-forward; fi
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main

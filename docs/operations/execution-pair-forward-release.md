@@ -27,8 +27,13 @@ reuses the module rule).
 
 The existing prepare workflow selects the profile from `version`. A forward
 candidate, its installed load and its four receiver cases run at **one exact
-source**: the executor must equal candidate source A. The publisher B may differ
-from A only by the admission file; `bind` enforces ancestry, tree and that delta.
+source**: the executor must equal candidate source A. A publisher B (including a
+later resume publisher) must descend from A with A's tree; within the exact
+*publisher closure* (the forward library and CLI, the installed-harness and
+readback helpers, the tag ruleset, `global.json` and the publish workflow) it may
+differ from A only by the admission file. Unrelated repository history cannot
+strand a partly published pair, and a control scans the publisher sources and
+workflow to prove the closure is exactly what they read.
 
 ## Admission states
 
@@ -74,6 +79,17 @@ admission refuses the rest before any intent exists, and `ready()` proves every
 send is possible (credentials, retained bytes, staged assets) before the first
 intent, because an intent that cannot be sent is a permanent Unknown.
 
+## Continuing a stopped publication
+
+`mode=publish` starts a fresh journal. After any stop, `mode=resume` runs a
+`--resume` preflight (candidate, receivers and tag policy are re-authenticated; unoccupied
+cells are *not* required because the engine re-observes every journal effect) and
+publishes a `plan` from the shared journal alone: `packages` (package window
+incomplete), `finalize` (window verified; `public-load` re-runs in the new run) or
+`complete`. Jobs run only when the plan names them, so no effect whose intent is
+recorded is ever resent; a stale `packages` job against an advanced journal is
+refused by the engine.
+
 ## Guards
 
 * **Preflight**: candidate archive authenticated through the maintained
@@ -104,6 +120,22 @@ feed and journal; every guard has a paired causal control that removes that
 single guard and shows the harm. They also prepare a real forward candidate and
 verify its reproducibility. Set `FSGG_SHARED_HELPER_ROOT` to a checkout of the
 pinned helper commit to avoid the (digest-verified) fetch.
+
+## Known limits
+
+* A pre-existing **draft** release for the selected tag is invisible to the
+  read-only preflight and package jobs (drafts need push access). It is detected at
+  the `draft` effect, whose job holds contents write, before any release write;
+  the packages already published remain valid and the operator resolves the draft.
+* A GitHub Packages 404 is trusted as absence only when the public feed also has no
+  history for that package; otherwise the listing is refused as ambiguous.
+* `main` must equal the publisher on every intent, dispatch and settlement, so the
+  protected environment should serialize merges to `main` during a run.
+* The `execution-pair-forward` environment must be created and protected by root
+  before any dispatch; a dispatch would otherwise create it unprotected.
+* The ledger App must be one of the two integrations in the Authority main-writer
+  ruleset (`authority_protection` pins them); the forward environment therefore
+  needs that existing App's credentials, or a ruleset change in `FS-GG/.github`.
 
 ## Not established here
 

@@ -210,6 +210,8 @@ class Hub:
         self.policy_bad = False
         self.release_asset_serial = 1000
         self.drop_requests = set()
+        self.hidden_github_listing = set()  # a token that cannot see an existing package gets 404
+        self.release_read_guard = None
 
     # -- GitHub REST (api.get/post/patch/upload_asset/download_asset)
     def api_get(self, path):
@@ -229,6 +231,8 @@ class Hub:
                 raise E.provider.NotFound(path)
             return {'object': {'sha': self.tags[tag], 'type': 'commit'}}
         if path.startswith(f'repos/{R}/releases?'):
+            if self.release_read_guard and self.release_read_guard():
+                raise OSError('transient release listing failure')
             page = int(path.rsplit('page=', 1)[1])
             return [dict(r) for r in self.releases] if page == 1 else []
         m = re.fullmatch(rf'repos/{re.escape(R)}/releases/(\d+)/assets\?per_page=100', path)
@@ -301,6 +305,8 @@ class Hub:
         m = re.fullmatch(r'https://api\.github\.com/orgs/FS-GG/packages/nuget/([a-z.]+)/versions\?per_page=100', url)
         if m:
             package = next(i for i in IDS if i.lower() == m.group(1))
+            if package in self.hidden_github_listing:
+                return 404, b''
             versions = list(self.extra_versions.get(('github', package), [])) + ([world.version] if package in self.feeds['github'] else [])
             return (200, json.dumps([{'name': v} for v in versions]).encode()) if versions else (404, b'')
         if url == f'https://api.github.com/repos/{R}/git/matching-refs/tags/execution/v':
@@ -682,6 +688,7 @@ def occupancy_controls(tmp):
         'higher-github-version': lambda h: h.extra_versions.update({('github', IDS[0]): ['0.3.5'], ('github', IDS[1]): ['0.3.5']}),
         'equal-nuget-version': lambda h: h.extra_versions.update({('nuget', IDS[0]): ['0.3.1'], ('nuget', IDS[1]): ['0.3.1']}),
         'higher-tag': lambda h: h.extra_tags.append('execution/v0.4.0'),
+        'github-listing-hidden': lambda h: h.hidden_github_listing.update({IDS[0]}) or h.extra_versions.update({('nuget', IDS[0]): ['0.2.0'], ('nuget', IDS[1]): ['0.2.0']}),
     }
     for label, mutate in cases.items():
         fresh = Hub(world)
@@ -710,6 +717,14 @@ def occupancy_controls(tmp):
     must_refuse('higher history', F.occupancy_join, sel, observed)
     with neutralized(F, 'select_version', lambda proposed, versions, tags=(): proposed):
         assert F.occupancy_join(sel, observed)['version'] == '0.3.1'
+    # Causal: without the ambiguity rule a hidden GitHub listing (404) is silently treated as an empty history.
+    hidden = Hub(world)
+    hidden.hidden_github_listing.add(IDS[0])
+    hidden.extra_versions[('nuget', IDS[0])] = hidden.extra_versions[('nuget', IDS[1])] = ['0.2.0']
+    observed = F.observe_occupancy(HubTransport(hidden), sel, 'gh')
+    must_refuse('hidden github listing', F.occupancy_join, sel, observed)
+    observed['listing'].update({f'github:{i}': 200 for i in IDS})
+    assert F.occupancy_join(sel, observed)['version'] == '0.3.1'
     count('occupancy')
 
 
@@ -1488,8 +1503,11 @@ def workflow_findings(text):
             findings.append('ledger-missing')
         if name in ('preflight', 'packages', 'finalize') and 'run-attempt' in job:
             findings.append('attempt-override')
-    if 'needs: preflight' not in jobs.get('packages', '') or 'needs: packages' not in jobs.get('public-load', '') or 'needs: public-load' not in jobs.get('finalize', ''):
+    if ('needs: preflight\n' not in jobs.get('packages', '') or 'needs: [preflight, packages]\n' not in jobs.get('public-load', '')
+            or 'needs: [preflight, public-load]\n' not in jobs.get('finalize', '')):
         findings.append('stage-order')
+    if "needs.packages.result == 'skipped'" not in jobs.get('public-load', '') or "needs.preflight.outputs.plan == 'packages'" not in jobs.get('packages', ''):
+        findings.append('resume-plan-gating')
     if 'permission-administration: read' not in jobs.get('preflight', '') or 'permission-administration: write' in text:
         findings.append('policy-token-scope')
     return findings
@@ -1503,7 +1521,7 @@ def workflow_controls():
         'permissions:packages': lambda t: t.replace('      packages: write\n      id-token: write\n', '      packages: write\n      id-token: write\n      contents: write\n', 1),
         'nuget-or-package-write-outside-packages:finalize': lambda t: t.replace('    permissions:\n      contents: write\n      actions: read\n      packages: read\n', '    permissions:\n      contents: write\n      actions: read\n      packages: write\n'),
         'public-load-has-credentials': lambda t: t.replace('GH_TOKEN: ${{ github.token }}\n        run: |\n          set -euo pipefail\n          python3 eng/execution-pair-forward.py public-load', 'GH_TOKEN: ${{ github.token }}\n          X: ${{ secrets.FSGG_DISPATCH_APP_ID }}\n        run: |\n          set -euo pipefail\n          python3 eng/execution-pair-forward.py public-load'),
-        'environment:finalize': lambda t: t.replace('    needs: public-load\n    runs-on: ubuntu-24.04\n    environment: execution-pair-forward\n', '    needs: public-load\n    runs-on: ubuntu-24.04\n'),
+        'environment:finalize': lambda t: t.replace('    needs: [preflight, public-load]\n    runs-on: ubuntu-24.04\n    environment: execution-pair-forward\n', '    needs: [preflight, public-load]\n    runs-on: ubuntu-24.04\n'),
         'credential-before-admission-gate:packages': lambda t: t.replace(
             '      - name: Require the enabled admission and exact publisher binding before any credential exists\n        id: admitted\n',
             '      - name: Exchange early\n        uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841\n        with:\n          user: x\n'
@@ -1512,7 +1530,8 @@ def workflow_controls():
         'unpinned-action:actions/checkout@v4': lambda t: t.replace('actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1', 'actions/checkout@v4', 1),
         'trigger-not-manual': lambda t: t.replace('on:\n  workflow_dispatch:', 'on:\n  push:\n  workflow_dispatch:', 1),
         'touches-original-operation': lambda t: t.replace("PYTHONOPTIMIZE: '0'", "PYTHONOPTIMIZE: '0'\n      ORIGINAL: execution/v0.3.0", 1),
-        'stage-order': lambda t: t.replace('    needs: public-load\n', '    needs: preflight\n', 1),
+        'stage-order': lambda t: t.replace('    needs: [preflight, public-load]\n', '    needs: preflight\n', 1),
+        'resume-plan-gating': lambda t: t.replace("needs.preflight.outputs.plan == 'packages' && github.ref", "github.ref", 1),
         'policy-token-scope': lambda t: t.replace('permission-administration: read', 'permission-administration: write', 1),
         'permissions:preflight': lambda t: t.replace('      packages: read\n    env:\n      PYTHONOPTIMIZE', '      packages: write\n    env:\n      PYTHONOPTIMIZE', 1),
     }
@@ -1660,11 +1679,10 @@ def cli_controls(tmp):
     sel = world.selection
     F.bind_publisher(sel, PUBLISHER, [F.ADMISSION_PATH], ancestor=True, tree=TREE)
     F.bind_publisher(sel, PUBLISHER, [], ancestor=True, tree=TREE)
+    # Unrelated repository history between A and B does not strand a partly published pair.
+    F.bind_publisher(sel, PUBLISHER, [F.ADMISSION_PATH, 'src/FS.GG.Coordination.Cli/Program.fs', 'docs/other.md', 'eng/execution-pair-release-admission.json'], ancestor=True, tree=TREE)
     for label, kwargs in {'not-ancestor': dict(paths=[], ancestor=False, tree=TREE), 'tree': dict(paths=[], ancestor=True, tree='c' * 40),
-                          'code-change': dict(paths=['eng/execution_pair_forward.py'], ancestor=True, tree=TREE),
-                          'workflow-change': dict(paths=[F.ADMISSION_PATH, '.github/workflows/execution-pair-forward-publish.yml'], ancestor=True, tree=TREE),
-                          'original-admission': dict(paths=['eng/execution-pair-release-admission.json'], ancestor=True, tree=TREE),
-                          'package-change': dict(paths=['src/FS.GG.Execution.Processes/ProcessSessions.fs'], ancestor=True, tree=TREE)}.items():
+                          **{f'closure-{path}': dict(paths=[F.ADMISSION_PATH, path], ancestor=True, tree=TREE) for path in sorted(F.PUBLISHER_CLOSURE - {F.ADMISSION_PATH})}}.items():
         must_refuse('publication delta ' + label, F.bind_publisher, sel, PUBLISHER, kwargs['paths'], ancestor=kwargs['ancestor'], tree=kwargs['tree'])
     count('publication-delta')
 
@@ -1732,7 +1750,7 @@ def cli_world(world, hub, authority, tmp, *, bind=None):
          patch.object(E.route, 'ProtectedPublisherAdmission', Gate), \
          patch.object(E.journal, 'ProtectedReleaseJournal', lambda api, ref, main_directory: authority.handle()), \
          patch.object(CLI, 'bind_publisher', bind or (lambda selection, sha: None)), \
-         patch.object(CLI, 'push_runner', hub.push), \
+         patch.object(CLI, 'push_runner', lambda argv: hub.push(argv)), \
          patch.object(CLI, 'verify_signature', lambda path: None), \
          patch.object(CLI, 'installed_check', installed_check(world)), \
          patch.object(F.PairProvider, 'download_feed', F.PairProvider.download_feed), \
@@ -1856,12 +1874,174 @@ def publisher_binding_controls(tmp):
         unrelated = git('rev-parse', 'HEAD')
         must_refuse('candidate is not an ancestor', CLI.bind_publisher, sel, unrelated)
         must_refuse('tree differs', CLI.bind_publisher, dict(sel, tree='c' * 40), b)
-        # Causal: with the delta rule widened to everything, a code change between A and B is accepted.
-        with patch.object(F, 'PUBLICATION_DELTA', frozenset({F.ADMISSION_PATH, 'eng/execution_pair_forward.py'})):
+        # Causal: without the closure rule the changed publisher code is accepted.
+        with patch.object(F, 'PUBLISHER_CLOSURE', frozenset({F.ADMISSION_PATH})):
             CLI.bind_publisher(sel, c)
     finally:
         os.chdir(old)
     count('publisher-binding')
+
+
+def closure_controls():
+    """The publisher closure is exactly what the publisher reads from the repository."""
+    sources = {name: (ROOT / name).read_text() for name in ('eng/execution_pair_forward.py', 'eng/execution-pair-forward.py')}
+    read = set()
+    for text in sources.values():
+        read |= {m for m in re.findall(r'(?:ROOT|ENG|HERE) / "([A-Za-z0-9_./-]+)"', text)}
+        read |= set(re.findall(r'"(eng/[A-Za-z0-9_./-]+)"', text))
+    read = {('eng/' + r if '/' not in r and r.endswith(('.py', '.json')) else r) for r in read}
+    read.discard('eng/')
+    assert 'eng/test-callable-cli-installed-harness.py' in read and 'eng/write-callable-cli-release-readback.py' in read and 'eng/repository-settings/release-tag-ruleset.json' in read
+    stray = {r for r in read if r not in F.PUBLISHER_CLOSURE and not r.startswith(('eng/execution-pair-release', 'eng/callable-cli-release.fsx'))}
+    assert not stray, f'the publisher reads repository files outside its closure: {sorted(stray)}'
+    # The workflow executes only closure files and the checked-out global.json (the harness copies it).
+    workflow = (ROOT / F.PUBLISH_WORKFLOW).read_text()
+    referenced = set(re.findall(r'\b(eng/[A-Za-z0-9_./-]+\.(?:py|json|fsx))\b', workflow))
+    assert referenced <= F.PUBLISHER_CLOSURE, sorted(referenced - F.PUBLISHER_CLOSURE)
+    assert 'global.json' in workflow
+    # Every closure member exists and the original-route admission is not an input of the publisher.
+    assert all((ROOT / path).is_file() for path in F.PUBLISHER_CLOSURE)
+    assert 'eng/execution-pair-release-admission.json' not in F.PUBLISHER_CLOSURE and 'eng/execution-pair-release-admission.json' not in read
+    # Causal: a publisher that starts reading a file outside the closure is found by this scan.
+    probe = 'x = ROOT / "eng/not-in-closure.py"'
+    found = set(re.findall(r'(?:ROOT|ENG|HERE) / "([A-Za-z0-9_./-]+)"', probe))
+    assert found == {'eng/not-in-closure.py'} and not found <= F.PUBLISHER_CLOSURE
+    count('publisher-closure')
+
+
+def resume_controls(tmp):
+    C, P = IDS
+    E = engine()
+    cid = 'sha256:' + '1' * 64
+    st = lambda eff: E.execution.JournalState(2, cid, eff)
+    assert F.resume_plan(st({})) == 'packages'
+    assert F.resume_plan(st({f'github:{C}': 'verified', f'github:{P}': 'intent'})) == 'packages'
+    pk = {e: 'verified' for e in F.EFFECT_IDS[:4]}
+    assert F.resume_plan(st(pk)) == 'finalize'
+    assert F.resume_plan(st({**pk, 'tag': 'intent'})) == 'finalize'
+    assert F.resume_plan(st({e: 'verified' for e in F.EFFECT_IDS})) == 'complete'
+    must_refuse('foreign journal effect', F.resume_plan, st({'other': 'verified'}))
+    must_refuse('finalize effect before packages complete', F.resume_plan, st({f'github:{C}': 'verified', 'tag': 'verified'}))
+    # The workflow is the only consumer of the plan: each stage runs exactly when the plan names it.
+    world = World(tmp)
+    hub, authority = Hub(world), Authority()
+    plans = []
+
+    def plan_of(receipt_dir):
+        return json.loads((Path(receipt_dir) / 'preflight-receipt.json').read_bytes())['plan']
+
+    with cli_world(world, hub, authority, tmp) as cli:
+        # Fresh: only the non-resume preflight is accepted and it plans the package stage.
+        code, err = cli('preflight', '--workdir', str(Path(tmp) / 'p0'))
+        assert code == 0 and plan_of(Path(tmp) / 'p0') == 'packages', err
+        code, err = cli('preflight', '--resume', '--workdir', str(Path(tmp) / 'p0r'))
+        assert code == 1 and 'existing forward journal' in err
+        # Interrupted mid-package-window (a process death after two pushes).
+        original = hub.push
+        seen = []
+
+        def die_after_two(argv):
+            original(argv)
+            seen.append(argv)
+            if len(seen) == 2:
+                raise Boom()
+
+        hub.push = die_after_two
+        try:
+            cli('packages', '--workdir', str(Path(tmp) / 'k1'))
+        except Boom:
+            pass
+        hub.push = original
+        assert authority.journal is not None and len(hub.pushes) == 2
+        # A plain preflight now refuses (journal begun, cells populated); the resume preflight continues it.
+        code, err = cli('preflight', '--workdir', str(Path(tmp) / 'p1'))
+        assert code == 1
+        code, err = cli('preflight', '--resume', '--workdir', str(Path(tmp) / 'p1r'))
+        assert code == 0 and plan_of(Path(tmp) / 'p1r') == 'packages', err
+        code, err = cli('packages', '--workdir', str(Path(tmp) / 'k2'))
+        assert code == 0 and hub.pushes == [('github', C), ('github', P), ('nuget', C), ('nuget', P)], err
+        code, err = cli('preflight', '--resume', '--workdir', str(Path(tmp) / 'p2r'))
+        assert code == 0 and plan_of(Path(tmp) / 'p2r') == 'finalize', err
+        # The next dispatch reads the plan, re-runs public-load and finalizes.
+        code, err = cli('public-load', '--workdir', str(Path(tmp) / 'k3'))
+        assert code == 0
+        hub.store_receipt((Path(tmp) / 'k3' / 'public-load-receipt.json').read_bytes())
+        code, err = cli('finalize', '--workdir', str(Path(tmp) / 'k4'))
+        assert code == 0 and authority.journal.state.effects == {e: 'verified' for e in F.EFFECT_IDS}, err
+        code, err = cli('preflight', '--resume', '--workdir', str(Path(tmp) / 'p3r'))
+        assert code == 0 and plan_of(Path(tmp) / 'p3r') == 'complete'
+        # Causal: a non-resuming preflight on a begun journal is exactly what stranded the route before.
+        assert cli('preflight', '--workdir', str(Path(tmp) / 'p4'))[0] == 1
+    # Unrelated main history does not strand the continuation (closure rule), the publisher still must be on main.
+    count('resume')
+
+
+def release_dispatch_reads_nothing_controls(tmp):
+    """A send is never preceded by a remote read that could fail after the intent was recorded."""
+    world = World(tmp)
+    hub = Hub(world)
+    journal = MemoryJournal(F.content_id(world.selection))
+    stage(world, hub, journal, 'packages')
+    generated = finalize_inputs(world, hub)
+    # Reads of the release list fail once the promote intent exists; the send has to survive that.
+    hub.release_read_guard = lambda: ('promote', 'intent') in journal.cas and ('promote', 'verified') not in journal.cas
+    must_refuse('observation outage after the promote send', stage, world, hub, journal, 'finalize', generated=generated)
+    assert hub.releases[0]['draft'] is False, 'the promote send must not depend on a read made after its intent'
+    posts = list(hub.posts)
+    hub.release_read_guard = None
+    stage(world, hub, journal, 'finalize', generated=generated)
+    assert journal.state.effects == {e: 'verified' for e in F.EFFECT_IDS} and hub.posts == posts, 'recovery settles by observation without resending'
+    # Same for an asset upload: the draft observed in the same transition is the only input.
+    world = World(Path(tempfile.mkdtemp(dir=tmp)))
+    hub = Hub(world)
+    journal = MemoryJournal(F.content_id(world.selection))
+    stage(world, hub, journal, 'packages')
+    generated = finalize_inputs(world, hub)
+    hub.release_read_guard = lambda: ('asset:FS.GG.Execution.Contracts', 'intent') in journal.cas and ('asset:FS.GG.Execution.Contracts', 'verified') not in journal.cas
+    must_refuse('observation outage after an asset send', stage, world, hub, journal, 'finalize', generated=generated)
+    assert F.asset_name('asset:' + IDS[0], '0.3.1') in hub.assets[hub.releases[0]['id']]
+    hub.release_read_guard = None
+    stage(world, hub, journal, 'finalize', generated=generated)
+    count('dispatch-reads-nothing')
+
+
+def env_injection_controls(tmp):
+    """The prepare workflow validates the version before it writes it to the environment file."""
+    prepare = (ROOT / '.github/workflows/callable-cli-release-prepare.yml').read_text()
+    job = prepare.split('  execution_pair_installed:\n', 1)[1]
+    gate = job.split('          set -euo pipefail\n', 1)[1].split('      - name: Run actual shared pair guards', 1)[0]
+    gate = 'set -euo pipefail\n' + '\n'.join(line[10:] if line.startswith('          ') else line for line in gate.splitlines())
+    stub = Path(tmp) / 'bin'
+    stub.mkdir()
+    (stub / 'git').write_text("#!/usr/bin/python3\nimport os,sys\na=sys.argv[1:]\nif a[0]=='rev-parse':print(os.environ['GITHUB_SHA'])\nif a[0]=='diff':pass\n")
+    (stub / 'git').chmod(0o700)
+
+    def run(version, *, source=None, script=gate):
+        out = Path(tempfile.mkdtemp(dir=tmp))
+        env = {**os.environ, 'PATH': f'{stub}{os.pathsep}{os.environ["PATH"]}', 'MODE': 'execution-pair-installed', 'GITHUB_REF': 'refs/heads/main', 'GITHUB_RUN_ATTEMPT': '1',
+               'GITHUB_REPOSITORY': F.REPOSITORY, 'GITHUB_SHA': '9' * 40, 'EXECUTOR_SOURCE': '9' * 40, 'SOURCE_A': source or '9' * 40, 'CANDIDATE_RUN': '1',
+               'CANDIDATE_ARTIFACT': '3', 'ARCHIVE_SHA': 'c' * 64, 'CANDIDATE_VERSION': version, 'CANDIDATE_OUTPUT': str(out / 'candidate'), 'READBACK_OUTPUT': str(out / 'readback'),
+               'GITHUB_ENV': str(out / 'env')}
+        result = subprocess.run(['bash', '-c', script], cwd=ROOT, env=env, capture_output=True, text=True)
+        return result.returncode, (out / 'env').read_text() if (out / 'env').exists() else ''
+
+    code, env_file = run('0.3.1')
+    assert code == 0 and 'PAIR_PROFILE=execution-pair-forward' in env_file and 'CANDIDATE_VERSION=0.3.1' in env_file
+    code, env_file = run('0.3.0', source='9' * 40)
+    assert code == 0 and 'PAIR_PROFILE=execution-pair\n' in env_file
+    for bad in ('0.3.1\nBASH_ENV=/tmp/evil', '0.3.1 ', '0.3.1\n', '0.3', '0.3.1-rc1', '$(id)', '0.2.0', ''):
+        code, env_file = run(bad)
+        assert code != 0 and env_file == '', repr(bad)
+        count('env-injection-refused')
+    # Forward candidates run at one exact source.
+    code, env_file = run('0.3.1', source='8' * 40)
+    assert code != 0 and env_file == ''
+    # Causal: remove the version validation and the injected line reaches the environment file.
+    unguarded = '\n'.join(line for line in gate.splitlines() if 'forward_version_allowed' not in line and 'The version is written' not in line)
+    assert unguarded != gate
+    code, env_file = run('0.3.1\nBASH_ENV=/tmp/evil', script=unguarded)
+    assert 'BASH_ENV=/tmp/evil' in env_file, 'control: without validation the version injects an environment variable'
+    count('env-injection')
 
 
 def api_class_controls(tmp):
@@ -1920,6 +2100,10 @@ def main():
         acquisition_controls(fresh())
         preflight_controls(fresh())
         api_class_controls(fresh())
+        closure_controls()
+        resume_controls(fresh())
+        release_dispatch_reads_nothing_controls(fresh())
+        env_injection_controls(fresh())
         cli_wiring_controls(fresh())
         publisher_binding_controls(fresh())
         fence_controls(fresh())

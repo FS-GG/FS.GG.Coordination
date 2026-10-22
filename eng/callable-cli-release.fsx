@@ -141,7 +141,7 @@ let pairTag = $"execution/v{version}"
 let pairProject id = Path.Combine(repo, "src", id, id + ".fsproj")
 // The original profile remains exactly 0.3.0; the forward profile is exactly disjoint from it.
 let requirePairVersion () =
-    if isForward then require (System.Text.RegularExpressions.Regex.IsMatch(version, forwardVersionPattern)) "forward Execution pair version must be a newer stable release than 0.3.0"
+    if isForward then require (System.Text.RegularExpressions.Regex.IsMatch(version, forwardVersionPattern) && not (version.EndsWith "\n")) "forward Execution pair version must be a newer stable release than 0.3.0"
     else require (version = "0.3.0") "only selected Execution pair 0.3.0 may be prepared"
 let pairFile id = $"{id}.{version}.nupkg"
 let pairPath id = Path.Combine(output, pairFile id)

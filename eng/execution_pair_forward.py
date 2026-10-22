@@ -48,8 +48,15 @@ PUBLISH_WORKFLOW = ".github/workflows/execution-pair-forward-publish.yml"
 PREPARE_WORKFLOW = ".github/workflows/callable-cli-release-prepare.yml"
 ENVIRONMENT = "execution-pair-forward"
 ADMISSION_PATH = "eng/execution-pair-forward-admission.json"
-# Only the admission may change between the candidate source A and publisher B.
-PUBLICATION_DELTA = frozenset({ADMISSION_PATH})
+# Everything the publisher executes or reads from the repository. Between the candidate source A
+# and any publisher B (including a later resume publisher) these files must be byte-identical,
+# except the admission itself; unrelated repository changes cannot strand a partly published pair.
+# A control scans the publisher sources and workflow and fails if they read anything outside this set.
+PUBLISHER_CLOSURE = frozenset({
+    ADMISSION_PATH, "eng/execution_pair_forward.py", "eng/execution-pair-forward.py",
+    "eng/test-callable-cli-installed-harness.py", "eng/write-callable-cli-release-readback.py",
+    "eng/repository-settings/release-tag-ruleset.json", "global.json", ".github/workflows/execution-pair-forward-publish.yml",
+})
 
 IDS = ("FS.GG.Execution.Contracts", "FS.GG.Execution.Processes")
 ORIGINAL_VERSION = "0.3.0"
@@ -334,16 +341,17 @@ def selection_as_pair_admission(selection: dict) -> dict:
 
 
 def publication_delta_allowed(paths) -> bool:
+    """The publisher closure may differ between A and B only in the admission file."""
     paths = list(paths)
-    return all(type(p) is str for p in paths) and set(paths) <= PUBLICATION_DELTA
+    return all(type(p) is str for p in paths) and (set(paths) & PUBLISHER_CLOSURE) <= {ADMISSION_PATH}
 
 
 def bind_publisher(selection: dict, publisher_sha: str, diff_paths, *, ancestor: bool, tree: str) -> None:
-    """Candidate A must be an ancestor of publisher B and B may only add the admission."""
+    """Candidate A must be an ancestor of publisher B; B may change only the admission within the publisher closure."""
     hexid(publisher_sha, 40, "publisher")
     require(ancestor is True, "candidate source is not an ancestor of the publisher")
     require(tree == selection["tree"], "candidate source tree differs from the selection")
-    require(publication_delta_allowed(diff_paths), "candidate-to-publisher delta contains non-admission changes")
+    require(publication_delta_allowed(diff_paths), "candidate-to-publisher delta changes the publisher closure beyond the admission")
 
 
 # ---------------------------------------------------------------------------
@@ -564,7 +572,7 @@ def fetch_feed(transport, github_token: str, version: str, feed: str, package: s
 def observe_occupancy(transport, selection: dict, github_token: str) -> dict:
     """Bounded read-only observation of all four package cells, version lists, tag and release."""
     version = selection["version"]
-    observed = {"versions": {}, "cells": {}, "tags": None, "tag": None, "release": None}
+    observed = {"versions": {}, "cells": {}, "listing": {}, "tags": None, "tag": None, "release": None}
     github_headers = {"Authorization": "Basic " + base64.b64encode(f"x:{github_token}".encode()).decode()}
     api = {"Authorization": f"Bearer {github_token}", "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"}
     for feed in ("github", "nuget"):
@@ -575,6 +583,7 @@ def observe_occupancy(transport, selection: dict, github_token: str) -> dict:
                 # One finite page: a full page cannot prove absence.
                 status, raw = transport.get(f"https://api.github.com/orgs/FS-GG/packages/nuget/{package.lower()}/versions?per_page=100", headers=api, cap=MAX_JSON)
                 require(status in (200, 404), f"{key} version listing returned HTTP {status}")
+                observed["listing"][key] = status
                 rows = strict_json(raw) if status == 200 else []
                 require(isinstance(rows, list) and len(rows) < 100 and all(isinstance(r, dict) and type(r.get("name")) is str for r in rows), f"{key} version listing is incomplete")
                 for row in rows:
@@ -583,6 +592,7 @@ def observe_occupancy(transport, selection: dict, github_token: str) -> dict:
             else:
                 status, raw = transport.get(feed_url(feed, package), headers=headers, cap=MAX_JSON)
                 require(status in (200, 404), f"{key} version index returned HTTP {status}")
+                observed["listing"][key] = status
                 observed["versions"][key] = parse_versions(raw if status == 200 else None)
             status, _ = transport.get(feed_url(feed, package, version), headers=headers, cap=MAX_PACKAGE)
             require(status in (200, 404), f"{key} cell returned HTTP {status}")
@@ -605,9 +615,15 @@ def occupancy_join(selection: dict, observed: dict) -> dict:
     """Refuse unless the selected version is newer than everything observed and wholly unoccupied."""
     version = selection["version"]
     keys = {f"{feed}:{package}" for feed in ("github", "nuget") for package in IDS}
-    require(set(observed.get("versions", {})) == keys and set(observed.get("cells", {})) == keys, "occupancy observation is incomplete")
+    require(set(observed.get("versions", {})) == keys and set(observed.get("cells", {})) == keys and set(observed.get("listing", {})) == keys,
+            "occupancy observation is incomplete")
     require(observed.get("tag") == 404 and observed.get("release") == 404, "component tag or release already exists")
     require(all(status == 404 for status in observed["cells"].values()), "a selected package cell is already populated")
+    # A GitHub Packages 404 can mean "not visible to this token" as well as "absent": it is trusted only
+    # when the public feed also shows no history for that package.
+    for package in IDS:
+        require(not (observed["listing"][f"github:{package}"] == 404 and observed["versions"][f"nuget:{package}"]),
+                f"GitHub Packages listing for {package} is ambiguous (404 while the public feed has history)")
     everything = [v for versions in observed["versions"].values() for v in versions]
     require(version not in everything, "selected version already appears in a feed index")
     chosen = select_version(version, everything, observed["tags"])
@@ -884,6 +900,7 @@ class PairProvider:
         self.marker = f"execution-pair-forward:{self.cid}"
         self.feed_facts = {}
         self.last_dispatch_diagnostic = None
+        self._draft_row = None
 
     # -- helpers
     def component_absent(self) -> bool:
@@ -986,6 +1003,9 @@ class PairProvider:
             # Promotion later flips draft to false, so the draft effect stays verifiable by tag, target and marker.
             valid = (release.get("tag_name") == self.tag and release.get("prerelease") is False
                      and release.get("target_commitish") == self.source and self.marker in (release.get("body") or ""))
+            if valid:
+                # Remembered for this transition: the engine observes every verified effect before any send.
+                self._draft_row = release
             return O("matched", self.cid) if valid else O("mismatched")
         if kind == "asset":
             release = self._release()
@@ -1026,14 +1046,16 @@ class PairProvider:
                 self.api.post(f"repos/{REPOSITORY}/releases", {"tag_name": self.tag, "target_commitish": self.source,
                               "name": f"Execution pair {self.version}", "body": self.marker, "draft": True, "prerelease": False})
             elif kind == "asset":
-                release = self._release()
-                require(release is not None and release.get("draft") is True, "forward draft release unavailable")
+                # No remote read here: the draft was observed just before the intent and a failed read would strand the effect.
+                release = self._draft_row
+                require(release is not None and release.get("draft") is True, "forward draft release was not observed in this transition")
                 name, digest = self._asset_digest(e)
                 path = self.asset_dir / name if package in GENERATED_ASSETS else (self.candidate.directory / name)
                 self.api.upload_asset(release["id"], name, path, digest)
             elif e == "promote":
-                release = self._release()
-                require(release is not None and release.get("draft") is True and self._assets_all_matched(release), "complete forward draft unavailable")
+                # Every asset effect was re-observed matched in this same transition, ahead of this send.
+                release = self._draft_row
+                require(release is not None and release.get("draft") is True, "forward draft release was not observed in this transition")
                 self.api.patch(f"repos/{REPOSITORY}/releases/{release['id']}", {"draft": False, "make_latest": "false"})
             else:
                 raise Refused(f"unknown forward effect {e}")
@@ -1138,11 +1160,32 @@ def acquire_receivers(transport, token: str, selection: dict, workdir) -> dict:
     return proof
 
 
-def run_preflight(transport, selection: dict, *, token: str, policy_raw: bytes, workdir) -> dict:
-    """Bounded authenticated read-only preflight; every join must hold before any credential exists."""
+def resume_plan(state) -> str:
+    """Which stage a continuing invocation must run, from the shared journal alone."""
+    effects = state.effects
+    require(set(effects) <= set(EFFECT_IDS), "the journal holds an effect outside the forward route")
+    verified = {e for e, v in effects.items() if v == "verified"}
+    if verified == set(EFFECT_IDS):
+        return "complete"
+    if set(STAGES["packages"]) <= verified:
+        return "finalize"
+    require(not (set(effects) & set(EFFECT_IDS[4:])), "the journal advanced past the package window before it completed")
+    return "packages"
+
+
+def run_preflight(transport, selection: dict, *, token: str, policy_raw: bytes, workdir, resume: bool = False) -> dict:
+    """Bounded authenticated read-only preflight; every join must hold before any credential exists.
+
+    A resuming preflight (journal already begun) cannot require unoccupied cells: the engine
+    re-observes every journal effect on each transition and refuses a contradiction.
+    """
     candidate = acquire_candidate(transport, token, selection, workdir)
     receivers = acquire_receivers(transport, token, selection, workdir)
-    occupancy = occupancy_join(selection, observe_occupancy(transport, selection, token))
+    observed = observe_occupancy(transport, selection, token)
+    if resume:
+        occupancy = {"version": selection["version"], "resume": True, "cells": dict(observed["cells"]), "tag": observed["tag"], "release": observed["release"]}
+    else:
+        occupancy = occupancy_join(selection, observed)
     policy = policy_join(policy_raw, selection)
     return {"schema": "fsgg.coordination.execution-pair-forward-preflight/1", "operation": selection["operation"], "contentId": content_id(selection),
             "version": selection["version"], "candidateManifestSha256": sha256_hex(candidate.manifest_bytes),

@@ -15,18 +15,21 @@ run-name: "PAIR forward ${{ inputs.mode }} ${{ inputs.operation }} @ ${{ github.
 #   public-load read-only anonymous public package execution; no secrets at all.
 #   finalize    ordinary-ledger App token + contents:write + policy-read App token;
 #               no package or NuGet credential. Effects 5-13 of the same journal.
-# A rerun is refused (attempt must be 1); no step retries a mutation.
+# A rerun is refused (attempt must be 1); no step retries a mutation. A stopped publication is
+# continued by a new dispatch in resume mode, which reads the shared journal and runs only the
+# stages that remain; it never resends an effect whose intent is already recorded.
 on:
   workflow_dispatch:
     inputs:
       mode:
-        description: preflight (read-only) or publish (packages, public-load, finalize)
+        description: preflight (read-only), publish (fresh journal with packages, public-load and finalize) or resume (continue the existing journal)
         required: true
         default: preflight
         type: choice
         options:
           - preflight
           - publish
+          - resume
       operation:
         description: Exact forward operation identity from the admission selection
         required: true
@@ -46,6 +49,8 @@ jobs:
     runs-on: ubuntu-24.04
     environment: execution-pair-forward
     timeout-minutes: 30
+    outputs:
+      plan: ${{ steps.preflight.outputs.plan }}
     permissions:
       contents: read
       actions: read
@@ -54,6 +59,7 @@ jobs:
       PYTHONOPTIMIZE: '0'
       PYTHONDONTWRITEBYTECODE: '1'
       OPERATION: ${{ inputs.operation }}
+      MODE: ${{ inputs.mode }}
     steps:
       - name: Check out the exact publisher without persisted credentials
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -90,14 +96,17 @@ jobs:
           owner: FS-GG
           repositories: FS.GG.Coordination
           permission-administration: read
-      - name: Authenticate candidate, four receivers, occupancy, policy and journal destination
+      - name: Authenticate candidate, four receivers, occupancy, policy and journal
+        id: preflight
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           POLICY_TOKEN: ${{ steps.policy.outputs.token }}
         run: |
           set -euo pipefail
-          python3 eng/execution-pair-forward.py preflight --workdir "$RUNNER_TEMP/forward-preflight"
+          resume=()
+          if test "$MODE" = resume; then resume=(--resume); fi
+          python3 eng/execution-pair-forward.py preflight "${resume[@]}" --workdir "$RUNNER_TEMP/forward-preflight"
       - name: Retain the preflight receipt
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -109,7 +118,7 @@ jobs:
 
   packages:
     name: packages
-    if: inputs.mode == 'publish' && github.ref == 'refs/heads/main' && github.actor == 'EHotwagner'
+    if: inputs.mode != 'preflight' && needs.preflight.outputs.plan == 'packages' && github.ref == 'refs/heads/main' && github.actor == 'EHotwagner'
     needs: preflight
     runs-on: ubuntu-24.04
     environment: execution-pair-forward
@@ -183,8 +192,8 @@ jobs:
 
   public-load:
     name: public-load
-    if: inputs.mode == 'publish' && github.ref == 'refs/heads/main' && github.actor == 'EHotwagner'
-    needs: packages
+    if: ${{ !cancelled() && inputs.mode != 'preflight' && needs.preflight.result == 'success' && (needs.packages.result == 'success' || needs.packages.result == 'skipped') && (needs.preflight.outputs.plan == 'packages' || needs.preflight.outputs.plan == 'finalize') && github.ref == 'refs/heads/main' && github.actor == 'EHotwagner' }}
+    needs: [preflight, packages]
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     permissions:
@@ -231,8 +240,8 @@ jobs:
 
   finalize:
     name: finalize
-    if: inputs.mode == 'publish' && github.ref == 'refs/heads/main' && github.actor == 'EHotwagner'
-    needs: public-load
+    if: ${{ !cancelled() && inputs.mode != 'preflight' && needs.public-load.result == 'success' && github.ref == 'refs/heads/main' && github.actor == 'EHotwagner' }}
+    needs: [preflight, public-load]
     runs-on: ubuntu-24.04
     environment: execution-pair-forward
     timeout-minutes: 75

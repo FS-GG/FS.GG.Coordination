@@ -97,6 +97,7 @@ def main(argv=None) -> int:
     parser.add_argument("--workdir", type=pathlib.Path)
     parser.add_argument("--observed", type=pathlib.Path, help="select-version: JSON {versions:[...], tags:[...]}")
     parser.add_argument("--result", type=pathlib.Path)
+    parser.add_argument("--resume", action="store_true", help="preflight: continue the existing forward journal instead of requiring an unused one")
     args = parser.parse_args(argv)
     try:
         F.require(sys.flags.optimize == 0, "protected validators require Python optimize=0")
@@ -130,13 +131,28 @@ def main(argv=None) -> int:
         api_class = F.make_api_class(engine)
         if args.command == "preflight":
             policy_raw = F.read_policy(api_class(environ("POLICY_TOKEN")))
-            receipt = F.run_preflight(transport, selection, token=github_token, policy_raw=policy_raw, workdir=args.workdir)
+            receipt = F.run_preflight(transport, selection, token=github_token, policy_raw=policy_raw, workdir=args.workdir, resume=args.resume)
             ledger = api_class(github_token)
-            fresh, physical = engine.route.classify_journal_destination(ledger, F.journal_ref(selection))
-            F.require(fresh, "the selected release journal is not unused")
-            receipt["journal"] = {"state": "unused", "ref": F.journal_ref(selection), "authorityMain": physical}
+            ref = F.journal_ref(selection)
+            fresh, physical = engine.route.classify_journal_destination(ledger, ref)
+            if args.resume:
+                F.require(not fresh, "resume requires the existing forward journal")
+                reader = engine.journal.ProtectedReleaseJournal(ledger, ref, main_directory=True)
+                state = reader.read()
+                reader.validate_intent(F.journal_intent(selection))
+                F.require(engine.route.authority_main(ledger) == physical, "Authority main moved during the resume read")
+                plan = F.resume_plan(state)
+                receipt["journal"] = {"state": "begun", "ref": ref, "authorityMain": physical, "generation": state.generation}
+            else:
+                F.require(fresh, "the selected release journal is not unused")
+                plan = "packages"
+                receipt["journal"] = {"state": "unused", "ref": ref, "authorityMain": physical}
+            receipt["plan"] = plan
             (args.result or args.workdir / "preflight-receipt.json").write_bytes(F.canonical(receipt) + b"\n")
-            print("forward preflight passed; no journal, tag, feed or release changed")
+            if os.environ.get("GITHUB_OUTPUT"):
+                with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+                    output.write(f"plan={plan}\n")
+            print(f"forward preflight passed; plan={plan}; no journal, tag, feed or release changed")
             return 0
         if args.command == "public-load":
             candidate = F.acquire_candidate(transport, github_token, selection, args.workdir)
@@ -168,6 +184,7 @@ def main(argv=None) -> int:
         provider = F.PairProvider(engine, publisher_api, selection, candidate, transport=transport, github_token=github_token,
                                   nuget_key=nuget_key, generated=generated, asset_dir=args.workdir / "assets", runner=push_runner, allowed=allowed)
         cid, intent = F.content_id(selection), F.journal_intent(selection)
+        provider.ready(effects)  # before genesis: an unsendable stage must not consume the journal
         fresh, physical = route.classify_journal_destination(ledger_api, ref)
         if stage == "packages" and fresh:
             F.occupancy_join(selection, F.observe_occupancy(transport, selection, github_token))
