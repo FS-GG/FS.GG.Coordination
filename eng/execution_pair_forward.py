@@ -51,7 +51,8 @@ ADMISSION_PATH = "eng/execution-pair-forward-admission.json"
 # Everything the publisher executes or reads from the repository. Between the candidate source A
 # and any publisher B (including a later resume publisher) these files must be byte-identical,
 # except the admission itself; unrelated repository changes cannot strand a partly published pair.
-# A control scans the publisher sources and workflow and fails if they read anything outside this set.
+# A control scans the publisher sources and workflow and fails if they read anything outside this set;
+# publisher_surface() widens the rule to anything the interpreter or dotnet could resolve by name.
 PUBLISHER_CLOSURE = frozenset({
     ADMISSION_PATH, "eng/execution_pair_forward.py", "eng/execution-pair-forward.py",
     "eng/test-callable-cli-installed-harness.py", "eng/write-callable-cli-release-readback.py",
@@ -340,10 +341,28 @@ def selection_as_pair_admission(selection: dict) -> dict:
             "consumerQualification": selection["consumerQualification"]}
 
 
+_EXECUTABLE_SURFACE_NAMES = frozenset({"nuget.config", "global.json", "directory.build.props", "directory.build.targets", "directory.packages.props",
+                                       "sitecustomize.py", "usercustomize.py", "dotnet-tools.json"})
+
+
+def publisher_surface(path: str) -> bool:
+    """Paths that can change what the publisher runs: its closure and anything Python or dotnet could resolve by name.
+
+    The publisher is also run hermetically (`python3 -I`, dotnet from a clean directory), so this is
+    defense in depth: shadowing modules, import hooks and tool configuration are never a free change.
+    """
+    if path in PUBLISHER_CLOSURE:
+        return True
+    directory, _, name = path.rpartition("/")
+    lowered = name.lower()
+    return (lowered in _EXECUTABLE_SURFACE_NAMES or lowered.endswith(".pth")
+            or (lowered.endswith(".py") and directory in ("", "eng")) or lowered.endswith((".config", ".props", ".targets")))
+
+
 def publication_delta_allowed(paths) -> bool:
-    """The publisher closure may differ between A and B only in the admission file."""
+    """Between A and any publisher B the publisher surface may differ only in the admission file."""
     paths = list(paths)
-    return all(type(p) is str for p in paths) and (set(paths) & PUBLISHER_CLOSURE) <= {ADMISSION_PATH}
+    return all(type(p) is str for p in paths) and {p for p in paths if publisher_surface(p)} <= {ADMISSION_PATH}
 
 
 def bind_publisher(selection: dict, publisher_sha: str, diff_paths, *, ancestor: bool, tree: str) -> None:

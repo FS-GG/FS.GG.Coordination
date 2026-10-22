@@ -1503,6 +1503,9 @@ def workflow_findings(text):
             findings.append('ledger-missing')
         if name in ('preflight', 'packages', 'finalize') and 'run-attempt' in job:
             findings.append('attempt-override')
+    for number, line in enumerate(live.splitlines(), 1):
+        if re.search(r'\bpython3\b', line) and not re.search(r'python3 -I -B\b', line):
+            findings.append(f'python-not-hermetic:{number}')
     if ('needs: preflight\n' not in jobs.get('packages', '') or 'needs: [preflight, packages]\n' not in jobs.get('public-load', '')
             or 'needs: [preflight, public-load]\n' not in jobs.get('finalize', '')):
         findings.append('stage-order')
@@ -1520,7 +1523,7 @@ def workflow_controls():
     mutations = {
         'permissions:packages': lambda t: t.replace('      packages: write\n      id-token: write\n', '      packages: write\n      id-token: write\n      contents: write\n', 1),
         'nuget-or-package-write-outside-packages:finalize': lambda t: t.replace('    permissions:\n      contents: write\n      actions: read\n      packages: read\n', '    permissions:\n      contents: write\n      actions: read\n      packages: write\n'),
-        'public-load-has-credentials': lambda t: t.replace('GH_TOKEN: ${{ github.token }}\n        run: |\n          set -euo pipefail\n          python3 eng/execution-pair-forward.py public-load', 'GH_TOKEN: ${{ github.token }}\n          X: ${{ secrets.FSGG_DISPATCH_APP_ID }}\n        run: |\n          set -euo pipefail\n          python3 eng/execution-pair-forward.py public-load'),
+        'public-load-has-credentials': lambda t: t.replace('GH_TOKEN: ${{ github.token }}\n        run: |\n          set -euo pipefail\n          python3 -I -B eng/execution-pair-forward.py public-load', 'GH_TOKEN: ${{ github.token }}\n          X: ${{ secrets.FSGG_DISPATCH_APP_ID }}\n        run: |\n          set -euo pipefail\n          python3 -I -B eng/execution-pair-forward.py public-load'),
         'environment:finalize': lambda t: t.replace('    needs: [preflight, public-load]\n    runs-on: ubuntu-24.04\n    environment: execution-pair-forward\n', '    needs: [preflight, public-load]\n    runs-on: ubuntu-24.04\n'),
         'credential-before-admission-gate:packages': lambda t: t.replace(
             '      - name: Require the enabled admission and exact publisher binding before any credential exists\n        id: admitted\n',
@@ -1531,6 +1534,7 @@ def workflow_controls():
         'trigger-not-manual': lambda t: t.replace('on:\n  workflow_dispatch:', 'on:\n  push:\n  workflow_dispatch:', 1),
         'touches-original-operation': lambda t: t.replace("PYTHONOPTIMIZE: '0'", "PYTHONOPTIMIZE: '0'\n      ORIGINAL: execution/v0.3.0", 1),
         'stage-order': lambda t: t.replace('    needs: [preflight, public-load]\n', '    needs: preflight\n', 1),
+        'python-not-hermetic': lambda t: t.replace('python3 -I -B eng/execution-pair-forward.py public-load', 'python3 eng/execution-pair-forward.py public-load', 1),
         'resume-plan-gating': lambda t: t.replace("needs.preflight.outputs.plan == 'packages' && github.ref", "github.ref", 1),
         'policy-token-scope': lambda t: t.replace('permission-administration: read', 'permission-administration: write', 1),
         'permissions:preflight': lambda t: t.replace('      packages: read\n    env:\n      PYTHONOPTIMIZE', '      packages: write\n    env:\n      PYTHONOPTIMIZE', 1),
@@ -1875,7 +1879,7 @@ def publisher_binding_controls(tmp):
         must_refuse('candidate is not an ancestor', CLI.bind_publisher, sel, unrelated)
         must_refuse('tree differs', CLI.bind_publisher, dict(sel, tree='c' * 40), b)
         # Causal: without the closure rule the changed publisher code is accepted.
-        with patch.object(F, 'PUBLISHER_CLOSURE', frozenset({F.ADMISSION_PATH})):
+        with patch.object(F, 'publisher_surface', lambda path: path == F.ADMISSION_PATH):
             CLI.bind_publisher(sel, c)
     finally:
         os.chdir(old)
@@ -1902,6 +1906,38 @@ def closure_controls():
     # Every closure member exists and the original-route admission is not an input of the publisher.
     assert all((ROOT / path).is_file() for path in F.PUBLISHER_CLOSURE)
     assert 'eng/execution-pair-release-admission.json' not in F.PUBLISHER_CLOSURE and 'eng/execution-pair-release-admission.json' not in read
+    # Python or dotnet resolving a name from the checkout can never be a free change.
+    for path in ('eng/zipfile.py', 'json.py', 'subprocess.py', 'eng/sitecustomize.py', 'x.pth', 'NuGet.Config', 'sub/nuget.config', 'Directory.Build.props',
+                 'tools/Directory.Build.targets', 'global.json', 'eng/runpy.py', 'src/x/app.config'):
+        assert F.publisher_surface(path), path
+        assert not F.publication_delta_allowed([F.ADMISSION_PATH, path]), path
+        count('surface-refused')
+    for path in ('docs/a.md', 'src/FS.GG.Coordination.Cli/Program.fs', 'tests/x/test.py', 'specs/a.json', 'eng/some-script.sh', 'eng/execution-pair-release-admission.json'):
+        assert not F.publisher_surface(path) and F.publication_delta_allowed([F.ADMISSION_PATH, path]), path
+    # Causal: the stdlib shadow runs under plain python3 and does not under the hermetic invocation.
+    scratch = Path(tempfile.mkdtemp())
+    (scratch / 'eng').mkdir()
+    for name in ('eng/execution_pair_forward.py', 'eng/execution-pair-forward.py', 'eng/test-callable-cli-installed-harness.py', 'eng/write-callable-cli-release-readback.py',
+                 F.ADMISSION_PATH):
+        shutil.copyfile(ROOT / name, scratch / name)
+    (scratch / 'eng/zipfile.py').write_text('print("SHADOW-RAN")\nraise SystemExit(0)\n')
+    clean_env = {k: v for k, v in os.environ.items() if not k.startswith(('PYTHON', 'GITHUB_'))}
+    plain = subprocess.run([sys.executable, 'eng/execution-pair-forward.py', 'state'], cwd=scratch, env=clean_env, capture_output=True, text=True)
+    assert 'SHADOW-RAN' in plain.stdout, 'control: plain python3 lets a module in eng/ shadow the standard library'
+    hermetic = subprocess.run([sys.executable, '-I', '-B', 'eng/execution-pair-forward.py', 'state'], cwd=scratch, env=clean_env, capture_output=True, text=True)
+    assert hermetic.stdout.strip() == 'disabled' and 'SHADOW' not in hermetic.stdout, hermetic.stderr
+    (scratch / 'json.py').write_text('print("ROOT-SHADOW-RAN")\n')
+    inline = subprocess.run([sys.executable, '-I', '-B', '-'], input='import json\nprint("inline-ok")\n', cwd=scratch, env=clean_env, capture_output=True, text=True)
+    assert inline.stdout.strip() == 'inline-ok'
+    count('hermetic-python')
+    # dotnet runs from a clean directory outside the checkout.
+    CLI = cli_module()
+    seen = []
+    with patch.object(CLI.subprocess, 'run', lambda *a, **k: (seen.append(k.get('cwd')), subprocess.CompletedProcess(a[0], 0, '', ''))[1]):
+        CLI.push_runner(['dotnet', 'nuget', 'push', 'x'])
+        CLI.verify_signature(Path('x'))
+    assert len(seen) == 2 and all(c and not Path(c).resolve().is_relative_to(ROOT) for c in seen), seen
+    count('dotnet-clean-cwd')
     # Causal: a publisher that starts reading a file outside the closure is found by this scan.
     probe = 'x = ROOT / "eng/not-in-closure.py"'
     found = set(re.findall(r'(?:ROOT|ENG|HERE) / "([A-Za-z0-9_./-]+)"', probe))

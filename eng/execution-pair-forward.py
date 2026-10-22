@@ -76,12 +76,24 @@ def ledger_wiring(engine, selection):
     return api_class, ledger_api, ref
 
 
+# dotnet runs from a clean directory outside the checkout so no repository NuGet.Config, global.json or
+# Directory.* file is discovered; sources and credentials are explicit arguments.
+_CLEAN_CWD = None
+
+
+def clean_cwd() -> str:
+    global _CLEAN_CWD
+    if _CLEAN_CWD is None:
+        _CLEAN_CWD = tempfile.mkdtemp(prefix="forward-dotnet-")
+    return _CLEAN_CWD
+
+
 def push_runner(argv):
-    subprocess.run(argv, check=True, capture_output=True, text=True, timeout=900)
+    subprocess.run(argv, check=True, capture_output=True, text=True, timeout=900, cwd=clean_cwd())
 
 
 def verify_signature(path):
-    result = subprocess.run(["dotnet", "nuget", "verify", str(path), "--all"], capture_output=True, text=True, timeout=60)
+    result = subprocess.run(["dotnet", "nuget", "verify", str(path), "--all"], capture_output=True, text=True, timeout=60, cwd=clean_cwd())
     F.require(result.returncode == 0, "repository signature verification failed")
 
 

@@ -31,9 +31,13 @@ source**: the executor must equal candidate source A. A publisher B (including a
 later resume publisher) must descend from A with A's tree; within the exact
 *publisher closure* (the forward library and CLI, the installed-harness and
 readback helpers, the tag ruleset, `global.json` and the publish workflow) it may
-differ from A only by the admission file. Unrelated repository history cannot
-strand a partly published pair, and a control scans the publisher sources and
-workflow to prove the closure is exactly what they read.
+differ from A only by the admission file. The same rule covers anything Python or
+dotnet could resolve by name (top-level and `eng/` Python files, `.pth`, NuGet and
+MSBuild configuration). The publisher also runs hermetically: every workflow
+invocation is `python3 -I -B` and dotnet runs from a clean directory outside the
+checkout. Unrelated repository history therefore cannot strand a partly published
+pair, and a control scans the publisher sources and workflow to prove the closure
+is exactly what they read.
 
 ## Admission states
 
@@ -128,7 +132,10 @@ pinned helper commit to avoid the (digest-verified) fetch.
   the `draft` effect, whose job holds contents write, before any release write;
   the packages already published remain valid and the operator resolves the draft.
 * A GitHub Packages 404 is trusted as absence only when the public feed also has no
-  history for that package; otherwise the listing is refused as ambiguous.
+  history for that package; otherwise the listing is refused as ambiguous. A package
+  whose only history is on GitHub Packages and invisible to the workflow token is
+  still read as absent: the push would then fail and consume the journal id, but
+  nothing public is published.
 * `main` must equal the publisher on every intent, dispatch and settlement, so the
   protected environment should serialize merges to `main` during a run.
 * The `execution-pair-forward` environment must be created and protected by root

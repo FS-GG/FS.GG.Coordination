@@ -71,7 +71,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          state="$(python3 eng/execution-pair-forward.py state)"
+          state="$(python3 -I -B eng/execution-pair-forward.py state)"
           if test "$state" = disabled; then
             echo "::error::forward route is disabled; no selection is admitted"
             exit 1
@@ -106,7 +106,7 @@ jobs:
           set -euo pipefail
           resume=()
           if test "$MODE" = resume; then resume=(--resume); fi
-          python3 eng/execution-pair-forward.py preflight "${resume[@]}" --workdir "$RUNNER_TEMP/forward-preflight"
+          python3 -I -B eng/execution-pair-forward.py preflight "${resume[@]}" --workdir "$RUNNER_TEMP/forward-preflight"
       - name: Retain the preflight receipt
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -147,12 +147,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if test "$(python3 eng/execution-pair-forward.py state)" != enabled; then
+          if test "$(python3 -I -B eng/execution-pair-forward.py state)" != enabled; then
             echo "::error::forward route is not enabled"
             exit 1
           fi
-          python3 eng/execution-pair-forward.py bind --workdir "$RUNNER_TEMP/forward-bind"
-          python3 - >> "$GITHUB_OUTPUT" <<'PY_FORWARD_USER'
+          python3 -I -B eng/execution-pair-forward.py bind --workdir "$RUNNER_TEMP/forward-bind"
+          python3 -I -B - >> "$GITHUB_OUTPUT" <<'PY_FORWARD_USER'
           import json
           print('nuget_user=' + json.load(open('eng/execution-pair-forward-admission.json'))['selection']['namespaceEntitlement']['nugetUser'])
           PY_FORWARD_USER
@@ -188,7 +188,7 @@ jobs:
           NUGET_API_KEY: ${{ steps.nuget.outputs.NUGET_API_KEY }}
         run: |
           set -euo pipefail
-          python3 eng/execution-pair-forward.py packages --workdir "$RUNNER_TEMP/forward-packages"
+          python3 -I -B eng/execution-pair-forward.py packages --workdir "$RUNNER_TEMP/forward-packages"
 
   public-load:
     name: public-load
@@ -217,8 +217,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(python3 eng/execution-pair-forward.py state)" = enabled
-          python3 eng/execution-pair-forward.py bind --workdir "$RUNNER_TEMP/forward-bind"
+          test "$(python3 -I -B eng/execution-pair-forward.py state)" = enabled
+          python3 -I -B eng/execution-pair-forward.py bind --workdir "$RUNNER_TEMP/forward-bind"
       - name: Set up the pinned .NET SDK
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with:
@@ -229,7 +229,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          python3 eng/execution-pair-forward.py public-load --workdir "$RUNNER_TEMP/forward-public"
+          python3 -I -B eng/execution-pair-forward.py public-load --workdir "$RUNNER_TEMP/forward-public"
       - name: Retain the public-load receipt for finalization
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
@@ -264,11 +264,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if test "$(python3 eng/execution-pair-forward.py state)" != enabled; then
+          if test "$(python3 -I -B eng/execution-pair-forward.py state)" != enabled; then
             echo "::error::forward route is not enabled"
             exit 1
           fi
-          python3 eng/execution-pair-forward.py bind --workdir "$RUNNER_TEMP/forward-bind"
+          python3 -I -B eng/execution-pair-forward.py bind --workdir "$RUNNER_TEMP/forward-bind"
       - name: Mint the ordinary protected-journal writer token
         id: ledger
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
@@ -301,4 +301,4 @@ jobs:
           POLICY_TOKEN: ${{ steps.policy.outputs.token }}
         run: |
           set -euo pipefail
-          python3 eng/execution-pair-forward.py finalize --workdir "$RUNNER_TEMP/forward-finalize"
+          python3 -I -B eng/execution-pair-forward.py finalize --workdir "$RUNNER_TEMP/forward-finalize"
