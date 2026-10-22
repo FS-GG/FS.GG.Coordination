@@ -594,6 +594,8 @@ def selection_controls(tmp):
         'namespace-unaccepted': lambda s: s['namespaceEntitlement'].update(accepted=False),
         'protection-ruleset': lambda s: s['tagProtection'].update(rulesetId=7), 'extra-key': lambda s: s.update(extra=1),
         'receiver-sources-missing': lambda s: s.pop('receiverSources'),
+        'receiver-sources-null': lambda s: s.update(receiverSources=None),
+        'receiver-sources-rollback-commit': lambda s: s['receiverSources']['sdd-s1'].update(commit=READBACK['PAIR_RECEIVERS']['sdd-rollback'][1]),
         'receiver-sources-original-sdd': lambda s: s['receiverSources']['sdd-s1'].update(commit=READBACK['PAIR_RECEIVERS']['sdd-s1'][1]),
         'receiver-sources-original-fsquint': lambda s: s['receiverSources']['fsquint-s1'].update(commit=READBACK['PAIR_RECEIVERS']['fsquint-s1'][1]),
         'receiver-sources-zero': lambda s: s['receiverSources']['sdd-s1'].update(commit='0' * 40),
@@ -857,6 +859,10 @@ def acquisition_controls(tmp):
     stale_hub = Hub(stale_world)
     must_refuse('receivers from the fixed original-version commits', F.acquire_receivers, HubTransport(stale_hub), 'gh', stale,
                 Path(tempfile.mkdtemp(dir=tmp)))
+    # A null override would select the original table inside the shared helper; acquisition refuses it directly.
+    nulled = copy.deepcopy(stale)
+    nulled['receiverSources'] = None
+    must_refuse('null receiver sources at acquisition', F.acquire_receivers, HubTransport(stale_hub), 'gh', nulled, Path(tempfile.mkdtemp(dir=tmp)))
     # Causal: dropping the selected receiver override lets the original-version receiver evidence through.
     real = F.readback_module()
     dropped = dict(real, pair_consumers=lambda admission, root, sources: real['pair_consumers'](admission, root))

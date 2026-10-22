@@ -81,8 +81,8 @@ def pair_receiver_table(sources=None):
     for case in PAIR_FORWARD_RECEIVER_CASES:
         commit = sources[case]['commit']
         sha(commit, 40)
-        repository, original, count = PAIR_RECEIVERS[case]
-        require(set(commit) != {'0'} and commit != original, case + ' must not reuse the original-version receiver')
+        repository, _, count = PAIR_RECEIVERS[case]
+        require(set(commit) != {'0'} and commit not in {row[1] for row in PAIR_RECEIVERS.values()}, case + ' must not reuse a fixed original receiver')
         table[case] = (repository, commit, count)
     locks = sources['fsquint-s1']['coreLocks']
     require(isinstance(locks, dict) and set(locks) == set(PAIR_SDK_SOURCE_LOCKS), 'SDK source-lock population differs')

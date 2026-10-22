@@ -53,7 +53,8 @@ A forward selection therefore names its own S1 receiver commits in
  "fsquint-s1": {"commit": "<40 hex>", "coreLocks": {"<the seven FsQuint lock paths>": "<sha256>"}}}
 ```
 
-Neither commit may be the original receiver. `coreLocks` replaces the seven pinned
+The value must be an object (null is refused), and neither commit may be any of the four
+fixed original receivers. `coreLocks` replaces the seven pinned
 FsQuint SDK-Core source-lock digests (the same seven paths). The selection is part
 of the content identity, and the maintained four-receiver join checks every observed
 receiver commit and lock digest against it. The original pair still joins only the
@@ -63,7 +64,8 @@ The packed bytes embed `RepositoryCommit` = source A, so the receiver lock conte
 hashes exist only after A is fixed. Order: prepare the candidate at A; create each
 receiver commit by changing only the pair version pin and its regenerated locks
 against those exact candidate packages; run `execution-pair-consumers` at A with
-those commits as `consumer_sources`; record both in the selection. `main` must stay
+those commits and their trees as `consumer_sources` (`sdd_source`, `sdd_tree`,
+`fsquint_source`, `fsquint_tree`); record both in the selection. `main` must stay
 at A from candidate preparation through the receiver run.
 
 ## Admission states
