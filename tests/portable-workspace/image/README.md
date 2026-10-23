@@ -586,10 +586,56 @@ records and 512 command bounds remain shared across phases, including failure
 retention. Archive mutation or failed verification blocks load; first failure,
 direct-child settlement and remaining retirement uncertainty stay distinct.
 
+### Hosted-VM resource domain
+
+[FS-GG/.github#4778](https://github.com/FS-GG/.github/issues/4778#issuecomment-6359585393)
+selected route (b): each BAR image operation runs on one fresh GitHub-hosted
+`ubuntu-24.04` VM. The [capacity probe](https://github.com/FS-GG/.github/issues/4778#issuecomment-6363750262)
+showed this route is feasible on the measured VM. `resourceDomain.relation` therefore admits a second closed
+value, `dedicated-ephemeral-hosted-vm`. That relation additionally requires
+`resourceDomain.domainEvidenceSha256` and `admission.domain`, and the two must correspond.
+
+- **Evidence.** The admission document is root-produced `fsgg.bar-hosted-domain/1` evidence from
+  `eng/bar_hosted_domain.py admit`, with verdict `admitted` and no refusals. It records:
+  - the operation's own boot ID, which must equal `clock.bootId`, so evidence from another VM or boot refuses;
+  - the `ubuntu24` GitHub-hosted runner at the explicitly selected image version `20261012.334.1`. Image drift refuses until source selects the new version;
+  - `containerd.service`, `docker.service`, `docker.socket` and `fstrim.timer` stopped, with no daemon processes left (a periodic trim would punch the loop backing sparse);
+  - rootless user namespaces allowed;
+  - one ext4 operation volume, formatted `nodiscard`. It is the mounted loop device's actual backing file (offset 0, no size limit) on a separate device, and that file still holds at least its full size after `mkfs`;
+  - Buildah 1.43.1 in the userland;
+  - at least 14 GiB MemAvailable and four CPUs.
+- **Reader checks.** The BAR reader requires the allocation and the load store to be on that volume's device. It also requires a resource disposition with zero shared-host reservations.
+- **What still runs.** The shared resource admission and every other profile check still run unchanged at the operation boundary. The evidence is correspondence, not authority.
+
+`.github/workflows/bar-hosted-domain-preflight.yml` is dispatch-only and uses no product content. It does the following:
+- builds the digest-pinned Arch userland, with Buildah 1.43.1 from the dated archive (signature-verified and checked against the probe's recorded sha256);
+- removes preinstalled toolchains;
+- stops the container daemons and turns swap off;
+- allows rootless user namespaces;
+- provisions the preallocated volume;
+- writes the domain evidence;
+- runs `userland-check` as the unprivileged runner, inside a delegated systemd unit with its own mount, PID and cgroup namespaces.
+
+`userland-check` exercises the following:
+- the controller's own `host_resources` observation;
+- rootless UID and GID 10001 mapping;
+- the `0::/` cgroup-namespace view, the enclosing CPU/memory/task headroom and the runner's uid 1001;
+- a scratch working container in the VFS build store;
+- an empty load-store census;
+- the Arch support pins.
+
+No image is pulled or built.
+
 Run the inert source controls with:
 
 ```sh
 PYTHONDONTWRITEBYTECODE=1 python3 tests/portable-workspace/image/test_bar_profile.py
+```
+
+The hosted-domain helper's pure refusal controls and its contract with the BAR reader run with:
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 python3 tests/portable-workspace/image/test_bar_hosted_domain.py
 ```
 
 They use synthetic Git inputs, tiny Python capture children and injected native

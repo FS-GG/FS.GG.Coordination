@@ -214,6 +214,101 @@ class BarProfile(unittest.TestCase):
                     occupied.unlink()
         self.assertFalse((Path(args.state_dir) / selection['operationId']).exists())
 
+    def hosted(self, args, selection, mutate=None, disposition=None):
+        """Synthetic hosted-VM domain evidence on the fixture's own volume.
+
+        No hosted runner, service stop or volume is involved; this exercises only
+        the closed relation join in the actual BAR selection reader."""
+        device = Path(args.engine_allocation).stat().st_dev
+        evidence = {'schema': BAR.HOSTED_DOMAIN_SCHEMA, 'relation': BAR.HOSTED_RELATION,
+                    'verdict': 'admitted', 'refusals': [], 'bootId': selection['clock']['bootId'],
+                    'runner': {'imageOS': 'ubuntu24', 'imageVersion': BAR.HOSTED_RUNNER_IMAGE_VERSION, 'githubHosted': True},
+                    'services': {'stopped': list(BAR.HOSTED_STOPPED_SERVICES), 'active': [], 'daemonProcesses': 0},
+                    'userns': {'apparmorRestrictUnprivileged': 0, 'maxUserNamespaces': 63838},
+                    'volume': {'device': f'{os.major(device)}:{os.minor(device)}', 'filesystem': 'ext4',
+                               'bytes': 127 * 1024**3, 'allocatedBytes': 127 * 1024**3,
+                               'freeBytes': 116 * 1024**3, 'freeInodes': 7_806_964,
+                               'discard': 'nodiscard',
+                               'backingDevice': '8:2' if os.major(device) == 8 and os.minor(device) == 1 else '8:1'},
+                    'builder': {'version': 'buildah version 1.43.1 (image-spec 1.1.1, runtime-spec 1.2.1)'},
+                    'resources': {'memAvailableBytes': 15 * 1024**3, 'logicalCpus': 4, 'affinity': 4}}
+        if mutate: mutate(evidence)
+        target = self.root / 'hosted-domain.json'
+        target.write_bytes(SHARED.canonical(evidence)); target.chmod(0o600)
+        reference = Path(selection['admission']['resourceDisposition']['path'])
+        reference.write_bytes(SHARED.canonical(disposition or {
+            'sharedHostReservedMemoryBytes': 0, 'sharedHostReservedCpu': 0,
+            'sharedHostReservedDiskBytes': 0, 'unquantifiedResourceConflicts': []}))
+        selection['admission']['resourceDisposition']['sha256'] = sha(reference.read_bytes())
+        selection['admission']['domain'] = {'path': str(target), 'sha256': sha(target.read_bytes())}
+        selection['resourceDomain'] = {'relation': BAR.HOSTED_RELATION,
+                                       'topologySha256': selection['resourceDomain']['topologySha256'],
+                                       'domainEvidenceSha256': sha(target.read_bytes())}
+        self.base.rebind_selection(args, selection)
+
+    def test_hosted_vm_relation_joins_closed_domain_evidence(self):
+        args, selection, home = self.fixture()
+        self.hosted(args, selection)
+        with patch.object(Path, 'home', return_value=home):
+            result = BAR.main(args, IMAGE.__dict__)
+        self.assertFalse(result['nativeExecutionEnabled'])
+        self.assertEqual(result['hostedDomain']['relation'], BAR.HOSTED_RELATION)
+        self.assertEqual(result['hostedDomain']['runnerImageVersion'], '20261012.334.1')
+        self.assertFalse((Path(args.state_dir) / selection['operationId']).exists())
+
+    def test_hosted_vm_relation_refuses_unproved_or_weakened_domains(self):
+        cases = {
+            'refused': (lambda e: e.update(verdict='refused', refusals=['synthetic']), None, 'evidence refused'),
+            'runner': (lambda e: e['runner'].update(imageOS='ubuntu22'), None, 'runner image differs'),
+            'image-version': (lambda e: e['runner'].update(imageVersion='20261019.340.1'), None, 'runner image differs'),
+            'replayed-boot': (lambda e: e.update(bootId='00000000-0000-0000-0000-000000000000'), None, 'another boot'),
+            'backing-not-separate': (lambda e: e['volume'].update(backingDevice=e['volume']['device']), None,
+                                     'backing is not a separate file'),
+            'daemon-bool': (lambda e: e['services'].update(daemonProcesses=False), None, 'bounded integer required'),
+            'userns-float': (lambda e: e['userns'].update(apparmorRestrictUnprivileged=0.0), None, 'bounded integer required'),
+            'fstrim': (lambda e: e['services'].update(stopped=e['services']['stopped'][:3]), None, 'daemons not stopped'),
+            'services': (lambda e: e['services'].update(active=['docker.service']), None, 'daemons not stopped'),
+            'userns': (lambda e: e['userns'].update(apparmorRestrictUnprivileged=1), None, 'user namespaces'),
+            'sparse': (lambda e: e['volume'].update(allocatedBytes=1024**3), None, 'not preallocated'),
+            'discard': (lambda e: e['volume'].update(discard='discard'), None, 'volume format differs'),
+            'floor': (lambda e: e['volume'].update(freeBytes=79 * 1024**3), None, 'free floor not met'),
+            'device': (lambda e: e['volume'].update(device='4095:4095'), None, 'outside the domain volume'),
+            'builder': (lambda e: e['builder'].update(version='buildah version 1.33.7 (image-spec 1.1.0-rc.5, runtime-spec 1.1.0)'),
+                        None, 'builder version differs'),
+            'memory': (lambda e: e['resources'].update(memAvailableBytes=14 * 1024**3 - 1), None, 'capacity floor'),
+            'cpu': (lambda e: e['resources'].update(affinity=2), None, 'capacity floor'),
+            'extension': (lambda e: e.update(command=['bash']), None, 'input fields mismatch'),
+            'reservation': (None, {'sharedHostReservedMemoryBytes': 1, 'sharedHostReservedCpu': 0,
+                                   'sharedHostReservedDiskBytes': 0, 'unquantifiedResourceConflicts': []},
+                            'cannot carry shared-host reservations'),
+        }
+        args, base, home = self.fixture()
+        for name, (mutate, disposition, message) in cases.items():
+            selection = copy.deepcopy(base)
+            self.hosted(args, selection, mutate, disposition)
+            with self.subTest(case=name), patch.object(Path, 'home', return_value=home), \
+                    self.assertRaisesRegex(RuntimeError, message):
+                BAR.main(args, IMAGE.__dict__)
+            self.assertFalse((Path(args.state_dir) / selection['operationId']).exists())
+
+    def test_hosted_vm_relation_requires_its_bound_evidence_reference(self):
+        args, selection, home = self.fixture()
+        self.hosted(args, selection)
+        for mutate, message in ((lambda s: s['resourceDomain'].pop('domainEvidenceSha256'), 'input fields mismatch'),
+                                (lambda s: s['admission'].pop('domain'), 'input fields mismatch'),
+                                (lambda s: s['resourceDomain'].update(domainEvidenceSha256='0' * 64), 'correspondence missing'),
+                                (lambda s: s['resourceDomain'].update(relation='hosted-vm'), 'input fields mismatch'),
+                                (lambda s: s['admission']['domain'].update(sha256='0' * 64), 'correspondence missing')):
+            wrong = copy.deepcopy(selection); mutate(wrong); self.base.rebind_selection(args, wrong)
+            with patch.object(Path, 'home', return_value=home), self.assertRaisesRegex(RuntimeError, message):
+                BAR.main(args, IMAGE.__dict__)
+        shared_host = copy.deepcopy(selection)
+        shared_host['resourceDomain'] = {'relation': BAR.SHARED_HOST_RELATION,
+                                         'topologySha256': selection['resourceDomain']['topologySha256']}
+        self.base.rebind_selection(args, shared_host)
+        with patch.object(Path, 'home', return_value=home), self.assertRaisesRegex(RuntimeError, 'input fields mismatch'):
+            BAR.main(args, IMAGE.__dict__)
+
     def test_selected_bar_input_cannot_be_used_by_sc2(self):
         args, selection, home = self.fixture()
         with patch.object(Path, 'home', return_value=home), self.assertRaises(RuntimeError):
