@@ -27,7 +27,7 @@ PRODUCT_REVISION = '4ddd070650e3131916a13bb2c5e75f99376e1c3a'
 PRODUCT_TREE = 'f6e4dc108bf065cd2fd44d48e0faf8807e1b8e3c'
 HELPER_FILES = {
     'eng/portable-workspace-image.py': '14f519038fd24684b458d917ddb33ab6bada86a084b39c35ce5ae7e8e9fa7aa5',
-    'eng/portable_workspace_bar.py': 'dd14f953efed7e02e9c0912e6b9e1caa8d277257912a415ab13eddeac99b378b',
+    'eng/portable_workspace_bar.py': 'c5b571ac23309a9a60ef0663617a1862a7a7955dd543c1cd352afc636583bbbf',
     'eng/portable_workspace_sc2.py': '19f4b126ace622349e5bff9ae9462e079e13ebf41d5706bb8cc1551a33ee262e',
 }
 PRODUCT_FILES = {
@@ -368,12 +368,23 @@ def canonicalize_checkouts(revision):
     return receipt
 
 
-def prepare(operation_id, revision, *, source=SOURCE, allocation=ALLOCATION, evidence=EVIDENCE, home=HOME, bar=None):
+def prepare(operation_id, revision, *, source=SOURCE, allocation=ALLOCATION, evidence=EVIDENCE, home=HOME, bar=None, purpose='full-image'):
     require(re.fullmatch(r'bar-image-[0-9]{1,20}-[0-9]{1,5}', operation_id) is not None, 'fixed run/attempt identity required')
     require(re.fullmatch(r'[0-9a-f]{40}', revision) is not None, 'exact helper revision required')
     require(re.fullmatch(r'[0-9a-f]{40}', os.environ.get('HELPER_TREE', '')) is not None, 'exact helper tree required')
     require(os.getuid() == RUNNER_UID, 'unprivileged uid1001 required')
     bar = load_bar(source) if bar is None else bar
+    require(purpose in ('full-image', 'network-prerequisite'), 'fixed purpose required')
+    facts_pin = digest_file(evidence / 'facts.env', 65536)
+    facts_bytes = (evidence / 'facts.env').read_bytes()
+    require(len(facts_bytes) == facts_pin['bytes'] and hashlib.sha256(facts_bytes).hexdigest() == facts_pin['sha256'],
+            'installed package facts changed')
+    facts = facts_bytes.decode()
+    require(facts.splitlines().count('userland.pastaPackage=passt 2026_10_02.cba3570-1') == 1,
+            'signed installed pasta package identity differs')
+    security, security_pin = read_json(evidence / 'root-security.json')
+    require(security.get('bootId') == Path('/proc/sys/kernel/random/boot_id').read_text().strip(),
+            'fresh root security observation required')
     started = float(os.environ.get('HOST_JOB_MONOTONIC', 'nan'))
     require(math.isfinite(started), 'original outer job clock required')
     elapsed = time.monotonic() - started
@@ -430,9 +441,11 @@ def prepare(operation_id, revision, *, source=SOURCE, allocation=ALLOCATION, evi
                     'baseImage': bar.BASE_IMAGE, 'localTag': 'localhost/fsgg/bar:' + operation_id, 'exportName': operation_id},
         'allocation': {'path': str(allocation), 'identity': bar.directory_pin(allocation)},
         'build': {'root': str(build_root), 'runroot': str(build_run)}, 'load': {'root': str(load_root), 'runroot': str(load_run)},
+        'network': {'purpose': purpose, 'seed': bar.network_seed()},
         'support': support, 'clock': {'bootId': boot, 'start': start, 'workEnd': start + bar.WORK_SECONDS,
                                     'totalEnd': start + bar.WORK_SECONDS + bar.RETIRE_SECONDS},
         'admission': {'topology': topology_ref, 'resourceDisposition': disposition_ref,
+                      'security': {'path': str(evidence / 'root-security.json'), 'sha256': security_pin['sha256']},
                       'domain': {'path': str(domain_path), 'sha256': domain_pin['sha256']}},
         'resourceDomain': {'relation': bar.HOSTED_RELATION, 'topologySha256': topology_ref['sha256'],
                            'domainEvidenceSha256': domain_pin['sha256']}, 'licenseAccepted': True}
@@ -443,7 +456,7 @@ def prepare(operation_id, revision, *, source=SOURCE, allocation=ALLOCATION, evi
 
 def controller_argv(selection, target, digest, *, source=SOURCE, allocation=ALLOCATION):
     return [str(Path(sys.executable).resolve()), '-I', '-B', str(source / 'eng/portable-workspace-image.py'),
-        'qualify', '--profile', 'bar-headless', '--source', str(source), '--expected-source-revision', selection['helper']['revision'],
+        ('preflight' if selection['network']['purpose'] == 'network-prerequisite' else 'qualify'), '--profile', 'bar-headless', '--source', str(source), '--expected-source-revision', selection['helper']['revision'],
         '--image-source', str(allocation / 'context'), '--expected-image-source-revision', PRODUCT_REVISION,
         '--engine-allocation', str(allocation), '--engine-scratch-dir', str(allocation / 'build/download-tmp'),
         '--state-dir', str(allocation / 'state'), '--root', selection['build']['root'], '--runroot', selection['build']['runroot'],
@@ -507,6 +520,7 @@ def receipt(operation_id, *, allocation=ALLOCATION, evidence=EVIDENCE, transport
             require(manifest_path.name == 'sha256-' + manifest_pin['sha256'] + '.json', 'manifest content address differs')
             selection_path = evidence / 'operation-input.json'
             selection, selection_pin = read_json(selection_path)
+            require(selection.get('network', {}).get('purpose') == 'full-image', 'prerequisite cannot authorize candidate transport')
             require(manifest.get('profile') == 'bar-headless' and manifest.get('operationId') == operation_id
                     and manifest.get('firstCause') is None and manifest.get('result', {}).get('imageId') == result['imageId']
                     and manifest.get('result', {}).get('archiveSha256') == result.get('archiveSha256')
@@ -531,6 +545,34 @@ def receipt(operation_id, *, allocation=ALLOCATION, evidence=EVIDENCE, transport
             # controller evidence. Metadata safety checks above remain strict.
             success = False
             refusals.append(type(error).__name__ + ': ' + str(error)[:512])
+    prerequisite_passed = False
+    purpose = 'Unknown'
+    try:
+        selected, selected_pin = read_json(evidence / 'operation-input.json')
+        purpose = selected.get('network', {}).get('purpose', 'Unknown')
+        if purpose == 'network-prerequisite':
+            require(not candidate.exists(), 'prerequisite produced a candidate')
+            require(not success and not encrypted, 'prerequisite candidate permission refused')
+            if isinstance(result, dict) and result.get('preflight') == 'passed':
+                manifest_path = Path(result.get('manifest', ''))
+                require(manifest_path.parent == state / 'manifests', 'prerequisite manifest outside original')
+                manifest, manifest_pin = read_json(manifest_path)
+                require(manifest_path.name == 'sha256-' + manifest_pin['sha256'] + '.json'
+                        and manifest.get('inputSha256') == selected_pin['sha256']
+                        and manifest.get('operationId') == result.get('operationId') == operation_id
+                        and manifest.get('profile') == result.get('profile') == 'bar-headless'
+                        and manifest.get('firstCause') is None
+                        and manifest.get('result', {}).get('preflight') == 'passed'
+                        and manifest.get('result', {}).get('candidateQualified') is False
+                        and result.get('candidateQualified') is False
+                        and manifest['result'].get('networkPrerequisite') == result.get('networkPrerequisite')
+                        and manifest.get('helper') == selected.get('helper')
+                        and manifest.get('product') == selected.get('product')
+                        and manifest.get('clock') == selected.get('clock'),
+                        'prerequisite manifest/input/result differs')
+                prerequisite_passed = True
+    except (OSError, ValueError, RuntimeError, KeyError) as error:
+        refusals.append('prerequisite correspondence: ' + str(error)[:256])
     observation = {'exists': False, 'bytes': None, 'regular': None}
     try:
         info = candidate.stat(follow_symlinks=False)
@@ -538,7 +580,7 @@ def receipt(operation_id, *, allocation=ALLOCATION, evidence=EVIDENCE, transport
     except OSError as error:
         observation['unavailable'] = str(error)[:256]
     observation['hashStatus'] = 'bounded hash retained' if archive is not None else 'not retained: absent, unqualified or refused'
-    value = {'operationId': operation_id, 'metadataBytes': total, 'metadata': files, 'candidate': archive,
+    value = {'operationId': operation_id, 'purpose': purpose, 'networkPrerequisitePassed': prerequisite_passed, 'metadataBytes': total, 'metadata': files, 'candidate': archive,
              'metadataTransportCeilingBytes': total + RECEIPT_BYTES,
              'candidateObservation': observation,
              'candidateTransportPermitted': success, 'candidatePath': str(candidate), 'transportFreeBytes': free,
@@ -567,12 +609,13 @@ def receipt(operation_id, *, allocation=ALLOCATION, evidence=EVIDENCE, transport
     if os.environ.get('GITHUB_OUTPUT'):
         with open(os.environ['GITHUB_OUTPUT'], 'a') as stream:
             stream.write('candidate-permitted=' + str(success).lower() + '\n')
+            stream.write('prerequisite-passed=' + str(prerequisite_passed).lower() + '\n')
     return value
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.split('\n', 1)[0])
-    parser.add_argument('mode', choices=['canonicalize-checkouts', 'seal-transport', 'qualify', 'receipt'])
+    parser.add_argument('mode', choices=['canonicalize-checkouts', 'seal-transport', 'qualify', 'network-prerequisite', 'receipt'])
     parser.add_argument('--operation-id', required=True)
     parser.add_argument('--source-revision')
     args = parser.parse_args(argv)
@@ -585,7 +628,8 @@ def main(argv=None):
         print(json.dumps({'candidateTransportPermitted': value['candidateTransportPermitted'],
                           'metadataBytes': value['metadataBytes'], 'candidate': value['candidate']}, sort_keys=True))
     else:
-        selection, target, digest = prepare(args.operation_id, args.source_revision or '')
+        selection, target, digest = prepare(args.operation_id, args.source_revision or '',
+            purpose='network-prerequisite' if args.mode == 'network-prerequisite' else 'full-image')
         argv = controller_argv(selection, target, digest)
         os.execve(argv[0], argv, {'PATH': '/usr/bin:/bin', 'HOME': str(HOME), 'USER': 'runner', 'LOGNAME': 'runner',
                                 'XDG_RUNTIME_DIR': '/tmp/runtime-1001', 'LANG': 'C.UTF-8', 'LC_ALL': 'C.UTF-8'})

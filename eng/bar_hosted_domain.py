@@ -54,10 +54,10 @@ def canonical(value) -> bytes:
     return (json.dumps(value, sort_keys=True, separators=(',', ':'), allow_nan=False) + '\n').encode()
 
 
-def command(argv, *, check=False):
+def command(argv, *, check=False, timeout_seconds=COMMAND_SECONDS):
     """Bounded fixed command; returns (exit, stdout, stderr) without a shell."""
     try:
-        done = subprocess.run(argv, capture_output=True, timeout=COMMAND_SECONDS, check=False)
+        done = subprocess.run(argv, capture_output=True, timeout=timeout_seconds, check=False)
     except (OSError, subprocess.TimeoutExpired) as error:
         if check:
             raise
@@ -157,6 +157,50 @@ def read_int(value: Path):
         return None
 
 
+def security_observation():
+    """Read-only observations; missing/unreadable evidence is explicitly Unknown."""
+    result = {'schema': 'fsgg.bar-network-security/1',
+              'bootId': Path('/proc/sys/kernel/random/boot_id').read_text().strip(),
+              'uid': os.getuid(), 'gid': os.getgid(), 'pid': os.getpid(), 'observations': {}}
+    for name in ('/sys/kernel/security/lsm', '/sys/module/apparmor/parameters/enabled',
+                 '/sys/kernel/security/apparmor/profiles', '/proc/self/attr/current',
+                 '/proc/self/status', '/proc/self/mountinfo', '/proc/self/uid_map', '/proc/self/gid_map'):
+        try:
+            with open(name, 'rb') as stream:
+                payload = stream.read(65537)
+            result['observations'][name] = ({'status': 'observed', 'value': payload.decode(errors='replace')}
+                if len(payload) <= 65536 else {'status': 'Unknown', 'reason': 'byte bound exceeded'})
+        except OSError as error:
+            result['observations'][name] = {'status': 'Unknown', 'reason': str(error)[:256]}
+    result['namespaces'] = {}
+    for name in ('pid', 'user', 'mnt', 'net'):
+        try:
+            result['namespaces'][name] = {'status': 'observed', 'inode': Path('/proc/self/ns/' + name).stat().st_ino}
+        except OSError as error:
+            result['namespaces'][name] = {'status': 'Unknown', 'reason': str(error)[:256]}
+    result['scope'] = 'observed host state; rootless Podman AppArmor=false is not host LSM absence'
+    return result
+
+
+def security_readback(args):
+    # Fixed bounded kernel read, no policy/sysctl/profile mutation. A missing or
+    # empty audit log cannot prove that no LSM denied the short-lived helper.
+    started = os.environ.get('HOST_JOB_STARTED', '')
+    if not re.fullmatch(r'[0-9]{1,12}', started):
+        raise RuntimeError('original host job start required')
+    code, output, error = command(['/usr/bin/journalctl', '--kernel', '--boot', '--no-pager',
+        '--output=json', '-n', '128', '--since=@' + started, '--grep=apparmor|AVC|DENIED'], timeout_seconds=30)
+    value = {'security': security_observation(), 'audit': {'exit': code, 'stdout': output,
+             'stderr': error, 'completeness': 'unproved', 'absenceConclusion': 'Unknown'},
+             'scope': 'original operation kernel readback; no process or provider disposal proof'}
+    target = Path(args.evidence)
+    descriptor = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(descriptor, 'wb') as stream:
+        stream.write(canonical(value))
+    os.chown(target, args.owner_uid, args.owner_gid)
+    return 0
+
+
 def admit(args) -> int:
     if os.geteuid() != 0:
         raise RuntimeError('admit observes root-owned domain state and must run as root')
@@ -215,6 +259,11 @@ def admit(args) -> int:
     with os.fdopen(descriptor, 'wb') as stream:
         stream.write(payload)
     os.chown(target, args.owner_uid, args.owner_gid)
+    security = target.with_name('root-security.json')
+    descriptor = os.open(security, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(descriptor, 'wb') as stream:
+        stream.write(canonical(security_observation()))
+    os.chown(security, args.owner_uid, args.owner_gid)
     print(json.dumps({'evidence': str(target), 'sha256': hashlib.sha256(payload).hexdigest(),
                       'verdict': evidence['verdict'], 'refusals': refusals}, sort_keys=True))
     return 2 if refusals else 0
@@ -310,7 +359,13 @@ def main(argv=None) -> int:
     for name in ('--allocation', '--load-store', '--controller-module'):
         check_parser.add_argument(name, required=True)
     check_parser.add_argument('--expected-uid', type=int, required=True)
+    security_parser = modes.add_parser('security-readback')
+    security_parser.add_argument('--evidence', required=True)
+    security_parser.add_argument('--owner-uid', type=int, required=True)
+    security_parser.add_argument('--owner-gid', type=int, required=True)
     args = parser.parse_args(argv)
+    if args.mode == 'security-readback':
+        return security_readback(args)
     return admit(args) if args.mode == 'admit' else userland_check(args)
 
 

@@ -143,7 +143,7 @@ class CheckoutBootstrap(unittest.TestCase):
         (self.root / 'evidence').mkdir(mode=0o700)
         for path in (source, product): self.git(path, 'config', '--local', 'gc.auto', '0')
         env = {'GITHUB_WORKSPACE': str(self.root), 'GITHUB_REPOSITORY': 'FS-GG/FS.GG.Coordination',
-               'GITHUB_EVENT_NAME': 'workflow_dispatch', 'GITHUB_REF': 'refs/heads/main', 'GITHUB_RUN_ATTEMPT': '1'}
+               'GITHUB_EVENT_NAME': 'workflow_dispatch', 'GITHUB_REF': 'refs/heads/main', 'GITHUB_RUN_ATTEMPT': '1', 'QUALIFICATION_MODE': 'qualify'}
         with patch.dict(os.environ, env), patch.object(WRAPPER, 'load_bar', return_value=BAR), \
              patch.object(WRAPPER, 'PRODUCT_REVISION', product_revision), patch.object(WRAPPER, 'PRODUCT_TREE', product_tree):
             result = WRAPPER.canonicalize_checkouts(revision)
@@ -181,6 +181,7 @@ class Preparation(unittest.TestCase):
             path.chmod(0o500)
             self.native[role] = str(path)
         for target, name, value in [
+            (BAR, 'network_seed', lambda: {'files': {}, 'aliases': {}}),
             (WRAPPER, 'RUNNER_UID', os.getuid()), (WRAPPER, 'BUILDER', self.native['builder']),
             (WRAPPER, 'PRODUCT_FILES', self.product_pins),
             (BAR, 'SUPPORT_EXECUTABLES', {key: self.native[key] for key in BAR.SUPPORT_EXECUTABLES}),
@@ -206,6 +207,8 @@ class Preparation(unittest.TestCase):
             'builder': {'version': 'buildah version 1.43.1'},
             'resources': {'memAvailableBytes': 15 * GIB, 'logicalCpus': 4, 'affinity': 4}}
         self.write_domain()
+        (self.evidence / 'facts.env').write_text('userland.pastaPackage=passt 2026_10_02.cba3570-1\n')
+        WRAPPER.write_new(self.evidence / 'root-security.json', {'schema': 'fsgg.bar-network-security/1', 'bootId': self.domain['bootId'], 'observations': {}})
         start = float(os.environ['HOST_JOB_MONOTONIC'])
         WRAPPER.write_new(self.evidence / 'transport-seal.json', {
             'operationId': OPERATION, 'bootId': self.domain['bootId'], 'outerStartMonotonic': start,
@@ -235,6 +238,16 @@ class Preparation(unittest.TestCase):
         self.assertFalse((self.allocation / 'state' / OPERATION).exists(), 'preparation must not consume controller original')
         with self.assertRaises(FileExistsError):
             self.prepare()
+
+    def test_fixed_prerequisite_purpose_uses_the_same_managed_preflight(self):
+        selection, target, digest = WRAPPER.prepare(OPERATION, 'b' * 40, source=ROOT,
+            allocation=self.allocation, evidence=self.evidence, home=self.home, bar=BAR,
+            purpose='network-prerequisite')
+        argv = WRAPPER.controller_argv(selection, target, digest, source=ROOT, allocation=self.allocation)
+        self.assertEqual(argv[4], 'preflight')
+        self.assertEqual(selection['network']['purpose'], 'network-prerequisite')
+        self.assertEqual(selection['clock']['totalEnd'] - selection['clock']['start'], 3720)
+        self.assertNotIn('qualify', argv)
 
     def test_bad_source_domain_stores_and_original_clock_refuse_before_exec(self):
         cases = ['wrong-product', 'stale-boot', 'root-refusal', 'occupied-store', 'consumed', 'expired-outer', 'bad-tree', 'missing-support']
@@ -309,7 +322,7 @@ class Transport(unittest.TestCase):
         self.state.mkdir(parents=True, mode=0o700); self.evidence.mkdir(mode=0o700)
         self.candidate = self.state / 'candidate.oci.tar'
         self.candidate.write_bytes(b'authored inert archive bytes; no OCI image or product')
-        self.selection = {'helper': {'revision': 'a' * 40}, 'product': {'revision': WRAPPER.PRODUCT_REVISION}, 'clock': {'start': 1}}
+        self.selection = {'network': {'purpose': 'full-image'}, 'helper': {'revision': 'a' * 40}, 'product': {'revision': WRAPPER.PRODUCT_REVISION}, 'clock': {'start': 1}}
         WRAPPER.write_new(self.evidence / 'transport-seal.json', {'synthetic': True, 'outerDeadlineMonotonic': time.monotonic() + 3600})
         WRAPPER.write_new(self.evidence / 'topology.json', {
             'transportSealSha256': WRAPPER.digest_file(self.evidence / 'transport-seal.json', 1024**2)['sha256']})
@@ -343,6 +356,24 @@ class Transport(unittest.TestCase):
     def receipt(self):
         with patch.object(WRAPPER.os, 'statvfs', return_value=argparse.Namespace(f_bavail=20 * GIB, f_frsize=1)):
             return WRAPPER.receipt(OPERATION, allocation=self.allocation, evidence=self.evidence, transport=self.transport)
+
+    def test_prerequisite_success_is_metadata_only_and_never_encrypts(self):
+        self.candidate.unlink()
+        self.selection['network']['purpose'] = 'network-prerequisite'
+        selected = self.evidence / 'operation-input.json'; selected.write_bytes(WRAPPER.canonical(self.selection))
+        result = {'profile': 'bar-headless', 'preflight': 'passed', 'candidateQualified': False,
+                  'networkPrerequisite': {'imageId': 'sha256:' + 'e' * 64, 'scope': 'authored prerequisite control'}}
+        self.manifest.update(result=result, inputSha256=hashlib.sha256(selected.read_bytes()).hexdigest())
+        self.result = {**result, 'operationId': OPERATION}
+        self.write_result()
+        with patch.object(WRAPPER, 'encrypt_candidate') as encrypt:
+            value = WRAPPER.receipt(OPERATION, allocation=self.allocation, evidence=self.evidence, transport=self.transport)
+        encrypt.assert_not_called()
+        self.assertTrue(value['networkPrerequisitePassed'])
+        self.assertFalse(value['candidateTransportPermitted'])
+        self.assertIsNone(value['candidate']); self.assertIsNone(value['encryptedCandidate'])
+        self.assertEqual(value['cryptoCommands'], [])
+        self.assertTrue((self.transport / OPERATION / 'state/0001.stdout').exists())
 
     def test_valid_exact_manifest_archive_and_original_streams_are_staged(self):
         value = self.receipt()
@@ -424,7 +455,7 @@ class Workflow(unittest.TestCase):
             for code in (0, 41):
                 evidence = root / str(code); evidence.mkdir(mode=0o700)
                 env = {**os.environ, 'PATH': str(tools) + ':/usr/bin:/bin', 'EVIDENCE': str(evidence),
-                       'ENTER_SCRIPT': 'authored inert entry fixture', 'OPERATION_ID': OPERATION,
+                       'ENTER_SCRIPT': 'authored inert entry fixture', 'OPERATION_ID': OPERATION, 'QUALIFICATION_MODE': 'qualify',
                        'USERLAND': '/fixture-userland', 'VOLUME': '/fixture-volume', 'GITHUB_WORKSPACE': str(root),
                        'GITHUB_SHA': 'b' * 40, 'HOST_JOB_STARTED': str(int(time.time())),
                        'HOST_JOB_MONOTONIC': str(time.monotonic()), 'FIXTURE_EXIT': str(code)}
@@ -458,7 +489,7 @@ class Workflow(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             output = Path(temporary) / 'environment'
             normal = {'GITHUB_ENV': str(output), 'GITHUB_EVENT_NAME': 'workflow_dispatch',
-                      'GITHUB_REF': 'refs/heads/main', 'GITHUB_RUN_ATTEMPT': '1'}
+                      'GITHUB_REF': 'refs/heads/main', 'GITHUB_RUN_ATTEMPT': '1', 'QUALIFICATION_MODE': 'qualify'}
             result = subprocess.run(['/bin/bash', '-c', guard], env={**os.environ, **normal}, capture_output=True, timeout=10)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn('HOST_JOB_STARTED=', output.read_text())
@@ -486,7 +517,8 @@ class Workflow(unittest.TestCase):
         self.assertLess(text.index('canonicalize-checkouts --operation-id'), text.index('Build the pinned daemonless Arch userland'))
         self.assertEqual(text.count('fetch-depth: 0'), 2)
         self.assertNotIn('pull_request:', text)
-        self.assertIn('if: ${{ inputs.full_image }}', text)
+        self.assertIn("inputs.purpose == 'network-prerequisite' && !inputs.full_image", text)
+        self.assertIn("inputs.purpose == 'full-image' && inputs.full_image", text)
         self.assertIn('timeout-minutes: 90', text)
         self.assertIn('chmod 0700 "$VOLUME/allocation/context"', text)
         self.assertIn('test "$GITHUB_REF" = refs/heads/main', text)
@@ -501,8 +533,7 @@ class Workflow(unittest.TestCase):
         self.assertIn('path: /fsgg-bar/transport-candidate/', text)
         self.assertNotIn('path: /fsgg-bar/allocation/state/', text)
         self.assertNotIn('continue-on-error', text)
-        self.assertEqual(literal_block(text, 'PACMAN_SCRIPT'), literal_block(
-            (ROOT / '.github/workflows/bar-hosted-domain-preflight.yml').read_text(), 'PACMAN_SCRIPT'))
+        self.assertIn('pacman -Qkk passt', literal_block(text, 'PACMAN_SCRIPT'))
         rows = text.splitlines(keepends=True)
         scripts = [literal_block(text, 'PACMAN_SCRIPT'), literal_block(text, 'ENTER_SCRIPT')]
         scripts.extend(literal_block(''.join(rows[index:]), 'run') for index, row in enumerate(rows) if row.strip() == 'run: |')
@@ -517,13 +548,13 @@ class Workflow(unittest.TestCase):
                 return literal_block(WORKFLOW.read_text(), 'ENTER_SCRIPT')
         env = {'SOURCE': '/fixture-source', 'EVIDENCE': '/fixture-evidence', 'HELPER_TREE': 'a' * 40,
                'HOST_JOB_STARTED': str(int(time.time())), 'HOST_JOB_MONOTONIC': str(time.monotonic()),
-               'OPERATION_ID': OPERATION, 'SOURCE_REVISION': 'b' * 40}
+               'OPERATION_ID': OPERATION, 'SOURCE_REVISION': 'b' * 40, 'QUALIFICATION_MODE': 'qualify'}
         with patch.dict(os.environ, env):
             runner = Entry()
             result, trace = runner.run_entry()
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn('mount <-o> <remount,bind,ro>', trace)
-            self.assertIn('/eng/bar_hosted_operation.py qualify --operation-id', trace)
+            self.assertIn('/eng/bar_hosted_operation.py "$QUALIFICATION_MODE" --operation-id', trace)
             self.assertNotIn('userland-check', trace)
             for failure in ('pivot_root', 'umount', 'rmdir'):
                 result, trace = runner.run_entry(failure)

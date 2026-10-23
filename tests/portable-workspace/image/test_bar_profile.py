@@ -40,6 +40,17 @@ class BarProfile(unittest.TestCase):
         self.addCleanup(self.base.doCleanups)
         self.addCleanup(self.base.tearDown)
         self.root = self.base.root
+        network = self.root / 'network-tools'; network.mkdir(mode=0o700)
+        binaries = tuple(str(network / name) for name in ('passt', 'passt.avx2'))
+        aliases = tuple(str(network / name) for name in ('pasta', 'pasta.avx2'))
+        for binary, alias in zip(binaries, aliases):
+            Path(binary).write_bytes(b'authored inert network ELF port'); Path(binary).chmod(0o500)
+            Path(alias).symlink_to(binary)
+        self.network_library = network / 'libnetwork.so'
+        self.network_library.write_bytes(b'authored inert loader dependency'); self.network_library.chmod(0o400)
+        for key, value in [('NETWORK_BINARIES', binaries), ('NETWORK_ALIASES', aliases),
+                           ('NETWORK_OWNER', os.getuid()), ('NETWORK_LIBRARY_ROOT', str(self.root))]:
+            change = patch.object(BAR, key, value); change.start(); self.addCleanup(change.stop)
         for module in (BAR, SHARED):
             for key, value in (('SUPPORT_LIBRARIES', self.base.library_aliases),
                                ('SUPPORT_EXECUTABLES', self.base.executable_paths)):
@@ -76,6 +87,10 @@ class BarProfile(unittest.TestCase):
                 '-c', 'commit.gpgsign=false', 'commit', '-qm', 'Synthetic BAR source selection')
             selection[key].update(revision=git(root, 'rev-parse', 'HEAD'), tree=git(root, 'rev-parse', 'HEAD^{tree}'),
                                   files={name: sha((root / name).read_bytes()) for name in names})
+        selection['network'] = {'purpose': 'full-image', 'seed': BAR.network_seed()}
+        security = self.root / 'root-security.json'
+        security.write_bytes(SHARED.canonical({'schema': 'fsgg.bar-network-security/1', 'bootId': selection['clock']['bootId'], 'observations': {}})); security.chmod(0o600)
+        selection['admission']['security'] = {'path': str(security), 'sha256': sha(security.read_bytes())}
         selection['schema'] = 'fsgg.bar-headless-operation/1'
         selection['product']['baseImage'] = BAR.BASE_IMAGE
         selection['load']['root'] = str(home / '.local/share/fsgg/headless-images/bar' / selection['operationId'])
@@ -143,10 +158,37 @@ class BarProfile(unittest.TestCase):
                 'inspect': {'Id': image_id, 'Os': 'linux', 'Architecture': 'amd64', 'Config': config,
                             'RootFS': {'Layers': native_config['rootfs']['diff_ids']}}}
 
-    def ports(self, args, selection, image=None, fail=None, bad_mapping=False, existing_image=False):
+    def ports(self, args, selection, image=None, fail=None, bad_mapping=False, existing_image=False, network_fault=None):
         spawn, calls, resources = self.base.native_ports(args, selection, image=image, fail=fail)
         real_popen = subprocess.Popen
         def invoke(argv, **kwargs):
+            if 'pull' in argv:
+                calls.append(argv.copy())
+                if fail == 'pull':
+                    return real_popen([sys.executable, '-I', '-c', 'raise SystemExit(23)'], **kwargs)
+                return real_popen([sys.executable, '-I', '-c', 'print("synthetic selected base pull")'], **kwargs)
+            if '--list' in argv and argv[-1] in BAR.NETWORK_BINARIES:
+                calls.append(argv.copy())
+                output = 'libnetwork.so => ' + str(self.network_library) + ' (0x0)'
+                return real_popen([sys.executable, '-I', '-c', 'print(' + repr(output) + ')'], **kwargs)
+            if argv[0] == BAR.NETWORK_ALIASES[0]:
+                calls.append(argv.copy())
+                return real_popen([sys.executable, '-I', '-c', 'print(' + repr(BAR.NETWORK_VERSION) + ')'], **kwargs)
+            if 'build' in argv and any('network-prerequisite/Containerfile' in value for value in argv):
+                calls.append(argv.copy())
+                if network_fault == 'pasta':
+                    return real_popen([sys.executable, '-I', '-c',
+                        "import sys;sys.stderr.write(\"Couldn't open network namespace /proc/401/ns/net: Permission denied\\n\");raise SystemExit(125)"], **kwargs)
+                if fail == 'build':
+                    return real_popen([sys.executable, '-I', '-c', 'raise SystemExit(23)'], **kwargs)
+                target = next(value.split('=', 1)[1] for value in argv if value.startswith('--iidfile='))
+                Path(target).write_text('sha256:' + 'e' * 64 + '\n')
+                value = {'uid': 0, 'noNewPrivs': 1, 'procPidCorrespondence': 1,
+                         'pidNamespace': Path('/proc/self/ns/pid').stat().st_ino + 1,
+                         'networkNamespace': Path('/proc/self/ns/net').stat().st_ino + 1}
+                if network_fault == 'nnp': value['noNewPrivs'] = 0
+                if network_fault == 'namespace': value['networkNamespace'] -= 1
+                return real_popen([sys.executable, '-I', '-c', 'print(' + repr('FSGG_NET_PROBE ' + json.dumps(value)) + ')'], **kwargs)
             if 'unshare' in argv and '-c' in argv and '"euid"' not in argv[-1]:
                 calls.append(argv.copy())
                 rows = '0 1000 1\n1 100000 ' + ('2000' if bad_mapping else '65536') + '\n'
@@ -172,6 +214,7 @@ class BarProfile(unittest.TestCase):
 
     def test_actual_bar_preflight_consumes_role_specific_info_protocol(self):
         args, selection, home = self.fixture(); args.mode = 'preflight'
+        selection['network']['purpose'] = 'network-prerequisite'; self.base.rebind_selection(args, selection)
         spawn, calls, resources = self.ports(args, selection)
         with self.native_context(home, spawn, resources):
             result = BAR.main(args, IMAGE.__dict__)
@@ -181,7 +224,59 @@ class BarProfile(unittest.TestCase):
                          [['info'], ['info', '--format=json']])
         self.assertEqual([argv[0] for argv in infos],
                          [selection['support']['builder']['path'], selection['support']['podman']['path']])
-        self.assertFalse(any('pull' in argv or 'build' in argv or 'load' in argv for argv in calls))
+        self.assertEqual(sum('pull' in argv for argv in calls), 1)
+        self.assertEqual(sum('build' in argv for argv in calls), 1)
+        self.assertFalse(any('load' in argv or 'push' in argv for argv in calls))
+        self.assertFalse(result['candidateQualified'])
+        probe = next(argv for argv in calls if 'build' in argv)
+        for flag in ('--network=private', '--pid=private', '--ipc=private',
+                     '--runtime=/usr/bin/crun', '--security-opt=no-new-privileges', '--retry=0'):
+            self.assertIn(flag, probe)
+        self.assertFalse(any(value.startswith('--target=') for value in probe))
+        recipe = BAR.network_probe_recipe().decode()
+        self.assertEqual(recipe.count('RUN '), 1)
+        self.assertIn('FROM --platform=linux/amd64 ' + BAR.BASE_IMAGE, recipe)
+        self.assertNotIn('apt-get', recipe)
+        self.assertEqual(subprocess.run(['/bin/sh', '-n'], input=recipe.split('RUN ', 1)[1],
+                                       text=True, capture_output=True, timeout=5).returncode, 0)
+
+    def test_network_failure_or_weakened_result_blocks_full_generation(self):
+        for fault, expected in [('pasta', 'command failed with exit 125'),
+                                ('nnp', 'isolation correspondence'), ('namespace', 'isolation correspondence')]:
+            with self.subTest(fault=fault), FIXTURE.tempfile.TemporaryDirectory(dir=self.root) as temporary:
+                original = self.root; self.base.root = self.root = Path(temporary); self.root.chmod(0o700)
+                try:
+                    args, selection, home = self.fixture(); args.mode = 'qualify'
+                    spawn, calls, resources = self.ports(args, selection, network_fault=fault)
+                    with self.native_context(home, spawn, resources), self.assertRaisesRegex(RuntimeError, expected):
+                        BAR.main(args, IMAGE.__dict__)
+                    self.assertFalse(any('--target=headless-integration' in argv for argv in calls))
+                    self.assertFalse(any('push' in argv or 'load' in argv or 'tag' in argv for argv in calls))
+                    journal = Path(args.state_dir) / selection['operationId'] / 'journal.jsonl'
+                    records = [json.loads(line) for line in journal.read_bytes().splitlines()]
+                    self.assertEqual(records[-1]['descendantSettlement'], 'unproved')
+                    if fault == 'pasta':
+                        self.assertEqual(records[-1]['firstCause'], expected)
+                        failed = next(row for row in records if row.get('event') == 'command-result' and row.get('exitCode') == 125)
+                        self.assertTrue(failed['bothStreamsEof']); self.assertTrue(failed['directChildReaped'])
+                finally:
+                    self.base.root = self.root = original
+
+    def test_network_alias_or_avx2_change_refuses_before_probe(self):
+        args, selection, home = self.fixture(); args.mode = 'qualify'
+        # These were captured in the operation input, not invented fixture hashes.
+        Path(BAR.NETWORK_BINARIES[1]).chmod(0o700)
+        Path(BAR.NETWORK_BINARIES[1]).write_bytes(b'changed after capture')
+        Path(BAR.NETWORK_BINARIES[1]).chmod(0o500)
+        with patch.object(Path, 'home', return_value=home), \
+             self.assertRaisesRegex(RuntimeError, 'network helper seed differs'), \
+             patch.object(IMAGE.subprocess, 'Popen') as launched:
+            BAR.main(args, IMAGE.__dict__)
+        launched.assert_not_called()
+        Path(BAR.NETWORK_ALIASES[0]).unlink()
+        Path(BAR.NETWORK_ALIASES[0]).symlink_to(BAR.NETWORK_BINARIES[1])
+        with self.assertRaisesRegex(RuntimeError, 'network helper alias differs'):
+            BAR.network_seed()
 
     def test_actual_check_inputs_is_inert_and_full_helper_closure_is_bound(self):
         args, selection, home = self.fixture()
@@ -347,7 +442,8 @@ class BarProfile(unittest.TestCase):
         verified = next(i for i, row in enumerate(records) if row['event'] == 'archive-verified')
         loaded = next(i for i, row in enumerate(records) if row['event'] == 'command-intent' and row['name'] == 'verified-load')
         self.assertLess(verified, loaded)
-        self.assertEqual(sum('build' in argv for argv in calls), 1)
+        self.assertEqual(sum('build' in argv for argv in calls), 2)
+        self.assertEqual(sum('pull' in argv for argv in calls), 1)
         self.assertEqual(sum('load' in argv for argv in calls), 1)
         self.assertFalse(any('run' in argv or 'create' in argv or 'prune' in argv for argv in calls))
 

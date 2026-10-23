@@ -11,6 +11,7 @@ import re
 from pathlib import Path, PurePosixPath
 import stat
 import sys
+import json
 
 # Capture the existing internal module without a bytecode cache. Its exact bytes
 # are independently bound in the three-leaf helper closure before any native IO.
@@ -42,6 +43,56 @@ fields, text, number = shared.fields, shared.text, shared.number
 path, regular_bytes, strict_json = shared.path, shared.regular_bytes, shared.strict_json
 pinned_token, file_token, identity = shared.pinned_token, shared.file_token, shared.identity
 directory_pin, disjoint = shared.directory_pin, shared.disjoint
+
+# Fixed aliases are checked separately; ordinary support/source paths still
+# forbid links. Keep the original helper pathname (and its host LSM policy).
+NETWORK_BINARIES = ('/usr/bin/passt', '/usr/bin/passt.avx2')
+NETWORK_ALIASES = ('/usr/bin/pasta', '/usr/bin/pasta.avx2')
+NETWORK_LIBRARY_ROOT = '/usr/lib'
+NETWORK_OWNER = 0
+NETWORK_VERSION = 'pasta 2026_10_02.cba3570'
+
+
+def network_seed():
+    files, aliases = {}, {}
+    for name in NETWORK_BINARIES:
+        value = path(name)
+        payload, _ = regular_bytes(value, 16 * 1024**2, owned=False)
+        require(value.stat().st_uid == NETWORK_OWNER and value.stat().st_mode & 0o111,
+                'untrusted network helper')
+        files[name] = {'sha256': hashlib.sha256(payload).hexdigest(), 'identity': file_token(value, owned=False)}
+    for alias, target in zip(NETWORK_ALIASES, NETWORK_BINARIES):
+        value = Path(alias); info = value.lstat()
+        require(info.st_uid == NETWORK_OWNER and (value.resolve(strict=True) == Path(target) or
+                (stat.S_ISREG(info.st_mode) and (info.st_dev, info.st_ino) ==
+                 (Path(target).stat().st_dev, Path(target).stat().st_ino))),
+                'network helper alias differs')
+        require(stat.S_ISLNK(info.st_mode) or (info.st_dev, info.st_ino) ==
+                (Path(target).stat().st_dev, Path(target).stat().st_ino), 'network alias is not the fixed target')
+        aliases[alias] = {'target': target, 'link': os.readlink(value) if value.is_symlink() else None,
+                          'device': info.st_dev, 'inode': info.st_ino, 'changedNs': info.st_ctime_ns}
+    return {'files': files, 'aliases': aliases}
+
+
+def network_probe_recipe():
+    # A fixed shell/coreutils-only RUN, no BAR assets, packages or compiler.
+    return ('FROM --platform=linux/amd64 ' + BASE_IMAGE + '\nUSER 0:0\n'
+            'RUN set -eu; test "$(id -u)" = 0; '
+            'grep -Eq "^NoNewPrivs:[[:space:]]+1$" /proc/self/status; '
+            'test "$(stat -Lc %i /proc/$$/ns/pid)" = "$(stat -Lc %i /proc/self/ns/pid)"; '
+            'printf \'FSGG_NET_PROBE {"uid":0,"noNewPrivs":1,"procPidCorrespondence":1,"pidNamespace":%s,"networkNamespace":%s}\\n\' '
+            '"$(stat -Lc %i /proc/self/ns/pid)" "$(stat -Lc %i /proc/self/ns/net)"\n').encode()
+
+
+def bounded_observation(name):
+    try:
+        with open(name, 'rb') as stream:
+            value = stream.read(65537)
+        if len(value) > 65536:
+            return {'status': 'Unknown', 'reason': 'observation exceeds bound'}
+        return {'status': 'observed', 'value': value.decode(errors='replace')}
+    except OSError as error:
+        return {'status': 'Unknown', 'reason': str(error)[:256]}
 source_identity, context_directories = shared.source_identity, shared.context_directories
 stream_identity = shared.stream_identity
 integer = shared.integer
@@ -66,7 +117,9 @@ def selected_input(args):
     payload, object_id = regular_bytes(path(args.operation_input), MAX_JSON_BYTES, expected)
     require(object_id['mode'] == 0o600, 'private operation input mode0600 required')
     selection = strict_json(payload)
-    fields(selection, 'schema operationId helper product allocation build load support clock admission resourceDomain licenseAccepted')
+    fields(selection, 'schema operationId helper product allocation build load support clock admission resourceDomain licenseAccepted network')
+    fields(selection['network'], 'purpose seed')
+    require(selection['network']['purpose'] in ('full-image', 'network-prerequisite'), 'fixed network purpose required')
     require(selection['schema'] == 'fsgg.bar-headless-operation/1', 'BAR operation schema required')
     require(type(selection['resourceDomain']) is dict, 'resource-domain relation required')
     hosted = selection['resourceDomain'].get('relation') == HOSTED_RELATION
@@ -97,7 +150,7 @@ def selected_input(args):
     require(work == start + WORK_SECONDS and total == work + RETIRE_SECONDS, 'original lifetime mismatch')
     # These references bind the root-selected determining evidence. They cannot
     # assert authority or replace fresh adjacent native admission observations.
-    fields(selection['admission'], 'topology resourceDisposition' + (' domain' if hosted else ''))
+    fields(selection['admission'], 'topology resourceDisposition security' + (' domain' if hosted else ''))
     require(selection['resourceDomain']['topologySha256'] == selection['admission']['topology']['sha256'],
             'resource-domain topology correspondence missing')
     require(not hosted or selection['resourceDomain']['domainEvidenceSha256'] == selection['admission']['domain']['sha256'],
@@ -163,6 +216,8 @@ def hosted_domain(selection, allocation, load_root):
 
 def namespace(root, graphroot, runroot):
     paths, env, expected = shared.namespace(root, graphroot, runroot)
+    expected['containers.conf']['network']['default_rootless_network_cmd'] = 'pasta'
+    expected['containers.conf']['engine']['helper_binaries_dir'] = ['/usr/bin', '/usr/lib/podman']
     expected['registries.conf']['registry'] = [
         {'prefix': 'docker.io/library/ubuntu', 'location': 'docker.io/library/ubuntu',
          'insecure': False, 'blocked': False}]
@@ -260,6 +315,11 @@ def check_inputs(args, api, *, command=None, skip_source_commands=False):
     for name, graph, runtime in (('build', build_root, build_run), ('load', load_root, load_run)):
         paths, env, directories, config_pins = check_namespace(allocation / name, graph, runtime)
         pins.update(directories); configs.update(config_pins); envs[name] = env
+    require(selection['network']['seed'] == network_seed(), 'network helper seed differs')
+    security = strict_json(regular_bytes(path(selection['admission']['security']['path']), MAX_JSON_BYTES)[0])
+    require(security.get('schema') == 'fsgg.bar-network-security/1'
+            and security.get('bootId') == selection['clock']['bootId']
+            and type(security.get('observations')) is dict, 'security observation/boot correspondence differs')
     support = selection['support']
     require(type(support) is dict and set(support) ==
             {'builder', 'podman', 'crun', 'conmon', 'git', 'du', 'python'} | set(SUPPORT_LIBRARIES),
@@ -302,6 +362,85 @@ def check_inputs(args, api, *, command=None, skip_source_commands=False):
 
 
 class Lifetime(shared.Lifetime):
+    def guard_objects(self, *, retirement=False):
+        super().guard_objects(retirement=retirement)
+        require(network_seed() == self.selection['network']['seed'], 'network helper alias/object changed')
+        for alias, expected in getattr(self, 'network_library_aliases', {}).items():
+            require(str(Path(alias).resolve(strict=True)) == expected, 'network library alias changed')
+        require(not Path('/etc/ld.so.preload').exists(), 'network loader preload refused')
+
+    def network_prerequisite(self):
+        self.record({'event': 'network-security-observation',
+                     'status': 'observations only; Unknown is not LSM absence',
+                     'selfStatus': bounded_observation('/proc/self/status'),
+                     'selfLabel': bounded_observation('/proc/self/attr/current'),
+                     'mountinfo': bounded_observation('/proc/self/mountinfo')})
+        files = dict(self.selection['network']['seed']['files'])
+        self.network_library_aliases = {}
+        loader = self.selection['support']['elf-loader']['path']
+        for binary in NETWORK_BINARIES:
+            output = self.execute('network-loader-list', [loader, '--list', binary], 30).stdout
+            require('not found' not in output, 'network helper dependency unavailable')
+            paths = {loader}
+            for line in output.splitlines():
+                match = re.search(r'(?:=>\s+|^\s*)(/[^\s]+)', line)
+                if match:
+                    resolved = Path(match[1]).resolve(strict=True)
+                    require(resolved.is_relative_to(NETWORK_LIBRARY_ROOT), 'network library outside fixed root')
+                    self.network_library_aliases[match[1]] = str(resolved)
+                    paths.add(str(resolved))
+            require(2 <= len(paths) <= 32, 'network loader closure malformed')
+            for name in paths:
+                payload, _ = regular_bytes(path(name), 256 * 1024**2, owned=False)
+                files[name] = {'sha256': hashlib.sha256(payload).hexdigest(),
+                               'identity': file_token(path(name), owned=False)}
+        if Path('/etc/ld.so.cache').exists():
+            payload, _ = regular_bytes(path('/etc/ld.so.cache'), 16 * 1024**2, owned=False)
+            files['/etc/ld.so.cache'] = {'sha256': hashlib.sha256(payload).hexdigest(),
+                                       'identity': file_token(path('/etc/ld.so.cache'), owned=False)}
+        for name, row in files.items():
+            require(Path(name).stat().st_uid in (0, NETWORK_OWNER), 'network closure owner differs')
+            self.checked['supportPins'][name] = pinned_token(path(name), 256 * 1024**2,
+                                                            row['sha256'], owned=False)
+        self.record({'event': 'network-support-seal', 'inputSha256': self.checked['inputSha256'],
+                     'seed': self.selection['network']['seed'], 'files': files,
+                     'libraryAliases': self.network_library_aliases})
+        version = self.execute('network-helper-version', [NETWORK_ALIASES[0], '--version'], 30).stdout
+        require(bool(version.splitlines()) and version.splitlines()[0] == NETWORK_VERSION, 'network helper version differs')
+        self.census()
+        commands = proposed_commands(self.checked, self.directory)
+        self.execute('base-pull', commands['pull'], 600)
+        self.base_image_prepared = True
+        context = self.directory / 'network-prerequisite'; context.mkdir(mode=0o700)
+        recipe = context / 'Containerfile'
+        descriptor = os.open(recipe, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+        with os.fdopen(descriptor, 'wb') as stream:
+            stream.write(network_probe_recipe())
+        iid = self.directory / 'network-prerequisite.id'
+        require(not iid.exists() and not iid.is_symlink(), 'fresh network iidfile required')
+        argv = [value for value in commands['build']
+                if not value.startswith(('--target=', '--tag=', '--iidfile=', '--file='))]
+        argv[-1:] = ['--tag=localhost/fsgg/bar-network:' + self.selection['operationId'],
+                     '--iidfile=' + str(iid), '--file=' + str(recipe), str(context)]
+        before = {key: Path('/proc/self/ns/' + key).stat().st_ino for key in ('pid', 'net')}
+        output = self.execute('network-prerequisite-build', argv, 120).stdout
+        rows = [line.removeprefix('FSGG_NET_PROBE ') for line in output.splitlines()
+                if line.startswith('FSGG_NET_PROBE ')]
+        require(len(rows) == 1, 'network RUN result missing/ambiguous')
+        observed = strict_json(rows[0].encode()); fields(observed, 'uid noNewPrivs procPidCorrespondence pidNamespace networkNamespace')
+        require(type(observed['uid']) is int and type(observed['noNewPrivs']) is int
+                and observed['uid'] == 0 and observed['noNewPrivs'] == 1
+                and type(observed['procPidCorrespondence']) is int and observed['procPidCorrespondence'] == 1
+                and type(observed['pidNamespace']) is int and type(observed['networkNamespace']) is int
+                and observed['pidNamespace'] > 0 and observed['networkNamespace'] > 0
+                and observed['pidNamespace'] != before['pid'] and observed['networkNamespace'] != before['net'],
+                'network RUN isolation correspondence differs')
+        image = text(regular_bytes(iid, 80)[0].decode().strip(), r'sha256:[0-9a-f]{64}')
+        self.network_result = {'imageId': image, 'recipeSha256': hashlib.sha256(network_probe_recipe()).hexdigest(),
+                               'observed': observed, 'parentNamespaces': before,
+                               'scope': 'private network setup and fixed RUN only; no egress or BAR image acceptance'}
+        self.record({'event': 'network-prerequisite-passed', **self.network_result})
+
     def record(self, value, primary=None):
         if value.get('event') == 'run-start':
             value = {**value, 'profile': PROFILE}
@@ -326,6 +465,7 @@ class Lifetime(shared.Lifetime):
                     'namespace does not map BAR UID/GID10001')
         require(not self.census(), 'fresh BAR load store already has images')
         self.record({'event': 'bar-preflight-passed', 'mappedImageUser': 10001})
+        self.network_prerequisite()
 
 
 def verify_image_config(value):
@@ -515,7 +655,7 @@ def qualify(owner):
                         owner.execute, complete=key == 'product', observe=owner.verification_tick)
     owner.resource_admission()
     require(not owner.census(), 'BAR load store must remain fresh before acquisition')
-    owner.execute('base-pull', commands['pull'], 600)
+    require(owner.base_image_prepared, 'network prerequisite has not prepared base')
     owner.execute('image-build', commands['build'], WORK_SECONDS)
     iid = Path(commands['iidfile'])
     payload, _ = regular_bytes(iid, 80)
@@ -587,6 +727,8 @@ def main(args, api):
     # Pure file/config/object checks precede the consumed-original fence. All
     # subsequent subprocesses, including Git, share its original capture owner.
     checked = check_inputs(args, api, skip_source_commands=True)
+    require((args.mode == 'preflight') == (checked['selection']['network']['purpose'] == 'network-prerequisite'),
+            'controller mode/purpose differs')
     owner = Lifetime(args, api, checked)
     result = None
     manifest = None
@@ -595,7 +737,10 @@ def main(args, api):
         require(checked_again['inputIdentity'] == checked['inputIdentity'], 'input changed at native boundary')
         owner.checked = checked_again
         owner.preflight()
-        result = {'profile': PROFILE, 'preflight': 'passed'} if args.mode == 'preflight' else qualify(owner)
+        require((args.mode == 'preflight') == (owner.selection['network']['purpose'] == 'network-prerequisite'),
+                'controller mode/purpose differs')
+        result = ({'profile': PROFILE, 'preflight': 'passed', 'networkPrerequisite': owner.network_result,
+                   'candidateQualified': False} if args.mode == 'preflight' else qualify(owner))
     except BaseException as error:
         owner.preserve(error)
     finally:
@@ -638,4 +783,5 @@ def main(args, api):
             'combinedLogBytes': owner.log_bytes, 'metadataBytes': owner.metadata_bytes,
             'commandNamespaceObservationGaps': [slot['ordinal'] for slot in owner.commands
                                                if 'namespaceObservation' in slot],
-            'scope': 'ordinary sampled profile; native/product and whole descendant acceptance separate'}
+            'scope': ('network prerequisite only; no product image acceptance' if args.mode == 'preflight' else
+                      'ordinary sampled profile; native/product and whole descendant acceptance separate')}
