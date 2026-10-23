@@ -302,6 +302,32 @@ class Transport(unittest.TestCase):
 
 
 class Workflow(unittest.TestCase):
+    def test_actual_unit_command_keeps_capture_files_owned_by_the_invoking_runner(self):
+        text = WORKFLOW.read_text().split('      - name: Qualify one complete BAR image', 1)[1]
+        script = literal_block(text, 'run')
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            tools = root / 'tools'; tools.mkdir()
+            (tools / 'git').write_text('#!/bin/sh\nprintf "%s\\n" aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n')
+            (tools / 'sudo').write_text('#!/bin/sh\nprintf \'{"fixture":"result"}\\n\'\nprintf \'fixture diagnostic\\n\' >&2\nexit "$FIXTURE_EXIT"\n')
+            for path in tools.iterdir():
+                path.chmod(0o700)
+            for code in (0, 41):
+                evidence = root / str(code); evidence.mkdir(mode=0o700)
+                env = {**os.environ, 'PATH': str(tools) + ':/usr/bin:/bin', 'EVIDENCE': str(evidence),
+                       'ENTER_SCRIPT': 'authored inert entry fixture', 'OPERATION_ID': OPERATION,
+                       'USERLAND': '/fixture-userland', 'VOLUME': '/fixture-volume', 'GITHUB_WORKSPACE': str(root),
+                       'GITHUB_SHA': 'b' * 40, 'HOST_JOB_STARTED': str(int(time.time())),
+                       'HOST_JOB_MONOTONIC': str(time.monotonic()), 'FIXTURE_EXIT': str(code)}
+                result = subprocess.run(['/bin/bash', '-c', script], env=env, capture_output=True, text=True, timeout=10)
+                self.assertEqual(result.returncode, code, result.stderr)
+                captured, diagnostic = evidence / 'qualification-result.json', evidence / 'qualification.stderr.log'
+                self.assertEqual(captured.read_text(), '{"fixture":"result"}\n')
+                self.assertEqual(diagnostic.read_text(), 'fixture diagnostic\n')
+                self.assertEqual((captured.stat().st_uid, diagnostic.stat().st_uid), (os.getuid(), os.getuid()))
+                if code:
+                    self.assertEqual(result.stderr, 'fixture diagnostic\n')
+
     def test_actual_transport_defaults_are_provisioned_private_for_the_runner(self):
         text = WORKFLOW.read_text()
         command = next(row.strip() for row in text.splitlines() if row.strip().startswith('sudo install -d -m 0700 -o 1001 -g 1001'))

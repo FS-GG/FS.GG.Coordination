@@ -231,13 +231,17 @@ jobs:
         run: |
           set -euo pipefail
           printf '%s\n' "$ENTER_SCRIPT" > "$EVIDENCE/enter-userland.sh"
-          if sudo -n systemd-run --quiet --wait --pipe --collect --unit="fsgg-$OPERATION_ID" \
+          if
+            # The runner owns/opens these evidence files; only the unit is elevated.
+            # shellcheck disable=SC2024
+            sudo -n systemd-run --quiet --wait --pipe --collect --unit="fsgg-$OPERATION_ID" \
             -p Delegate=yes -p TasksMax=4096 -p RuntimeMaxSec=3900 -p TimeoutStopSec=120 -p KillMode=control-group \
             --setenv=USERLAND="$USERLAND" --setenv=VOLUME="$VOLUME" --setenv=SOURCE="$GITHUB_WORKSPACE/source" \
             --setenv=EVIDENCE="$EVIDENCE" --setenv=OPERATION_ID="$OPERATION_ID" --setenv=SOURCE_REVISION="$GITHUB_SHA" \
             --setenv=HELPER_TREE="$(git -C source rev-parse 'HEAD^{tree}')" --setenv=HOST_JOB_STARTED="$HOST_JOB_STARTED" --setenv=HOST_JOB_MONOTONIC="$HOST_JOB_MONOTONIC" \
             /usr/bin/unshare --mount --cgroup --pid --fork /bin/bash "$EVIDENCE/enter-userland.sh" \
-            > "$EVIDENCE/qualification-result.json" 2> "$EVIDENCE/qualification.stderr.log"; then
+            > "$EVIDENCE/qualification-result.json" 2> "$EVIDENCE/qualification.stderr.log"
+          then
             :
           else
             status=$?
