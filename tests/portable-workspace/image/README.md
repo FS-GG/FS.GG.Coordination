@@ -688,6 +688,16 @@ build/load stores. The earlier scratch probe's stores cannot be reused. There
 is one fixed `qualify --profile bar-headless` invocation and no arbitrary
 command, retry, resume or product-runtime interface.
 
+The pinned checkout action creates local `gc.auto=0`, which the unchanged closed
+source guard rejects. Before provisioning, the fixed two-checkout bootstrap
+requires that exact singleton key/value and representation, the expected public
+origin/revision/tree, complete internal history and a clean worktree. It removes
+only that local key, verifies every other configuration byte is unchanged, then
+runs the existing strict source-identity guard. Missing, duplicate, nonzero or
+unexpected configuration refuses before image work. Global/system configuration
+and credentials are left untouched; this is not a general configuration cleaner.
+The first refusal and any already completed role receipt are retained.
+
 The fresh VM repeats the selected image-version, preallocated nodiscard volume,
 daemon/user-namespace and capacity refusals. The maintained pivot-root entry
 places the Arch userland at its mount namespace root before dropping to

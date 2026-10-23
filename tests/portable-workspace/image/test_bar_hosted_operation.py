@@ -48,6 +48,115 @@ def literal_block(text, key):
     return textwrap.dedent(''.join(following))
 
 
+class CheckoutBootstrap(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory(prefix='bar-gc-causal-')
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.environment = {'PATH': '/usr/bin:/bin', 'HOME': str(self.root), 'GIT_CONFIG_NOSYSTEM': '1',
+                            'GIT_CONFIG_GLOBAL': '/dev/null', 'LANG': 'C.UTF-8', 'LC_ALL': 'C.UTF-8'}
+
+    def git(self, root, *args):
+        result = subprocess.run(['/usr/bin/git', '-C', str(root), *args], env=self.environment,
+                                capture_output=True, check=True, timeout=10)
+        return result.stdout.decode().strip()
+
+    def fixture(self, name, origin='https://github.com/FS-GG/FS.GG.Coordination'):
+        root = self.root / name; root.mkdir(mode=0o700)
+        self.git(root, 'init', '-q', '-b', 'main')
+        self.git(root, 'remote', 'add', 'origin', origin)
+        (root / 'authored.txt').write_text('inert real-Git checkout control\n')
+        self.git(root, 'add', 'authored.txt')
+        self.git(root, '-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid',
+                 '-c', 'commit.gpgsign=false', 'commit', '-qm', 'Authored fixture')
+        return root, self.git(root, 'rev-parse', 'HEAD'), self.git(root, 'rev-parse', 'HEAD^{tree}')
+
+    def strict(self, root, revision, tree):
+        def command(label, argv, seconds):
+            result = subprocess.run(argv, env=self.environment, capture_output=True, check=True, timeout=10)
+            return argparse.Namespace(stdout=result.stdout.decode())
+        return BAR.source_identity({}, root, revision, tree, command=command, complete=True)
+
+    def test_real_git_causal_default_checkout_refusal_then_exact_repair(self):
+        root, revision, tree = self.fixture('source')
+        canonical = (root / '.git/config').read_bytes()
+        self.strict(root, revision, tree)
+        self.git(root, 'config', '--local', 'gc.auto', '0')
+        # Reproduce the pinned action's separate temporary include cleanup,
+        # using an inert placeholder rather than any real credential data.
+        include = 'includeIf.gitdir:/fixture/.git.path'
+        self.git(root, 'config', '--local', include, '/fixture/not-a-credential.config')
+        self.git(root, 'config', '--local', '--unset', include)
+        with self.assertRaisesRegex(RuntimeError, 'Git configuration executable/external override'):
+            self.strict(root, revision, tree)
+        global_config, system_config = self.root / 'global', self.root / 'system'
+        for path in (global_config, system_config):
+            path.write_text('[sentinel]\n\tvalue = unchanged\n')
+        with patch.dict(os.environ, {'GIT_CONFIG_GLOBAL': str(global_config), 'GIT_CONFIG_SYSTEM': str(system_config)}):
+            result = WRAPPER.canonicalize_checkout_gc(root, revision, tree,
+                'https://github.com/FS-GG/FS.GG.Coordination', BAR, complete=True)
+        self.assertEqual((root / '.git/config').read_bytes(), canonical)
+        self.assertTrue(result['otherConfigBytesUnchanged'])
+        self.assertEqual(result['strictSourceIdentity'], 'passed')
+        self.assertEqual(global_config.read_bytes(), system_config.read_bytes())
+        self.assertEqual(global_config.read_text(), '[sentinel]\n\tvalue = unchanged\n')
+        self.strict(root, revision, tree)
+
+    def test_unexpected_missing_duplicate_or_nonzero_config_is_never_normalized(self):
+        for case in ('missing', 'nonzero', 'duplicate', 'extra-gc', 'ssh-command', 'include', 'quoted-zero'):
+            with self.subTest(case=case):
+                root, revision, tree = self.fixture(case)
+                if case != 'missing': self.git(root, 'config', '--local', 'gc.auto', '0')
+                if case == 'nonzero': self.git(root, 'config', '--local', 'gc.auto', '1')
+                elif case == 'duplicate': self.git(root, 'config', '--local', '--add', 'gc.auto', '0')
+                elif case == 'extra-gc': self.git(root, 'config', '--local', 'gc.pruneExpire', 'never')
+                elif case == 'ssh-command': self.git(root, 'config', '--local', 'core.sshCommand', 'must-not-execute')
+                elif case == 'include': self.git(root, 'config', '--local', 'include.path', '/must-not-read')
+                elif case == 'quoted-zero':
+                    path = root / '.git/config'; path.write_bytes(path.read_bytes().replace(b'auto = 0', b'auto = "0"'))
+                before = (root / '.git/config').read_bytes()
+                with self.assertRaises(RuntimeError):
+                    WRAPPER.canonicalize_checkout_gc(root, revision, tree,
+                        'https://github.com/FS-GG/FS.GG.Coordination', BAR, complete=True)
+                self.assertEqual((root / '.git/config').read_bytes(), before)
+
+    def test_dirty_incomplete_or_wrong_revision_checkout_is_not_modified(self):
+        for case in ('dirty', 'shallow', 'revision', 'tree', 'hook', 'alternates'):
+            with self.subTest(case=case):
+                root, revision, tree = self.fixture(case)
+                self.git(root, 'config', '--local', 'gc.auto', '0')
+                before = (root / '.git/config').read_bytes()
+                if case == 'dirty': (root / 'authored.txt').write_text('changed')
+                elif case == 'shallow': (root / '.git/shallow').write_text(revision + '\n')
+                elif case == 'revision': revision = '0' * 40
+                elif case == 'tree': tree = '0' * 40
+                elif case == 'hook': (root / '.git/hooks/pre-commit').write_text('must not execute')
+                elif case == 'alternates': (root / '.git/objects/info/alternates').write_text('/must-not-read\n')
+                with self.assertRaises(RuntimeError):
+                    WRAPPER.canonicalize_checkout_gc(root, revision, tree,
+                        'https://github.com/FS-GG/FS.GG.Coordination', BAR, complete=True)
+                self.assertEqual((root / '.git/config').read_bytes(), before)
+
+    def test_actual_two_checkout_bootstrap_and_first_refusal_receipt(self):
+        source, revision, tree = self.fixture('source')
+        product, product_revision, product_tree = self.fixture('product', 'https://github.com/FS-GG/FSBarV2')
+        (self.root / 'evidence').mkdir(mode=0o700)
+        for path in (source, product): self.git(path, 'config', '--local', 'gc.auto', '0')
+        env = {'GITHUB_WORKSPACE': str(self.root), 'GITHUB_REPOSITORY': 'FS-GG/FS.GG.Coordination',
+               'GITHUB_EVENT_NAME': 'workflow_dispatch', 'GITHUB_REF': 'refs/heads/main', 'GITHUB_RUN_ATTEMPT': '1'}
+        with patch.dict(os.environ, env), patch.object(WRAPPER, 'load_bar', return_value=BAR), \
+             patch.object(WRAPPER, 'PRODUCT_REVISION', product_revision), patch.object(WRAPPER, 'PRODUCT_TREE', product_tree):
+            result = WRAPPER.canonicalize_checkouts(revision)
+            self.assertIsNone(result['firstRefusal'])
+            self.assertEqual(result['source']['strictSourceIdentity'], 'passed')
+            self.assertEqual(result['product']['strictSourceIdentity'], 'passed')
+            # A second call cannot silently reinterpret a canonical checkout as
+            # new checkout-created gc metadata; the first refusal is retained.
+            with self.assertRaises(RuntimeError): WRAPPER.canonicalize_checkouts(revision)
+        refusal = json.loads((self.root / 'evidence/checkout-config-refusal.json').read_text())
+        self.assertIn('expected singleton', refusal['firstRefusal'])
+
+
 class Preparation(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
@@ -373,6 +482,8 @@ class Workflow(unittest.TestCase):
 
     def test_fixed_workflow_preserves_domain_profile_and_complete_generation_guards(self):
         text = WORKFLOW.read_text()
+        self.assertEqual(text.count('canonicalize-checkouts --operation-id'), 1)
+        self.assertLess(text.index('canonicalize-checkouts --operation-id'), text.index('Build the pinned daemonless Arch userland'))
         self.assertEqual(text.count('fetch-depth: 0'), 2)
         self.assertNotIn('pull_request:', text)
         self.assertIn('if: ${{ inputs.full_image }}', text)
