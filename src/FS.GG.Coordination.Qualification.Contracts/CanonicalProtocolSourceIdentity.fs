@@ -7,7 +7,7 @@ open System.Text.Json
 
 [<Literal>]
 let CurrentSha256 =
-    "edebdec2a4f80ea8ab94dc18cadb02894efe4b3e989d7e3f5732ed7d5c8ba0f1"
+    "fd8ee59710f4855883061dc8d970eb7d7a80c910af79a9bed69f8c5217fbda4c"
 
 let isCurrent root =
     try
