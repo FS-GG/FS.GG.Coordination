@@ -270,12 +270,33 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$EVIDENCE"
-          # Audit observation shares this original9-minute receipt aperture.
-          if [ -f "$EVIDENCE/domain.json" ]; then
-            sudo env HOST_JOB_STARTED="$HOST_JOB_STARTED" python3 -I -B source/eng/bar_hosted_domain.py security-readback \
-              --evidence "$EVIDENCE/host-security-readback.json" --owner-uid "$(id -u)" --owner-gid "$(id -g)"
+          # Optional diagnostics share this9-minute aperture but cannot skip
+          # canonical primary receipt or poison its evidence inventory.
+          security_stage=()
+          if {
+            security_directory="${RUNNER_TEMP:-/nonexistent}/fsgg-$OPERATION_ID-security"
+            if [ -n "${RUNNER_TEMP:-}" ] && mkdir -m 0700 "$security_directory"; then
+              security_stage=(--security-stage "$security_directory")
+              if [ -f "$EVIDENCE/domain.json" ]; then
+                if (ulimit -f 1024; sudo env HOST_JOB_STARTED="$HOST_JOB_STARTED" python3 -I -B source/eng/bar_hosted_domain.py security-readback \
+                    --evidence "$security_directory/readback.json" --owner-uid "$(id -u)" --owner-gid "$(id -g)") \
+                    > "$security_directory/stdout" 2> "$security_directory/stderr"; then
+                  security_status=0
+                else
+                  security_status=$?
+                fi
+              else
+                security_status=125
+                printf '%s\n' 'root domain unavailable; security readback Unknown' > "$security_directory/stderr"
+              fi
+              printf '%s\n' "$security_status" > "$security_directory/status"
+            else
+              printf '%s\n' 'optional security stage unavailable; Unknown' >&2
+            fi
+          }; then :; else
+            printf '%s\n' 'optional security capture failed; Unknown' >&2
           fi
-          if python3 -I -B source/eng/bar_hosted_operation.py receipt --operation-id "$OPERATION_ID" \
+          if python3 -I -B source/eng/bar_hosted_operation.py receipt --operation-id "$OPERATION_ID" "${security_stage[@]}" \
             > "$EVIDENCE/receipt-result.json" 2> "$EVIDENCE/receipt.stderr.log"; then
             :
           else

@@ -262,6 +262,20 @@ class BarProfile(unittest.TestCase):
                 finally:
                     self.base.root = self.root = original
 
+    def test_post_pull_headroom_loss_refuses_before_network_build(self):
+        args, selection, home = self.fixture(); args.mode = 'preflight'
+        selection['network']['purpose'] = 'network-prerequisite'; self.base.rebind_selection(args, selection)
+        spawn, calls, resources = self.ports(args, selection)
+        def lose_headroom(argv, **kwargs):
+            child = spawn(argv, **kwargs)
+            if 'pull' in argv:
+                resources['hostMemoryAvailableBytes'] = 0
+            return child
+        with self.native_context(home, lose_headroom, resources), self.assertRaisesRegex(RuntimeError, 'host memory'):
+            BAR.main(args, IMAGE.__dict__)
+        self.assertTrue(any('pull' in argv for argv in calls))
+        self.assertFalse(any('build' in argv for argv in calls))
+
     def test_network_alias_or_avx2_change_refuses_before_probe(self):
         args, selection, home = self.fixture(); args.mode = 'qualify'
         # These were captured in the operation input, not invented fixture hashes.

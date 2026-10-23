@@ -745,6 +745,15 @@ that absence. The third failed original's pasta netns EACCES remains a failure;
 this source adds a diagnostic prerequisite, not a proved fix for its denier.
 Failed direct-child EOF/reaping still leaves descendant settlement unproved.
 
+The optional privileged security readback writes into a fresh private runner
+staging directory outside canonical controller evidence. Readback, ownership,
+collision or malformed-output failures become bounded secondary Unknowns;
+they cannot skip canonical receipt or poison its primary metadata inventory.
+Primary native errors and raw streams retain precedence. A successful metadata
+receipt cannot turn a failed qualification into success. The new network build
+also repeats the canonical resource admission immediately after base pull and
+before its build; a usage-ceiling sample does not prove fresh free headroom.
+
 The pinned upstream contracts are [Buildah network setup](https://github.com/containers/buildah/blob/310b1c8f53f3c0a7884f82fe51083577c473490a/run_linux.go),
 [passt AVX2 selection](https://passt.top/passt/tree/arch.c?id=cba357068dc586e7540971eb40bb56c5e62c4de1)
 and [Podman rootless AppArmor support reporting](https://github.com/containers/podman/blob/464c15fec06f0074c916f9eff87c4806869c2833/vendor/go.podman.io/common/pkg/apparmor/internal/supported/supported.go).

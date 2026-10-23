@@ -27,7 +27,7 @@ PRODUCT_REVISION = '4ddd070650e3131916a13bb2c5e75f99376e1c3a'
 PRODUCT_TREE = 'f6e4dc108bf065cd2fd44d48e0faf8807e1b8e3c'
 HELPER_FILES = {
     'eng/portable-workspace-image.py': '14f519038fd24684b458d917ddb33ab6bada86a084b39c35ce5ae7e8e9fa7aa5',
-    'eng/portable_workspace_bar.py': 'c5b571ac23309a9a60ef0663617a1862a7a7955dd543c1cd352afc636583bbbf',
+    'eng/portable_workspace_bar.py': '8cccac4562371b8aa04cf68708769a9fdb89d59ebb35558e707e64dd3b4d24bf',
     'eng/portable_workspace_sc2.py': '19f4b126ace622349e5bff9ae9462e079e13ebf41d5706bb8cc1551a33ee262e',
 }
 PRODUCT_FILES = {
@@ -463,7 +463,55 @@ def controller_argv(selection, target, digest, *, source=SOURCE, allocation=ALLO
         '--operation-input', str(target), '--expected-operation-input-sha256', digest, '--podman', '/usr/bin/podman']
 
 
-def receipt(operation_id, *, allocation=ALLOCATION, evidence=EVIDENCE, transport=Path('/fsgg-bar/transport-metadata')):
+def optional_security_readback(stage, operation_id):
+    """Optional diagnostics never determine primary capture/transport success.
+
+    The privileged producer writes outside canonical evidence. Only bounded,
+    readable ordinary data is embedded; partial/unreadable output stays Unknown.
+    """
+    result = {'status': 'Unknown', 'absenceConclusion': 'Unknown', 'exit': None}
+    if stage is None:
+        return {**result, 'reason': 'optional diagnostic stage unavailable'}
+    try:
+        stage = Path(stage)
+        require(stage.parent == Path(os.environ['RUNNER_TEMP'])
+                and stage.name == 'fsgg-' + operation_id + '-security', 'fixed security stage required')
+        info = stage.lstat()
+        require(stat.S_ISDIR(info.st_mode) and not stat.S_ISLNK(info.st_mode)
+                and info.st_uid == os.getuid() and stat.S_IMODE(info.st_mode) == 0o700,
+                'private owned security stage required')
+        def ordinary(name, maximum):
+            target = stage / name
+            require(target.lstat().st_nlink == 1, 'linked optional diagnostic refused')
+            pin = digest_file(target, maximum)
+            descriptor = os.open(target, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+            with os.fdopen(descriptor, 'rb') as stream:
+                opened = os.fstat(stream.fileno())
+                require(stat.S_ISREG(opened.st_mode) and opened.st_nlink == 1
+                        and (opened.st_dev, opened.st_ino) == (pin['device'], pin['inode']),
+                        'optional diagnostic object changed')
+                payload = stream.read(maximum + 1)
+            require(len(payload) == pin['bytes'] and hashlib.sha256(payload).hexdigest() == pin['sha256'],
+                    'optional diagnostic changed')
+            return payload
+        code = ordinary('status', 16).decode().strip()
+        require(re.fullmatch(r'[0-9]{1,3}', code) is not None and int(code) <= 255,
+                'optional diagnostic status malformed')
+        result['exit'] = int(code)
+        result['stderr'] = ordinary('stderr', 65536).decode(errors='replace')[-4096:]
+        if result['exit'] != 0:
+            return {**result, 'reason': 'optional privileged readback failed'}
+        ordinary('readback.json', 256 * 1024)
+        data, _ = read_json(stage / 'readback.json', 256 * 1024)
+        require(type(data) is dict and data.get('security', {}).get('bootId') ==
+                Path('/proc/sys/kernel/random/boot_id').read_text().strip(), 'optional readback boot differs')
+        return {**result, 'status': 'observed', 'data': data}
+    except Exception as error:
+        return {**result, 'reason': type(error).__name__ + ': ' + str(error)[:512]}
+
+
+def receipt(operation_id, *, allocation=ALLOCATION, evidence=EVIDENCE, transport=Path('/fsgg-bar/transport-metadata'),
+            security_stage=None):
     """Retain bounded metadata and authorize transport only for verified success.
 
     No store is modified or pruned. A failed/oversized candidate is described but
@@ -590,6 +638,13 @@ def receipt(operation_id, *, allocation=ALLOCATION, evidence=EVIDENCE, transport
              'transportStagingAllowanceBytes': TRANSPORT_FREE_BYTES,
              'scope': 'exported image bytes and controller evidence; no gameplay or loaded ABI acceptance',
              'providerPhysicalDisposal': 'Unknown'}
+    secondary = optional_security_readback(security_stage, operation_id)
+    # Primary evidence has precedence even if optional observations exceed the
+    # remaining receipt aperture. Absence never asserts an LSM absence.
+    if len(canonical({**value, 'securityReadback': secondary})) <= RECEIPT_BYTES:
+        value['securityReadback'] = secondary
+    elif len(canonical({**value, 'securityReadback': {'status': 'Unknown', 'reason': 'optional receipt budget'}})) <= RECEIPT_BYTES:
+        value['securityReadback'] = {'status': 'Unknown', 'reason': 'optional receipt budget'}
     require(len(canonical(value)) <= RECEIPT_BYTES, 'transport receipt byte bound exceeded')
     # Transport contains only verified, copied metadata. The uploader never
     # globs an unchecked generation directory after a receipt failure.
@@ -618,13 +673,16 @@ def main(argv=None):
     parser.add_argument('mode', choices=['canonicalize-checkouts', 'seal-transport', 'qualify', 'network-prerequisite', 'receipt'])
     parser.add_argument('--operation-id', required=True)
     parser.add_argument('--source-revision')
+    parser.add_argument('--security-stage')
     args = parser.parse_args(argv)
+    require(args.security_stage is None or args.mode == 'receipt', 'security stage is receipt-only')
     if args.mode == 'canonicalize-checkouts':
         print(json.dumps(canonicalize_checkouts(args.source_revision or ''), sort_keys=True))
     elif args.mode == 'seal-transport':
         print(json.dumps(seal_crypto(args.operation_id, evidence=Path(os.environ['GITHUB_WORKSPACE']) / 'evidence'), sort_keys=True))
     elif args.mode == 'receipt':
-        value = receipt(args.operation_id, evidence=Path(os.environ['GITHUB_WORKSPACE']) / 'evidence')
+        value = receipt(args.operation_id, evidence=Path(os.environ['GITHUB_WORKSPACE']) / 'evidence',
+                        security_stage=args.security_stage)
         print(json.dumps({'candidateTransportPermitted': value['candidateTransportPermitted'],
                           'metadataBytes': value['metadataBytes'], 'candidate': value['candidate']}, sort_keys=True))
     else:

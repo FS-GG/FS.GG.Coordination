@@ -423,6 +423,9 @@ class Lifetime(shared.Lifetime):
         argv[-1:] = ['--tag=localhost/fsgg/bar-network:' + self.selection['operationId'],
                      '--iidfile=' + str(iid), '--file=' + str(recipe), str(context)]
         before = {key: Path('/proc/self/ns/' + key).stat().st_ino for key in ('pid', 'net')}
+        # A base pull can take600s. Sampling ceilings do not refresh free
+        # headroom/CPU admission; this new label needs its own adjacent gate.
+        self.resource_admission()
         output = self.execute('network-prerequisite-build', argv, 120).stdout
         rows = [line.removeprefix('FSGG_NET_PROBE ') for line in output.splitlines()
                 if line.startswith('FSGG_NET_PROBE ')]

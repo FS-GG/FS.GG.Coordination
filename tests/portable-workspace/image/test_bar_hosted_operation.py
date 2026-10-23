@@ -357,6 +357,20 @@ class Transport(unittest.TestCase):
         with patch.object(WRAPPER.os, 'statvfs', return_value=argparse.Namespace(f_bavail=20 * GIB, f_frsize=1)):
             return WRAPPER.receipt(OPERATION, allocation=self.allocation, evidence=self.evidence, transport=self.transport)
 
+    def test_malformed_optional_json_cannot_discard_primary_metadata(self):
+        self.candidate.unlink()
+        (self.evidence / 'qualification-result.json').write_bytes(b'')
+        stage = self.root / ('fsgg-' + OPERATION + '-security'); stage.mkdir(mode=0o700)
+        (stage / 'status').write_text('0\n'); (stage / 'stderr').write_bytes(b'')
+        (stage / 'readback.json').write_bytes(b'{"security":{"bootId":"invalid"},"number":NaN}')
+        with patch.dict(os.environ, {'RUNNER_TEMP': str(self.root)}), patch.object(WRAPPER, 'encrypt_candidate') as encrypt:
+            value = WRAPPER.receipt(OPERATION, allocation=self.allocation, evidence=self.evidence,
+                                    transport=self.transport, security_stage=stage)
+        encrypt.assert_not_called()
+        self.assertEqual(value['securityReadback']['status'], 'Unknown')
+        self.assertFalse(value['candidateTransportPermitted'])
+        self.assertTrue((self.transport / OPERATION / 'state/0001.stdout').exists())
+
     def test_prerequisite_success_is_metadata_only_and_never_encrypts(self):
         self.candidate.unlink()
         self.selection['network']['purpose'] = 'network-prerequisite'
@@ -442,6 +456,91 @@ class Transport(unittest.TestCase):
 
 
 class Workflow(unittest.TestCase):
+    def test_optional_privileged_failure_preserves_actual_receipt_and_primary_upload_path(self):
+        text = WORKFLOW.read_text()
+        receipt_script = literal_block(text.split('      - name: Retain the bounded generation receipt', 1)[1], 'run')
+        summary_script = literal_block(text.split('      - name: Summarize the complete generation', 1)[1], 'run')
+        for primary in ('failed', 'prerequisite'):
+            with self.subTest(primary=primary):
+                fixture = Transport('test_valid_exact_manifest_archive_and_original_streams_are_staged')
+                fixture.setUp()
+                try:
+                    fixture.candidate.unlink()
+                    (fixture.evidence / 'domain.json').write_text('{}')
+                    (fixture.evidence / 'qualification.stderr.log').write_bytes(b'original native first-cause125')
+                    if primary == 'failed':
+                        fixture.manifest.update(firstCause='command failed with exit125', result=None)
+                        fixture.write_result()
+                        (fixture.evidence / 'qualification-result.json').write_bytes(b'')
+                    else:
+                        fixture.selection['network']['purpose'] = 'network-prerequisite'
+                        selected = fixture.evidence / 'operation-input.json'
+                        selected.write_bytes(WRAPPER.canonical(fixture.selection))
+                        result = {'profile': 'bar-headless', 'preflight': 'passed', 'candidateQualified': False,
+                                  'networkPrerequisite': {'scope': 'authored prerequisite control'}}
+                        fixture.manifest.update(result=result,
+                            inputSha256=hashlib.sha256(selected.read_bytes()).hexdigest())
+                        fixture.result = {**result, 'operationId': OPERATION}
+                        fixture.write_result()
+                    tools = fixture.root / 'tools'; tools.mkdir()
+                    runner_temp = fixture.root / 'runner-temp'; runner_temp.mkdir(mode=0o700)
+                    # The sudo port fails after an unreadable partial file.
+                    # Actual canonical receipt runs in a genuine Python child.
+                    (tools / 'sudo').write_text("""#!/bin/sh
+previous=
+for argument in "$@"; do
+  if [ "$previous" = --evidence ]; then
+    printf '%s' '{partial privileged output' > "$argument"
+    chmod 000 "$argument"
+  fi
+  previous="$argument"
+done
+printf '%s\n' 'authored secondary readback refusal' >&2
+exit 41
+""")
+                    (tools / 'python3').write_text(
+                        '#!/usr/bin/python3\nimport importlib.util,json,os,pathlib,sys\n'
+                        'spec=importlib.util.spec_from_file_location("actual_receipt",'
+                        + repr(str(ROOT / 'eng/bar_hosted_operation.py')) + ')\n'
+                        'module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)\n'
+                        'assert "receipt" in sys.argv\n'
+                        'root=pathlib.Path(os.environ["FIXTURE_ROOT"])\n'
+                        'stage=sys.argv[sys.argv.index("--security-stage")+1] if "--security-stage" in sys.argv else None\n'
+                        'value=module.receipt(' + repr(OPERATION) + ',allocation=root/"allocation",'
+                        'evidence=root/"evidence",transport=root/"transport",security_stage=stage)\n'
+                        'print(json.dumps({"candidate":value["candidateTransportPermitted"]}))\n')
+                    for child in tools.iterdir(): child.chmod(0o700)
+                    outputs = fixture.root / 'outputs'
+                    env = {**os.environ, 'PATH': str(tools) + ':/usr/bin:/bin', 'FIXTURE_ROOT': str(fixture.root),
+                           'EVIDENCE': str(fixture.evidence), 'RUNNER_TEMP': str(runner_temp),
+                           'OPERATION_ID': OPERATION, 'HOST_JOB_STARTED': '1700000000', 'GITHUB_OUTPUT': str(outputs)}
+                    done = subprocess.run(['/bin/bash', '-c', receipt_script], env=env,
+                                          capture_output=True, text=True, timeout=15)
+                    self.assertEqual(done.returncode, 0, done.stderr)
+                    value = json.loads((fixture.evidence / 'transport-receipt.json').read_text())
+                    self.assertEqual(value['securityReadback']['status'], 'Unknown')
+                    self.assertEqual(value['securityReadback']['exit'], 41)
+                    self.assertFalse(value['candidateTransportPermitted'])
+                    self.assertEqual(value['networkPrerequisitePassed'], primary == 'prerequisite')
+                    stage = fixture.transport / OPERATION
+                    self.assertEqual((stage / 'evidence/qualification.stderr.log').read_bytes(),
+                                     b'original native first-cause125')
+                    self.assertTrue((stage / 'state/0001.stdout').exists())
+                    self.assertFalse((stage / 'evidence/host-security-readback.json').exists())
+                    self.assertIn('candidate-permitted=false', outputs.read_text())
+                    # This is exactly the maintained metadata uploader's path.
+                    self.assertIn('path: /fsgg-bar/transport-metadata/', text)
+                    summary_env = {**env, 'GITHUB_SHA': 'b' * 40, 'GITHUB_STEP_SUMMARY': str(fixture.root / 'summary'),
+                        'QUALIFICATION_MODE': 'network-prerequisite', 'ADMIT_OUTCOME': 'success',
+                        'QUALIFY_OUTCOME': 'failure' if primary == 'failed' else 'success',
+                        'RECEIPT_OUTCOME': 'success', 'METADATA_OUTCOME': 'success', 'CANDIDATE_OUTCOME': 'skipped',
+                        'CANDIDATE_PERMITTED': 'false', 'PREREQUISITE_PASSED': str(primary == 'prerequisite').lower()}
+                    summary = subprocess.run(['/bin/bash', '-c', summary_script], env=summary_env,
+                                             capture_output=True, text=True, timeout=10)
+                    self.assertEqual(summary.returncode == 0, primary == 'prerequisite')
+                finally:
+                    fixture.doCleanups()
+
     def test_actual_unit_command_keeps_capture_files_owned_by_the_invoking_runner(self):
         text = WORKFLOW.read_text().split('      - name: Qualify one complete BAR image', 1)[1]
         script = literal_block(text, 'run')
