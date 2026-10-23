@@ -7619,6 +7619,152 @@ module PreflightArtifactReplay {
 }
 
 
+// One owner key; source-only composition, not an installed launch authority.
+module OriginalSourceCompositionModel {
+  type Owner = NoOwner | OwnerA | OwnerB
+  type ReaderPhase = Unrequested | IntentConsumed | InvocationObserved | Uncertain | Settled
+  type OriginalBinding = { original: int, reservation: int, allocation: int, roots: int, clock: int, deadline: int }
+  type SupplierSnapshot = { binding: OriginalBinding, revision: int, fence: int, admitted: bool, transcript: int, firstFailure: bool }
+  type ExportSnapshot = { binding: OriginalBinding, attempt: int, phase: ReaderPhase,
+    sourceCommit: int, receivingCommit: int, retainedRoot: bool }
+  type Composition = { owner: Owner, supplier: SupplierSnapshot, exportState: ExportSnapshot,
+    attached: bool, envelopeRevision: int, candidateBounded: bool, commitVisible: bool,
+    commitReadback: bool, uncertain: bool, readerLaunchCount: int, sourceAuthority: bool,
+    ackCount: int, reserveCount: int, writerSettled: bool, copyObserved: bool, responded: bool, key: int, event: int, time: int }
+  var original: Composition
+  pure val binding: OriginalBinding = { original: 1, reservation: 1, allocation: 1, roots: 1, clock: 1, deadline: 2 }
+  pure val initial: Composition = { owner: NoOwner,
+    supplier: { binding: binding, revision: 1, fence: 1, admitted: true, transcript: 1, firstFailure: false },
+    exportState: { binding: binding, attempt: 0, phase: Unrequested, sourceCommit: 0, receivingCommit: 0, retainedRoot: true },
+    attached: false, envelopeRevision: 0, candidateBounded: false, commitVisible: false,
+    commitReadback: false, uncertain: false, readerLaunchCount: 0, sourceAuthority: false,
+    ackCount: 0, reserveCount: 0, writerSettled: false, copyObserved: false, responded: false, key: 1, event: 0, time: 0 }
+  action init = original' = initial
+  pure def canOwn(s: Composition): bool = s.owner == NoOwner and not(s.uncertain)
+  pure def owned(s: Composition, owner: Owner): Composition = { ...s, owner: owner, event: 1 }
+  action lockA = all { canOwn(original), original' = owned(original, OwnerA) }
+  action lockB = all { canOwn(original), original' = owned(original, OwnerB) }
+  pure def canAttach(s: Composition): bool = s.owner != NoOwner and not(s.attached)
+  pure def attached(s: Composition): Composition = { ...s, attached: true,
+    candidateBounded: true, envelopeRevision: 1, event: 2 }
+  action attach = all { canAttach(original), original' = attached(original) }
+  pure def committed(s: Composition): Composition = { ...s, commitVisible: true,
+    commitReadback: true, owner: NoOwner, exportState: { ...s.exportState, sourceCommit: 1 }, event: 3 }
+  action commit = all { original.attached, original.candidateBounded, not(original.commitReadback), original' = committed(original) }
+  pure def appended(s: Composition): Composition = { ...s,
+    supplier: { ...s.supplier, revision: 2, fence: 2, transcript: 2 }, owner: NoOwner, envelopeRevision: s.envelopeRevision + 1, event: 4 }
+  action appendSupplier = all { original.owner != NoOwner, original.commitReadback, original.supplier.revision == 1, original' = appended(original) }
+  pure def writerTerminated(s: Composition): Composition = { ...s, writerSettled: true, event: 5 }
+  action settleWriter = all { original.commitReadback, not(original.writerSettled), original' = writerTerminated(original) }
+  pure def canConsume(s: Composition): bool = s.owner != NoOwner and s.commitReadback and s.writerSettled
+    and s.time < s.supplier.binding.deadline and s.exportState.phase == Unrequested and s.exportState.retainedRoot and not(s.uncertain)
+  pure def consumed(s: Composition): Composition = { ...s, exportState: { ...s.exportState, attempt: 1, phase: IntentConsumed },
+    envelopeRevision: s.envelopeRevision + 1, owner: NoOwner, event: 6 }
+  action consume = all { canConsume(original), original' = consumed(original) }
+  pure def lost(s: Composition): Composition = { ...s, uncertain: true,
+    exportState: { ...s.exportState, phase: Uncertain }, event: 7 }
+  action loseResponse = all { original.exportState.attempt == 1, not(original.uncertain), original' = lost(original) }
+  // This records an abstract future original-bound observation, NEVER an effect from source data.
+  pure def observed(s: Composition): Composition = { ...s, readerLaunchCount: 1,
+    exportState: { ...s.exportState, phase: InvocationObserved }, event: 8 }
+  action observeInvocation = all { original.exportState.phase == IntentConsumed, not(original.uncertain),
+    original.readerLaunchCount == 0, original' = observed(original) }
+  pure def copied(s: Composition): Composition = { ...s, copyObserved: true, event: 9 }
+  action observeCopy = all { original.exportState.phase == InvocationObserved, not(original.copyObserved), original' = copied(original) }
+  pure def destinationCommitted(s: Composition): Composition = { ...s,
+    exportState: { ...s.exportState, receivingCommit: 1 }, event: 10 }
+  action receivingCommit = all { original.copyObserved, original.exportState.sourceCommit == 1,
+    original.exportState.receivingCommit == 0, original' = destinationCommitted(original) }
+  pure def readerSettled(s: Composition): Composition = { ...s,
+    exportState: { ...s.exportState, phase: Settled }, event: 11 }
+  action settleReader = all { original.exportState.phase == InvocationObserved,
+    original.exportState.receivingCommit == 1, original' = readerSettled(original) }
+  pure def answered(s: Composition): Composition = { ...s, responded: true, event: 12 }
+  action respond = all { original.exportState.phase == Settled, not(original.responded), not(original.uncertain), original' = answered(original) }
+  pure def released(s: Composition): Composition = { ...s, owner: NoOwner, event: 13 }
+  action release = all { original.responded, original.owner != NoOwner, original' = released(original) }
+  action blocked = all { original.uncertain or original.responded, original' = original }
+  pure def expired(s: Composition): Composition = { ...s, time: 2, event: 14 }
+  action expire = all { original.time == 0, original.exportState.attempt == 0, original' = expired(original) }
+  action successStep = any { lockA, lockB, attach, commit, appendSupplier, settleWriter, consume,
+    observeInvocation, observeCopy, receivingCommit, settleReader, respond, release, blocked }
+  action step = any { lockA, lockB, attach, commit, appendSupplier, settleWriter, consume, expire,
+    loseResponse, observeInvocation, observeCopy, receivingCommit, settleReader, respond, release, blocked }
+  val safety = and {
+    original.key == 1,
+    original.supplier.binding == binding,
+    original.exportState.binding == original.supplier.binding,
+    original.supplier.admitted,
+    original.supplier.transcript >= 1,
+    original.supplier.revision == original.supplier.fence,
+    original.commitVisible implies original.candidateBounded,
+    original.attached implies original.envelopeRevision >= 1,
+    original.readerLaunchCount <= 1,
+    original.readerLaunchCount > 0 implies original.exportState.attempt == 1,
+    original.uncertain implies original.exportState.phase == Uncertain,
+    original.writerSettled implies original.exportState.retainedRoot,
+    original.exportState.receivingCommit == 1 implies (original.exportState.sourceCommit == 1 and original.copyObserved),
+    original.responded implies (original.exportState.phase == Settled and original.exportState.receivingCommit == 1),
+    not(original.sourceAuthority), original.ackCount == 0, original.reserveCount == 0
+  }
+  val done = original.responded
+  val ownedWitness = original.event == 1
+  val attachedWitness = original.event == 2
+  val committedWitness = original.event == 3
+  val appendWitness = original.event == 4
+  val writerWitness = original.event == 5
+  val consumedWitness = original.event == 6
+  val uncertainWitness = original.event == 7
+  val invocationWitness = original.event == 8
+  val copyWitness = original.event == 9
+  val receivingWitness = original.event == 10
+  val settledWitness = original.event == 11
+  val responseWitness = original.event == 12
+  val releasedWitness = original.event == 13
+  val expiredWitness = original.event == 14
+  action replaceSupplier = all { original.attached,
+    original' = { ...original, supplier: { ...original.supplier, transcript: 0 } } }
+  action secondKey = all { original.attached, original' = { ...original, key: 2 } }
+  action mismatchedOriginal = all { original.attached,
+    original' = { ...original, exportState: { ...original.exportState, binding: { ...binding, roots: 2 } } } }
+  action reissueUncertain = all { original.uncertain, original' = { ...original, readerLaunchCount: 2 } }
+  action releaseWriterRoot = all { original.writerSettled,
+    original' = { ...original, exportState: { ...original.exportState, retainedRoot: false } } }
+  action receiverOnly = all { original.copyObserved,
+    original' = { ...original, exportState: { ...original.exportState, sourceCommit: 0, receivingCommit: 1 } } }
+  action sourceAsAuthority = all { original.commitReadback, original' = { ...original, sourceAuthority: true, ackCount: 1 } }
+  action replacedSupplierStep = any { step, replaceSupplier }
+  action secondKeyStep = any { step, secondKey }
+  action mismatchedOriginalStep = any { step, mismatchedOriginal }
+  action uncertainReissueStep = any { step, reissueUncertain }
+  action releasedRootStep = any { step, releaseWriterRoot }
+  action receiverOnlyStep = any { step, receiverOnly }
+  action sourceAuthorityStep = any { step, sourceAsAuthority }
+  run sourceComposition = init.then(lockA).then(attach).then(commit).then(lockA).then(appendSupplier)
+    .then(settleWriter).then(lockA).then(consume).expect(safety and consumedWitness)
+  run unknownDoesNotReissue = init.then(lockB).then(attach).then(commit).then(settleWriter)
+    .then(lockB).then(consume).then(loseResponse).then(blocked).expect(safety and uncertainWitness)
+  run wrongKeyDetected = init.then(lockA).then(attach).then(secondKey).expect(not(safety))
+  run replacementDetected = init.then(lockA).then(attach).then(replaceSupplier).expect(not(safety))
+  run rootMismatchDetected = init.then(lockA).then(attach).then(mismatchedOriginal).expect(not(safety))
+  run authorityDetected = init.then(lockA).then(attach).then(commit).then(sourceAsAuthority).expect(not(safety))
+  run expiryRefuses = init.then(lockA).then(attach).then(commit).then(settleWriter).then(expire)
+    .expect(safety and expiredWitness and not(canConsume(original)))
+}
+
+module OriginalSourceCompositionReplay {
+  import OriginalSourceCompositionModel.*
+  var phase: int
+  action replayInit = all { init, phase' = 0 }
+  action replayStep = any {
+    all { phase == 0, lockA, phase' = 1 },
+    all { phase == 1, attach, phase' = 2 },
+    all { phase == 2, commit, phase' = 3 },
+    all { phase == 3, lockB, phase' = 4 },
+    all { phase == 4, appendSupplier, phase' = 5 }
+  }
+}
+
 module SourceDirectoryCommitModel {
   type CommitState = {
     owner: int, phase: int, original: int, bounded: bool,

@@ -178,7 +178,7 @@ let expectedQuint =
 let expectedLmt = "37e0b0365c2641edce40b48605471f61fa12e97c3e2376152f0e849abdc31f10"
 
 let expectedSource =
-    "edebdec2a4f80ea8ab94dc18cadb02894efe4b3e989d7e3f5732ed7d5c8ba0f1"
+    "28ef9be8fd55a6dfe7aa20e2dbbd11f8c9ca230308514bd7ed93bff093d80df1"
 
 let expectedContract =
     "791c65eacbc4ef93484673ed6c40d3e8ca21fd75f34371e58c9f954f757c1a64"
@@ -260,7 +260,7 @@ let classifyInvocation isQuint arguments =
         && (argumentValue "--main" arguments
             |> Option.exists (fun main ->
                 main.StartsWith("Preflight", StringComparison.Ordinal)
-                || (main.StartsWith("SourceDirectoryCommit", StringComparison.Ordinal)
+                || ((main.StartsWith("SourceDirectoryCommit", StringComparison.Ordinal) || main.StartsWith("OriginalSourceComposition", StringComparison.Ordinal))
                     && (argumentValue "--out" arguments |> Option.isNone))))
     then
         "quint/preflight-sampling"
@@ -1301,12 +1301,12 @@ let requireCompletedProcessInventory () =
 let exerciseFormalShardProcessInventory mutation =
     let expected =
         [
-            "external/base", 33
-            "quint/preflight-sampling", 18
-            "quint/preflight-interaction", 3
+            "external/base", 35
+            "quint/preflight-sampling", 27
+            "quint/preflight-interaction", 4
             "quint/base-nonverify", 5
             "quint/base-verify", 0
-            "quint/selected-root", 8
+            "quint/selected-root", 9
             "quint/formal-simulation", 1
             "quint/formal-temporal", 1
             "quint/formal-safety-mutant", 1
@@ -2575,7 +2575,10 @@ try
                     |> List.tryFind (fun i -> i > first)
                     |> Option.defaultValue fenceEnd
 
-                while last > first && String.IsNullOrWhiteSpace markdownLines[last - 1] do
+                // Standalone line comments preceding the next module are outside this module.
+                // Keep every native declaration; trim only blanks and line-comment trivia.
+                while last > first && (String.IsNullOrWhiteSpace markdownLines[last - 1]
+                                       || markdownLines[last - 1].TrimStart().StartsWith("//", StringComparison.Ordinal)) do
                     last <- last - 1
 
                 if markdownLines[last - 1] <> "}" then
@@ -2800,6 +2803,7 @@ try
     writeProjected "admission" [ "PreflightAdmissionModel" ]
     writeProjected "observation" [ "PreflightObservationModel"; "PreflightObservationReplay" ]
     writeProjected "source-directory" [ "SourceDirectoryCommitModel"; "SourceDirectoryCommitReplay" ]
+    writeProjected "original-source" [ "OriginalSourceCompositionModel"; "OriginalSourceCompositionReplay" ]
 
     let projectionRefusal directory path digest qntDigest =
         try
@@ -2870,7 +2874,8 @@ try
                                         |> List.tryFind (fun i -> i > start)
                                         |> Option.defaultValue fenceEnd
 
-                                    while finish > start && String.IsNullOrWhiteSpace markdownLines[finish - 1] do
+                                    while finish > start && (String.IsNullOrWhiteSpace markdownLines[finish - 1]
+                                                              || markdownLines[finish - 1].TrimStart().StartsWith("//", StringComparison.Ordinal)) do
                                         finish <- finish - 1
 
                                     finish)
@@ -2995,6 +3000,7 @@ try
             "PreflightAdmissionModel"
             "PreflightObservationModel"
             "SourceDirectoryCommitModel"
+            "OriginalSourceCompositionModel"
         ] do
         let code, output, error =
             runPreflight
@@ -3009,7 +3015,7 @@ try
                     "--witnesses"
                     "done"
                  ]
-                 @ (if main = "SourceDirectoryCommitModel" then [ "--step"; "successStep" ] else [])
+                 @ (if main = "SourceDirectoryCommitModel" || main = "OriginalSourceCompositionModel" then [ "--step"; "successStep" ] else [])
                  @ preflightBound)
 
         if code <> 0 then
@@ -3031,6 +3037,13 @@ try
             "SourceDirectoryCommitModel", "omittedSyncStep", "safety"
             "SourceDirectoryCommitModel", "prematureResponseStep", "safety"
             "SourceDirectoryCommitModel", "consumedReplayStep", "safety"
+            "OriginalSourceCompositionModel", "replacedSupplierStep", "safety"
+            "OriginalSourceCompositionModel", "secondKeyStep", "safety"
+            "OriginalSourceCompositionModel", "mismatchedOriginalStep", "safety"
+            "OriginalSourceCompositionModel", "uncertainReissueStep", "safety"
+            "OriginalSourceCompositionModel", "releasedRootStep", "safety"
+            "OriginalSourceCompositionModel", "receiverOnlyStep", "safety"
+            "OriginalSourceCompositionModel", "sourceAuthorityStep", "safety"
         ] do
         let code, output, error =
             runPreflight
@@ -3054,7 +3067,7 @@ try
             fail "PREFLIGHT-CAUSAL-MUTANT" (main + ":" + step)
 
     for main, steps in
-        [ "PreflightArtifactReplay", "8"; "PreflightObservationReplay", "18"; "SourceDirectoryCommitReplay", "8" ] do
+        [ "PreflightArtifactReplay", "8"; "PreflightObservationReplay", "18"; "SourceDirectoryCommitReplay", "8"; "OriginalSourceCompositionReplay", "5" ] do
         let actualTrace = Path.Combine(scratch, main + ".itf.json")
 
         let code, output, error =
@@ -3170,7 +3183,7 @@ try
                 fail "PREFLIGHT-REPLAY-DRIFT" (main + ":" + key)
 
     if preflightOnly then
-        if samplingMeasurements.Count <> 18 || interactionMeasurements.Count <> 3 then
+        if samplingMeasurements.Count <> 27 || interactionMeasurements.Count <> 4 then
             fail "PREFLIGHT-FOCUSED-COVERAGE" "missing observation"
 
         verifyMeasurementDirectory ()
@@ -3330,9 +3343,9 @@ try
 
     for label, count in
         [
-            "external/base", 33
-            "quint/preflight-sampling", 18
-            "quint/preflight-interaction", 3
+            "external/base", 35
+            "quint/preflight-sampling", 27
+            "quint/preflight-interaction", 4
             "quint/base-nonverify", expectedBaseNonverifyCount
             "quint/base-verify", expectedBaseVerifyCount
             "quint/selected-root", selectedRootIds.Count
@@ -3544,6 +3557,8 @@ try
             "mutation-saga", "CoordinationProtocolTests", "^test(Mutation|DurablePlan)"
             "desired-state", "CoordinationProtocolTests", "^testDesiredState"
             "qualification", "CoordinationProtocolTests", "^test(QualificationManifest|CompiledOutputs|DeterministicIdentity)"
+            "original-source-composition", "OriginalSourceCompositionModel",
+                "^(sourceComposition|unknownDoesNotReissue|wrongKeyDetected|replacementDetected|rootMismatchDetected|authorityDetected|expiryRefuses)$"
             "source-directory-commit", "SourceDirectoryCommitModel",
                 "^(successfulCommit|unqualifiedBackingRemainsUnknown|blockedDoesNotRelease|oldBytesDoNotAuthorizeReplay|omittedSyncDetected|prematureResponseDetected|consumedReplayDetected)$"
         ]
@@ -3558,7 +3573,7 @@ try
             artifactPath
             [
                 "test"
-                (if rootModule = "SourceDirectoryCommitModel" then validateProjectionUse rootModule else qualificationQnt)
+                (if rootModule = "SourceDirectoryCommitModel" || rootModule = "OriginalSourceCompositionModel" then validateProjectionUse rootModule else qualificationQnt)
                 "--main"
                 rootModule
                 "--backend"
@@ -5364,12 +5379,12 @@ try
         if
             Set.ofSeq rootMeasurements.Keys <> expectedRoots
             || Set.ofSeq formalMeasurements.Keys <> expectedFormal
-            || samplingMeasurements.Count <> 18
+            || samplingMeasurements.Count <> 27
             || (samplingMeasurements
                 |> Seq.map (fun (id, _, _, _) -> id)
                 |> Set.ofSeq
                 |> Set.count)
-               <> 18
+               <> 27
         then
             fail "MEASUREMENT-COVERAGE" "missing-or-duplicate-observations"
 
@@ -5457,8 +5472,8 @@ try
                 invocations = invocationMetrics
             |}
 
-        if interactionMeasurements.Count <> 3 then
-            fail "PREFLIGHT-INTERACTION-COVERAGE" "expected-three"
+        if interactionMeasurements.Count <> 4 then
+            fail "PREFLIGHT-INTERACTION-COVERAGE" "expected-four"
 
         writeJson
             "preflight-interaction.json"

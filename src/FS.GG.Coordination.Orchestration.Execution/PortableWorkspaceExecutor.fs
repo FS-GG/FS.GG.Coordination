@@ -240,6 +240,14 @@ type PortableHostExportSourceSnapshot =
     { Original: PortableHostExportSourceOriginal; Lifecycle: PortableHostLifecycle
       AttemptBytes: byte array option; CopyObservationBytes: byte array option; ReceivingObservationBytes: byte array option }
 
+/// Independent source-envelope CAS cursor; never a supplier transcript revision or authority.
+type PortableOriginalSourceCursor = { Revision: uint64; Fence: uint64 }
+
+/// Complete source data only. Unknown custody/durability cannot authorize ACK, launch or cleanup.
+type PortableOriginalSourceSnapshot =
+    { Cursor: PortableOriginalSourceCursor; Supplier: PortableSupplierAdmissionState
+      Export: PortableHostExportSourceSnapshot option; NativeCustody: PortableEvidence<unit> }
+
 type private PortableHostJournalEntry =
     { BindingDigest: string; HostContainerName: string; State: PortableHostExecutionState }
 
@@ -248,12 +256,17 @@ type private PortableHostExportSourceEntry =
       SupplierIdentity: PortableHostSupplierIdentity; AttemptBytes: byte array option
       CopyObservationBytes: byte array option; ReceivingObservationBytes: byte array option }
 
+type private PortableOriginalSourceEntry =
+    { Cursor: PortableOriginalSourceCursor; Supplier: PortableSupplierAdmissionState
+      Export: PortableHostExportSourceEntry option }
+
 type private PortableJournalEntry =
     | PortableRunning of commandId: Guid * bindingDigest: string * containerName: string
     | PortableSettled of bindingDigest: string * receipt: PortableExecutionReceipt
     | PortableHost of PortableHostJournalEntry
     | PortableHostExportSource of PortableHostExportSourceEntry
     | PortableSupplierAdmissionDraft of PortableSupplierAdmissionState
+    | PortableOriginalSource of PortableOriginalSourceEntry
 
 type private PortableLaunchDisposition =
     | UsePortableOutcome of PortableExecutionOutcome
@@ -1249,6 +1262,104 @@ module PortableWorkspaceExecutor =
         if memory.Length > int64 PortableSupplierAdmission.MaximumSupplierBytes then invalidOp "supplier-journal-size"
         memory.ToArray()
 
+    let private originalSourceSchema = "fsgg.portable-original-source-journal/1"
+
+    let private validateOriginalSource (entry: PortableOriginalSourceEntry) =
+        if entry.Cursor.Revision = 0UL || entry.Cursor.Fence <> entry.Cursor.Revision
+           || entry.Supplier.JournalVersion <> SupplierJournalV4 then invalidOp "original-source-cursor"
+        PortableSupplierAdmission.validate entry.Supplier |> Result.defaultWith invalidOp |> ignore
+        match entry.Export with
+        | None -> ()
+        | Some export ->
+            let pinned = entry.Supplier.Pinned |> Option.defaultWith (fun () -> invalidOp "original-source-unpinned")
+            if export.SupplierIdentity <> pinned.Identity || export.Original.Context.Reservation <> pinned.OriginalReservation
+               || export.Original.Context.Reservation.Binding.Command <> entry.Supplier.Original.Command then
+                invalidOp "original-source-binding"
+            validateExportSourceEntry export
+
+    let private originalSourceBytes (entry: PortableOriginalSourceEntry) =
+        validateOriginalSource entry
+        use memory = new PortableHostExportBoundedStream(PortableSupplierAdmission.MaximumRecordBytes)
+        use writer = new BinaryWriter(memory, UTF8Encoding(false, true), true)
+        let section (bytes: byte array) = writer.Write bytes.Length; writer.Write bytes
+        writer.Write originalSourceSchema
+        writer.Write entry.Cursor.Revision
+        writer.Write entry.Cursor.Fence
+        section (supplierSourceBytes entry.Supplier)
+        writer.Write entry.Export.IsSome
+        entry.Export |> Option.iter (exportSourceBytes >> section)
+        writer.Flush()
+        memory.ToArray()
+
+    let private readOriginalSource (reader: BinaryReader) =
+        let cursor = { Revision = reader.ReadUInt64(); Fence = reader.ReadUInt64() }
+        let section maximum parse =
+            let length = reader.ReadInt32()
+            if length <= 0 || length > maximum then invalidOp "original-source-section-size"
+            let bytes = reader.ReadBytes length
+            if bytes.Length <> length then invalidOp "original-source-truncated"
+            use memory = new MemoryStream(bytes, false)
+            use nested = new BinaryReader(memory, UTF8Encoding(false, true), true)
+            let value = parse nested
+            if memory.Position <> memory.Length then invalidOp "original-source-trailing-section"
+            value
+        let supplier = section PortableSupplierAdmission.MaximumSupplierBytes (fun nested ->
+            if nested.ReadString() <> "fsgg.portable-execution-supplier-journal/4" then invalidOp "original-source-supplier-version"
+            readSupplier SupplierJournalV4 nested)
+        let export = if reader.ReadBoolean() then Some(section (PortableWorkspaceContract.maximumDocumentBytes * 4) (fun nested ->
+                         if nested.ReadString() <> exportSourceSchema then invalidOp "original-source-export-version"
+                         readExportSource nested)) else None
+        let entry = { Cursor = cursor; Supplier = supplier; Export = export }
+        validateOriginalSource entry
+        entry
+
+    let private reverifyOriginalExport selection (entry: PortableOriginalSourceEntry) =
+        let readback = PortableSupplierAdmission.reverifyControlledSourceV4 selection entry.Supplier |> Result.defaultWith invalidOp
+        let reservation, identity, lifecycle = PortableSupplierAdmission.projectControlledSourceLifecycle readback |> Result.defaultWith invalidOp
+        let export = entry.Export |> Option.map (fun export ->
+            if export.Original.Context.Reservation <> reservation || export.SupplierIdentity <> identity then invalidOp "original-source-binding"
+            let config = entry.Supplier.CheckpointCustody.Value.NativeConfiguration
+            let scope = PortableSupplierOriginalNativeConfiguration.scope config
+            let clock = PortableSupplierOriginalNativeConfiguration.clock config
+            let context = export.Original.Context
+            let root = context.SourceRoot
+            if root.OwnerUid <> scope.OwnerUid || root.OwnerGid <> scope.OwnerGid || context.Clock.HostBootId <> clock.HostBootId then invalidOp "original-source-root-clock"
+            match scope.SourceRoot with
+            | CreationAllocationRoot ->
+                if root.Device <> identity.AllocationDevice || root.Inode <> identity.AllocationInode then invalidOp "original-source-enumeration-root"
+                if not (context.RetiringRoots |> List.exists (fun r -> r.Device = identity.AllocationDevice && r.Inode = identity.AllocationInode)) then invalidOp "original-source-allocation"
+            | IndependentlyPinnedRoot pinned ->
+                if root.Device <> pinned.Device || root.Inode <> pinned.Inode then invalidOp "original-source-root"
+            match PortableSupplierOriginalNativeConfiguration.destination config with
+            | Some destination when destination.Root.Device = context.DestinationRoot.Device
+                                    && destination.Root.Inode = context.DestinationRoot.Inode
+                                    && destination.OwnerUid = context.DestinationRoot.OwnerUid
+                                    && destination.OwnerGid = context.DestinationRoot.OwnerGid -> ()
+            | _ -> invalidOp "original-source-destination-policy"
+            // Exact data conversion only. Neither snapshot is a live native clock witness.
+            let ticks = bigint clock.AnchorTicks * bigint TimeSpan.TicksPerSecond
+                        + bigint (reservation.AdmittedAt - clock.AnchorUtc).Ticks * bigint clock.MonotonicFrequency
+            let numerator = ticks * 1000000000I
+            let denominator = bigint TimeSpan.TicksPerSecond * bigint clock.MonotonicFrequency
+            if numerator < 0I || numerator % denominator <> 0I
+               || numerator / denominator <> bigint context.Clock.AdmittedMonotonicNanoseconds then invalidOp "original-source-clock-domain"
+            let combined = PortableHostAllocation.reconcileLifecycle export.Host.State.Lifecycle lifecycle
+            { export with Host = { export.Host with State = { export.Host.State with Lifecycle = combined } } })
+        { entry with Export = export }
+
+    let private nextOriginalCursor cursor =
+        if cursor.Revision = UInt64.MaxValue || cursor.Fence = UInt64.MaxValue then invalidOp "original-source-cursor-overflow"
+        { Revision = cursor.Revision + 1UL; Fence = cursor.Fence + 1UL }
+
+    let private originalSourceSnapshot (entry: PortableOriginalSourceEntry) =
+        { Cursor = entry.Cursor; Supplier = entry.Supplier
+          Export = entry.Export |> Option.map (fun export ->
+            { Original = export.Original; Lifecycle = export.Host.State.Lifecycle
+              AttemptBytes = export.AttemptBytes |> Option.map Array.copy
+              CopyObservationBytes = export.CopyObservationBytes |> Option.map Array.copy
+              ReceivingObservationBytes = export.ReceivingObservationBytes |> Option.map Array.copy })
+          NativeCustody = EvidenceUnknown "original source installation, namespace, clock and retained-root custody unqualified" }
+
     let private supplierV4Transition (previous: PortableSupplierAdmissionState) (current: PortableSupplierAdmissionState) =
         let before = previous.CheckpointCustody.Value
         let after = current.CheckpointCustody.Value
@@ -1348,7 +1459,7 @@ module PortableWorkspaceExecutor =
                 context
 
         let decode (stream: FileStream) =
-            if stream.Length <= 0L || stream.Length > int64 PortableWorkspaceContract.maximumDocumentBytes * 4L then
+            if stream.Length <= 0L || stream.Length > int64 PortableSupplierAdmission.MaximumRecordBytes then
                 invalidOp "portable-journal-size-refused"
             use reader = new BinaryReader(stream, Encoding.UTF8, false)
 
@@ -1360,6 +1471,7 @@ module PortableWorkspaceExecutor =
                 | "fsgg.portable-execution-supplier-journal/4" ->
                     if stream.Length > int64 PortableSupplierAdmission.MaximumSupplierBytes then invalidOp "supplier-journal-size"
                     PortableSupplierAdmissionDraft(readSupplier (if schema.EndsWith("/2", StringComparison.Ordinal) then SupplierJournalV2 elif schema.EndsWith("/3", StringComparison.Ordinal) then SupplierJournalV3 else SupplierJournalV4) reader)
+                | "fsgg.portable-original-source-journal/1" -> PortableOriginalSource(readOriginalSource reader)
                 | "fsgg.portable-host-export-source-journal/1" -> PortableHostExportSource(readExportSource reader)
                 | "fsgg.portable-execution-host-journal/1" -> PortableHost(readHost reader)
                 | "fsgg.portable-execution-journal/1" ->
@@ -1378,6 +1490,13 @@ module PortableWorkspaceExecutor =
                 invalidOp "portable-journal-trailing-bytes-refused"
 
             match entry with
+            | PortableOriginalSource state ->
+                let expected = originalSourceBytes state
+                if stream.Length <> int64 expected.Length then invalidOp "original-source-noncanonical"
+                stream.Position <- 0L
+                let actual = Array.zeroCreate<byte> expected.Length
+                stream.ReadExactly(actual.AsSpan())
+                if actual <> expected then invalidOp "original-source-noncanonical"
             | PortableHostExportSource state ->
                 let expected = exportSourceBytes state
                 if stream.Length <> int64 expected.Length then invalidOp "host-export-source-noncanonical"
@@ -1405,6 +1524,7 @@ module PortableWorkspaceExecutor =
         let write location entry =
             // /4 checks the complete candidate size before any temporary-file effect.
             let prepared = match entry with
+                           | PortableOriginalSource state -> Some(originalSourceBytes state)
                            | PortableHostExportSource state -> Some(exportSourceBytes state)
                            | PortableSupplierAdmissionDraft state when state.JournalVersion = SupplierJournalV4 -> Some(supplierSourceBytes state)
                            | _ -> None
@@ -1452,7 +1572,7 @@ module PortableWorkspaceExecutor =
                         writer.Write 2uy
                         writer.Write binding
                         writeReceipt writer receipt
-                    | PortableHost _ | PortableSupplierAdmissionDraft _ | PortableHostExportSource _ -> invalidOp "portable-journal-state-refused"
+                    | PortableHost _ | PortableSupplierAdmissionDraft _ | PortableHostExportSource _ | PortableOriginalSource _ -> invalidOp "portable-journal-state-refused"
 
                   if prepared.IsSome then failSourceAt BeforeSourceFileFlush
                   writer.Flush()
@@ -1523,11 +1643,19 @@ module PortableWorkspaceExecutor =
                 source path |> ignore
                 read path)
 
-        member _.StageSupplier(state: PortableSupplierAdmissionState, expectedRevision: uint64 option, expectedFence: uint64 option) =
+        member _.StageSupplier(state: PortableSupplierAdmissionState, expectedRevision: uint64 option, expectedFence: uint64 option, ?envelopeCursor: PortableOriginalSourceCursor, ?controlledSelection: PortableSupplierControlledSourceSelection) =
             locked state.Original.Command.WorkspaceScope state.Original.Command.IdempotencyId (fun path ->
                 if state.JournalVersion = SupplierJournalV4 then source path |> ignore
+                let stored = read path
+                let composite = match stored with Some(PortableOriginalSource entry) -> Some entry | _ -> None
+                let previous =
+                    match composite, envelopeCursor with
+                    | Some entry, Some expected when expected = entry.Cursor -> Some(PortableSupplierAdmissionDraft entry.Supplier)
+                    | Some _, _ -> raise SupplierSourceConflictException
+                    | None, Some _ -> raise SupplierSourceConflictException
+                    | None, None -> stored
                 let eligible =
-                    match read path, expectedRevision with
+                    match previous, expectedRevision with
                     | None, None -> state.Revision = 1UL && expectedFence.IsNone
                     | Some(PortableSupplierAdmissionDraft previous), Some expected ->
                         previous.JournalVersion = state.JournalVersion
@@ -1581,10 +1709,20 @@ module PortableWorkspaceExecutor =
                 | SupplierIntentStored | SupplierCreationPinned | SupplierAwaitingGenesis | SupplierGenesisAccepted -> ()
                 | _ -> invalidOp "supplier-journal-effect-phase-unavailable"
                 let expectedBytes = if state.JournalVersion = SupplierJournalV4 then Some(supplierSourceBytes state) else None
-                write path (PortableSupplierAdmissionDraft state)
+                let target = match composite with
+                             | None -> PortableSupplierAdmissionDraft state
+                             | Some entry ->
+                                 let selection = controlledSelection |> Option.defaultWith (fun () -> invalidOp "original-source-controlled-selection-required")
+                                 let candidate = { entry with Supplier = state; Cursor = nextOriginalCursor entry.Cursor }
+                                 if state.Challenge.IsSome then
+                                     PortableSupplierAdmission.validateControlledSourceHistory selection state |> Result.defaultWith invalidOp
+                                     PortableOriginalSource candidate
+                                 else PortableOriginalSource(reverifyOriginalExport selection candidate)
+                write path target
                 expectedBytes |> Option.iter (fun expected ->
                     // New descriptor, bounded exact bytes, still under the same owner lock.
                     use fresh = (source path).OpenRead() |> Option.defaultWith (fun () -> invalidOp "supplier-source-readback-missing")
+                    let expected = match target with PortableOriginalSource entry -> originalSourceBytes entry | _ -> expected
                     if fresh.Length <> int64 expected.Length then invalidOp "supplier-source-readback-size"
                     let actual = Array.zeroCreate<byte> expected.Length
                     fresh.ReadExactly(actual.AsSpan())
@@ -1592,7 +1730,8 @@ module PortableWorkspaceExecutor =
                     // Cold decoding invokes all structural checkpoint/reference checks again.
                     failSourceAt BeforeSourceColdReopen
                     match read path with
-                    | Some(PortableSupplierAdmissionDraft decoded) when decoded = state -> ()
+                    | Some(PortableSupplierAdmissionDraft decoded) when decoded = state && composite.IsNone -> ()
+                    | Some(PortableOriginalSource decoded) when decoded.Supplier = state && Some decoded.Cursor = (composite |> Option.map (fun e -> nextOriginalCursor e.Cursor)) -> ()
                     | _ -> invalidOp "supplier-source-cold-readback-mismatch")
                 // Syscall completion is NOT qualified filesystem/ancestry durability. No ACK/runner receipt.
                 "supplier-admission-commit-unknown: directory durability is unavailable")
@@ -1623,6 +1762,71 @@ module PortableWorkspaceExecutor =
                     | Some(PortableHostExportSource restored) when exportSourceBytes restored = exportSourceBytes updated -> result
                     | _ -> invalidOp "host-export-source-readback"
                 | _ -> invalidOp "host-export-source-original-missing")
+
+        member _.ReadOriginalSource(selection, original: PortableSupplierAdmissionOriginal, cursor: PortableOriginalSourceCursor) =
+            locked original.Command.WorkspaceScope original.Command.IdempotencyId (fun path ->
+                source path |> ignore
+                match read path with
+                | Some(PortableOriginalSource entry) when entry.Supplier.Original = original && entry.Cursor = cursor ->
+                    reverifyOriginalExport selection entry |> originalSourceSnapshot
+                | _ -> invalidOp "original-source-current-conflict")
+
+        member _.AttachOriginalSource(selection, original: PortableSupplierAdmissionOriginal, expectedRevision, expectedFence,
+                                      exportOriginal: PortableHostExportSourceOriginal) =
+            locked original.Command.WorkspaceScope original.Command.IdempotencyId (fun path ->
+                source path |> ignore
+                let state = match read path with
+                            | Some(PortableSupplierAdmissionDraft state) when state.JournalVersion = SupplierJournalV4
+                                && state.Original = original && state.Revision = expectedRevision
+                                && state.CheckpointCustody.Value.StoreFence = expectedFence -> state
+                            | _ -> invalidOp "original-source-attach-conflict"
+                let canonicalSupplier = supplierSourceBytes state
+                use currentBytes = (source path).OpenRead() |> Option.defaultWith (fun () -> invalidOp "original-source-missing")
+                if currentBytes.Length <> int64 canonicalSupplier.Length then invalidOp "original-source-supplier-noncanonical"
+                let actualSupplier = Array.zeroCreate<byte> canonicalSupplier.Length
+                currentBytes.ReadExactly(actualSupplier.AsSpan())
+                if currentBytes.ReadByte() <> -1 || actualSupplier <> canonicalSupplier then invalidOp "original-source-supplier-noncanonical"
+                let verified = PortableSupplierAdmission.reverifyControlledSourceV4 selection state |> Result.defaultWith invalidOp
+                let reservation, identity, lifecycle = PortableSupplierAdmission.projectControlledSourceLifecycle verified |> Result.defaultWith invalidOp
+                match lifecycle.OuterRetirement with
+                | EvidenceKnown _ -> invalidOp "original-source-already-retired"
+                | _ -> ()
+                if reservation <> exportOriginal.Context.Reservation then invalidOp "original-source-reservation"
+                let host = { BindingDigest = exportOriginal.Digest; HostContainerName = identity.ContainerId
+                             State = { Reservation = reservation; Lifecycle = lifecycle; Receipt = None } }
+                let export = { Host = host; Original = exportOriginal; SupplierIdentity = identity
+                               AttemptBytes = None; CopyObservationBytes = None; ReceivingObservationBytes = None }
+                let entry = reverifyOriginalExport selection { Cursor = { Revision = 1UL; Fence = 1UL }; Supplier = state; Export = Some export }
+                let expected = originalSourceBytes entry // bound complete candidate before any temp effect
+                write path (PortableOriginalSource entry)
+                failSourceAt BeforeSourceColdReopen
+                match read path with
+                | Some(PortableOriginalSource cold) when originalSourceBytes cold = expected ->
+                    reverifyOriginalExport selection cold |> originalSourceSnapshot
+                | _ -> invalidOp "original-source-cold-readback")
+
+        member _.ChangeOriginalSource(selection, original: PortableSupplierAdmissionOriginal, cursor: PortableOriginalSourceCursor,
+                                      exportOriginal: PortableHostExportSourceOriginal, change) =
+            locked original.Command.WorkspaceScope original.Command.IdempotencyId (fun path ->
+                source path |> ignore
+                let entry = match read path with
+                            | Some(PortableOriginalSource entry) when entry.Supplier.Original = original && entry.Cursor = cursor -> reverifyOriginalExport selection entry
+                            | _ -> invalidOp "original-source-current-conflict"
+                let before = entry.Export |> Option.defaultWith (fun () -> invalidOp "original-source-export-missing")
+                if before.Original.CanonicalBytes <> exportOriginal.CanonicalBytes then invalidOp "original-source-export-conflict"
+                let updated = change before
+                if updated.Original.CanonicalBytes <> before.Original.CanonicalBytes || updated.SupplierIdentity <> before.SupplierIdentity
+                   || (before.AttemptBytes |> Option.exists (fun bytes -> updated.AttemptBytes <> Some bytes))
+                   || (before.CopyObservationBytes |> Option.exists (fun bytes -> updated.CopyObservationBytes <> Some bytes))
+                   || (before.ReceivingObservationBytes |> Option.exists (fun bytes -> updated.ReceivingObservationBytes <> Some bytes)) then invalidOp "original-source-continuation-replacement"
+                let candidate = { entry with Cursor = nextOriginalCursor entry.Cursor; Export = Some updated }
+                let expected = originalSourceBytes candidate
+                write path (PortableOriginalSource candidate)
+                failSourceAt BeforeSourceColdReopen
+                match read path with
+                | Some(PortableOriginalSource cold) when originalSourceBytes cold = expected ->
+                    reverifyOriginalExport selection cold |> originalSourceSnapshot
+                | _ -> invalidOp "original-source-cold-readback")
 
         member _.Reserve(workspaceScope, idempotencyId, commandId, binding, containerName) =
             locked workspaceScope idempotencyId (fun path ->
@@ -1771,6 +1975,71 @@ module PortableWorkspaceExecutor =
 
     /// Inactive source journal only: shares the existing key/lock, never a runner or transport.
     /// Every successful write is still durability-Unknown; no production ACK/handoff API exists.
+    /// Same-key controlled SOURCE composition only; no launch, ACK, removal or production capability.
+    type OriginalSourceJournal private (stateRoot: string, sourceFailure: ControlledSupplierStoreFailurePoint option) =
+        let journal = DurableJournal(stateRoot, sourceFailure)
+        new(stateRoot: string) = OriginalSourceJournal(stateRoot, None)
+        static member CreateControlledFailureTest(stateRoot: string, point: ControlledSupplierStoreFailurePoint) = OriginalSourceJournal(stateRoot, Some point)
+        member _.AttachControlled(selection, original, expectedRevision, expectedFence, exportOriginal) =
+            journal.AttachOriginalSource(selection, original, expectedRevision, expectedFence, exportOriginal)
+        member _.ReadControlled(selection, original, cursor) = journal.ReadOriginalSource(selection, original, cursor)
+        /// Same maintained source-stage checks for a pending challenge, preserving the continuation.
+        /// This creates no authenticated readback and never authorizes a native effect.
+        member _.StageControlledPending(selection, state: PortableSupplierAdmissionState, expectedRevision, expectedFence, cursor) =
+            if state.Challenge.IsNone then Error "original-source-pending-required"
+            else journal.StageSupplier(state, Some expectedRevision, Some expectedFence,
+                                       envelopeCursor = cursor, controlledSelection = selection)
+                 |> Result.map (fun _ -> nextOriginalCursor cursor)
+        member _.StageControlledSupplier(selection, transition: PortableSupplierAuthenticatedSourceTransition, cursor) =
+            let state = transition.State
+            if transition.ExpectedRevision = UInt64.MaxValue || transition.ExpectedFence = UInt64.MaxValue
+               || state.Original <> transition.Original || state.Revision <> transition.ExpectedRevision + 1UL
+               || state.CheckpointCustody.Value.StoreFence <> transition.ExpectedFence + 1UL then Error "original-source-transition-conflict"
+            else
+                journal.StageSupplier(state, Some transition.ExpectedRevision, Some transition.ExpectedFence,
+                                      envelopeCursor = cursor, controlledSelection = selection)
+                |> Result.bind (fun _ -> journal.ReadOriginalSource(selection, state.Original, nextOriginalCursor cursor))
+        /// Consumes a single inert reader intent; every result retains Unknown native custody.
+        /// No invocation method exists. A lost response is reconciled only by reading the same original.
+        member _.PrepareControlledReaderAttempt(selection, original, cursor, exportOriginal: PortableHostExportSourceOriginal,
+                                               hostBootId: Guid, monotonicNanoseconds: uint64) =
+            if not (HostExportSource.originalClockCurrent hostBootId monotonicNanoseconds exportOriginal) then Error "original-source-attempt-clock"
+            else journal.ChangeOriginalSource(selection, original, cursor, exportOriginal, fun entry ->
+                if entry.AttemptBytes.IsSome then invalidOp "original-source-attempt-consumed"
+                match entry.Host.State.Lifecycle.Termination, entry.Host.State.Lifecycle.OuterRetirement with
+                | EvidenceKnown _, (EvidenceMissing _ | EvidenceUnknown _) when entry.Host.State.Lifecycle.ReconciliationConflicts.IsEmpty -> ()
+                | _ -> invalidOp "original-source-writer-retention-unconfirmed"
+                // This canonical source intent is NOT independently authenticated launch admission.
+                use memory = new PortableHostExportBoundedStream(HostExportSource.MaximumContextBytes)
+                use writer = new BinaryWriter(memory, UTF8Encoding(false, true), true)
+                writer.Write "fsgg.portable-host-export-attempt/1"
+                writer.Write exportOriginal.Digest
+                writer.Write(hostBootId.ToString("D"))
+                writer.Write monotonicNanoseconds
+                writeHost writer entry.Host
+                writer.Flush()
+                { entry with AttemptBytes = Some(memory.ToArray()) })
+        member _.ObserveControlledCopy(selection, original, cursor, exportOriginal, attemptDigest: string, bytes: byte array) =
+            if isNull bytes || bytes.Length = 0 || bytes.Length > HostExportSource.MaximumContextBytes then Error "host-export-copy-size"
+            else
+                let copied = Array.copy bytes
+                journal.ChangeOriginalSource(selection, original, cursor, exportOriginal, fun entry ->
+                    match entry.AttemptBytes with
+                    | Some attempt when sha256 attempt = attemptDigest -> { entry with CopyObservationBytes = Some copied }
+                    | _ -> invalidOp "original-source-copy-attempt")
+        member _.ObserveControlledReceiving(selection, original, cursor, exportOriginal, observation: PortableAuthenticatedHostExportReceiving, now) =
+            journal.ChangeOriginalSource(selection, original, cursor, exportOriginal, fun entry ->
+                if isNull (box observation) || not (observation.Host.IsCurrent now)
+                   || observation.Evidence.Host.Identity <> entry.SupplierIdentity
+                   || observation.Evidence.ContextDigest <> entry.Original.Digest
+                   || observation.Evidence.Host.Reservation <> entry.Original.Context.Reservation then invalidOp "original-source-receiving-binding"
+                match entry.AttemptBytes, entry.CopyObservationBytes with
+                | Some attempt, Some copied when observation.Evidence.AttemptDigest = sha256 attempt
+                                                && observation.Evidence.CopyObservationDigest = sha256 copied ->
+                    { entry with ReceivingObservationBytes = Some observation.Bytes
+                                 Host = { entry.Host with State = { entry.Host.State with Lifecycle = PortableHostAllocation.reconcileLifecycle entry.Host.State.Lifecycle observation.Host.Evidence.Lifecycle } } }
+                | _ -> invalidOp "original-source-receiving-attempt")
+
     type SupplierAdmissionJournal private (stateRoot: string, sourceFailure: ControlledSupplierStoreFailurePoint option) =
         let journal = DurableJournal(stateRoot, sourceFailure)
         new(stateRoot: string) = SupplierAdmissionJournal(stateRoot, None)

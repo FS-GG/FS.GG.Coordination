@@ -1,6 +1,6 @@
 {
   "schema": "fsgg.preflight-correspondence/1",
-  "sourceSha256": "edebdec2a4f80ea8ab94dc18cadb02894efe4b3e989d7e3f5732ed7d5c8ba0f1",
+  "sourceSha256": "28ef9be8fd55a6dfe7aa20e2dbbd11f8c9ca230308514bd7ed93bff093d80df1",
   "quintSha256": "939b64095b706017f2f202c6f99c860c40be7c31bddc2b98557316e50f42cd7f",
   "extractorSha256": "37e0b0365c2641edce40b48605471f61fa12e97c3e2376152f0e849abdc31f10",
   "profile": "fsgg-quint-profile/2",
@@ -13,20 +13,25 @@
   "traces": [
     {
       "name": "PreflightArtifactReplay.itf.json",
-      "sha256": "aca63fd7fe0d3fa2f9ecd3270ebd8032b89e7f9cf678c6a42dd940af01b480c8"
+      "sha256": "0bf30270e697487c27a1e7823c57d16309cb383e83514a91a0e178ece56b0c84"
     },
     {
       "name": "PreflightObservationReplay.itf.json",
-      "sha256": "77f8dcfb84be55ffd084fb42b169c39bef8fcf16b6c47678ea3469325c789197"
+      "sha256": "fab962946e4b802c2462516cb5488638399c44e14cf43ce4e50fa6719403b5e7"
     },
     {
       "name": "SourceDirectoryCommitReplay.itf.json",
-      "sha256": "c9bfbd0ab8aeb24203fe8dafc3d9c53d745a5bbd588b76649eec50768c46de10"
+      "sha256": "c9fcff3b495594ebe2577c5eb3f356661b9851ebee4139e5d2786d52bc0e32c3"
+    },
+    {
+      "name": "OriginalSourceCompositionReplay.itf.json",
+      "sha256": "e6e4802d059ee4bf8ac39441cb3230641736549611743af1af25abb8b4989207"
     }
   ],
   "replaySteps": {
     "PreflightArtifactReplay": 8,
     "PreflightObservationReplay": 18,
-    "SourceDirectoryCommitReplay": 8
+    "SourceDirectoryCommitReplay": 8,
+    "OriginalSourceCompositionReplay": 5
   }
 }

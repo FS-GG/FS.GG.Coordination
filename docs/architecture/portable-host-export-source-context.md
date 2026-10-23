@@ -111,3 +111,56 @@ barrier and any native export or retirement remain separate work.
 An ordinary owner copy from an old held allocation can be a separately admitted fresh non-destructive
 acquisition. It must preserve that allocation's original Unknown outcomes and holds; this API does not
 backfill a new reservation, clock or retrospective receipt for it.
+
+## Same-key supplier and export composition
+
+`OriginalSourceJournal` adds `fsgg.portable-original-source-journal/1` at the
+existing workspace/idempotency key. Its bounded outer record retains the complete
+canonical supplier `/4` payload and an optional export continuation. Explicit
+attachment checks the current supplier bytes, revision and fence under the same
+owner lock; reads do not migrate legacy records. Its separate outer cursor lets
+export updates preserve the supplier transcript revision. Existing supplier
+writers refuse a composite entry unless the explicit composite path supplies its
+expected cursor, so a supplier update cannot discard export state.
+
+Controlled attachment rechecks the retained signatures with the existing test
+selection and derives lifecycle data from that checked transcript. It joins the
+reservation, allocation identity and shared native-configuration fields to the
+export original. Original clock conversion uses checked exact integer arithmetic.
+Paths, owner numbers, configured filesystem UUIDs and clock snapshots remain data;
+these checks establish no descriptor ancestry, namespace custody or live clock
+witness. Unsupported or contradictory data joins refuse the operation. Every
+snapshot retains `NativeCustody = EvidenceUnknown`; the API exposes no launch,
+ACK, reservation, deletion or production grant operation.
+
+A reader attempt is a single inert source intent. Missing writer termination,
+already consumed intent, stale cursor and conflicting original refuse preparation.
+The complete candidate is bounded before a temporary file exists. Existing file
+flush, same-directory replacement, directory-sync and cold-read cuts apply to the
+outer record. After an ambiguous replacement, only same-original readback may
+reconcile source data; old bytes, a lost response or rollback cannot authorize a
+resend. This source record does not replace an installed owner's durable launch
+admission and process settlement.
+
+Production requires retaining the **actual original allocation/root** after writer
+termination until both authenticated commits and reader settlement permit its
+release. A copied output archive is not that root. The installed operator must
+provide this retention and the original-bound OS custody; source-only state cannot
+assert either. `prepareAck` and `reserveHost` remain refused.
+
+`PortableHostBinding.AllocationReceiptDigest` currently names adapter-supplied
+identity without a declared production digest recipe. It must not be equated to
+raw receipt SHA-256 or `SHA256("fsgg.v3.creation-receipt/1\0" || receipt)` without
+an authentic adapter contract. The composition tests use the explicit test-only
+preimage `fsgg.controlled-test-allocation-binding/1\n`; that equality is source test
+data and supplies no receiving-helper or production receipt interoperability.
+Existing signed C/R fixtures remain unchanged. The distinct-destination test
+configuration is selected before `beginIntentV4`; unchanged C/R signatures gain no
+native-policy authentication from that selection.
+
+The adjacent `OriginalSourceCompositionModel` records shared state at one key,
+per-call lock acquisition, independent cursors, intent consumption, uncertainty and
+retention. The existing directory-commit model retains the lower filesystem
+boundary. Finite sampling and causal negative controls are not formal or native
+host qualification. A raw Quint trace alone does not establish an FsQuint
+production-driver correspondence.

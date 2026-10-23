@@ -1,6 +1,6 @@
 # Compiled contract projection
 
-Source: `edebdec2a4f80ea8ab94dc18cadb02894efe4b3e989d7e3f5732ed7d5c8ba0f1`
+Source: `28ef9be8fd55a6dfe7aa20e2dbbd11f8c9ca230308514bd7ed93bff093d80df1`
 
 Behavior: `9d2581c99badfb89acdb359acceb0a1ba560322939d47944e58aa1fdcf10e05b`
 
