@@ -3,6 +3,9 @@
 volume, userland or BAR content is involved."""
 import copy
 import importlib.util
+import hashlib
+import json
+import re
 import os
 from pathlib import Path
 import sys
@@ -134,6 +137,19 @@ class UserlandEntry(unittest.TestCase):
     This checks composition and fail-closed ordering, not Linux namespace
     semantics; the original hosted failure still requires native qualification.
     """
+
+    def test_workflow_bytes_and_references_match_execution_pin_registration(self):
+        path = '.github/workflows/bar-hosted-domain-preflight.yml'
+        extension = json.loads((ROOT / 'evidence/github-substrate-v2/gs2-06-7/execution-pins-extension.json').read_text())
+        registrations = [document for document in extension['documents'] if document['path'] == path]
+        self.assertEqual(len(registrations), 1, 'workflow needs one execution-pin registration')
+        registration = registrations[0]
+        workflow = (ROOT / path).read_bytes()
+        self.assertEqual(registration['sha256'], hashlib.sha256(workflow).hexdigest(),
+                         'workflow changed: update its execution-pins-extension digest with the reviewed source')
+        uses = re.findall(r'^\s*(?:-\s*)?uses:\s*([^\s#]+)', workflow.decode(), re.MULTILINE)
+        self.assertEqual(sorted(registration['externalReferences']), sorted(use for use in uses if not use.startswith('./')))
+        self.assertEqual(sorted(registration['localReferences']), sorted(use for use in uses if use.startswith('./')))
 
     @staticmethod
     def script():
