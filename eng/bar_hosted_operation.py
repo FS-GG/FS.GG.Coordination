@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import configparser
 import hashlib
 import importlib.util
 import json
@@ -274,6 +275,99 @@ def load_bar(source):
     return bar
 
 
+def canonicalize_checkout_gc(root, revision, tree, origin, bar, *, complete=False):
+    """Remove only the pinned checkout action's exact local gc.auto=0.
+
+    This is a one-time bootstrap for two fresh internal checkouts, not a config
+    cleaner. Any other unexpected config, ambiguity or changed source refuses.
+    Global/system config and credentials are neither read nor edited by Git.
+    """
+    require(re.fullmatch(r'[0-9a-f]{40}', revision) is not None, 'exact checkout revision required')
+    git_dir = root / '.git'
+    require(git_dir.is_dir() and not git_dir.is_symlink(), 'fresh internal Git directory required')
+    for name in ('shallow', 'commondir', 'objects/info/alternates', 'refs/replace', 'info/grafts'):
+        require(not (git_dir / name).exists(), 'checkout is incomplete or externally redirected')
+    for name in ('objects', 'refs', 'info', 'hooks'):
+        bar.shared.path(str(git_dir / name))
+    if (git_dir / 'hooks').exists():
+        with os.scandir(git_dir / 'hooks') as hooks:
+            for count, hook in enumerate(hooks, 1):
+                require(count <= 32 and hook.name.endswith('.sample')
+                        and stat.S_ISREG(hook.stat(follow_symlinks=False).st_mode),
+                        'fresh checkout has an active/nonregular Git hook')
+    config_path = git_dir / 'config'
+    token = bar.file_token(config_path)
+    raw, _ = bar.regular_bytes(config_path, 1024**2)
+    require(bar.file_token(config_path) == token, 'local checkout config changed during capture')
+    parser = configparser.ConfigParser(interpolation=None, strict=True)
+    try:
+        parser.read_string(raw.decode())
+    except (configparser.Error, UnicodeError):
+        raise RuntimeError('BAR hosted generation: ambiguous or malformed local checkout config') from None
+    require(parser.has_section('gc') and dict(parser['gc']) == {'auto': '0'}, 'expected singleton local gc.auto=0 required')
+    for section in parser.sections():
+        if section == 'gc':
+            continue
+        allowed = ({'repositoryformatversion', 'filemode', 'bare', 'logallrefupdates', 'symlinks',
+                    'ignorecase', 'precomposeunicode'} if section == 'core' else
+                   {'url', 'fetch'} if section == 'remote "origin"' else
+                   {'remote', 'merge'} if section.startswith('branch "') else set())
+        require(allowed and set(parser[section]) <= allowed, 'unexpected checkout configuration remains')
+    require(parser.get('remote "origin"', 'url', fallback='') in (origin, origin + '.git'), 'checkout origin differs')
+    # git config writes this exact block on both pinned fresh action checkouts.
+    # An alternative representation is not silently normalized.
+    block = b'[gc]\n\tauto = 0\n'
+    require(raw.count(block) == 1, 'checkout-created gc.auto representation differs')
+    expected = raw.replace(block, b'', 1)
+    environment = {'PATH': '/usr/bin:/bin', 'HOME': '/nonexistent', 'LANG': 'C.UTF-8', 'LC_ALL': 'C.UTF-8',
+                   'GIT_CONFIG_NOSYSTEM': '1', 'GIT_CONFIG_GLOBAL': '/dev/null'}
+    prefix = ['/usr/bin/git', '--no-optional-locks', '--no-replace-objects', '-c', 'core.fsmonitor=false',
+              '-c', 'core.hooksPath=/dev/null', '-C', str(root)]
+    def command(label, argv, seconds):
+        result = subprocess.run(argv, capture_output=True, stdin=subprocess.DEVNULL, env=environment,
+                                timeout=min(seconds, 30), check=False)
+        require(len(result.stdout) + len(result.stderr) <= 8 * 1024**2, 'checkout diagnostic bound exceeded')
+        require(result.returncode == 0, 'checkout bootstrap Git command refused: ' + label)
+        return argparse.Namespace(stdout=result.stdout.decode(), stderr=result.stderr.decode())
+    def git(*args):
+        return command('checkout-config', prefix + list(args), 30).stdout.strip()
+    require(git('config', '--local', '--get-all', 'gc.auto') == '0', 'ambiguous local gc.auto provenance')
+    require(git('rev-parse', 'HEAD') == revision, 'fresh checkout revision differs')
+    actual_tree = git('rev-parse', revision + '^{tree}')
+    require(tree is None or actual_tree == tree, 'fresh checkout tree differs')
+    require(git('status', '--porcelain', '--untracked-files=all', '--ignored') == '', 'fresh checkout is dirty')
+    require(bar.file_token(config_path) == token, 'local checkout config changed before targeted removal')
+    git('config', '--local', '--unset-all', 'gc.auto', '^0$')
+    after, _ = bar.regular_bytes(config_path, 1024**2)
+    require(after == expected, 'non-target checkout configuration bytes changed')
+    bar.source_identity({}, root, revision, actual_tree, command=command, complete=complete)
+    return {'revision': revision, 'tree': actual_tree, 'removedLocalKey': 'gc.auto', 'expectedValue': '0',
+            'beforeSha256': hashlib.sha256(raw).hexdigest(), 'afterSha256': hashlib.sha256(after).hexdigest(),
+            'otherConfigBytesUnchanged': True, 'strictSourceIdentity': 'passed'}
+
+
+def canonicalize_checkouts(revision):
+    require(os.environ.get('GITHUB_EVENT_NAME') == 'workflow_dispatch'
+            and os.environ.get('GITHUB_REF') == 'refs/heads/main'
+            and os.environ.get('GITHUB_RUN_ATTEMPT') == '1'
+            and os.environ.get('GITHUB_REPOSITORY') == 'FS-GG/FS.GG.Coordination',
+            'only the fixed first-attempt hosted checkout bootstrap is supported')
+    workspace = Path(os.environ['GITHUB_WORKSPACE'])
+    source = workspace / 'source'
+    bar = load_bar(source)
+    receipt = {'source': None, 'product': None, 'firstRefusal': None}
+    try:
+        receipt['source'] = canonicalize_checkout_gc(source, revision, None, 'https://github.com/FS-GG/FS.GG.Coordination', bar)
+        receipt['product'] = canonicalize_checkout_gc(workspace / 'product', PRODUCT_REVISION, PRODUCT_TREE,
+                                                     'https://github.com/FS-GG/FSBarV2', bar, complete=True)
+    except Exception as error:
+        receipt['firstRefusal'] = type(error).__name__ + ': ' + str(error)[:512]
+        write_new(workspace / 'evidence/checkout-config-refusal.json', receipt)
+        print(json.dumps(receipt, sort_keys=True), file=sys.stderr)
+        raise
+    return receipt
+
+
 def prepare(operation_id, revision, *, source=SOURCE, allocation=ALLOCATION, evidence=EVIDENCE, home=HOME, bar=None):
     require(re.fullmatch(r'bar-image-[0-9]{1,20}-[0-9]{1,5}', operation_id) is not None, 'fixed run/attempt identity required')
     require(re.fullmatch(r'[0-9a-f]{40}', revision) is not None, 'exact helper revision required')
@@ -478,11 +572,13 @@ def receipt(operation_id, *, allocation=ALLOCATION, evidence=EVIDENCE, transport
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.split('\n', 1)[0])
-    parser.add_argument('mode', choices=['seal-transport', 'qualify', 'receipt'])
+    parser.add_argument('mode', choices=['canonicalize-checkouts', 'seal-transport', 'qualify', 'receipt'])
     parser.add_argument('--operation-id', required=True)
     parser.add_argument('--source-revision')
     args = parser.parse_args(argv)
-    if args.mode == 'seal-transport':
+    if args.mode == 'canonicalize-checkouts':
+        print(json.dumps(canonicalize_checkouts(args.source_revision or ''), sort_keys=True))
+    elif args.mode == 'seal-transport':
         print(json.dumps(seal_crypto(args.operation_id, evidence=Path(os.environ['GITHUB_WORKSPACE']) / 'evidence'), sort_keys=True))
     elif args.mode == 'receipt':
         value = receipt(args.operation_id, evidence=Path(os.environ['GITHUB_WORKSPACE']) / 'evidence')
