@@ -169,7 +169,7 @@ jobs:
           sudo mkfs.ext4 -q -m 0 -E nodiscard,lazy_itable_init=0,lazy_journal_init=0 "$loop"
           sudo mkdir -m 0755 "$VOLUME"
           sudo mount -o nodiscard "$loop" "$VOLUME"
-          sudo install -d -m 0700 -o 1001 -g 1001 "$VOLUME/allocation" "$VOLUME/load-store"
+          sudo install -d -m 0700 -o 1001 -g 1001 "$VOLUME/allocation" "$VOLUME/load-store" "$VOLUME/transport-candidate" "$VOLUME/transport-metadata"
           echo "provision.volumeImageBytes=$size" | tee -a "$EVIDENCE/facts.env"
           echo "provision.volumeAllocatedAfterMkfs=$(( $(stat -c %b "$VOLUME_IMAGE") * $(stat -c %B "$VOLUME_IMAGE") ))" \
             | tee -a "$EVIDENCE/facts.env"

@@ -3,6 +3,8 @@
 namespace, source acquisition, build, compiler or product bytes are required."""
 import argparse
 import hashlib
+import inspect
+import shlex
 import importlib.util
 import json
 import os
@@ -252,16 +254,19 @@ class Transport(unittest.TestCase):
         self.assertIn('malformed', value['transportRefusals'][0])
         self.assertEqual((self.transport / OPERATION / 'evidence/qualification.stderr.log').read_bytes(), b'original first cause')
 
-    def test_changed_archive_or_manifest_cannot_authorize_transport(self):
-        self.candidate.write_bytes(b'changed archive')
-        with self.assertRaisesRegex(RuntimeError, 'archive identity mismatch'):
-            self.receipt()
+    def assert_refused_with_original_stream(self, value, message):
+        self.assertFalse(value['candidateTransportPermitted'])
+        self.assertIn(message, value['transportRefusals'][0])
+        self.assertEqual((self.transport / OPERATION / 'state/0001.stdout').read_bytes(), b'bounded original command stdout')
 
-        self.candidate.write_bytes(b'authored inert archive bytes; no OCI image or product')
+    def test_changed_archive_retains_original_stream_without_candidate_permission(self):
+        self.candidate.write_bytes(b'changed archive')
+        self.assert_refused_with_original_stream(self.receipt(), 'archive identity mismatch')
+
+    def test_failed_manifest_retains_original_stream_without_candidate_permission(self):
         self.manifest['firstCause'] = 'original failed command'
         self.write_result()
-        with self.assertRaisesRegex(RuntimeError, 'manifest correspondence'):
-            self.receipt()
+        self.assert_refused_with_original_stream(self.receipt(), 'manifest correspondence')
 
     def test_duplicate_result_fields_cannot_authorize_transport(self):
         path = self.evidence / 'qualification-result.json'
@@ -278,19 +283,41 @@ class Transport(unittest.TestCase):
         self.assertIn('original crypto first cause', value['transportRefusals'][0])
         self.assertEqual((self.transport / OPERATION / 'state/0001.stdout').read_bytes(), b'bounded original command stdout')
 
-    def test_bounds_links_and_staging_headroom_fail_closed(self):
-        with patch.object(WRAPPER, 'ARCHIVE_BYTES', 1), self.assertRaisesRegex(RuntimeError, 'archive identity mismatch'):
-            self.receipt()
+    def test_oversized_candidate_retains_original_stream_without_candidate_permission(self):
+        with patch.object(WRAPPER, 'ARCHIVE_BYTES', 1):
+            value = self.receipt()
+        self.assert_refused_with_original_stream(value, 'oversized')
+
+    def test_candidate_staging_headroom_refusal_preserves_original_streams(self):
+        with patch.object(WRAPPER.os, 'statvfs', return_value=argparse.Namespace(f_bavail=1, f_frsize=1)):
+            value = WRAPPER.receipt(OPERATION, allocation=self.allocation, evidence=self.evidence, transport=self.transport)
+        self.assert_refused_with_original_stream(value, 'staging headroom')
+
+    def test_unsafe_metadata_bounds_or_links_still_refuse(self):
         with patch.object(WRAPPER, 'METADATA_BYTES', 1), self.assertRaisesRegex(RuntimeError, 'metadata transport bound'):
             self.receipt()
-        with patch.object(WRAPPER.os, 'statvfs', return_value=argparse.Namespace(f_bavail=1, f_frsize=1)), self.assertRaisesRegex(RuntimeError, 'staging headroom'):
-            WRAPPER.receipt(OPERATION, allocation=self.allocation, evidence=self.evidence, transport=self.transport)
         (self.state / 'linked').symlink_to(self.root)
         with self.assertRaisesRegex(RuntimeError, 'linked artifact'):
             self.receipt()
 
 
 class Workflow(unittest.TestCase):
+    def test_actual_transport_defaults_are_provisioned_private_for_the_runner(self):
+        text = WORKFLOW.read_text()
+        command = next(row.strip() for row in text.splitlines() if row.strip().startswith('sudo install -d -m 0700 -o 1001 -g 1001'))
+        def validate(command):
+            argv = shlex.split(command)
+            self.assertEqual(argv[:10], ['sudo', 'install', '-d', '-m', '0700', '-o', '1001', '-g', '1001', '$VOLUME/allocation'])
+            paths = {path.replace('$VOLUME', '/fsgg-bar') for path in argv[9:]}
+            for method in (WRAPPER.receipt, WRAPPER.encrypt_candidate):
+                actual = str(inspect.signature(method).parameters['transport'].default)
+                self.assertIn(actual, paths, 'actual helper transport parent must be uid1001/private before receipt')
+        validate(command)
+        for missing in ('transport-candidate', 'transport-metadata'):
+            broken = command.replace(' "$VOLUME/' + missing + '"', '')
+            with self.assertRaises(AssertionError):
+                validate(broken)
+
     def test_first_actual_shell_guard_blocks_rerun_wrong_event_or_ref_before_checkout(self):
         guard = literal_block(WORKFLOW.read_text(), 'run')
         with tempfile.TemporaryDirectory() as temporary:

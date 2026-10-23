@@ -376,8 +376,10 @@ def receipt(operation_id, *, allocation=ALLOCATION, evidence=EVIDENCE, transport
                 for child in children:
                     entries += 1
                     require(entries < MAX_FILES, 'metadata entry-count bound exceeded')
-                    require(not child.is_symlink(), 'linked artifact refused')
                     path = Path(child.path)
+                    if path == candidate:
+                        continue
+                    require(not child.is_symlink(), 'linked artifact refused')
                     paths.append(path)
                     if child.is_dir(follow_symlinks=False):
                         pending.append(path)
@@ -402,46 +404,49 @@ def receipt(operation_id, *, allocation=ALLOCATION, evidence=EVIDENCE, transport
                and result.get('scope') == 'ordinary sampled profile; native/product and whole descendant acceptance separate'
                and re.fullmatch(r'sha256:[0-9a-f]{64}', result.get('imageId', '')) is not None
                and result.get('archive') == str(candidate))
-    if success:
-        manifest_path = Path(result.get('manifest', ''))
-        require(manifest_path.parent == state / 'manifests', 'result manifest outside original generation')
-        manifest, manifest_pin = read_json(manifest_path)
-        require(manifest_path.name == 'sha256-' + manifest_pin['sha256'] + '.json', 'manifest content address differs')
-        selection_path = evidence / 'operation-input.json'
-        selection, selection_pin = read_json(selection_path)
-        require(manifest.get('profile') == 'bar-headless' and manifest.get('operationId') == operation_id
-                and manifest.get('firstCause') is None and manifest.get('result', {}).get('imageId') == result['imageId']
-                and manifest.get('result', {}).get('archiveSha256') == result.get('archiveSha256')
-                and manifest.get('inputSha256') == selection_pin['sha256']
-                and manifest.get('helper') == selection.get('helper') and manifest.get('product') == selection.get('product')
-                and manifest.get('clock') == selection.get('clock'),
-                'successful controller manifest correspondence differs')
-        topology, topology_pin = read_json(evidence / 'topology.json')
-        seal, seal_pin = read_json(evidence / 'transport-seal.json')
-        require(topology_pin['sha256'] == selection['admission']['topology']['sha256']
-                and topology['transportSealSha256'] == seal_pin['sha256'], 'original crypto seal/topology join differs')
-    archive = (digest_file(candidate, ARCHIVE_BYTES, deadline=seal['outerDeadlineMonotonic'])
-               if success and candidate.exists() and candidate.stat().st_size <= ARCHIVE_BYTES else None)
-    require(not success or (archive is not None and archive['bytes'] > 0 and archive['sha256'] == result.get('archiveSha256')),
-            'successful archive identity mismatch')
-    free = os.statvfs(allocation).f_bavail * os.statvfs(allocation).f_frsize
-    # Pass the original file with compression-level0. Reserve one additional
-    # full16GiB staging allowance plus256MiB for metadata copies/ZIP overhead on
-    # this volume; do not assume undocumented action disk behavior is free.
-    require(not success or free >= TRANSPORT_FREE_BYTES, 'full-candidate transport staging headroom unavailable')
-    encrypted = None
+    archive, encrypted, free = None, None, None
     if success:
         try:
+            manifest_path = Path(result.get('manifest', ''))
+            require(manifest_path.parent == state / 'manifests', 'result manifest outside original generation')
+            manifest, manifest_pin = read_json(manifest_path)
+            require(manifest_path.name == 'sha256-' + manifest_pin['sha256'] + '.json', 'manifest content address differs')
+            selection_path = evidence / 'operation-input.json'
+            selection, selection_pin = read_json(selection_path)
+            require(manifest.get('profile') == 'bar-headless' and manifest.get('operationId') == operation_id
+                    and manifest.get('firstCause') is None and manifest.get('result', {}).get('imageId') == result['imageId']
+                    and manifest.get('result', {}).get('archiveSha256') == result.get('archiveSha256')
+                    and manifest.get('inputSha256') == selection_pin['sha256']
+                    and manifest.get('helper') == selection.get('helper') and manifest.get('product') == selection.get('product')
+                    and manifest.get('clock') == selection.get('clock'),
+                    'successful controller manifest correspondence differs')
+            topology, topology_pin = read_json(evidence / 'topology.json')
+            seal, seal_pin = read_json(evidence / 'transport-seal.json')
+            require(topology_pin['sha256'] == selection['admission']['topology']['sha256']
+                    and topology['transportSealSha256'] == seal_pin['sha256'], 'original crypto seal/topology join differs')
+            archive = digest_file(candidate, ARCHIVE_BYTES, deadline=seal['outerDeadlineMonotonic'])
+            require(archive['bytes'] > 0 and archive['sha256'] == result.get('archiveSha256'),
+                    'successful archive identity mismatch')
+            free = os.statvfs(allocation).f_bavail * os.statvfs(allocation).f_frsize
+            # The original archive is read in place; additional space covers
+            # ciphertext, bounded metadata copies and streaming ZIP overhead.
+            require(free >= TRANSPORT_FREE_BYTES, 'full-candidate transport staging headroom unavailable')
             encrypted = encrypt_candidate(operation_id, candidate, archive, evidence=evidence)
         except Exception as error:
-            # Independent bounded controller evidence remains transportable when
-            # candidate encryption fails. Never turn that into candidate success.
+            # Candidate-only refusals do not discard independently safe original
+            # controller evidence. Metadata safety checks above remain strict.
             success = False
             refusals.append(type(error).__name__ + ': ' + str(error)[:512])
+    observation = {'exists': False, 'bytes': None, 'regular': None}
+    try:
+        info = candidate.stat(follow_symlinks=False)
+        observation.update(exists=True, bytes=info.st_size, regular=stat.S_ISREG(info.st_mode))
+    except OSError as error:
+        observation['unavailable'] = str(error)[:256]
+    observation['hashStatus'] = 'bounded hash retained' if archive is not None else 'not retained: absent, unqualified or refused'
     value = {'operationId': operation_id, 'metadataBytes': total, 'metadata': files, 'candidate': archive,
              'metadataTransportCeilingBytes': total + RECEIPT_BYTES,
-             'candidateObservation': {'exists': candidate.exists(), 'bytes': candidate.stat().st_size if candidate.exists() else None,
-                                      'hashStatus': 'bounded hash retained' if archive is not None else 'absent or exceeds archive bound'},
+             'candidateObservation': observation,
              'candidateTransportPermitted': success, 'candidatePath': str(candidate), 'transportFreeBytes': free,
              'encryptedCandidate': encrypted,
              'cryptoCommands': list(CRYPTO_OBSERVATIONS),
