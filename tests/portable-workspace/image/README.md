@@ -665,3 +665,111 @@ retirement. Source-only or intermediate-toolchain completion cannot close it.
 Loaded engine/plugin ABI, Count1, useful play (still0/6), B2 adoption, publication,
 parent acceptance and original holds remain separate. Prepared inputs and
 `check-inputs` correspondence never grant execution authority.
+
+## Hosted complete BAR image generation
+
+The dispatch-only `bar-hosted-image-qualification.yml` is the complete image
+route for the same issue1032. It uses the existing `bar-headless` controller,
+with the accepted FSBar recipe at `4ddd070650e3131916a13bb2c5e75f99376e1c3a`
+and tree `f6e4dc108bf065cd2fd44d48e0faf8807e1b8e3c`. The fixed wrapper
+`eng/bar_hosted_operation.py` binds all six recipe files and the three unchanged
+executing controller files. The recipe retains its exact Ubuntu snapshot,
+vcpkg/toolchain, Recoil headers/archive, HighBar stock plugin and compiled
+controls, complete BAR Rapid game graph, and Avalanche3.4 map selections.
+
+Each generation needs Programme/root's separate admission and one fresh hosted
+VM. Source delivery, the full-image dispatch choice and the earlier no-content
+preflight do not grant that admission. The workflow accepts only the first
+attempt on protected main. Both Git checkouts have complete internal histories;
+the product copy is a clean, private context on the operation volume. The
+wrapper creates a fresh operation input, exact namespace configurations,
+resolved support-file hashes, current-boot domain references and new empty
+build/load stores. The earlier scratch probe's stores cannot be reused. There
+is one fixed `qualify --profile bar-headless` invocation and no arbitrary
+command, retry, resume or product-runtime interface.
+
+The fresh VM repeats the selected image-version, preallocated nodiscard volume,
+daemon/user-namespace and capacity refusals. The maintained pivot-root entry
+places the Arch userland at its mount namespace root before dropping to
+uid/gid1001. Source is bound read-only. The delegated4096-task unit has a3900s
+maximum runtime and120s stop allowance with control-group cleanup. These
+platform bounds do not change the controller's3600s work and120s retirement
+clock, four-CPU affinity,12GiB observed RSS or80GiB sampled disk ceiling. The
+controller still reports hard containment and whole descendant settlement as
+unproved.
+
+The job's90-minute limit includes provisioning and bounded evidence transport.
+Before the controller starts, the wrapper requires enough of that original
+outer clock to retain the entire62-minute controller aperture and20 minutes
+for receipts/transport. It refuses if preparation has consumed that room.
+Neither repeated local stage timeouts nor a completed toolchain stage renews
+the clock or closes the full image promise. Build time, aggregate8MiB command
+output and80GiB VFS/export/load fit remain native qualification questions.
+
+The controller exports the actual image ID, verifies the bounded OCI archive
+and produced static ELF/file/hash/alias correspondence, loads only that archive
+into the new separate store, and reads back the loaded image/config/rootfs and
+selected local tag. The wrapper admits candidate transport only after joining
+that result to the content-addressed manifest, original input/source/clock and
+archive digest. It copies only bounded regular metadata and original command
+streams into a private transport directory; malformed or failed results cannot
+authorize candidate transport. Reporter failures emit bounded diagnostics in
+the native job log. Independent readback must retain the native source/run/
+attempt/step joins, artifact identities/digests, full candidate bytes and all
+first-cause/retirement gaps.
+
+Run the inert source controls with:
+
+```sh
+python3 -I -B tests/portable-workspace/image/test_bar_hosted_operation.py
+```
+
+They exercise the actual closed input/domain/configuration readers and fixed
+wrapper/entry shell with authored tiny fixtures and intercepted engine ports.
+Tiny synthetic OpenSSL controls generate temporary fixture keys and verify
+streaming roundtrip, wrong-key and tamper refusal; they use no product bytes or
+operator private key. No compiler, container, source/content acquisition or
+product runtime runs.
+The existing linear controller and these source/configuration checks cover this
+route; no additional scheduler or custom model is introduced. Required source
+CI and independent review remain separate from actual image qualification.
+
+The complete image result still leaves loaded engine/plugin ABI, Count1, useful
+play, B2 adoption, publication and parent acceptance open. Direct-handle reaping,
+the final store census and native job termination are observed separately from
+any unavailable provider physical-disposal evidence. No global prune, old
+attempt cleanup or historical Home capacity release follows from this route.
+
+### Encrypted candidate custody
+
+Only recipient-encrypted image bytes enter the candidate artifact. The reviewed
+public RSA3072 certificate is [bar-hosted-recipient.pem](../../../eng/bar-hosted-recipient.pem);
+the operator keeps its private key outside the repository, runner and artifacts.
+Before image work, the wrapper seals the exact certificate fingerprint and
+actual host OpenSSL, resolved loader/libraries and loader-cache hashes. That
+seal joins the controller's topology/input evidence and original monotonic
+90-minute outer deadline. All identities are checked again around encryption.
+The child environment disables inherited OpenSSL configuration/modules.
+
+The fixed [OpenSSL CMS](https://docs.openssl.org/3.0/man1/openssl-cms/) command
+uses AES-256-GCM AuthEnvelopedData with RSA-OAEP SHA256/MGF1-SHA256, binary mode
+and streaming. The `-outform DER` CLI option with `-stream` produces indefinite
+BER encoding. Encryption consumes the original verified archive without a
+second plaintext copy. The source-sealed archive is at most16GiB; ciphertext is
+bounded by the actual archive size plus64MiB. Before encryption, the volume must
+have an additional16GiB+256MiB free for ciphertext, metadata copies and overhead.
+The pinned upload action streams its ZIP at compression level0. Metadata staging
+holds at most60MiB original files plus a4MiB receipt; candidate transport carries
+only the bounded `candidate.cms`. Both artifacts retain for30 days. Receipt,
+metadata upload and candidate upload have9/1/10-minute caps within the original
+20-minute transport allowance. Transport fit remains measured qualification.
+
+Root's separately selected private readback first verifies native artifact
+identity/digest and bounded member shape, then decrypts into a private quarantine
+file with `openssl cms -decrypt -binary -inform DER`, the reviewed certificate
+and the retained private key. Decryption must exit successfully before any
+plaintext is accepted; authenticated decryption can leave partial quarantine
+bytes on failure. The original archive digest and16GiB bound must match before
+the existing bounded OCI reader independently checks the candidate. Ciphertext
+retention alone does not establish that readback. Encryption failures retain
+bounded original controller metadata/streams and forbid candidate transport.
