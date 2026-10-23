@@ -273,7 +273,7 @@ class Sc2Profile(unittest.TestCase):
                 SC2.main(args, IMAGE.__dict__)
         self.assertFalse((Path(args.state_dir) / selection['operationId']).exists())
 
-    def native_ports(self, args, selection, *, fail=None, image=None):
+    def native_ports(self, args, selection, *, fail=None, image=None, info_fault=None):
         """Controlled Popen boundary; engine argv are observed, never executed.
 
         Shared selector capture still drains genuine tiny Python child streams.
@@ -291,14 +291,38 @@ class Sc2Profile(unittest.TestCase):
                 return real_popen([sys.executable, '-I', '-c', 'raise SystemExit(23)'], **kwargs)
             kind = 'load' if argv[0] == selection['support']['podman']['path'] else 'build'
             if '--version' in argv:
-                output = 'buildah version 1.43.1'
+                output = 'buildah version ' + ('1.43.0' if info_fault == ('build', 'version') else '1.43.1')
             elif 'info' in argv:
+                # Pinned CLI contracts: Buildah1.43.1 defaults to JSON and its
+                # --format accepts Go templates; Podman6.1.4 defaults to YAML.
+                suffix = argv[argv.index('info'):]
+                if kind == 'build' and suffix == ['info', '--format=json']:
+                    # info.go rejects this non-template format before encoding.
+                    return real_popen([sys.executable, '-I', '-c',
+                        "import sys;sys.stderr.write('Error: invalid format provided: json\\n');raise SystemExit(125)"], **kwargs)
+                if kind == 'load' and suffix == ['info']:
+                    # Podman's default YAML must fail the real JSON parser.
+                    return real_popen([sys.executable, '-I', '-c',
+                        "print('host:\\n  arch: amd64')"], **kwargs)
+                if suffix not in (['info'], ['info', '--format=json']):
+                    raise AssertionError('Unexpected closed info invocation: ' + repr(argv))
                 store = selection[kind]
                 value = ({'store': {'GraphRoot': store['root'], 'RunRoot': store['runroot'], 'GraphDriverName': 'vfs'},
                           'host': {'os': 'linux', 'arch': 'amd64', 'rootless': True}} if kind == 'build' else
                          {'store': {'graphRoot': store['root'], 'runRoot': store['runroot'], 'graphDriverName': 'vfs'},
                           'host': {'os': 'linux', 'arch': 'amd64', 'security': {'rootless': True}}})
-                output = json.dumps(value)
+                if info_fault is not None and info_fault[0] == kind:
+                    fault = info_fault[1]
+                    if fault == 'store':
+                        value['store']['GraphRoot' if kind == 'build' else 'graphRoot'] = '/foreign/store'
+                    elif fault == 'rootless':
+                        host = value['host'] if kind == 'build' else value['host']['security']
+                        host['rootless'] = False
+                    elif fault == 'platform':
+                        value['host']['arch'] = 'arm64'
+                    elif fault != 'malformed':
+                        raise AssertionError('Unknown info fault: ' + fault)
+                output = '{' if info_fault == (kind, 'malformed') else json.dumps(value)
             elif 'du' in [Path(value).name for value in argv]:
                 output = '\n'.join('1\t' + root for root in (args.engine_allocation, selection['load']['root']))
             elif 'unshare' in argv:
@@ -444,6 +468,11 @@ class Sc2Profile(unittest.TestCase):
              patch.object(IMAGE.subprocess, 'Popen', side_effect=spawn):
             result = SC2.main(args, IMAGE.__dict__)
             self.assertEqual(result['preflight'], 'passed')
+            infos = [argv for argv in calls if 'info' in argv]
+            self.assertEqual([argv[argv.index('info'):] for argv in infos],
+                             [['info'], ['info', '--format=json']])
+            self.assertEqual([argv[0] for argv in infos],
+                             [selection['support']['builder']['path'], selection['support']['podman']['path']])
             self.assertFalse(any('pull' in argv or 'build' in argv or 'load' in argv for argv in calls))
             records = [json.loads(row) for row in Path(result['journal']).read_bytes().splitlines()]
             self.assertEqual(records[-1]['outcome'], 'passed-scoped')
@@ -452,6 +481,57 @@ class Sc2Profile(unittest.TestCase):
             with self.assertRaises(FileExistsError):
                 SC2.main(args, IMAGE.__dict__)
             self.assertEqual(len(calls), count)
+
+    def test_original_shared_info_format_fails_with_eof_and_first_cause(self):
+        args, selection, home = self.fixture(); args.mode = 'qualify'
+        spawn, calls, resources = self.native_ports(args, selection)
+        native_json = SC2.Lifetime.native_json
+        def old_shared_format(owner, label, argv, **kwargs):
+            if label == 'build-info':
+                argv = argv + ['--format=json']
+            return native_json(owner, label, argv, **kwargs)
+        with patch.object(Path, 'home', return_value=home), \
+             patch.object(SC2, 'host_resources', return_value=resources), \
+             patch.object(SC2, 'disk_backing', return_value='synthetic disk'), \
+             patch.object(os, 'sched_setaffinity'), \
+             patch.object(os, 'sched_getaffinity', return_value={0, 1, 2, 3}), \
+             patch.object(SC2.Lifetime, 'native_json', old_shared_format), \
+             patch.object(IMAGE.subprocess, 'Popen', side_effect=spawn):
+            with self.assertRaisesRegex(RuntimeError, 'command failed with exit 125'):
+                SC2.main(args, IMAGE.__dict__)
+        self.assertFalse(any('pull' in argv or 'build' in argv or 'load' in argv for argv in calls))
+        journal = Path(args.state_dir) / selection['operationId'] / 'journal.jsonl'
+        records = [json.loads(row) for row in journal.read_bytes().splitlines()]
+        failed = next(row for row in records if row.get('event') == 'command-result' and row.get('exitCode') == 125)
+        self.assertTrue(failed['bothStreamsEof'])
+        self.assertTrue(failed['directChildReaped'])
+        self.assertEqual(records[-1]['firstCause'], 'command failed with exit 125')
+        self.assertEqual(records[-1]['descendantSettlement'], 'unproved')
+
+    def test_pinned_info_schema_failures_still_block_build(self):
+        for kind, fault in [(kind, fault) for kind in ('build', 'load')
+                            for fault in ('malformed', 'store', 'rootless', 'platform')] + [('build', 'version')]:
+            with self.subTest(kind=kind, fault=fault), tempfile.TemporaryDirectory(dir=self.root) as temporary:
+                original = self.root; self.root = Path(temporary); self.root.chmod(0o700)
+                try:
+                    args, selection, home = self.fixture(); args.mode = 'qualify'
+                    spawn, calls, resources = self.native_ports(args, selection, info_fault=(kind, fault))
+                    with patch.object(Path, 'home', return_value=home), \
+                         patch.object(SC2, 'host_resources', return_value=resources), \
+                         patch.object(SC2, 'disk_backing', return_value='synthetic disk'), \
+                         patch.object(os, 'sched_setaffinity'), \
+                         patch.object(os, 'sched_getaffinity', return_value={0, 1, 2, 3}), \
+                         patch.object(IMAGE.subprocess, 'Popen', side_effect=spawn):
+                        expected = {'malformed': 'malformed JSON', 'store': 'effective native storage',
+                                    'rootless': 'rootless/platform', 'platform': 'rootless/platform',
+                                    'version': 'builder version family'}[fault]
+                        with self.assertRaisesRegex(RuntimeError, expected):
+                            SC2.main(args, IMAGE.__dict__)
+                    self.assertFalse(any('pull' in argv or 'build' in argv or 'load' in argv for argv in calls))
+                    if fault == 'version':
+                        self.assertFalse(any('info' in argv for argv in calls))
+                finally:
+                    self.root = original
 
     def test_failed_resource_admission_never_contacts_engine(self):
         args, selection, home = self.fixture(); args.mode = 'qualify'
