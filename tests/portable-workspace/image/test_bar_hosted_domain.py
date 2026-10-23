@@ -6,6 +6,8 @@ import importlib.util
 import os
 from pathlib import Path
 import sys
+import subprocess
+import textwrap
 import tempfile
 import unittest
 
@@ -124,6 +126,107 @@ class HostedDomain(unittest.TestCase):
         self.assertTrue(DOMAIN.uid_map_covers('         0       1001          1\n         1     165536      65536\n', 10001))
         self.assertFalse(DOMAIN.uid_map_covers('         0       1001          1\n', 10001))
         self.assertFalse(DOMAIN.uid_map_covers('garbage', 10001))
+
+
+class UserlandEntry(unittest.TestCase):
+    """Execute the maintained shell plan with privileged commands replaced.
+
+    This checks composition and fail-closed ordering, not Linux namespace
+    semantics; the original hosted failure still requires native qualification.
+    """
+
+    @staticmethod
+    def script():
+        workflow = (ROOT / '.github/workflows/bar-hosted-domain-preflight.yml').read_text()
+        block = workflow.split('          ENTER_SCRIPT: |\n', 1)[1].split('        run: |', 1)[0]
+        return textwrap.dedent(block)
+
+    def run_entry(self, fail='', transform=lambda script: script):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            userland, tools = root / 'userland', root / 'tools'
+            userland.mkdir(); tools.mkdir()
+            log = root / 'commands'
+            stub = tools / 'stub'
+            stub.write_text('''#!/bin/bash
+set -eu
+name=${0##*/}
+printf '%s' "$name" >> "$TRACE"
+printf ' <%s>' "$@" >> "$TRACE"
+printf '\\n' >> "$TRACE"
+[ "$name" != "${FAIL_COMMAND:-}" ] || exit 41
+case "$name" in
+  pivot_root)
+    # A non-mount root or a pivot from the wrong cwd is invalid.
+    test "$PWD" = "$USERLAND"
+    test "$*" = '. .old-root'
+    /usr/bin/grep -Fx "mount <--bind> <$USERLAND> <$USERLAND>" "$TRACE" >/dev/null
+    ;;
+  setpriv)
+    /usr/bin/grep -Fx 'umount <--lazy> </.old-root>' "$TRACE" >/dev/null
+    /usr/bin/grep -Fx 'rmdir </.old-root>' "$TRACE" >/dev/null
+    ;;
+  chroot) exit 42 ;;
+esac
+''')
+            stub.chmod(0o700)
+            for name in ('mount', 'mkdir', 'install', 'pivot_root', 'umount', 'rmdir', 'setpriv', 'chroot'):
+                (tools / name).symlink_to(stub)
+            script = transform(self.script()).replace('/usr/bin/setpriv', str(tools / 'setpriv'))
+            result = subprocess.run(['/bin/bash', '-c', script], capture_output=True, text=True,
+                                    timeout=10, env={**os.environ, 'PATH': str(tools) + ':/usr/bin:/bin',
+                                                     'TRACE': str(log), 'USERLAND': str(userland),
+                                                     'VOLUME': '/fixture-volume', 'FAIL_COMMAND': fail})
+            return result, log.read_text()
+
+    def test_real_entry_plan_pivots_then_detaches_before_dropping_privilege(self):
+        result, trace = self.run_entry()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        ordered = ['mount <--make-rprivate> </>', 'mount <--bind>', 'mount <-t> <proc>',
+                   'mount <-t> <cgroup2>', 'pivot_root <.> <.old-root>',
+                   'umount <--lazy> </.old-root>', 'rmdir </.old-root>', 'setpriv <--reuid=1001> <--regid=1001>']
+        cursor = 0
+        for operation in ordered:
+            cursor = trace.index(operation, cursor) + len(operation)
+        self.assertNotIn('chroot', trace)
+        self.assertIn('--init-groups> <--reset-env>', trace)
+        self.assertIn('--expected-uid 1001', trace)
+        self.assertIn('--allocation /fsgg-bar/allocation', trace)
+        self.assertIn('--load-store /home/runner/.local/share/fsgg/headless-images/bar/preflight', trace)
+
+    def test_failed_root_transition_never_starts_the_userland_check(self):
+        for operation in ('mount', 'pivot_root', 'umount', 'rmdir'):
+            with self.subTest(operation=operation):
+                result, trace = self.run_entry(operation)
+                self.assertEqual(result.returncode, 41, result.stderr)
+                self.assertFalse(any(row.startswith('setpriv ') for row in trace.splitlines()))
+
+    def test_broken_chroot_and_non_mount_root_plans_are_rejected(self):
+        def chroot(script):
+            start = script.index('mkdir "$USERLAND/.old-root"')
+            end = script.index('exec /usr/bin/setpriv', start)
+            return script[:start] + 'exec chroot "$USERLAND" ' + script[end + len('exec '):]
+
+        variants = {
+            'old-chroot': chroot,
+            'non-mount-root': lambda script: script.replace('mount --bind "$USERLAND" "$USERLAND"', ':'),
+            'wrong-pivot-root': lambda script: script.replace('pivot_root . .old-root', 'pivot_root / .old-root'),
+        }
+        for name, transform in variants.items():
+            with self.subTest(name=name):
+                result, trace = self.run_entry(transform=transform)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertFalse(any(row.startswith('setpriv ') for row in trace.splitlines()))
+
+    def test_missing_pivot_tool_never_starts_the_userland_check(self):
+        result, trace = self.run_entry(transform=lambda script: script.replace(
+            'pivot_root . .old-root', 'fsgg-fixture-missing-pivot-root . .old-root'))
+        self.assertEqual(result.returncode, 127, result.stderr)
+        self.assertFalse(any(row.startswith('setpriv ') for row in trace.splitlines()))
+
+    def test_shell_syntax(self):
+        result = subprocess.run(['/bin/bash', '-n'], input=self.script(), text=True, capture_output=True, timeout=10)
+        self.assertEqual(result.returncode, 0, result.stderr)
 
 
 if __name__ == '__main__':

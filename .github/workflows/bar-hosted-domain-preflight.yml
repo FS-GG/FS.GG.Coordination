@@ -158,6 +158,10 @@ jobs:
           ENTER_SCRIPT: |
             set -euo pipefail
             mount --make-rprivate /
+            # CLONE_NEWUSER refuses a chroot whose root differs from the mount
+            # namespace root. Make this userland the namespace root instead.
+            # pivot_root(2): private propagation and a self-bind mount are required.
+            mount --bind "$USERLAND" "$USERLAND"
             mount -t proc proc "$USERLAND/proc"
             mount --rbind /dev "$USERLAND/dev"
             mount -t sysfs sysfs "$USERLAND/sys"
@@ -168,7 +172,13 @@ jobs:
               "$USERLAND/home/runner/.local/share/fsgg"
             mount --bind "$VOLUME" "$USERLAND/fsgg-bar"
             mount --bind "$VOLUME/load-store" "$USERLAND/home/runner/.local/share/fsgg"
-            exec chroot "$USERLAND" /usr/bin/setpriv --reuid=1001 --regid=1001 --init-groups --reset-env \
+            mkdir "$USERLAND/.old-root"
+            cd "$USERLAND"
+            pivot_root . .old-root
+            cd /
+            umount --lazy /.old-root
+            rmdir /.old-root
+            exec /usr/bin/setpriv --reuid=1001 --regid=1001 --init-groups --reset-env \
               /usr/bin/env HOME=/home/runner XDG_RUNTIME_DIR=/tmp/runtime-1001 PATH=/usr/bin /bin/sh -c \
               'mkdir -p -m 0700 /tmp/runtime-1001 && exec python3 -I /opt/fsgg/eng/bar_hosted_domain.py userland-check --allocation /fsgg-bar/allocation --load-store /home/runner/.local/share/fsgg/headless-images/bar/preflight --controller-module /opt/fsgg/eng/portable_workspace_sc2.py --expected-uid 1001'
         run: |
@@ -177,7 +187,7 @@ jobs:
           sudo -n systemd-run --quiet --wait --pipe --collect -p Delegate=yes -p TasksMax=4096 \
             --setenv=USERLAND="$USERLAND" --setenv=VOLUME="$VOLUME" \
             /usr/bin/unshare --mount --cgroup --pid --fork /bin/bash "$EVIDENCE/enter-userland.sh" \
-            | tee "$EVIDENCE/userland-check.json"
+            2> >(tee "$EVIDENCE/userland-check.stderr.log" >&2) | tee "$EVIDENCE/userland-check.json"
 
       - name: Summarize the domain preflight
         if: always()
@@ -193,7 +203,7 @@ jobs:
             echo "outcome.userlandCheck=$USERLAND_OUTCOME"
             echo "evidence.domainSha256=$(sha256sum "$EVIDENCE/domain.json" 2>/dev/null | cut -d ' ' -f 1)"
           } | tee -a "$EVIDENCE/facts.env"
-          for file in facts.env admit-result.json domain.json userland-check.json; do
+          for file in facts.env admit-result.json domain.json userland-check.json userland-check.stderr.log; do
             echo "----- $file -----"; cat "$EVIDENCE/$file" 2>/dev/null || echo absent
           done
           { echo '## BAR hosted domain preflight'; echo '```'; cat "$EVIDENCE/facts.env"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
@@ -209,5 +219,6 @@ jobs:
             ${{ env.EVIDENCE }}/admit-result.json
             ${{ env.EVIDENCE }}/domain.json
             ${{ env.EVIDENCE }}/userland-check.json
+            ${{ env.EVIDENCE }}/userland-check.stderr.log
           if-no-files-found: warn
           retention-days: 30
