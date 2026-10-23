@@ -269,6 +269,15 @@
     "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
   ],
   "localReferences": []
+},
+{
+  "kind": "workflow",
+  "path": ".github/workflows/bar-hosted-capacity-probe.yml",
+  "sha256": "bdb9e212b7cddf4ee7a397c9c4d2decd58f3a17418967e147c5d0f2a19a66b8b",
+  "externalReferences": [
+    "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
+  ],
+  "localReferences": []
 }
 ]
 }
