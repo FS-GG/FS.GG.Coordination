@@ -80,7 +80,9 @@ Unsupported platforms or native operations refuse; legacy record write paths ret
 Successful completion establishes this syscall ordering only. Every successful source write/readback
 still reports directory durability Unknown. Production separately requires authenticated, durably
 provisioned pre-existing `stateRoot/journal-v1` ancestry, qualified backing/filesystem assumptions and
-stable namespace custody. The unchanged root initializer supplies none of that provenance; this is
+stable namespace custody, including ownership of each temporary entry until cleanup. Identity
+checks and exact generated cleanup names do not defend against an arbitrary same-user actor replacing
+those entries between checks. The unchanged root initializer supplies none of that provenance; this is
 not a hardware or power-loss durability claim. A blocked syscall retains its owner lock until it
 returns; managed timeout cannot release custody while fsync continues. An outer process owner must
 retain an interrupted or unconfirmed operation as Unknown.

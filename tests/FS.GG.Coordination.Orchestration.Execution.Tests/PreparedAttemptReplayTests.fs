@@ -533,4 +533,5 @@ let ``genuine source directory commit trace replays actual descriptor write flus
             let! report = Replay.run (TimeSpan.FromSeconds 10.) CancellationToken.None sourceDirectoryDriver expected
             Assert.Equal(ReplayOutcome.Equivalent, report.Outcome)
             Assert.Equal(8, report.AppliedSteps)
+            Assert.Equal(None, report.CleanupFailure)
     }

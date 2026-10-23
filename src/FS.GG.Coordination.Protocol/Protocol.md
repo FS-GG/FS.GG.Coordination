@@ -7618,31 +7618,7 @@ module PreflightArtifactReplay {
   }
 }
 
-```
 
-## Typed prerequisite preparation
-
-These three bounded partitions describe the consumer-owned preflight contract. Import and discovery
-are separate observed transitions; mutation and consumption are separate transitions. Their abstract
-identities are projections of the actual assembled input and PID/start-time identities. The production
-`PreparedArtifact`, `PreparationObservation`, and `PreparationCustody` reducers are replayed, including ordered effects.
-Custody binds the held bootstrap before ACK, observes its fixed filter, and requires whole-process
-pidfd termination and output/scratch settlement. A leader exit or checker JSON cannot establish cleanup.
-No native operation authority, kernel provenance or product supervisor is supplied by these models.
-Sampling bounds and completion witnesses are qualification evidence, never exhaustive proof.
-
-## Local source-journal directory synchronization
-
-This finite shared-directory model covers one key, two competing owners, one original and one
-fully bounded candidate. It is separate from `GS20310JournalModel`, whose commit is Git CAS.
-The local syscall order does not authenticate the directory ancestry, filesystem, hardware,
-receiver, clock or original. Conditional persistence after directory synchronization assumes
-an independently qualified, durably provisioned pre-existing directory and stable namespace
-custody. Process interruption before that point can expose old or new bytes; neither authorizes
-resending an uncertain attempt. A blocked synchronization syscall can stutter indefinitely:
-there is no unconditional progress or managed-timeout release rule.
-
-```quint protocol.qnt +=
 module SourceDirectoryCommitModel {
   type CommitState = {
     owner: int, phase: int, original: int, bounded: bool,
@@ -7717,9 +7693,12 @@ module SourceDirectoryCommitModel {
   action prematureResponse = all { commit.phase == 5, commit' = { ...commit, phase: 8, responded: true, issued: 1 } }
   action reissueConsumed = all { commit.consumed, commit.phase == 9,
     commit' = { ...commit, issued: 2 } }
-  action omittedSyncStep = any { step, omittedSync }
-  action prematureResponseStep = any { step, prematureResponse }
-  action consumedReplayStep = any { step, reissueConsumed }
+  action successStep = any { lockA, lockB, boundCandidate, createAndWrite, fileFlush,
+    replace, directorySync, coldRead, respond, release, stutter }
+  action omittedSyncStep = any { successStep, omittedSync }
+  action prematureResponseStep = any { successStep, prematureResponse }
+  action consumedReplayStep = any { lockA, boundCandidate, createAndWrite, fileFlush,
+    replace, crashBeforeSync, reissueConsumed, stutter }
   run successfulCommit = init.then(lockA).then(boundCandidate).then(createAndWrite)
     .then(fileFlush).then(replace).then(directorySync).then(coldRead).then(respond)
     .expect(done and safety)
@@ -7754,7 +7733,31 @@ module SourceDirectoryCommitReplay {
     all { phase == 8, stutter, phase' = phase }
   }
 }
+
 ```
+
+## Typed prerequisite preparation
+
+These three bounded partitions describe the consumer-owned preflight contract. Import and discovery
+are separate observed transitions; mutation and consumption are separate transitions. Their abstract
+identities are projections of the actual assembled input and PID/start-time identities. The production
+`PreparedArtifact`, `PreparationObservation`, and `PreparationCustody` reducers are replayed, including ordered effects.
+Custody binds the held bootstrap before ACK, observes its fixed filter, and requires whole-process
+pidfd termination and output/scratch settlement. A leader exit or checker JSON cannot establish cleanup.
+No native operation authority, kernel provenance or product supervisor is supplied by these models.
+Sampling bounds and completion witnesses are qualification evidence, never exhaustive proof.
+
+## Local source-journal directory synchronization
+
+This finite shared-directory model covers one key, two competing owners, one original and one
+fully bounded candidate. It is separate from `GS20310JournalModel`, whose commit is Git CAS.
+The local syscall order does not authenticate the directory ancestry, filesystem, hardware,
+receiver, clock or original. Conditional persistence after directory synchronization assumes
+an independently qualified, durably provisioned pre-existing directory and stable namespace
+custody. Process interruption before that point can expose old or new bytes; neither authorizes
+resending an uncertain attempt. A blocked synchronization syscall can stutter indefinitely:
+there is no unconditional progress or managed-timeout release rule.
+
 
 Implementation correspondence: `PortableSourceJournalIO.Context.Write` performs the bounded
 candidate write, successful file flush, descriptor-relative replacement and same-directory fsync.

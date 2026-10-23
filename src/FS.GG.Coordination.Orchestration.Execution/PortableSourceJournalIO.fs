@@ -122,8 +122,12 @@ module internal PortableSourceJournalIO =
                     | Some output -> output.Dispose()
                     | None -> ()
                 finally
-                    // Never mask the first failure; never remove the target or someone else's temp.
+                    // Under stable exclusive private-parent custody, remove only this attempt's
+                    // generated name. Arbitrary same-user entry substitution is outside that assumption.
+                    // Cleanup never masks the first failure or removes the target/owner lock.
                     if created && not replaced then unlinkat(directoryDescriptor, temporary, 0) |> ignore
 
+        // SafeFileHandle retires the descriptor; underlying close errno is not independently
+        // projected. No observed-close or storage-durability qualification is claimed here.
         interface IDisposable with
             member _.Dispose() = directory.Dispose()
