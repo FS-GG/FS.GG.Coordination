@@ -7630,7 +7630,7 @@ module OriginalSourceCompositionModel {
   type Composition = { owner: Owner, supplier: SupplierSnapshot, exportState: ExportSnapshot,
     attached: bool, envelopeRevision: int, candidateBounded: bool, commitVisible: bool,
     commitReadback: bool, uncertain: bool, readerLaunchCount: int, sourceAuthority: bool,
-    ackCount: int, reserveCount: int, writerSettled: bool, copyObserved: bool, responded: bool, key: int, event: int, time: int }
+    ackCount: int, reserveCount: int, writerSettled: bool, copyObserved: bool, responded: bool, key: int, event: int, time: int, committedReplyLost: bool }
   var original: Composition
   pure val binding: OriginalBinding = { original: 1, reservation: 1, allocation: 1, roots: 1, clock: 1, deadline: 2 }
   pure val initial: Composition = { owner: NoOwner,
@@ -7638,7 +7638,7 @@ module OriginalSourceCompositionModel {
     exportState: { binding: binding, attempt: 0, phase: Unrequested, sourceCommit: 0, receivingCommit: 0, retainedRoot: true },
     attached: false, envelopeRevision: 0, candidateBounded: false, commitVisible: false,
     commitReadback: false, uncertain: false, readerLaunchCount: 0, sourceAuthority: false,
-    ackCount: 0, reserveCount: 0, writerSettled: false, copyObserved: false, responded: false, key: 1, event: 0, time: 0 }
+    ackCount: 0, reserveCount: 0, writerSettled: false, copyObserved: false, responded: false, key: 1, event: 0, time: 0, committedReplyLost: false }
   action init = original' = initial
   pure def canOwn(s: Composition): bool = s.owner == NoOwner and not(s.uncertain)
   pure def owned(s: Composition, owner: Owner): Composition = { ...s, owner: owner, event: 1 }
@@ -7663,7 +7663,11 @@ module OriginalSourceCompositionModel {
   action consume = all { canConsume(original), original' = consumed(original) }
   pure def lost(s: Composition): Composition = { ...s, uncertain: true,
     exportState: { ...s.exportState, phase: Uncertain }, event: 7 }
-  action loseResponse = all { original.exportState.attempt == 1, not(original.uncertain), original' = lost(original) }
+  pure def canLoseLaunchResponse(s: Composition): bool = not(s.responded) and not(s.uncertain)
+    and (s.exportState.phase == IntentConsumed or s.exportState.phase == InvocationObserved)
+  action loseResponse = all { canLoseLaunchResponse(original), original' = lost(original) }
+  action loseCommittedReply = all { original.responded, original.exportState.phase == Settled,
+    original' = { ...original, committedReplyLost: true } }
   // This records an abstract future original-bound observation, NEVER an effect from source data.
   pure def observed(s: Composition): Composition = { ...s, readerLaunchCount: 1,
     exportState: { ...s.exportState, phase: InvocationObserved }, event: 8 }
@@ -7687,9 +7691,9 @@ module OriginalSourceCompositionModel {
   pure def expired(s: Composition): Composition = { ...s, time: 2, event: 14 }
   action expire = all { original.time == 0, original.exportState.attempt == 0, original' = expired(original) }
   action successStep = any { lockA, lockB, attach, commit, appendSupplier, settleWriter, consume,
-    observeInvocation, observeCopy, receivingCommit, settleReader, respond, release, blocked }
+    observeInvocation, observeCopy, receivingCommit, settleReader, respond, release, blocked, loseCommittedReply }
   action step = any { lockA, lockB, attach, commit, appendSupplier, settleWriter, consume, expire,
-    loseResponse, observeInvocation, observeCopy, receivingCommit, settleReader, respond, release, blocked }
+    loseResponse, observeInvocation, observeCopy, receivingCommit, settleReader, respond, release, blocked, loseCommittedReply }
   val safety = and {
     original.key == 1,
     original.supplier.binding == binding,
@@ -7744,6 +7748,11 @@ module OriginalSourceCompositionModel {
     .then(settleWriter).then(lockA).then(consume).expect(safety and consumedWitness)
   run unknownDoesNotReissue = init.then(lockB).then(attach).then(commit).then(settleWriter)
     .then(lockB).then(consume).then(loseResponse).then(blocked).expect(safety and uncertainWitness)
+  run committedReplyLossPreservesSettlement = init.then(lockA).then(attach).then(commit).then(settleWriter)
+    .then(lockA).then(consume).then(observeInvocation).then(observeCopy).then(receivingCommit)
+    .then(settleReader).then(respond).then(loseCommittedReply)
+    .expect(safety and original.responded and original.exportState.phase == Settled
+      and original.committedReplyLost and not(canLoseLaunchResponse(original)))
   run wrongKeyDetected = init.then(lockA).then(attach).then(secondKey).expect(not(safety))
   run replacementDetected = init.then(lockA).then(attach).then(replaceSupplier).expect(not(safety))
   run rootMismatchDetected = init.then(lockA).then(attach).then(mismatchedOriginal).expect(not(safety))
@@ -7752,17 +7761,71 @@ module OriginalSourceCompositionModel {
     .expect(safety and expiredWitness and not(canConsume(original)))
 }
 
-module OriginalSourceCompositionReplay {
-  import OriginalSourceCompositionModel.*
-  var phase: int
-  action replayInit = all { init, phase' = 0 }
-  action replayStep = any {
-    all { phase == 0, lockA, phase' = 1 },
-    all { phase == 1, attach, phase' = 2 },
-    all { phase == 2, commit, phase' = 3 },
-    all { phase == 3, lockB, phase' = 4 },
-    all { phase == 4, appendSupplier, phase' = 5 }
+// Actual source API observation model. Future invocation/settlement above is not
+// implementation coverage and never supplies native Known evidence.
+module OriginalSourceCompositionSourceModel {
+  type SourceObservation = {
+    event: int, supplierRevision: int, supplierFence: int, transcript: int,
+    challengeConsumed: int, pending: bool, cursor: int, fence: int, attached: bool,
+    readerIntentConsumed: bool, firstFailure: bool, operationFailed: bool, refused: bool,
+    originalPreserved: bool, exportJoined: bool, custodyUnknown: bool,
+    lockReleased: bool, keyCount: int, readbackExact: bool
   }
+  var source: SourceObservation
+  pure val initial: SourceObservation = {
+    event: 0, supplierRevision: 1, supplierFence: 1, transcript: 1,
+    challengeConsumed: 0, pending: false, cursor: 0, fence: 0, attached: false,
+    readerIntentConsumed: false, firstFailure: false, operationFailed: false, refused: false,
+    originalPreserved: true, exportJoined: true, custodyUnknown: true,
+    lockReleased: true, keyCount: 1, readbackExact: true
+  }
+  action init = source' = initial
+  pure def attached(s: SourceObservation): SourceObservation = { ...s, event: 1, cursor: 1, fence: 1, attached: true }
+  action sourceAttach = all { source.event == 0, source' = attached(source) }
+  pure def pending(s: SourceObservation): SourceObservation = { ...s, event: 2, cursor: 2, fence: 2,
+    supplierRevision: 2, supplierFence: 2, pending: true }
+  action sourcePending = all { source.event == 1, source' = pending(source) }
+  pure def accepted(s: SourceObservation): SourceObservation = { ...s, event: 3, cursor: 3, fence: 3,
+    supplierRevision: 3, supplierFence: 3, transcript: 2, challengeConsumed: 1,
+    pending: false, operationFailed: true, refused: true }
+  action sourceAcceptedUnknown = all { source.event == 2, source' = accepted(source) }
+  pure def read(s: SourceObservation): SourceObservation = { ...s, event: 4, refused: false }
+  action sourceColdRead = all { source.event == 3, source' = read(source) }
+  pure def refused(s: SourceObservation, event: int): SourceObservation = { ...s, event: event, refused: true }
+  action sourceConsumedRefusal = all { source.event == 4, source' = refused(source, 5) }
+  action sourceTerminationRefusal = all { source.event == 5, source' = refused(source, 6) }
+  action sourceStaleRefusal = all { source.event == 6, source' = refused(source, 7) }
+  action terminal = all { source.event == 7, source' = source }
+  action step = any { sourceAttach, sourcePending, sourceAcceptedUnknown, sourceColdRead,
+    sourceConsumedRefusal, sourceTerminationRefusal, sourceStaleRefusal, terminal }
+  val safety = and { source.originalPreserved, source.exportJoined, source.custodyUnknown,
+    source.lockReleased, source.keyCount == 1, source.readbackExact,
+    source.cursor == source.fence, source.supplierRevision == source.supplierFence,
+    not(source.readerIntentConsumed), not(source.firstFailure),
+    source.event >= 3 implies (source.challengeConsumed == 1 and source.operationFailed),
+    source.event >= 4 implies (source.cursor == 3 and source.supplierRevision == 3) }
+  val done = source.event == 7
+  val attachWitness = source.event == 1
+  val pendingWitness = source.event == 2
+  val unknownWitness = source.event == 3
+  val coldWitness = source.event == 4
+  val consumedRefusalWitness = source.event == 5
+  val terminationRefusalWitness = source.event == 6
+  val staleWitness = source.event == 7
+  action discardSupplier = all { source.attached, source' = { ...source, originalPreserved: false } }
+  action replayConsumed = all { source.event >= 3, source' = { ...source, challengeConsumed: 0 } }
+  action trustCachedTermination = all { source.event == 5, source' = { ...source, readerIntentConsumed: true } }
+  action discardSupplierStep = any { step, discardSupplier }
+  action replayConsumedStep = any { step, replayConsumed }
+  action trustCachedTerminationStep = any { step, trustCachedTermination }
+  run actualSourceCompletions = init.then(sourceAttach).then(sourcePending).then(sourceAcceptedUnknown)
+    .then(sourceColdRead).then(sourceConsumedRefusal).then(sourceTerminationRefusal).then(sourceStaleRefusal).expect(safety and done)
+}
+
+module OriginalSourceCompositionReplay {
+  import OriginalSourceCompositionSourceModel.*
+  action replayInit = init
+  action replayStep = step
 }
 
 module SourceDirectoryCommitModel {

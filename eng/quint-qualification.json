@@ -665,7 +665,7 @@
       "module": "original-source-composition",
       "closure": [],
       "mode": "test",
-      "match": "^(sourceComposition|unknownDoesNotReissue|wrongKeyDetected|replacementDetected|rootMismatchDetected|authorityDetected|expiryRefuses)$",
+      "match": "^(sourceComposition|unknownDoesNotReissue|wrongKeyDetected|replacementDetected|rootMismatchDetected|authorityDetected|expiryRefuses|committedReplyLossPreservesSettlement)$",
       "positive": "sourceComposition",
       "adversarial": "wrongKeyDetected",
       "invalid": "rootMismatchDetected",

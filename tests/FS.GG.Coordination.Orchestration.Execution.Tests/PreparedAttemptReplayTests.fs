@@ -535,3 +535,71 @@ let ``genuine source directory commit trace replays actual descriptor write flus
             Assert.Equal(8, report.AppliedSteps)
             Assert.Equal(None, report.CleanupFailure)
     }
+
+// Upper correspondence consumes observations captured from real composite API calls and
+// independent cold reads. It does not drive a second business-state implementation.
+type private OriginalSourceReplayRuntime =
+    { Captured: OriginalSourceCapturedRun; mutable Index: int }
+
+let private originalSourceDriver: ReplayDriver<OriginalSourceReplayRuntime> =
+    {
+        Initialize = fun _ _ ->
+            let actual = PortableHostExecutorTests_OriginalSourceComposition().CaptureForReplay()
+            Task.FromResult(Ok { Captured = actual; Index = 0 })
+        Apply = fun step runtime _ ->
+            let next = runtime.Index + 1
+            Assert.True(next < runtime.Captured.Observations.Length,"source completion observation exhausted")
+            Assert.Equal(runtime.Captured.Observations[next].Action,step.Action)
+            runtime.Index <- next
+            Task.FromResult(Ok())
+        Observe = fun runtime _ ->
+            let observed = runtime.Captured.Observations[runtime.Index]
+            let baseline = runtime.Captured.Baseline
+            let consumed state = state.ChallengeLedger |> List.filter (fun (_,_,_,status) -> status = "consumed") |> List.length
+            let originalPreserved = observed.Supplier.Original = baseline.Original
+                                    && observed.Supplier.CheckpointCustody.Value.NativeConfiguration = baseline.CheckpointCustody.Value.NativeConfiguration
+                                    && observed.Supplier.Pinned = baseline.Pinned
+            let exportJoined = observed.Export |> Option.forall (fun export ->
+                export.Original.CanonicalBytes = runtime.Captured.ExportOriginal.CanonicalBytes
+                && export.Original.Context.Reservation = observed.Supplier.Pinned.Value.OriginalReservation)
+            let actual = state [
+                "source", QuintReplayValue.Record [
+                    "event", integer runtime.Index
+                    "supplierRevision", integer (observed.Supplier.Revision - baseline.Revision + 1UL)
+                    "supplierFence", integer (observed.Supplier.CheckpointCustody.Value.StoreFence - baseline.CheckpointCustody.Value.StoreFence + 1UL)
+                    "transcript", integer observed.Supplier.CheckpointCustody.Value.WireExchanges.Length
+                    "challengeConsumed", integer (consumed observed.Supplier - consumed baseline)
+                    "pending", boolean observed.Supplier.Challenge.IsSome
+                    "cursor", integer (observed.Cursor |> Option.map _.Revision |> Option.defaultValue 0UL)
+                    "fence", integer (observed.Cursor |> Option.map _.Fence |> Option.defaultValue 0UL)
+                    "attached", boolean observed.Export.IsSome
+                    "readerIntentConsumed", boolean (observed.Export |> Option.exists (fun export -> export.AttemptBytes.IsSome))
+                    "firstFailure", boolean observed.Supplier.FirstFailure.IsSome
+                    "operationFailed", boolean observed.FirstOperationFailure.IsSome
+                    "refused", boolean observed.Refused
+                    "originalPreserved", boolean originalPreserved
+                    "exportJoined", boolean exportJoined
+                    "custodyUnknown", boolean observed.CustodyUnknown
+                    "lockReleased", boolean observed.LockAvailable
+                    "keyCount", integer observed.KeyCount
+                    "readbackExact", boolean observed.ReadbackExact
+                ] ]
+            Task.FromResult(Ok actual)
+        Cleanup = fun runtime _ ->
+            runtime.Captured.Cleanup()
+            Assert.False(Directory.Exists runtime.Captured.Root)
+            Task.FromResult(Ok())
+    }
+
+[<Fact>]
+let ``upper composite trace replays real attach pending accepted uncertain cold read and refusal observations`` () =
+    task {
+        if OperatingSystem.IsLinux() then
+            let expected = trace "OriginalSourceCompositionReplay"
+                                ["sourceAttach";"sourcePending";"sourceAcceptedUnknown";"sourceColdRead"
+                                 "sourceConsumedRefusal";"sourceTerminationRefusal";"sourceStaleRefusal"]
+            let! report = Replay.run (TimeSpan.FromSeconds 30.) CancellationToken.None originalSourceDriver expected
+            Assert.Equal(ReplayOutcome.Equivalent,report.Outcome)
+            Assert.Equal(7,report.AppliedSteps)
+            Assert.Equal(None,report.CleanupFailure)
+    }

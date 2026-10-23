@@ -4371,11 +4371,11 @@ module PortableSupplierAdmission =
 
     /// Reverify immutable historical source evidence against fresh controlled policy/clock observations.
     /// Historical bundle/checkpoint bytes and their verification times are never rewritten.
-    let private reverifyControlledHistory selection (state: PortableSupplierAdmissionState) =
+    let private reverifyControlledHistoryCore allowHeld selection (state: PortableSupplierAdmissionState) =
         try
             controlledSelectionCurrent selection state
             let custody = state.CheckpointCustody.Value
-            if state.FirstFailure.IsSome || not state.Conflicts.IsEmpty then PortableSupplierC1.fail ()
+            if not allowHeld && (state.FirstFailure.IsSome || not state.Conflicts.IsEmpty) then PortableSupplierC1.fail ()
             custody.OutputCheckpointBase64 |> Option.iter (fun encoded ->
                 let checkpoint = raw 16384 encoded |> Result.defaultWith invalidOp |> PortableSupplierCheckpoint.parseOutput |> Result.defaultWith invalidOp
                 if (PortableSupplierCheckpoint.outputCommon checkpoint).Provenance <> "controlled-test" then PortableSupplierC1.fail ())
@@ -4422,6 +4422,8 @@ module PortableSupplierAdmission =
                      "native-proof",NativeProofSignature,proof,"raw-sha256"] collected notAfter
             Ok ()
         with _ -> Error "supplier-controlled-cold-reverification-refused"
+
+    let private reverifyControlledHistory selection state = reverifyControlledHistoryCore false selection state
 
     let private verifyAndAcceptControlledNativeV4 selection original revision fence (state: PortableSupplierAdmissionState) (requestInput: byte array) (frameInputs: byte array list) =
         if not (expectedV4 original revision fence state) then Error "supplier-v4-original-revision-fence-refused"
@@ -4547,7 +4549,7 @@ module PortableSupplierAdmission =
         else reverifyControlledHistory selection state |> Result.map (fun () -> ControlledSourceReadback state)
 
     /// Controlled TEST history check for persisting an existing pending challenge; creates no witness.
-    let validateControlledSourceHistory selection state = reverifyControlledHistory selection state
+    let validateControlledSourceHistory selection state = reverifyControlledHistoryCore true selection state
 
     /// Inert lifecycle projection from the SAME cold-reverified retained source transcript.
     /// This is not authenticated native host evidence or an effect/clock/root capability.

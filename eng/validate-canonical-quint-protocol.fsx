@@ -1302,7 +1302,7 @@ let exerciseFormalShardProcessInventory mutation =
     let expected =
         [
             "external/base", 35
-            "quint/preflight-sampling", 27
+            "quint/preflight-sampling", 31
             "quint/preflight-interaction", 4
             "quint/base-nonverify", 5
             "quint/base-verify", 0
@@ -2803,7 +2803,7 @@ try
     writeProjected "admission" [ "PreflightAdmissionModel" ]
     writeProjected "observation" [ "PreflightObservationModel"; "PreflightObservationReplay" ]
     writeProjected "source-directory" [ "SourceDirectoryCommitModel"; "SourceDirectoryCommitReplay" ]
-    writeProjected "original-source" [ "OriginalSourceCompositionModel"; "OriginalSourceCompositionReplay" ]
+    writeProjected "original-source" [ "OriginalSourceCompositionModel"; "OriginalSourceCompositionSourceModel"; "OriginalSourceCompositionReplay" ]
 
     let projectionRefusal directory path digest qntDigest =
         try
@@ -3001,6 +3001,7 @@ try
             "PreflightObservationModel"
             "SourceDirectoryCommitModel"
             "OriginalSourceCompositionModel"
+            "OriginalSourceCompositionSourceModel"
         ] do
         let code, output, error =
             runPreflight
@@ -3044,6 +3045,9 @@ try
             "OriginalSourceCompositionModel", "releasedRootStep", "safety"
             "OriginalSourceCompositionModel", "receiverOnlyStep", "safety"
             "OriginalSourceCompositionModel", "sourceAuthorityStep", "safety"
+            "OriginalSourceCompositionSourceModel", "discardSupplierStep", "safety"
+            "OriginalSourceCompositionSourceModel", "replayConsumedStep", "safety"
+            "OriginalSourceCompositionSourceModel", "trustCachedTerminationStep", "safety"
         ] do
         let code, output, error =
             runPreflight
@@ -3067,7 +3071,7 @@ try
             fail "PREFLIGHT-CAUSAL-MUTANT" (main + ":" + step)
 
     for main, steps in
-        [ "PreflightArtifactReplay", "8"; "PreflightObservationReplay", "18"; "SourceDirectoryCommitReplay", "8"; "OriginalSourceCompositionReplay", "5" ] do
+        [ "PreflightArtifactReplay", "8"; "PreflightObservationReplay", "18"; "SourceDirectoryCommitReplay", "8"; "OriginalSourceCompositionReplay", "7" ] do
         let actualTrace = Path.Combine(scratch, main + ".itf.json")
 
         let code, output, error =
@@ -3183,7 +3187,7 @@ try
                 fail "PREFLIGHT-REPLAY-DRIFT" (main + ":" + key)
 
     if preflightOnly then
-        if samplingMeasurements.Count <> 27 || interactionMeasurements.Count <> 4 then
+        if samplingMeasurements.Count <> 31 || interactionMeasurements.Count <> 4 then
             fail "PREFLIGHT-FOCUSED-COVERAGE" "missing observation"
 
         verifyMeasurementDirectory ()
@@ -3344,7 +3348,7 @@ try
     for label, count in
         [
             "external/base", 35
-            "quint/preflight-sampling", 27
+            "quint/preflight-sampling", 31
             "quint/preflight-interaction", 4
             "quint/base-nonverify", expectedBaseNonverifyCount
             "quint/base-verify", expectedBaseVerifyCount
@@ -3558,7 +3562,7 @@ try
             "desired-state", "CoordinationProtocolTests", "^testDesiredState"
             "qualification", "CoordinationProtocolTests", "^test(QualificationManifest|CompiledOutputs|DeterministicIdentity)"
             "original-source-composition", "OriginalSourceCompositionModel",
-                "^(sourceComposition|unknownDoesNotReissue|wrongKeyDetected|replacementDetected|rootMismatchDetected|authorityDetected|expiryRefuses)$"
+                "^(sourceComposition|unknownDoesNotReissue|wrongKeyDetected|replacementDetected|rootMismatchDetected|authorityDetected|expiryRefuses|committedReplyLossPreservesSettlement)$"
             "source-directory-commit", "SourceDirectoryCommitModel",
                 "^(successfulCommit|unqualifiedBackingRemainsUnknown|blockedDoesNotRelease|oldBytesDoNotAuthorizeReplay|omittedSyncDetected|prematureResponseDetected|consumedReplayDetected)$"
         ]
@@ -5379,12 +5383,12 @@ try
         if
             Set.ofSeq rootMeasurements.Keys <> expectedRoots
             || Set.ofSeq formalMeasurements.Keys <> expectedFormal
-            || samplingMeasurements.Count <> 27
+            || samplingMeasurements.Count <> 31
             || (samplingMeasurements
                 |> Seq.map (fun (id, _, _, _) -> id)
                 |> Set.ofSeq
                 |> Set.count)
-               <> 27
+               <> 31
         then
             fail "MEASUREMENT-COVERAGE" "missing-or-duplicate-observations"
 

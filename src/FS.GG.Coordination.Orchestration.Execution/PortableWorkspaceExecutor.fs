@@ -811,6 +811,12 @@ module PortableWorkspaceExecutor =
         text entry.Host.HostContainerName
         text entry.SupplierIdentity.Issuer
         text entry.SupplierIdentity.ContainerId
+        if entry.Host.State.Reservation <> entry.Original.Context.Reservation || entry.Host.BindingDigest <> entry.Original.Digest
+           || entry.Host.HostContainerName <> entry.SupplierIdentity.ContainerId || entry.Host.State.Receipt.IsSome
+           || String.IsNullOrWhiteSpace entry.SupplierIdentity.Issuer || String.IsNullOrWhiteSpace entry.SupplierIdentity.ContainerId
+           || not (entry.Original.Context.RetiringRoots |> List.exists (fun root -> root.Device = entry.SupplierIdentity.AllocationDevice && root.Inode = entry.SupplierIdentity.AllocationInode))
+           || (entry.AttemptBytes.IsNone && (entry.CopyObservationBytes.IsSome || entry.ReceivingObservationBytes.IsSome))
+           || (entry.CopyObservationBytes.IsNone && entry.ReceivingObservationBytes.IsSome) then invalidOp "host-export-source-original-conflict"
         let lifecycle = entry.Host.State.Lifecycle
         observation lifecycle.WorkloadExit
         observation lifecycle.Termination
@@ -1343,8 +1349,12 @@ module PortableWorkspaceExecutor =
             let denominator = bigint TimeSpan.TicksPerSecond * bigint clock.MonotonicFrequency
             if numerator < 0I || numerator % denominator <> 0I
                || numerator / denominator <> bigint context.Clock.AdmittedMonotonicNanoseconds then invalidOp "original-source-clock-domain"
-            let combined = PortableHostAllocation.reconcileLifecycle export.Host.State.Lifecycle lifecycle
-            { export with Host = { export.Host with State = { export.Host.State with Lifecycle = combined } } })
+            // Cached lifecycle is DATA. Only fresh checked supplier events may establish
+            // readiness; retain cached negative holds, never cached Known observations.
+            let fresh = { lifecycle with
+                            FirstFailure = lifecycle.FirstFailure |> Option.orElse export.Host.State.Lifecycle.FirstFailure
+                            ReconciliationConflicts = Set.union lifecycle.ReconciliationConflicts export.Host.State.Lifecycle.ReconciliationConflicts }
+            { export with Host = { export.Host with State = { export.Host.State with Lifecycle = fresh } } })
         { entry with Export = export }
 
     let private nextOriginalCursor cursor =
@@ -1359,6 +1369,18 @@ module PortableWorkspaceExecutor =
               CopyObservationBytes = export.CopyObservationBytes |> Option.map Array.copy
               ReceivingObservationBytes = export.ReceivingObservationBytes |> Option.map Array.copy })
           NativeCustody = EvidenceUnknown "original source installation, namespace, clock and retained-root custody unqualified" }
+
+    let private inspectOriginalSource selection (entry: PortableOriginalSourceEntry) =
+        if entry.Supplier.Challenge.IsSome || entry.Supplier.FirstFailure.IsSome || not entry.Supplier.Conflicts.IsEmpty then
+            // Pending/held inspection never constructs authenticated readiness or trusts cached Known.
+            PortableSupplierAdmission.validateControlledSourceHistory selection entry.Supplier |> Result.defaultWith invalidOp
+            let export = entry.Export |> Option.map (fun e ->
+                let inert = { PortableHostAllocation.emptyLifecycle with
+                                FirstFailure = entry.Supplier.FirstFailure |> Option.orElse e.Host.State.Lifecycle.FirstFailure
+                                ReconciliationConflicts = Set.union entry.Supplier.Conflicts e.Host.State.Lifecycle.ReconciliationConflicts }
+                { e with Host = { e.Host with State = { e.Host.State with Lifecycle = inert } } })
+            originalSourceSnapshot { entry with Export = export }
+        else reverifyOriginalExport selection entry |> originalSourceSnapshot
 
     let private supplierV4Transition (previous: PortableSupplierAdmissionState) (current: PortableSupplierAdmissionState) =
         let before = previous.CheckpointCustody.Value
@@ -1714,7 +1736,7 @@ module PortableWorkspaceExecutor =
                              | Some entry ->
                                  let selection = controlledSelection |> Option.defaultWith (fun () -> invalidOp "original-source-controlled-selection-required")
                                  let candidate = { entry with Supplier = state; Cursor = nextOriginalCursor entry.Cursor }
-                                 if state.Challenge.IsSome then
+                                 if state.Challenge.IsSome || state.FirstFailure.IsSome || not state.Conflicts.IsEmpty then
                                      PortableSupplierAdmission.validateControlledSourceHistory selection state |> Result.defaultWith invalidOp
                                      PortableOriginalSource candidate
                                  else PortableOriginalSource(reverifyOriginalExport selection candidate)
@@ -1768,8 +1790,25 @@ module PortableWorkspaceExecutor =
                 source path |> ignore
                 match read path with
                 | Some(PortableOriginalSource entry) when entry.Supplier.Original = original && entry.Cursor = cursor ->
-                    reverifyOriginalExport selection entry |> originalSourceSnapshot
+                    inspectOriginalSource selection entry
                 | _ -> invalidOp "original-source-current-conflict")
+
+        member _.AbandonOriginalSource(selection, original: PortableSupplierAdmissionOriginal, cursor: PortableOriginalSourceCursor, epoch: Guid) =
+            locked original.Command.WorkspaceScope original.Command.IdempotencyId (fun path ->
+                source path |> ignore
+                let before = match read path with
+                             | Some(PortableOriginalSource entry) when entry.Supplier.Original = original && entry.Cursor = cursor -> entry
+                             | _ -> invalidOp "original-source-current-conflict"
+                PortableSupplierAdmission.validateControlledSourceHistory selection before.Supplier |> Result.defaultWith invalidOp
+                let after = PortableSupplierAdmission.abandonChallenge epoch before.Supplier |> Result.defaultWith invalidOp
+                if not (supplierV4Transition before.Supplier after) then invalidOp "original-source-abandon-transition"
+                let candidate = { before with Supplier = after; Cursor = nextOriginalCursor before.Cursor }
+                let expected = originalSourceBytes candidate
+                write path (PortableOriginalSource candidate)
+                failSourceAt BeforeSourceColdReopen
+                match read path with
+                | Some(PortableOriginalSource cold) when originalSourceBytes cold = expected -> inspectOriginalSource selection cold
+                | _ -> invalidOp "original-source-cold-readback")
 
         member _.AttachOriginalSource(selection, original: PortableSupplierAdmissionOriginal, expectedRevision, expectedFence,
                                       exportOriginal: PortableHostExportSourceOriginal) =
@@ -1990,6 +2029,13 @@ module PortableWorkspaceExecutor =
             else journal.StageSupplier(state, Some expectedRevision, Some expectedFence,
                                        envelopeCursor = cursor, controlledSelection = selection)
                  |> Result.map (fun _ -> nextOriginalCursor cursor)
+        /// Persist a checked held SOURCE outcome without constructing authenticated readiness.
+        member _.QuarantineControlled(selection, held: PortableSupplierAdmissionState, expectedRevision, expectedFence, cursor) =
+            if held.FirstFailure.IsNone && held.Conflicts.IsEmpty then Error "original-source-hold-required"
+            else journal.StageSupplier(held, Some expectedRevision, Some expectedFence,
+                                       envelopeCursor = cursor, controlledSelection = selection)
+                 |> Result.bind (fun _ -> journal.ReadOriginalSource(selection, held.Original, nextOriginalCursor cursor))
+        member _.AbandonControlled(selection, original, cursor, epoch) = journal.AbandonOriginalSource(selection, original, cursor, epoch)
         member _.StageControlledSupplier(selection, transition: PortableSupplierAuthenticatedSourceTransition, cursor) =
             let state = transition.State
             if transition.ExpectedRevision = UInt64.MaxValue || transition.ExpectedFence = UInt64.MaxValue
