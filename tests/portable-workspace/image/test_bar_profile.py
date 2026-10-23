@@ -170,6 +170,19 @@ class BarProfile(unittest.TestCase):
             stack.enter_context(value)
         return stack
 
+    def test_actual_bar_preflight_consumes_role_specific_info_protocol(self):
+        args, selection, home = self.fixture(); args.mode = 'preflight'
+        spawn, calls, resources = self.ports(args, selection)
+        with self.native_context(home, spawn, resources):
+            result = BAR.main(args, IMAGE.__dict__)
+        self.assertEqual(result['preflight'], 'passed')
+        infos = [argv for argv in calls if 'info' in argv]
+        self.assertEqual([argv[argv.index('info'):] for argv in infos],
+                         [['info'], ['info', '--format=json']])
+        self.assertEqual([argv[0] for argv in infos],
+                         [selection['support']['builder']['path'], selection['support']['podman']['path']])
+        self.assertFalse(any('pull' in argv or 'build' in argv or 'load' in argv for argv in calls))
+
     def test_actual_check_inputs_is_inert_and_full_helper_closure_is_bound(self):
         args, selection, home = self.fixture()
         with patch.object(Path, 'home', return_value=home):

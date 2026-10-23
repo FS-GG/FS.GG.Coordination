@@ -1204,7 +1204,11 @@ class Lifetime:
         require(re.fullmatch(r'buildah version ' + re.escape(BUILDER_VERSION) + r'(?: \([^\r\n]{1,512}\))?', version)
                 is not None, 'selected builder version family unsupported')
         for kind, prefix in (('build', self.checked['builder']), ('load', self.checked['loader'])):
-            info = self.native_json(kind + '-info', prefix + ['info', '--format=json'], kind=kind)
+            # Buildah1.43.1 emits JSON by default; --format is a Go template.
+            # Podman6.1.4 needs the explicit JSON format (its default is YAML).
+            # See containers/{buildah,podman} tagged cmd/*/info.go.
+            info_args = ['info'] if kind == 'build' else ['info', '--format=json']
+            info = self.native_json(kind + '-info', prefix + info_args, kind=kind)
             store, host = info.get('store', {}), info.get('host', {})
             if kind == 'build':
                 root, runtime, driver = store.get('GraphRoot'), store.get('RunRoot'), store.get('GraphDriverName')
