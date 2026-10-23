@@ -1,0 +1,355 @@
+name: BAR hosted capacity probe
+
+# Disposable-VM feasibility probe for the BAR headless image resource domain:
+# FS-GG/.github#4778 decision section P, consumer FS-GG/FS.GG.Coordination#1032.
+# One standard GitHub-hosted runner is measured. The job checks out nothing,
+# reads no secrets, makes no repository write and fetches no BAR, Recoil,
+# HighBar, game, map, recipe or other licensed product content. It changes only
+# its own disposable VM (udev rule, service stop, toolchain deletion, LVM).
+# Network use: the pinned Arch base image and dated Arch archive packages,
+# one Buildah image metadata read and content-free reachability checks.
+# Results are observations of this VM; they grant no build or license effect.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bar-hosted-capacity-probe
+  cancel-in-progress: false
+
+env:
+  ARCH_IMAGE: docker.io/library/archlinux@sha256:52dfbd5afb23a220d5ee92dafcb4c788d96c026ed04179890c23adef4c897fa0
+  ARCH_ARCHIVE_DATE: 2026/10/18
+  BUILDAH_PACKAGE: https://archive.archlinux.org/packages/b/buildah/buildah-1.43.1-1-x86_64.pkg.tar.zst
+
+jobs:
+  capacity-probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      PROBE: ${{ github.workspace }}/bar-probe
+    steps:
+      - name: Record the baseline host shape
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$PROBE"
+          # Reusable statvfs recorder for the candidate paths at each stage.
+          cat > "$PROBE/statvfs.py" <<'PY'
+          import os, sys
+          stage = sys.argv[1]
+          for target in sys.argv[2:]:
+              if not os.path.exists(target):
+                  print(f"statvfs.{stage}.{target}=absent")
+                  continue
+              s = os.statvfs(target)
+              dev = os.stat(target).st_dev
+              print(f"statvfs.{stage}.{target}=availBytes {s.f_bavail * s.f_frsize} totalBytes {s.f_blocks * s.f_frsize} "
+                    f"availInodes {s.f_favail} totalInodes {s.f_files} device {os.major(dev)}:{os.minor(dev)}")
+          PY
+          # Shared helpers: fact recorder, free bytes, and compact block/mount/swap layout.
+          cat > "$PROBE/lib.sh" <<'SH'
+          rec() { printf '%s=%s\n' "$1" "$2" | tee -a "$PROBE/facts.env"; }
+          avail() { df -B1 --output=avail "$1" | tail -n 1 | tr -d ' '; }
+          compact() { python3 -c 'import json, sys; print(json.dumps(json.load(sys.stdin), separators=(",", ":")))'; }
+          layout() {
+            rec "layout.$1.lsblk" "$(lsblk -J -b -o NAME,SIZE,TYPE,FSTYPE,MAJ:MIN,MOUNTPOINTS | compact)"
+            rec "layout.$1.findmnt" "$(findmnt -J -b -o TARGET,SOURCE,FSTYPE,MAJ:MIN,SIZE,AVAIL | compact)"
+            rec "layout.$1.swap" "$(swapon --show --bytes --noheadings 2>&1 | tr '\n' ';' || true)"
+          }
+          SH
+          . "$PROBE/lib.sh"
+          rec probe.started "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          rec runner.imageOS "${ImageOS:-unknown}"
+          rec runner.imageVersion "${ImageVersion:-unknown}"
+          rec runner.name "${RUNNER_NAME:-unknown}"
+          rec os.pretty "$(. /etc/os-release && echo "$PRETTY_NAME")"
+          rec kernel "$(uname -r)"
+          rec cpu.nproc "$(nproc)"
+          rec cpu.affinity "$(python3 -c 'import os; print(len(os.sched_getaffinity(0)))')"
+          rec cpu.model "$(lscpu | sed -n 's/^Model name: *//p' | head -n 1)"
+          rec cpu.vmxSvmFlagCount "$(grep -c -E -w 'vmx|svm' /proc/cpuinfo || true)"
+          rec mem.baseline.totalKiB "$(awk '/^MemTotal:/ {print $2}' /proc/meminfo)"
+          rec mem.baseline.availableKiB "$(awk '/^MemAvailable:/ {print $2}' /proc/meminfo)"
+          rec mem.baseline.swapTotalKiB "$(awk '/^SwapTotal:/ {print $2}' /proc/meminfo)"
+          rec user.id "$(id)"
+          rec cgroup.fs "$(stat -fc %T /sys/fs/cgroup)"
+          rec cgroup.self "$(tr '\n' ' ' < /proc/self/cgroup)"
+          rec cgroup.rootControllers "$(cat /sys/fs/cgroup/cgroup.controllers)"
+          rec cgroup.rootSubtreeControl "$(cat /sys/fs/cgroup/cgroup.subtree_control)"
+          own="/sys/fs/cgroup$(sed -n 's/^0:://p' /proc/self/cgroup)"
+          for key in memory.max memory.current cpu.max pids.max pids.current; do
+            rec "cgroup.own.$key" "$(cat "$own/$key" 2>/dev/null || echo absent)"
+          done
+          rec userns.maxUserNamespaces "$(sysctl -n user.max_user_namespaces 2>/dev/null || echo absent)"
+          rec userns.apparmorRestrict "$(sysctl -n kernel.apparmor_restrict_unprivileged_userns 2>/dev/null || echo absent)"
+          rec userns.subuid "$(grep "^$(id -un):" /etc/subuid || echo absent)"
+          for tool in podman buildah skopeo crun runc conmon docker containerd lvm systemd-run; do
+            rec "tool.$tool.path" "$(command -v "$tool" || echo absent)"
+          done
+          rec tool.podman.version "$(podman --version 2>&1 || true)"
+          rec tool.buildah.version "$(buildah --version 2>&1 || true)"
+          rec tool.skopeo.version "$(skopeo --version 2>&1 || true)"
+          rec tool.crun.version "$(crun --version 2>&1 | head -n 1 || true)"
+          rec tool.docker.version "$(docker version --format '{{.Server.Version}}' 2>&1 || true)"
+          rec apt.candidate.buildah "$(apt-cache policy buildah 2>/dev/null | sed -n 's/^ *Candidate: *//p')"
+          rec apt.candidate.podman "$(apt-cache policy podman 2>/dev/null | sed -n 's/^ *Candidate: *//p')"
+          # The maintained controller pins these Arch-layout support paths.
+          for item in /usr/lib/libc.so.6 /usr/lib/libgpgme.so.45 /usr/lib/libassuan.so.9 \
+                      /usr/lib/libseccomp.so.2 /usr/bin/podman /usr/bin/crun /usr/bin/conmon; do
+            if [ -e "$item" ]; then rec "host.controllerPin.$item" present; else rec "host.controllerPin.$item" absent; fi
+          done
+          rec mnt.separateFilesystem "$(python3 -c 'import os; print("yes" if os.path.ismount("/mnt") and os.stat("/mnt").st_dev != os.stat("/").st_dev else "no")')"
+          layout baseline
+          python3 "$PROBE/statvfs.py" baseline / /mnt "$HOME" /tmp "$RUNNER_TEMP" | tee -a "$PROBE/facts.env"
+
+      - name: Probe /dev/kvm before and after the udev rule
+        shell: bash
+        run: |
+          set -euo pipefail
+          . "$PROBE/lib.sh"
+          kvm_api() {
+            python3 -c 'import fcntl, os; fd = os.open("/dev/kvm", os.O_RDWR); print(fcntl.ioctl(fd, 0xAE00))' 2>&1 | tail -n 1 || true
+          }
+          for stage in beforeUdev afterUdev; do
+            if [ -e /dev/kvm ]; then
+              rec "kvm.$stage.node" "$(stat -c '%A %U:%G' /dev/kvm)"
+              rec "kvm.$stage.getApiVersion" "$(kvm_api)"
+            else
+              rec "kvm.$stage.node" absent
+            fi
+            if [ "$stage" = beforeUdev ]; then
+              echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+                | sudo tee /etc/udev/rules.d/99-fsgg-kvm.rules
+              sudo udevadm control --reload-rules
+              sudo udevadm trigger --name-match=kvm || true
+              sudo udevadm settle || true
+            fi
+          done
+
+      - name: Probe one delegated systemd unit
+        shell: bash
+        run: |
+          set -euo pipefail
+          . "$PROBE/lib.sh"
+          printf '%s' "$PROBE_REPORT" > "$PROBE/delegate-report.sh"
+          chmod 0755 "$PROBE/delegate-report.sh"
+          for variant in root user; do
+            user_property=()
+            [ "$variant" = user ] && user_property=(-p "User=$(id -un)")
+            status=0
+            out=$(sudo -n systemd-run --quiet --wait --pipe --collect \
+                    -p Delegate=yes -p TasksMax=4096 "${user_property[@]}" \
+                    "$PROBE/delegate-report.sh" 2>&1) || status=$?
+            rec "delegate.$variant.exit" "$status"
+            rec "delegate.$variant.output" "$(printf '%s' "$out" | tr '\n' ' ')"
+          done
+        env:
+          PROBE_REPORT: |
+            #!/bin/sh
+            p=$(sed -n 's/^0:://p' /proc/self/cgroup)
+            echo "cgroup=$p"
+            echo "controllers=$(cat "/sys/fs/cgroup$p/cgroup.controllers")"
+            echo "memoryMax=$(cat "/sys/fs/cgroup$p/memory.max")"
+            echo "pidsMax=$(cat "/sys/fs/cgroup$p/pids.max")"
+            echo "uid=$(id -u)"
+            # Delegation write check: move into a leaf, then enable controllers for the subtree.
+            if mkdir "/sys/fs/cgroup$p/probe-leaf" && echo $$ > "/sys/fs/cgroup$p/probe-leaf/cgroup.procs" \
+               && echo '+cpu +memory +pids' > "/sys/fs/cgroup$p/cgroup.subtree_control"; then
+              echo "delegationWrite=ok subtree=$(cat "/sys/fs/cgroup$p/cgroup.subtree_control")"
+            else
+              echo "delegationWrite=failed"
+            fi
+
+      - name: Install Arch Buildah 1.43.1 in the pinned Arch userland
+        id: arch
+        continue-on-error: true
+        timeout-minutes: 7
+        shell: bash
+        run: |
+          set -euo pipefail
+          . "$PROBE/lib.sh"
+          start=$(date +%s)
+          rec arch.image "$ARCH_IMAGE"
+          rec arch.archiveDate "$ARCH_ARCHIVE_DATE"
+          rec arch.privateCgroupns "$(timeout -k 10 120 docker run --rm --init --cgroupns=private "$ARCH_IMAGE" cat /proc/self/cgroup 2>&1 | tr '\n' ' ')"
+          # Exact in-container commands; pacman verifies package signatures with the image keyring.
+          timeout -k 10 300 docker run --rm --init -e ARCH_ARCHIVE_DATE -e BUILDAH_PACKAGE "$ARCH_IMAGE" /bin/bash -c "$ARCH_SCRIPT" \
+            | tee -a "$PROBE/facts.env"
+          rec arch.seconds "$(( $(date +%s) - start ))"
+        env:
+          ARCH_SCRIPT: |
+            set -euo pipefail
+            printf 'Server = https://archive.archlinux.org/repos/%s/$repo/os/$arch\n' "$ARCH_ARCHIVE_DATE" > /etc/pacman.d/mirrorlist
+            pacman-key --init >/dev/null 2>&1
+            pacman-key --populate archlinux >/dev/null 2>&1
+            pacman -Syu --noconfirm --needed podman crun conmon git >/dev/null
+            pacman -U --noconfirm "$BUILDAH_PACKAGE" >/dev/null
+            echo "arch.buildah.packageSha256=$(sha256sum /var/cache/pacman/pkg/buildah-1.43.1-1-x86_64.pkg.tar.zst | cut -d ' ' -f 1)"
+            echo "arch.buildah.version=$(buildah --version)"
+            echo "arch.podman.version=$(podman --version)"
+            echo "arch.packages=$(pacman -Q buildah podman crun conmon gpgme glibc | tr '\n' ' ')"
+            for item in /usr/lib/ld-linux-x86-64.so.2 /usr/lib/libc.so.6 /usr/lib/libm.so.6 /usr/lib/libgpgme.so.45 \
+                        /usr/lib/libassuan.so.9 /usr/lib/libsqlite3.so.0 /usr/lib/libseccomp.so.2 \
+                        /usr/lib/libgpg-error.so.0 /usr/bin/podman /usr/bin/crun /usr/bin/conmon /usr/bin/git /usr/bin/du; do
+              if [ -e "$item" ]; then echo "arch.controllerPin.$item=present"; else echo "arch.controllerPin.$item=absent"; fi
+            done
+
+      - name: Read Buildah 1.43.1 alternative image metadata only
+        id: quay
+        continue-on-error: true
+        timeout-minutes: 2
+        shell: bash
+        run: |
+          set -euo pipefail
+          . "$PROBE/lib.sh"
+          rec alternative.quayBuildahStable "$(timeout -k 5 60 skopeo inspect --no-tags --format '{{.Digest}} {{.Created}}' docker://quay.io/buildah/stable:v1.43.1 2>&1 | tr '\n' ' ')"
+
+      - name: Check generic network egress reachability without content
+        shell: bash
+        run: |
+          set -euo pipefail
+          . "$PROBE/lib.sh"
+          # Hosts a later image build needs, except BAR content hosts, which this probe never contacts.
+          for url in https://registry-1.docker.io/v2/ https://auth.docker.io/ http://archive.ubuntu.com/ubuntu/ \
+                     https://snapshot.ubuntu.com/ https://github.com/ https://objects.githubusercontent.com/ \
+                     https://release-assets.githubusercontent.com/ https://archive.archlinux.org/ https://quay.io/v2/; do
+            rec "egress.$url" "$(curl -sS -o /dev/null -w '%{http_code}' --max-time 8 --head "$url" 2>&1 || true)"
+          done
+
+      - name: Free preinstalled toolchains and measure each command
+        shell: bash
+        run: |
+          set -euo pipefail
+          . "$PROBE/lib.sh"
+          step() {
+            local name=$1; shift
+            local before start status=0
+            before=$(avail /); start=$(date +%s)
+            "$@" || status=$?
+            rec "free.$name.command" "$*"
+            rec "free.$name.exit" "$status"
+            rec "free.$name.rootFreedBytes" "$(( $(avail /) - before ))"
+            rec "free.$name.seconds" "$(( $(date +%s) - start ))"
+          }
+          rec disk.preFree.rootAvail "$(avail /)"
+          step dotnet sudo rm -rf /usr/share/dotnet
+          step android sudo rm -rf /usr/local/lib/android
+          step haskell sudo rm -rf /opt/ghc /usr/local/.ghcup
+          step hostedtoolcache sudo rm -rf /opt/hostedtoolcache
+          step misc sudo rm -rf /usr/local/share/boost /usr/local/share/powershell /usr/share/swift \
+            /usr/local/julia* /usr/local/share/chromium /opt/microsoft /opt/google /opt/az /usr/lib/jvm \
+            /usr/local/lib/node_modules /usr/share/miniconda /opt/pipx /usr/local/aws-cli
+          step dockerImages sudo docker system prune --all --force
+
+      - name: Stop container daemons and swap, then record memory
+        shell: bash
+        run: |
+          set -euo pipefail
+          . "$PROBE/lib.sh"
+          rec mem.beforeStop.availableKiB "$(awk '/^MemAvailable:/ {print $2}' /proc/meminfo)"
+          status=0
+          sudo systemctl stop docker.socket docker.service containerd.service || status=$?
+          rec services.stopExit "$status"
+          rec services.state "$(systemctl is-active docker.socket docker.service containerd.service 2>&1 | tr '\n' ' ' || true)"
+          rec services.daemonProcesses "$(pgrep -c -f '^(/usr/bin/)?(dockerd|containerd)' || true)"
+          mnt_before=$(avail /mnt)
+          status=0
+          sudo swapoff -a || status=$?
+          sudo rm -f /mnt/swapfile
+          rec free.swapfile.command 'sudo swapoff -a; sudo rm -f /mnt/swapfile'
+          rec free.swapfile.exit "$status"
+          rec free.swapfile.mntFreedBytes "$(( $(avail /mnt) - mnt_before ))"
+          rec mem.afterStop.totalKiB "$(awk '/^MemTotal:/ {print $2}' /proc/meminfo)"
+          rec mem.afterStop.availableKiB "$(awk '/^MemAvailable:/ {print $2}' /proc/meminfo)"
+          rec mem.afterStop.swapTotalKiB "$(awk '/^SwapTotal:/ {print $2}' /proc/meminfo)"
+          rec disk.postFree.rootAvail "$(avail /)"
+          rec disk.postFree.mntAvail "$(avail /mnt)"
+          if [ "$(grep '^mnt.separateFilesystem=' "$PROBE/facts.env" | cut -d = -f 2)" = yes ]; then
+            rec disk.postFree.rootPlusSeparateMntAvail "$(( $(avail /) + $(avail /mnt) ))"
+          else
+            rec disk.postFree.rootPlusSeparateMntAvail "$(avail /)"
+          fi
+          layout afterDeletion
+          python3 "$PROBE/statvfs.py" afterDeletion / /mnt "$HOME" /tmp "$RUNNER_TEMP" | tee -a "$PROBE/facts.env"
+
+      - name: Assemble one preallocated LVM volume across root and mnt
+        id: lvm
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          . "$PROBE/lib.sh"
+          gib=$((1024 ** 3)); mib=$((1024 ** 2))
+          reserve=$((6 * gib))
+          rec lvm.rootEvidenceReserveBytes "$reserve"
+          separate=$(grep '^mnt.separateFilesystem=' "$PROBE/facts.env" | cut -d = -f 2)
+          root_size=$(( ( $(avail /) - reserve ) / mib * mib ))
+          start=$(date +%s)
+          sudo fallocate -l "$root_size" /fsgg-bar-root.img
+          images=(/fsgg-bar-root.img)
+          if [ "$separate" = yes ]; then
+            mnt_size=$(( ( $(avail /mnt) - gib ) / mib * mib ))
+            sudo fallocate -l "$mnt_size" /mnt/fsgg-bar-mnt.img
+            images+=(/mnt/fsgg-bar-mnt.img)
+          fi
+          rec lvm.allocatedBytes "$(stat -c '%n=%b*%B' "${images[@]}" | tr '\n' ' ')"
+          loops=()
+          for image in "${images[@]}"; do loops+=("$(sudo losetup --find --show "$image")"); done
+          rec lvm.physicalVolumes "${loops[*]}"
+          sudo pvcreate -q "${loops[@]}"
+          sudo vgcreate -q fsggbar "${loops[@]}"
+          sudo lvcreate -q -y -l 100%FREE -n operation fsggbar
+          sudo mkfs.ext4 -q -m 0 -E lazy_itable_init=1,lazy_journal_init=1 /dev/fsggbar/operation
+          allocation="$RUNNER_TEMP/fsgg-bar-allocation"
+          mkdir -p "$allocation" "$HOME/.local/share/fsgg"
+          sudo mount /dev/fsggbar/operation "$allocation"
+          sudo chown "$(id -u):$(id -g)" "$allocation"
+          mkdir -p "$allocation/load-store"
+          sudo mount --bind "$allocation/load-store" "$HOME/.local/share/fsgg"
+          rec lvm.setupSeconds "$(( $(date +%s) - start ))"
+          rec lvm.directWrite2GiB "$(dd if=/dev/zero of="$allocation/write-test" bs=16M count=128 oflag=direct 2>&1 | tail -n 1)"
+          rm -f "$allocation/write-test"
+          layout afterLvm
+          python3 "$PROBE/statvfs.py" afterLvm / /mnt "$HOME" /tmp "$RUNNER_TEMP" "$allocation" \
+            "$HOME/.local/share/fsgg" | tee -a "$PROBE/facts.env"
+
+      - name: Summarize the observations as one JSON artifact
+        if: always()
+        shell: bash
+        env:
+          ARCH_OUTCOME: ${{ steps.arch.outcome }}
+          QUAY_OUTCOME: ${{ steps.quay.outcome }}
+          LVM_OUTCOME: ${{ steps.lvm.outcome }}
+        run: |
+          set -euo pipefail
+          . "$PROBE/lib.sh"
+          rec outcome.archBuildah "$ARCH_OUTCOME"
+          rec outcome.quayMetadata "$QUAY_OUTCOME"
+          rec outcome.lvm "$LVM_OUTCOME"
+          rec probe.finished "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          python3 - "$PROBE/facts.env" "$PROBE/bar-capacity-probe.json" <<'PY'
+          import json, sys
+          facts = []
+          with open(sys.argv[1], encoding='utf-8') as stream:
+              for line in stream:
+                  key, _, value = line.rstrip('\n').partition('=')
+                  facts.append([key, value])
+          with open(sys.argv[2], 'w', encoding='utf-8') as stream:
+              json.dump({'schema': 'fsgg.bar-hosted-capacity-probe/1', 'facts': facts}, stream, indent=1)
+          PY
+          echo '----- BAR capacity probe facts -----'
+          cat "$PROBE/facts.env"
+          { echo '## BAR hosted capacity probe facts'; echo '```'; cat "$PROBE/facts.env"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Retain the probe facts
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: bar-hosted-capacity-probe-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.PROBE }}/bar-capacity-probe.json
+          if-no-files-found: error
+          retention-days: 30
