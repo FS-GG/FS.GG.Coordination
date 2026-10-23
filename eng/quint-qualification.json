@@ -1,7 +1,7 @@
 {
   "schema": "fsgg.coordination.quint-qualification/1",
   "source": "src/FS.GG.Coordination.Protocol/Protocol.md",
-  "sourceSha256": "edebdec2a4f80ea8ab94dc18cadb02894efe4b3e989d7e3f5732ed7d5c8ba0f1",
+  "sourceSha256": "fd8ee59710f4855883061dc8d970eb7d7a80c910af79a9bed69f8c5217fbda4c",
   "compilerReceipt": "src/FS.GG.Coordination.Protocol/Generated/receipt.json",
   "modules": [
     {
@@ -57,6 +57,10 @@
     },
     {
       "id": "source-directory-commit",
+      "selectionImports": []
+    },
+    {
+      "id": "original-source-composition",
       "selectionImports": []
     }
   ],
@@ -647,6 +651,57 @@
           "successfulCommit",
           "omittedSyncDetected",
           "prematureResponseDetected"
+        ],
+        "projections": [
+          "model-test-inventory"
+        ],
+        "ciImpact": "bounded-test-root",
+        "budgetEffect": "within-calibrated-envelope"
+      }
+    },
+    {
+      "id": "original-source-composition",
+      "main": "OriginalSourceCompositionModel",
+      "module": "original-source-composition",
+      "closure": [],
+      "mode": "test",
+      "match": "^(sourceComposition|unknownDoesNotReissue|wrongKeyDetected|replacementDetected|rootMismatchDetected|authorityDetected|expiryRefuses|committedReplyLossPreservesSettlement)$",
+      "positive": "sourceComposition",
+      "adversarial": "wrongKeyDetected",
+      "invalid": "rootMismatchDetected",
+      "budget": {
+        "depth": 1,
+        "states": 1000,
+        "samples": 100,
+        "elapsedMs": 45000,
+        "peakMiB": 1024,
+        "artifactBytes": 8388608
+      },
+      "admission": {
+        "owner": "original-source-composition",
+        "imports": [
+          "original-source-composition"
+        ],
+        "invariants": [
+          "safety"
+        ],
+        "independentOracles": [
+          "ledger-tamper",
+          "post-merge-verification"
+        ],
+        "root": "OriginalSourceCompositionModel",
+        "bounds": [
+          "depth",
+          "states",
+          "samples",
+          "elapsedMs",
+          "peakMiB",
+          "artifactBytes"
+        ],
+        "witnesses": [
+          "sourceComposition",
+          "wrongKeyDetected",
+          "rootMismatchDetected"
         ],
         "projections": [
           "model-test-inventory"
