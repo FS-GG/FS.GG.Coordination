@@ -2562,9 +2562,10 @@ type PortableHostExecutorTests_OriginalSourceComposition() =
         let export = fields[0]
         let host = get "Host" export
         let state = get "State" host :?> PortableHostExecutionState
-        let forged = { state with Lifecycle = { state.Lifecycle with Termination = EvidenceKnown {
-                            Binding = original.Context.Reservation.Binding; CollectedAt = date "2026-01-01T00:00:07.000000Z"
-                            ReceiptDigest = String.replicate 64 "a"; Value = () } } }
+        let forgedTermination: PortableHostObservation<unit> =
+            { Binding = original.Context.Reservation.Binding; CollectedAt = date "2026-01-01T00:00:07.000000Z"
+              ReceiptDigest = String.replicate 64 "a"; Value = () }
+        let forged = { state with Lifecycle = { state.Lifecycle with Termination = EvidenceKnown forgedTermination } }
         let host = replace "State" (box forged) host
         let export = replace "Host" host export
         let option = Microsoft.FSharp.Reflection.FSharpValue.MakeUnion(case,[|export|],bindingFlags=flags)
