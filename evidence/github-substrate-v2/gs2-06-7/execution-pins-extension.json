@@ -211,7 +211,7 @@
     {
       "kind": "workflow",
       "path": ".github/workflows/portable-workspace-image-qualification.yml",
-      "sha256": "362129027c943aeb29c1039c6cbb57c6c9f4c489eceee6b5de4bc35ff68c53e8",
+      "sha256": "b8a8f88a1270eb07f786df397000ed12b3341e7d8f104bc75753b766e6f3465f",
       "externalReferences": [
         "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
         "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
@@ -275,6 +275,16 @@
   "path": ".github/workflows/bar-hosted-capacity-probe.yml",
   "sha256": "bdb9e212b7cddf4ee7a397c9c4d2decd58f3a17418967e147c5d0f2a19a66b8b",
   "externalReferences": [
+    "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
+  ],
+  "localReferences": []
+},
+{
+  "kind": "workflow",
+  "path": ".github/workflows/bar-hosted-domain-preflight.yml",
+  "sha256": "3fe14c28b725c99a2156421425b8dbaa7422348f144e1b72f01dd3317fa06370",
+  "externalReferences": [
+    "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
     "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
   ],
   "localReferences": []

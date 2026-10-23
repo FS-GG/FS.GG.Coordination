@@ -7,6 +7,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import os
+import re
 from pathlib import Path, PurePosixPath
 import stat
 import sys
@@ -43,6 +44,14 @@ pinned_token, file_token, identity = shared.pinned_token, shared.file_token, sha
 directory_pin, disjoint = shared.directory_pin, shared.disjoint
 source_identity, context_directories = shared.source_identity, shared.context_directories
 stream_identity = shared.stream_identity
+integer = shared.integer
+SHARED_HOST_RELATION = 'shared-host-reservations-outside-enclosing-cgroup'
+# FS-GG/.github#4778 route (b): one fresh GitHub-hosted VM per operation. Its
+# root-produced domain evidence is correspondence only, never authority.
+HOSTED_RELATION = 'dedicated-ephemeral-hosted-vm'
+HOSTED_DOMAIN_SCHEMA = 'fsgg.bar-hosted-domain/1'
+HOSTED_RUNNER_IMAGE = 'ubuntu24'
+HOSTED_STOPPED_SERVICES = ('containerd.service', 'docker.service', 'docker.socket')
 
 def require(condition, message):
     if not condition:
@@ -57,8 +66,10 @@ def selected_input(args):
     selection = strict_json(payload)
     fields(selection, 'schema operationId helper product allocation build load support clock admission resourceDomain licenseAccepted')
     require(selection['schema'] == 'fsgg.bar-headless-operation/1', 'BAR operation schema required')
-    fields(selection['resourceDomain'], 'relation topologySha256')
-    require(selection['resourceDomain']['relation'] == 'shared-host-reservations-outside-enclosing-cgroup',
+    require(type(selection['resourceDomain']) is dict, 'resource-domain relation required')
+    hosted = selection['resourceDomain'].get('relation') == HOSTED_RELATION
+    fields(selection['resourceDomain'], 'relation topologySha256' + (' domainEvidenceSha256' if hosted else ''))
+    require(selection['resourceDomain']['relation'] in (SHARED_HOST_RELATION, HOSTED_RELATION),
             'unsupported resource-domain relation')
     text(selection['operationId'], r'[a-z0-9][a-z0-9-]{0,63}')
     require(selection['licenseAccepted'] is True, 'explicit licensed private build selection required')
@@ -84,14 +95,66 @@ def selected_input(args):
     require(work == start + WORK_SECONDS and total == work + RETIRE_SECONDS, 'original lifetime mismatch')
     # These references bind the root-selected determining evidence. They cannot
     # assert authority or replace fresh adjacent native admission observations.
-    fields(selection['admission'], 'topology resourceDisposition')
+    fields(selection['admission'], 'topology resourceDisposition' + (' domain' if hosted else ''))
     require(selection['resourceDomain']['topologySha256'] == selection['admission']['topology']['sha256'],
             'resource-domain topology correspondence missing')
+    require(not hosted or selection['resourceDomain']['domainEvidenceSha256'] == selection['admission']['domain']['sha256'],
+            'hosted domain evidence correspondence missing')
     for reference in selection['admission'].values():
         fields(reference, 'path sha256')
         regular_bytes(path(reference['path']), MAX_JSON_BYTES, text(reference['sha256'], r'[0-9a-f]{64}'))
     return selection, object_id
 
+
+
+def hosted_domain(selection, allocation, load_root):
+    """Join root-produced hosted-VM domain evidence to the selected volume.
+
+    Evidence is bounded correspondence only; the shared resource admission still
+    observes memory, CPU and disk afresh at the operation boundary."""
+    if selection['resourceDomain']['relation'] != HOSTED_RELATION:
+        return None
+    reference = selection['admission']['domain']
+    evidence = strict_json(regular_bytes(path(reference['path']), MAX_JSON_BYTES, reference['sha256'])[0])
+    fields(evidence, 'schema relation verdict refusals runner services userns volume builder resources')
+    require(evidence['schema'] == HOSTED_DOMAIN_SCHEMA and evidence['relation'] == HOSTED_RELATION,
+            'hosted domain evidence schema differs')
+    require(evidence['verdict'] == 'admitted' and evidence['refusals'] == [], 'hosted domain evidence refused')
+    runner = evidence['runner']; fields(runner, 'imageOS imageVersion githubHosted')
+    require(runner['imageOS'] == HOSTED_RUNNER_IMAGE and runner['githubHosted'] is True,
+            'hosted runner image differs')
+    text(runner['imageVersion'], r'[0-9]{8}\.[0-9]{1,6}(?:\.[0-9]{1,6})?')
+    services = evidence['services']; fields(services, 'stopped active daemonProcesses')
+    require(services['stopped'] == list(HOSTED_STOPPED_SERVICES) and services['active'] == []
+            and services['daemonProcesses'] == 0, 'hosted container daemons not stopped')
+    userns = evidence['userns']; fields(userns, 'apparmorRestrictUnprivileged maxUserNamespaces')
+    require(userns['apparmorRestrictUnprivileged'] == 0 and integer(userns['maxUserNamespaces']) > 0,
+            'hosted rootless user namespaces unavailable')
+    volume = evidence['volume']
+    fields(volume, 'device filesystem bytes allocatedBytes freeBytes freeInodes discard backingDevice')
+    require(volume['filesystem'] == 'ext4' and volume['discard'] == 'nodiscard', 'hosted volume format differs')
+    require(integer(volume['allocatedBytes']) >= integer(volume['bytes']) > 0, 'hosted volume backing not preallocated')
+    require(integer(volume['freeBytes']) >= shared.DISK_BYTES and integer(volume['freeInodes']) > 0,
+            'hosted volume free floor not met')
+    text(volume['backingDevice'], r'[0-9]+:[0-9]+')
+    device = text(volume['device'], r'[0-9]+:[0-9]+')
+    for value in (allocation, load_root):
+        actual = value.stat().st_dev
+        require(f'{os.major(actual)}:{os.minor(actual)}' == device, 'hosted allocation/load store outside the domain volume')
+    builder = evidence['builder']; fields(builder, 'version')
+    require(re.fullmatch(r'buildah version ' + re.escape(shared.BUILDER_VERSION) + r'(?: \([^\r\n]{1,512}\))?',
+                         text(builder['version'])) is not None, 'hosted builder version differs')
+    resources = evidence['resources']; fields(resources, 'memAvailableBytes logicalCpus affinity')
+    require(integer(resources['memAvailableBytes']) >= shared.RSS_BYTES + 2 * 1024**3
+            and integer(resources['logicalCpus']) >= 4 and integer(resources['affinity']) >= 4,
+            'hosted domain capacity floor not met')
+    disposition = strict_json(regular_bytes(path(selection['admission']['resourceDisposition']['path']), MAX_JSON_BYTES,
+                                            selection['admission']['resourceDisposition']['sha256'])[0])
+    require(disposition == {'sharedHostReservedMemoryBytes': 0, 'sharedHostReservedCpu': 0,
+                            'sharedHostReservedDiskBytes': 0, 'unquantifiedResourceConflicts': []},
+            'hosted domain cannot carry shared-host reservations')
+    return {'relation': HOSTED_RELATION, 'evidenceSha256': reference['sha256'], 'volumeDevice': device,
+            'runnerImageVersion': runner['imageVersion']}
 
 
 def namespace(root, graphroot, runroot):
@@ -181,6 +244,7 @@ def check_inputs(args, api, *, command=None, skip_source_commands=False):
     require(all(not any(value.iterdir()) for value in (build_root, build_run, load_root, load_run)),
             'BAR stores and runroots must be empty before consuming this operation')
     disjoint([('allocation', allocation), ('load store', load_root)])
+    hosted = hosted_domain(selection, allocation, load_root)
     require(path(args.root) == build_root and path(args.runroot) == build_run, 'store CLI mismatch')
     state = path(args.state_dir)
     require(state == allocation / 'state' and product == allocation / 'context', 'closed context/state layout mismatch')
@@ -219,7 +283,7 @@ def check_inputs(args, api, *, command=None, skip_source_commands=False):
     return {'profile': PROFILE, 'selection': selection, 'inputIdentity': input_object,
             'inputSha256': args.expected_operation_input_sha256, 'helper': helper, 'product': product,
             'allocation': allocation, 'state': state, 'directoryPins': pins, 'configPins': configs,
-            'storageReservation': None, 'resources': resources,
+            'storageReservation': None, 'resources': resources, 'hostedDomain': hosted,
             'supportPins': support_tokens,
             'sourcePins': {**complete_tokens, **declared_tokens, **{str(root / name): file_token(root / name)
                            for key, root in (('helper', helper), ('product', product))
@@ -514,6 +578,7 @@ def main(args, api):
         return {'profile': PROFILE, 'inputSha256': checked['inputSha256'],
                 'operationInputIdentity': checked['inputIdentity'],
                 'commands': proposed_commands(checked, directory),
+                'hostedDomain': checked['hostedDomain'],
                 'nativeExecutionEnabled': False, 'authority': 'external selection required; correspondence only'}
     # Pure file/config/object checks precede the consumed-original fence. All
     # subsequent subprocesses, including Git, share its original capture owner.

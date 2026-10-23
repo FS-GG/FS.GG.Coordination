@@ -1,0 +1,208 @@
+name: BAR hosted domain preflight
+
+# FS-GG/FS.GG.Coordination#1032 / FS-GG/.github#4778 route (b). Provisions the
+# dedicated hosted-VM resource domain on one fresh runner and runs the
+# no-content preflight: daemonless pinned Arch userland, preallocated nodiscard
+# operation volume, stopped container daemons, rootless user namespaces and a
+# delegated systemd unit with its own cgroup namespace. It checks out only this
+# repository's exact source, reads no secrets, pulls only the digest-pinned Arch
+# base, makes no repository write, and uses no BAR, Recoil, HighBar, game, map,
+# recipe or other product content. No image is built. Evidence is
+# correspondence only; it admits no BAR operation.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bar-hosted-domain-preflight
+  cancel-in-progress: false
+
+env:
+  ARCH_IMAGE: docker.io/library/archlinux@sha256:52dfbd5afb23a220d5ee92dafcb4c788d96c026ed04179890c23adef4c897fa0
+  ARCH_ARCHIVE_DATE: 2026/10/18
+  BUILDAH_PACKAGE: https://archive.archlinux.org/packages/b/buildah/buildah-1.43.1-1-x86_64.pkg.tar.zst
+  USERLAND: /opt/fsgg-bar-userland
+  VOLUME: /fsgg-bar
+  VOLUME_IMAGE: /fsgg-bar-volume.img
+
+jobs:
+  domain-preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      EVIDENCE: ${{ github.workspace }}/evidence
+    steps:
+      - name: Check out the exact candidate without persisted credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          path: source
+          persist-credentials: false
+
+      - name: Run the synthetic domain controls on the exact source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C source rev-parse HEAD)" = "$GITHUB_SHA"
+          mkdir -p "$EVIDENCE"
+          PYTHONDONTWRITEBYTECODE=1 python3 -I source/tests/portable-workspace/image/test_bar_hosted_domain.py
+
+      - name: Build the pinned daemonless Arch userland
+        timeout-minutes: 8
+        shell: bash
+        env:
+          PACMAN_SCRIPT: |
+            set -euo pipefail
+            printf 'Server = https://archive.archlinux.org/repos/%s/$repo/os/$arch\n' "$ARCH_ARCHIVE_DATE" > /etc/pacman.d/mirrorlist
+            pacman-key --init >/dev/null 2>&1
+            pacman-key --populate archlinux >/dev/null 2>&1
+            pacman -Syu --noconfirm --needed podman crun conmon git python shadow util-linux libcap >/dev/null
+            pacman -U --noconfirm "$BUILDAH_PACKAGE" >/dev/null
+            echo "userland.buildahPackageSha256=$(sha256sum /var/cache/pacman/pkg/buildah-1.43.1-1-x86_64.pkg.tar.zst | cut -d ' ' -f 1)"
+            for helper in newuidmap newgidmap; do
+              if [ -z "$(getcap "/usr/bin/$helper")" ] && [ ! -u "/usr/bin/$helper" ]; then
+                capability=cap_setuid; [ "$helper" = newgidmap ] && capability=cap_setgid
+                setcap "$capability=ep" "/usr/bin/$helper"
+                echo "userland.$helper=capability-restored"
+              else
+                echo "userland.$helper=$(getcap "/usr/bin/$helper" | cut -d ' ' -f 2-)"
+              fi
+            done
+            getent group runner >/dev/null || groupadd -g 1001 runner
+            getent passwd runner >/dev/null || useradd -u 1001 -g 1001 -m -s /bin/bash runner
+            echo 'runner:165536:65536' > /etc/subuid
+            echo 'runner:165536:65536' > /etc/subgid
+            gpgconf --kill all >/dev/null 2>&1 || true
+            pacman -Scc --noconfirm >/dev/null
+            echo "userland.buildah=$(buildah --version)"
+            echo "userland.podman=$(podman --version)"
+            echo "userland.packages=$(pacman -Q buildah podman crun conmon python shadow | tr '\n' ' ')"
+        run: |
+          set -euo pipefail
+          sudo docker pull --quiet "$ARCH_IMAGE"
+          container=$(sudo docker create "$ARCH_IMAGE" /bin/true)
+          sudo mkdir -m 0755 "$USERLAND"
+          sudo docker export "$container" | sudo tar -x -C "$USERLAND" --numeric-owner
+          sudo docker rm "$container" >/dev/null
+          sudo rm -f "$USERLAND/etc/resolv.conf"
+          sudo cp -L /etc/resolv.conf "$USERLAND/etc/resolv.conf"
+          # Package installation runs in a private mount namespace that ends with it.
+          sudo -E unshare --mount --pid --fork /bin/bash -c '
+            set -euo pipefail
+            mount --make-rprivate /
+            mount -t proc proc "$USERLAND/proc"
+            mount --rbind /dev "$USERLAND/dev"
+            mount -t sysfs sysfs "$USERLAND/sys"
+            exec chroot "$USERLAND" /usr/bin/env -i PATH=/usr/bin ARCH_ARCHIVE_DATE="$ARCH_ARCHIVE_DATE" \
+              BUILDAH_PACKAGE="$BUILDAH_PACKAGE" /bin/bash -c "$PACMAN_SCRIPT"' | tee "$EVIDENCE/facts.env"
+          sudo install -D -m 0644 source/eng/portable_workspace_sc2.py "$USERLAND/opt/fsgg/eng/portable_workspace_sc2.py"
+          sudo install -D -m 0644 source/eng/bar_hosted_domain.py "$USERLAND/opt/fsgg/eng/bar_hosted_domain.py"
+          echo "userland.image=$ARCH_IMAGE" | tee -a "$EVIDENCE/facts.env"
+
+      - name: Free preinstalled toolchains, stop container daemons and swap
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache \
+            /usr/local/share/boost /usr/local/share/powershell /usr/share/swift /usr/local/julia* \
+            /usr/local/share/chromium /opt/microsoft /opt/google /opt/az /usr/lib/jvm \
+            /usr/local/lib/node_modules /usr/share/miniconda /opt/pipx /usr/local/aws-cli
+          sudo docker system prune --all --force >/dev/null
+          sudo systemctl stop docker.socket docker.service containerd.service
+          sudo swapoff -a
+          sudo rm -f /swapfile /mnt/swapfile
+          sudo sysctl -q -w kernel.apparmor_restrict_unprivileged_userns=0
+          echo "provision.rootAvailBytes=$(df -B1 --output=avail / | tail -n 1 | tr -d ' ')" | tee -a "$EVIDENCE/facts.env"
+
+      - name: Provision the preallocated nodiscard operation volume
+        shell: bash
+        run: |
+          set -euo pipefail
+          gib=$((1024 ** 3)); mib=$((1024 ** 2))
+          size=$(( ( $(df -B1 --output=avail / | tail -n 1 | tr -d ' ') - 6 * gib ) / mib * mib ))
+          sudo fallocate -l "$size" "$VOLUME_IMAGE"
+          loop=$(sudo losetup --find --show "$VOLUME_IMAGE")
+          sudo mkfs.ext4 -q -m 0 -E nodiscard,lazy_itable_init=0,lazy_journal_init=0 "$loop"
+          sudo mkdir -m 0755 "$VOLUME"
+          sudo mount -o nodiscard "$loop" "$VOLUME"
+          sudo install -d -m 0700 -o 1001 -g 1001 "$VOLUME/allocation" "$VOLUME/load-store"
+          echo "provision.volumeImageBytes=$size" | tee -a "$EVIDENCE/facts.env"
+          echo "provision.volumeAllocatedAfterMkfs=$(( $(stat -c %b "$VOLUME_IMAGE") * $(stat -c %B "$VOLUME_IMAGE") ))" \
+            | tee -a "$EVIDENCE/facts.env"
+          echo "provision.loop=$loop" | tee -a "$EVIDENCE/facts.env"
+
+      - name: Admit the hosted domain as root-produced evidence
+        id: admit
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo env ImageOS="$ImageOS" ImageVersion="$ImageVersion" RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" \
+            python3 -I source/eng/bar_hosted_domain.py admit \
+            --allocation "$VOLUME/allocation" --load-store "$VOLUME/load-store" \
+            --backing-image "$VOLUME_IMAGE" --userland "$USERLAND" \
+            --evidence "$EVIDENCE/domain.json" --owner-uid "$(id -u)" --owner-gid "$(id -g)" \
+            | tee "$EVIDENCE/admit-result.json"
+
+      - name: Run the Arch-userland check in a delegated unit and cgroup namespace
+        id: userland
+        continue-on-error: true
+        shell: bash
+        env:
+          ENTER_SCRIPT: |
+            set -euo pipefail
+            mount --make-rprivate /
+            mount -t proc proc "$USERLAND/proc"
+            mount --rbind /dev "$USERLAND/dev"
+            mount -t sysfs sysfs "$USERLAND/sys"
+            mount -t cgroup2 cgroup2 "$USERLAND/sys/fs/cgroup"
+            mount -t tmpfs -o mode=1777 tmpfs "$USERLAND/tmp"
+            mkdir -p "$USERLAND/fsgg-bar" "$USERLAND/home/runner/.local/share/fsgg"
+            mount --bind "$VOLUME" "$USERLAND/fsgg-bar"
+            mount --bind "$VOLUME/load-store" "$USERLAND/home/runner/.local/share/fsgg"
+            exec chroot "$USERLAND" /usr/bin/setpriv --reuid=1001 --regid=1001 --init-groups --reset-env \
+              /usr/bin/env HOME=/home/runner XDG_RUNTIME_DIR=/tmp/runtime-1001 PATH=/usr/bin /bin/sh -c \
+              'mkdir -p -m 0700 /tmp/runtime-1001 && exec python3 -I /opt/fsgg/eng/bar_hosted_domain.py userland-check --allocation /fsgg-bar/allocation --load-store /home/runner/.local/share/fsgg/headless-images/bar/preflight --controller-module /opt/fsgg/eng/portable_workspace_sc2.py'
+        run: |
+          set -euo pipefail
+          printf '%s\n' "$ENTER_SCRIPT" > "$EVIDENCE/enter-userland.sh"
+          sudo -n systemd-run --quiet --wait --pipe --collect -p Delegate=yes -p TasksMax=4096 \
+            --setenv=USERLAND="$USERLAND" --setenv=VOLUME="$VOLUME" \
+            /usr/bin/unshare --mount --cgroup --pid --fork /bin/bash "$EVIDENCE/enter-userland.sh" \
+            | tee "$EVIDENCE/userland-check.json"
+
+      - name: Summarize the domain preflight
+        if: always()
+        shell: bash
+        env:
+          ADMIT_OUTCOME: ${{ steps.admit.outcome }}
+          USERLAND_OUTCOME: ${{ steps.userland.outcome }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$EVIDENCE"
+          {
+            echo "outcome.admit=$ADMIT_OUTCOME"
+            echo "outcome.userlandCheck=$USERLAND_OUTCOME"
+            echo "evidence.domainSha256=$(sha256sum "$EVIDENCE/domain.json" 2>/dev/null | cut -d ' ' -f 1)"
+          } | tee -a "$EVIDENCE/facts.env"
+          for file in facts.env admit-result.json domain.json userland-check.json; do
+            echo "----- $file -----"; cat "$EVIDENCE/$file" 2>/dev/null || echo absent
+          done
+          { echo '## BAR hosted domain preflight'; echo '```'; cat "$EVIDENCE/facts.env"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          test "$ADMIT_OUTCOME" = success && test "$USERLAND_OUTCOME" = success
+
+      - name: Retain the domain evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: bar-hosted-domain-preflight-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ env.EVIDENCE }}/facts.env
+            ${{ env.EVIDENCE }}/admit-result.json
+            ${{ env.EVIDENCE }}/domain.json
+            ${{ env.EVIDENCE }}/userland-check.json
+          if-no-files-found: warn
+          retention-days: 30

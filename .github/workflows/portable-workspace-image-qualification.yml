@@ -8,6 +8,7 @@ on:
       - eng/portable-workspace-image.py
       - eng/portable_workspace_sc2.py
       - eng/portable_workspace_bar.py
+      - eng/bar_hosted_domain.py
       - tests/portable-workspace/image/**
   push:
     branches: [main]
@@ -16,6 +17,7 @@ on:
       - eng/portable-workspace-image.py
       - eng/portable_workspace_sc2.py
       - eng/portable_workspace_bar.py
+      - eng/bar_hosted_domain.py
       - tests/portable-workspace/image/**
 
 permissions:
@@ -50,6 +52,7 @@ jobs:
           test -z "$(git status --porcelain)"
           PYTHONDONTWRITEBYTECODE=1 python3 tests/portable-workspace/image/test_image_archive.py
           PYTHONDONTWRITEBYTECODE=1 python3 tests/portable-workspace/image/test_bar_profile.py
+          PYTHONDONTWRITEBYTECODE=1 python3 tests/portable-workspace/image/test_bar_hosted_domain.py
           command -v podman
           install -d -m 0700 "$QUALIFICATION_STATE"
           python3 eng/portable-workspace-image.py preflight \
