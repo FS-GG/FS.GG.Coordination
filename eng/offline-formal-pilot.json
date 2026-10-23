@@ -19,8 +19,12 @@
     "eng/bootstrap-gates/canonical-quint-shard.sh",
     "eng/bootstrap-gates/canonical-quint.sh",
     "eng/bootstrap-qualification-plan.json",
+    "eng/check-canonical-quint-accounting.py",
     "eng/qualify-canonical-quint.sh",
     "eng/quint-qualification-baseline.json",
-    "eng/quint-qualification.json"
+    "eng/quint-qualification.json",
+    "src/FS.GG.Coordination.Qualification.Contracts/BootstrapCi.fs",
+    "src/FS.GG.Coordination.Qualification.Contracts/CanonicalProtocolSourceIdentity.fs",
+    "tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs"
   ]
 }

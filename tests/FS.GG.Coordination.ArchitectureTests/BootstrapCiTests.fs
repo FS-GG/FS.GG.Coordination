@@ -253,7 +253,7 @@ let private createArtifacts root =
             let resultDigest =
                 SHA256.HashData(
                     Encoding.UTF8.GetBytes(
-                        $"passed|passed|8|174|263|232|71|0|0|0|0|%s{preparationDigest}|%s{formalIdentity}|none|none"
+                        $"passed|passed|8|187|289|254|71|0|0|0|0|%s{preparationDigest}|%s{formalIdentity}|none|none"
                     )
                 )
                 |> Convert.ToHexString
@@ -261,7 +261,7 @@ let private createArtifacts root =
 
             File.WriteAllText(
                 target,
-                $"{{\"schema\":\"fsgg.coordination.canonical-quint-qualification/1\",\"q1Outcome\":\"passed\",\"q2Outcome\":\"passed\",\"positiveInvariantCount\":8,\"negativeControlCount\":174,\"preparationDurationMs\":100,\"q2DurationMs\":200,\"totalDurationMs\":300,\"processCounts\":{{\"external\":263,\"quintCli\":232,\"apalacheVerify\":71}},\"processAccounting\":\"logical-invocations-plus-explicit-startup-retries/v1\",\"physicalProcessCounts\":{{\"external\":263,\"quintCli\":232,\"apalacheVerify\":71}},\"startupRetries\":{{\"total\":0,\"verify\":0,\"reflectionDeadline\":0,\"earlyLifecycleExit\":0}},\"formalCounterexamples\":[%s{formalJson}],\"tools\":{{\"toolchainSha256\":\"%s{toolchainDigest}\",\"quintSha256\":\"%s{quintDigest}\",\"apalacheJarSha256\":\"%s{apalacheDigest}\"}},\"inputs\":{{\"sourceSha256\":\"%s{sourceDigest}\",\"contractSha256\":\"%s{contractDigest}\"}},\"preparationSha256\":\"%s{preparationDigest}\",\"failure\":null,\"resultSha256\":\"%s{resultDigest}\"}}"
+                $"{{\"schema\":\"fsgg.coordination.canonical-quint-qualification/1\",\"q1Outcome\":\"passed\",\"q2Outcome\":\"passed\",\"positiveInvariantCount\":8,\"negativeControlCount\":187,\"preparationDurationMs\":100,\"q2DurationMs\":200,\"totalDurationMs\":300,\"processCounts\":{{\"external\":289,\"quintCli\":254,\"apalacheVerify\":71}},\"processAccounting\":\"logical-invocations-plus-explicit-startup-retries/v1\",\"physicalProcessCounts\":{{\"external\":289,\"quintCli\":254,\"apalacheVerify\":71}},\"startupRetries\":{{\"total\":0,\"verify\":0,\"reflectionDeadline\":0,\"earlyLifecycleExit\":0}},\"formalCounterexamples\":[%s{formalJson}],\"tools\":{{\"toolchainSha256\":\"%s{toolchainDigest}\",\"quintSha256\":\"%s{quintDigest}\",\"apalacheJarSha256\":\"%s{apalacheDigest}\"}},\"inputs\":{{\"sourceSha256\":\"%s{sourceDigest}\",\"contractSha256\":\"%s{contractDigest}\"}},\"preparationSha256\":\"%s{preparationDigest}\",\"failure\":null,\"resultSha256\":\"%s{resultDigest}\"}}"
             )
         else
             File.WriteAllText(target, $"artifact:%s{relative}")
@@ -1746,12 +1746,12 @@ let private mutateCanonicalQuintReceipt mutate =
 [<Theory>]
 [<InlineData("\"q1Outcome\":\"passed\"", "\"q1Outcome\":\"failed\"", "quint-receipt-outcome")>]
 [<InlineData("\"positiveInvariantCount\":8", "\"positiveInvariantCount\":7", "quint-receipt-inventory")>]
-[<InlineData("\"negativeControlCount\":174", "\"negativeControlCount\":125", "quint-receipt-inventory")>]
+[<InlineData("\"negativeControlCount\":187", "\"negativeControlCount\":125", "quint-receipt-inventory")>]
 [<InlineData("\"totalDurationMs\":300", "\"totalDurationMs\":301", "quint-receipt-timing")>]
-[<InlineData("\"external\":263", "\"external\":185", "quint-receipt-process-count")>]
-[<InlineData("\"quintCli\":232", "\"quintCli\":160", "quint-receipt-process-count")>]
+[<InlineData("\"external\":289", "\"external\":185", "quint-receipt-process-count")>]
+[<InlineData("\"quintCli\":254", "\"quintCli\":160", "quint-receipt-process-count")>]
 [<InlineData("\"apalacheVerify\":71", "\"apalacheVerify\":46", "quint-receipt-process-count")>]
-[<InlineData("\"quintCli\":232", "\"quintCli\":0", "quint-receipt-process-count")>]
+[<InlineData("\"quintCli\":254", "\"quintCli\":0", "quint-receipt-process-count")>]
 [<InlineData("\"verify\":0", "\"verify\":1", "quint-receipt-startup-retries")>]
 [<InlineData("\"resultSha256\":\"", "\"resultSha256\":\"0", "quint-receipt-result-digest")>]
 let ``canonical Quint receipt rejects incomplete or contradictory evidence``

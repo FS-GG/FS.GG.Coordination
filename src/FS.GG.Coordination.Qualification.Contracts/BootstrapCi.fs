@@ -1549,7 +1549,7 @@ let private inspectCanonicalQuintReceipt (path: string) =
         let expectedResult =
             sha256Bytes (
                 Encoding.UTF8.GetBytes(
-                    $"passed|passed|8|174|263|232|71|%d{startupRetryCount}|%d{verifyRetryCount}|%d{reflectionRetryCount}|%d{earlyLifecycleRetryCount}|%s{preparationDigest}|%s{formalIdentity}|none|none"
+                    $"passed|passed|8|187|289|254|71|%d{startupRetryCount}|%d{verifyRetryCount}|%d{reflectionRetryCount}|%d{earlyLifecycleRetryCount}|%s{preparationDigest}|%s{formalIdentity}|none|none"
                 )
             )
 
@@ -1574,20 +1574,20 @@ let private inspectCanonicalQuintReceipt (path: string) =
                 yield violation "quint-receipt-outcome" "Q1 and Q2 must both pass"
             if
                 int64Property "positiveInvariantCount" root <> Some 8L
-                || int64Property "negativeControlCount" root <> Some 174L
+                || int64Property "negativeControlCount" root <> Some 187L
             then
                 yield
                     violation
                         "quint-receipt-inventory"
-                        "expected eight positive invariants and 174 observed negative-control rejections"
+                        "expected eight positive invariants and 187 observed negative-control rejections"
             if preparationMs < 0L || q2Ms < 0L || totalMs <> preparationMs + q2Ms then
                 yield violation "quint-receipt-timing" $"preparation=%d{preparationMs} q2=%d{q2Ms} total=%d{totalMs}"
             if
-                int64Property "external" processCounts <> Some 263L
-                || int64Property "quintCli" processCounts <> Some 232L
+                int64Property "external" processCounts <> Some 289L
+                || int64Property "quintCli" processCounts <> Some 254L
                 || int64Property "apalacheVerify" processCounts <> Some 71L
             then
-                yield violation "quint-receipt-process-count" "expected labeled retained process inventory 263/232/71"
+                yield violation "quint-receipt-process-count" "expected labeled retained process inventory 289/254/71"
             if processProperties <> [ "external"; "quintCli"; "apalacheVerify" ] then
                 yield violation "quint-receipt-process-properties" (String.concat "," processProperties)
             if
@@ -1608,8 +1608,8 @@ let private inspectCanonicalQuintReceipt (path: string) =
             then
                 yield violation "quint-receipt-startup-retries" "retry command/class counts are inconsistent"
             if
-                int64Property "external" physicalProcessCounts <> Some(263L + startupRetryCount)
-                || int64Property "quintCli" physicalProcessCounts <> Some(232L + startupRetryCount)
+                int64Property "external" physicalProcessCounts <> Some(289L + startupRetryCount)
+                || int64Property "quintCli" physicalProcessCounts <> Some(254L + startupRetryCount)
                 || int64Property "apalacheVerify" physicalProcessCounts
                    <> Some(71L + verifyRetryCount)
             then

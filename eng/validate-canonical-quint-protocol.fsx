@@ -3025,7 +3025,7 @@ try
         if not (Regex.IsMatch(output, @"done was witnessed in [1-9][0-9]* trace")) then
             fail "PREFLIGHT-REACHABILITY" main
 
-    for main, step, invariant in
+    let preflightMutants =
         [
             "PreflightArtifactModel", "mutantStep", "safety"
             "PreflightArtifactModel", "invalidationMutantStep", "safety"
@@ -3048,7 +3048,14 @@ try
             "OriginalSourceCompositionSourceModel", "discardSupplierStep", "safety"
             "OriginalSourceCompositionSourceModel", "replayConsumedStep", "safety"
             "OriginalSourceCompositionSourceModel", "trustCachedTerminationStep", "safety"
-        ] do
+        ]
+
+    if List.isEmpty preflightMutants || (Set.ofList preflightMutants).Count <> preflightMutants.Length then
+        fail "PREFLIGHT-MUTANT-INVENTORY" "empty or duplicate declared mutant"
+
+    let preflightRejectedProcessBaseline = quintRejectedProcessCount
+
+    for main, step, invariant in preflightMutants do
         let code, output, error =
             runPreflight
                 (main + ":" + step)
@@ -3069,6 +3076,9 @@ try
             || not ((output + error).Contains("Invariant violated", StringComparison.Ordinal))
         then
             fail "PREFLIGHT-CAUSAL-MUTANT" (main + ":" + step)
+
+    if quintRejectedProcessCount - preflightRejectedProcessBaseline <> List.length preflightMutants then
+        fail "PREFLIGHT-NEGATIVE-COVERAGE" "declared mutants differ from observed rejections"
 
     for main, steps in
         [ "PreflightArtifactReplay", "8"; "PreflightObservationReplay", "18"; "SourceDirectoryCommitReplay", "8"; "OriginalSourceCompositionReplay", "7" ] do
@@ -3362,9 +3372,9 @@ try
         expectedInvocationInventory[label] <- count
         actualInvocationInventory.TryAdd(label, 0) |> ignore
 
-    // The base qualification suite has 71 established red outcomes plus eleven preflight mutants. Every formal scenario
+    // The unchanged base qualification suite has 71 established red outcomes plus the declared preflight mutants. Every formal scenario
     // contributes one safety mutant, two TLC reproductions, and two Rust projections.
-    let expectedRejectedProcessCount = 82 + 5 * declaredFormalTestCount
+    let expectedRejectedProcessCount = 71 + List.length preflightMutants + 5 * declaredFormalTestCount
     let rootArtifactDirectory = Path.Combine(scratch, "root-artifacts")
     Directory.CreateDirectory rootArtifactDirectory |> ignore
     let rootArtifactDigests = ResizeArray<string * string>()
