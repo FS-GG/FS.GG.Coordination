@@ -78,6 +78,9 @@ jobs:
         run: |
           set -euo pipefail
           test "$GITHUB_REF" = refs/heads/main
+          mkdir -m 0700 "$EVIDENCE"
+          python3 -I -B source/eng/bar_hosted_operation.py canonicalize-checkouts --operation-id "$OPERATION_ID" --source-revision "$GITHUB_SHA" \
+            > "$EVIDENCE/checkout-config-receipt.json"
           test "$(git -C source rev-parse HEAD)" = "$GITHUB_SHA"
           test "$(git -C product rev-parse HEAD)" = 4ddd070650e3131916a13bb2c5e75f99376e1c3a
           test "$(git -C product rev-parse 'HEAD^{tree}')" = f6e4dc108bf065cd2fd44d48e0faf8807e1b8e3c
@@ -86,7 +89,6 @@ jobs:
           test -z "$(git -C product status --porcelain --untracked-files=all --ignored)"
           # Source copies are provisioned before loop sizing, with a2GiB cap.
           test "$(du -sb source product | awk '{sum += $1} END {print sum}')" -le 2147483648
-          mkdir -m 0700 "$EVIDENCE"
           python3 -I -B source/tests/portable-workspace/image/test_bar_hosted_operation.py
           python3 -I -B source/tests/portable-workspace/image/test_bar_hosted_domain.py
           python3 -I -B source/eng/bar_hosted_operation.py seal-transport --operation-id "$OPERATION_ID" \
