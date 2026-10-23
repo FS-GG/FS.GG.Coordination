@@ -164,3 +164,34 @@ retention. The existing directory-commit model retains the lower filesystem
 boundary. Finite sampling and causal negative controls are not formal or native
 host qualification. A raw Quint trace alone does not establish an FsQuint
 production-driver correspondence.
+
+### Checked recovery and upper replay
+
+Pending and held composite records have an inert inspection path. It checks the
+retained controlled history and preserves the complete envelope/export data,
+without producing `PortableSupplierAuthenticatedSourceReadback`. Explicit
+abandonment computes the existing challenge/epoch transition from the current
+record under its lock. Quarantine checks the held source transition against the
+same supplier and outer cursors; failure and conflict data remain sticky. Neither
+path clears a hold or supplies ACK, execution or cleanup authority.
+
+Cached export lifecycle fields cannot establish readiness. Reverification derives
+positive observations only from the freshly checked supplier transcript; cached
+negative holds may remain. Full nested export structure, including allocation
+membership in the retiring-root set for both source-root policy variants, is
+checked before a temporary write. A canonically reencoded cached termination is
+therefore data, not writer-termination evidence for attempt preparation.
+
+`OriginalSourceCompositionSourceModel` is the implemented API observation scope.
+The upper FsQuint driver captures real attachment, separate pending/accepted CAS
+writes, an accepted write interrupted after replacement, cold readback and
+consumed-challenge/missing-termination/stale-cursor refusals. It compares observed
+supplier and outer cursors, retained original/configuration bytes, challenge
+consumption, reader intent, first failure, released lock, single-key population and
+readback. Driver cleanup deletes its actual private root and must succeed.
+`OriginalSourceCompositionModel` retains the separate future invocation/settlement
+boundary; its witnesses are not implementation coverage. Committed reply loss
+preserves settled reader state, while launch uncertainty cannot erase settlement.
+The existing fixtures still lack a genuinely signed writer-termination journey,
+so this replay observes a refused reader intent rather than positive reader
+consumption or native invocation.
