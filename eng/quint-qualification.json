@@ -54,6 +54,10 @@
         "lifecycle",
         "relations"
       ]
+    },
+    {
+      "id": "source-directory-commit",
+      "selectionImports": []
     }
   ],
   "state": [
@@ -594,6 +598,57 @@
         ],
         "projections": [
           "qualification-manifest",
+          "model-test-inventory"
+        ],
+        "ciImpact": "bounded-test-root",
+        "budgetEffect": "within-calibrated-envelope"
+      }
+    },
+    {
+      "id": "source-directory-commit",
+      "main": "SourceDirectoryCommitModel",
+      "module": "source-directory-commit",
+      "closure": [],
+      "mode": "test",
+      "match": "^(successfulCommit|unqualifiedBackingRemainsUnknown|blockedDoesNotRelease|oldBytesDoNotAuthorizeReplay|omittedSyncDetected|prematureResponseDetected|consumedReplayDetected)$",
+      "positive": "successfulCommit",
+      "adversarial": "omittedSyncDetected",
+      "invalid": "prematureResponseDetected",
+      "budget": {
+        "depth": 1,
+        "states": 1000,
+        "samples": 100,
+        "elapsedMs": 45000,
+        "peakMiB": 1024,
+        "artifactBytes": 8388608
+      },
+      "admission": {
+        "owner": "source-directory-commit",
+        "imports": [
+          "source-directory-commit"
+        ],
+        "invariants": [
+          "safety"
+        ],
+        "independentOracles": [
+          "ledger-tamper",
+          "post-merge-verification"
+        ],
+        "root": "SourceDirectoryCommitModel",
+        "bounds": [
+          "depth",
+          "states",
+          "samples",
+          "elapsedMs",
+          "peakMiB",
+          "artifactBytes"
+        ],
+        "witnesses": [
+          "successfulCommit",
+          "omittedSyncDetected",
+          "prematureResponseDetected"
+        ],
+        "projections": [
           "model-test-inventory"
         ],
         "ciImpact": "bounded-test-root",

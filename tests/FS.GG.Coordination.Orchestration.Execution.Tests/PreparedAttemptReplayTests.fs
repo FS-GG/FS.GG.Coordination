@@ -432,3 +432,105 @@ let ``custody requirements independently refuse causal shortcuts and preserve cl
         Assert.False(closed.Pending)
         Assert.False(PreparationCustody.ready closed)
     | _ -> failwith scenario
+
+// Replay one actual source-primitive operation's observations, captured at its existing
+// finite cut boundaries. Initialize runs the real private I/O path; Apply consumes its
+// retained observations in order rather than manufacturing filesystem effects from Quint.
+// This checks syscall-order correspondence, never filesystem/power-loss qualification.
+type private SourceDirectoryObservation =
+    { Action: string
+      Phase: int }
+
+type private SourceDirectoryRuntime =
+    { Root: string
+      Observations: SourceDirectoryObservation array
+      mutable Index: int }
+
+let private sourceDirectoryDriver: ReplayDriver<SourceDirectoryRuntime> =
+    {
+        Initialize = fun _ _ ->
+            let directory = Path.Combine(Path.GetTempPath(), "source-directory-replay-" + Guid.NewGuid().ToString("N"))
+            Directory.CreateDirectory directory |> ignore
+            try
+                let observations = ResizeArray<SourceDirectoryObservation>()
+                let observe action phase = observations.Add { Action = action; Phase = phase }
+                observe "init" 0
+                let path = Path.Combine(directory, "key.bin")
+                use owner = new FileStream(Path.ChangeExtension(path, ".lock"), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None)
+                use source = new PortableSourceJournalIO.Context(directory, path, owner.SafeFileHandle)
+                observe "lockA" 1
+                let candidate = [|1uy;2uy;3uy|]
+                source.Write(candidate,
+                    (fun () ->
+                        Assert.False(File.Exists path)
+                        Assert.Empty(Directory.GetFiles(directory, "*.tmp"))
+                        observe "boundCandidate" 2),
+                    (fun () ->
+                        Assert.Single(Directory.GetFiles(directory, "*.tmp")) |> ignore
+                        observe "createAndWrite" 3),
+                    (fun () ->
+                        Assert.False(File.Exists path)
+                        observe "fileFlush" 4),
+                    (fun () ->
+                        Assert.Equal<byte>(candidate, File.ReadAllBytes path)
+                        Assert.Empty(Directory.GetFiles(directory, "*.tmp"))
+                        observe "replace" 5),
+                    (fun () -> observe "directorySync" 6))
+                use cold = source.OpenRead() |> Option.defaultWith (fun () -> failwith "source cold read missing")
+                let actual = Array.zeroCreate<byte> candidate.Length
+                cold.ReadExactly(actual.AsSpan())
+                Assert.Equal(-1, cold.ReadByte())
+                Assert.Equal<byte>(candidate, actual)
+                observe "coldRead" 7
+                observe "respond" 8
+                Task.FromResult(Ok { Root = directory; Observations = observations.ToArray(); Index = 0 })
+            with _ ->
+                Directory.Delete(directory, true)
+                reraise ()
+        Apply = fun step runtime _ ->
+            let next = runtime.Index + 1
+            if next >= runtime.Observations.Length then failwith "source observation population exhausted"
+            Assert.Equal(runtime.Observations[next].Action, step.Action)
+            runtime.Index <- next
+            Task.FromResult(Ok())
+        Observe = fun runtime _ ->
+            let phase = runtime.Observations[runtime.Index].Phase
+            Task.FromResult(
+                Ok(state [
+                    "phase", integer phase
+                    "commit", QuintReplayValue.Record [
+                        "owner", integer (if phase = 0 then 0 else 1)
+                        "phase", integer phase
+                        "original", integer 1
+                        "bounded", boolean (phase >= 2)
+                        "fileFlushed", boolean (phase >= 4)
+                        "renamed", boolean (phase >= 5)
+                        "directorySynced", boolean (phase >= 6)
+                        "coldRead", boolean (phase >= 7)
+                        "responded", boolean (phase >= 8)
+                        "visible", integer (if phase >= 5 then 1 else 0)
+                        // Conditional model assumption, not authenticated hardware evidence.
+                        "durable", integer (if phase >= 6 then 1 else 0)
+                        "consumed", boolean (phase >= 5)
+                        "uncertain", boolean false
+                        "qualifiedBacking", boolean true
+                        "issued", integer (if phase >= 8 then 1 else 0)
+                        "firstFailure", boolean false
+                        "effects", strings (if phase >= 3 then ["temp"] else [])
+                    ]
+                ]))
+        Cleanup = fun runtime _ ->
+            Directory.Delete(runtime.Root, true)
+            Task.FromResult(Ok())
+    }
+
+[<Fact>]
+let ``genuine source directory commit trace replays actual descriptor write flush rename sync and cold read observations`` () =
+    task {
+        if OperatingSystem.IsLinux() then
+            let expected = trace "SourceDirectoryCommitReplay"
+                                ["lockA"; "boundCandidate"; "createAndWrite"; "fileFlush"; "replace"; "directorySync"; "coldRead"; "respond"]
+            let! report = Replay.run (TimeSpan.FromSeconds 10.) CancellationToken.None sourceDirectoryDriver expected
+            Assert.Equal(ReplayOutcome.Equivalent, report.Outcome)
+            Assert.Equal(8, report.AppliedSteps)
+    }

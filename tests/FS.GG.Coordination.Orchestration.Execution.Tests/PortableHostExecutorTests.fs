@@ -1824,7 +1824,8 @@ type PortableHostExecutorTests_ControlledAuthenticatedSource() =
                 // authenticate persisted source bytes, independently of commit/durability evidence.
                 for point in [PortableWorkspaceExecutor.BeforeSourceWrite; PortableWorkspaceExecutor.BeforeSourceFileFlush
                               PortableWorkspaceExecutor.BeforeSourceReplacement; PortableWorkspaceExecutor.AfterSourceReplacementBeforeReadback
-                              PortableWorkspaceExecutor.BeforeSourceColdReopen] do
+                              PortableWorkspaceExecutor.BeforeSourceColdReopen; PortableWorkspaceExecutor.BeforeSourceDirectorySync
+                              PortableWorkspaceExecutor.AfterSourceDirectorySyncBeforeReadback; PortableWorkspaceExecutor.SimulatedSourceDirectorySyncError] do
                     use failedFixture = new HostExecutorFixture()
                     let sourceDirectory = Path.Combine(fixture.Policy.Runtime.StateRoot,"journal-v1")
                     let failedDirectory = Path.Combine(failedFixture.Policy.Runtime.StateRoot,"journal-v1")
@@ -1835,7 +1836,9 @@ type PortableHostExecutorTests_ControlledAuthenticatedSource() =
                     File.WriteAllBytes(failedPath,before)
                     let failed = PortableWorkspaceExecutor.SupplierAdmissionJournal.CreateControlledFailureTest(failedFixture.Policy.Runtime.StateRoot,point)
                     Assert.Equal(SupplierSourceCommitUnknown,failed.StageControlledV4 transition)
-                    let replaced = point = PortableWorkspaceExecutor.AfterSourceReplacementBeforeReadback || point = PortableWorkspaceExecutor.BeforeSourceColdReopen
+                    let replaced = List.contains point [PortableWorkspaceExecutor.AfterSourceReplacementBeforeReadback; PortableWorkspaceExecutor.BeforeSourceColdReopen
+                                                       PortableWorkspaceExecutor.BeforeSourceDirectorySync; PortableWorkspaceExecutor.AfterSourceDirectorySyncBeforeReadback
+                                                       PortableWorkspaceExecutor.SimulatedSourceDirectorySyncError]
                     let fresh = PortableWorkspaceExecutor.SupplierAdmissionJournal failedFixture.Policy.Runtime.StateRoot
                     let retained,durability = fresh.Read pending.Original.Command |> SupplierCheckpointFixtures.ok
                     Assert.Equal((if replaced then transition.State else pending),retained)
@@ -2334,6 +2337,12 @@ type PortableHostExecutorTests_PortableHostExportSourceTests(output: Xunit.Abstr
     [<InlineData(2, true)>]
     [<InlineData(3, true)>]
     [<InlineData(4, true)>]
+    [<InlineData(5, false)>]
+    [<InlineData(6, false)>]
+    [<InlineData(7, false)>]
+    [<InlineData(5, true)>]
+    [<InlineData(6, true)>]
+    [<InlineData(7, true)>]
     member _.``source write first failure retains old bytes or consumed new intent without replay or effects``(cut: int, duringAttempt: bool) =
         use fixture = new HostExecutorFixture()
         let input = context fixture
@@ -2356,7 +2365,10 @@ type PortableHostExecutorTests_PortableHostExportSourceTests(output: Xunit.Abstr
                     | 1 -> PortableWorkspaceExecutor.BeforeSourceFileFlush
                     | 2 -> PortableWorkspaceExecutor.BeforeSourceReplacement
                     | 3 -> PortableWorkspaceExecutor.AfterSourceReplacementBeforeReadback
-                    | _ -> PortableWorkspaceExecutor.BeforeSourceColdReopen
+                    | 4 -> PortableWorkspaceExecutor.BeforeSourceColdReopen
+                    | 5 -> PortableWorkspaceExecutor.BeforeSourceDirectorySync
+                    | 6 -> PortableWorkspaceExecutor.AfterSourceDirectorySyncBeforeReadback
+                    | _ -> PortableWorkspaceExecutor.SimulatedSourceDirectorySyncError
         let failing = PortableWorkspaceExecutor.HostExportSourceJournal.CreateControlledFailureTest(fixture.Policy.Runtime.StateRoot, point)
         if duringAttempt then
             Assert.True(failing.PrepareAttempt(original, stopped, fixture.Start, input.Clock.HostBootId, 1000000001UL) |> Result.isError)
@@ -2373,6 +2385,7 @@ type PortableHostExecutorTests_PortableHostExportSourceTests(output: Xunit.Abstr
             if duringAttempt then Assert.True(normal.PrepareAttempt(original, stopped, fixture.Start, input.Clock.HostBootId, 1000000002UL) |> Result.isError)
             else Assert.True(normal.Begin(original, initial, fixture.Start, input.Clock.HostBootId, 1000000000UL) |> Result.isError)
             Assert.Equal<byte>(originalBytes, File.ReadAllBytes fixture.Journal)
+        Assert.Empty(Directory.GetFiles(Path.Combine(fixture.Policy.Runtime.StateRoot, "journal-v1"), "*.tmp"))
         Assert.Equal(0, fixture.Runner.Runs)
         Assert.Equal(0, fixture.Runner.Cleans)
 
@@ -2433,3 +2446,52 @@ type PortableHostExecutorTests_PortableHostExportSourceTests(output: Xunit.Abstr
         Assert.Equal(65536, exact.CanonicalBytes.Length)
         Assert.Equal((padded padding), (PortableWorkspaceExecutor.HostExportSource.parseOriginal exact.CanonicalBytes |> ok).Context)
         Assert.True(PortableWorkspaceExecutor.HostExportSource.createOriginal (padded (padding+1)) |> Result.isError)
+
+
+// These source controls exercise actual Linux descriptor operations when run under a
+// separately admitted native test profile. They do not simulate power loss or qualify storage.
+type PortableHostExecutorTests_SourceDirectoryDescriptorTests() =
+    let noCut () = ()
+
+    [<Fact>]
+    member _.``source file rename sync and read stay on the pinned directory after pathname substitution``() =
+        if OperatingSystem.IsLinux() then
+            let root = Path.Combine(Path.GetTempPath(), "source-directory-" + Guid.NewGuid().ToString("N"))
+            let journal = Path.Combine(root, "journal-v1")
+            let moved = Path.Combine(root, "held-journal")
+            Directory.CreateDirectory journal |> ignore
+            try
+                let path = Path.Combine(journal, "key.bin")
+                use owner = new FileStream(Path.ChangeExtension(path, ".lock"), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None)
+                use source = new PortableSourceJournalIO.Context(journal, path, owner.SafeFileHandle)
+                Directory.Move(journal, moved)
+                Directory.CreateDirectory journal |> ignore
+                let expected = [|1uy;2uy;3uy|]
+                source.Write(expected, noCut, noCut, noCut, noCut, noCut)
+                use cold = source.OpenRead() |> Option.defaultWith (fun () -> failwith "held source missing")
+                let actual = Array.zeroCreate<byte> expected.Length
+                cold.ReadExactly(actual.AsSpan())
+                Assert.Equal<byte>(expected, actual)
+                Assert.Equal(-1, cold.ReadByte())
+                Assert.Equal<byte>(expected, File.ReadAllBytes(Path.Combine(moved, "key.bin")))
+                Assert.Empty(Directory.GetFileSystemEntries journal)
+            finally Directory.Delete(root, true)
+
+    [<Fact>]
+    member _.``replaced lock entry refuses source reads and writes before a temporary file``() =
+        if OperatingSystem.IsLinux() then
+            let root = Path.Combine(Path.GetTempPath(), "source-lock-" + Guid.NewGuid().ToString("N"))
+            Directory.CreateDirectory root |> ignore
+            try
+                let path = Path.Combine(root, "key.bin")
+                let lockPath = Path.ChangeExtension(path, ".lock")
+                use owner = new FileStream(lockPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None)
+                use source = new PortableSourceJournalIO.Context(root, path, owner.SafeFileHandle)
+                File.Move(lockPath, lockPath + ".old")
+                File.WriteAllBytes(lockPath, [|9uy|])
+                Assert.Throws<IOException>(fun () -> source.OpenRead() |> ignore) |> ignore
+                Assert.Throws<IOException>(fun () -> source.Write([|1uy|], noCut, noCut, noCut, noCut, noCut)) |> ignore
+                Assert.False(File.Exists path)
+                Assert.Empty(Directory.GetFiles(root, "*.tmp"))
+                Assert.Equal<byte>([|9uy|], File.ReadAllBytes lockPath)
+            finally Directory.Delete(root, true)

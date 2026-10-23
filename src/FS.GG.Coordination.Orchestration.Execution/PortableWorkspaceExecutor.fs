@@ -1309,6 +1309,14 @@ module PortableWorkspaceExecutor =
         | BeforeSourceReplacement
         | AfterSourceReplacementBeforeReadback
         | BeforeSourceColdReopen
+        | BeforeSourceDirectorySync
+        | AfterSourceDirectorySyncBeforeReadback
+        | SimulatedSourceDirectorySyncError
+
+    type private JournalLocation =
+        { Path: string
+          Owner: FileStream
+          mutable Source: PortableSourceJournalIO.Context option }
 
     type private DurableJournal(stateRoot: string, sourceFailure: ControlledSupplierStoreFailurePoint option) =
         let failSourceAt point =
@@ -1331,109 +1339,135 @@ module PortableWorkspaceExecutor =
             let key = Encoding.UTF8.GetBytes(workspaceScope + "\n" + idempotencyId) |> sha256
             Path.Combine(journalRoot, key + ".bin"), Path.Combine(journalRoot, key + ".lock")
 
-        let read path =
-            if not (File.Exists path) then
-                None
-            else
-                let info = FileInfo path
+        let source location =
+            match location.Source with
+            | Some context -> context
+            | None ->
+                let context = new PortableSourceJournalIO.Context(journalRoot, location.Path, location.Owner.SafeFileHandle)
+                location.Source <- Some context
+                context
 
-                if
-                    info.Length <= 0L
-                    || info.Length > int64 PortableWorkspaceContract.maximumDocumentBytes * 4L
-                then
-                    invalidOp "portable-journal-size-refused"
+        let decode (stream: FileStream) =
+            if stream.Length <= 0L || stream.Length > int64 PortableWorkspaceContract.maximumDocumentBytes * 4L then
+                invalidOp "portable-journal-size-refused"
+            use reader = new BinaryReader(stream, Encoding.UTF8, false)
 
-                use stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read)
-                use reader = new BinaryReader(stream, Encoding.UTF8, false)
+            let schema = reader.ReadString()
+            let entry =
+                match schema with
+                | "fsgg.portable-execution-supplier-journal/2"
+                | "fsgg.portable-execution-supplier-journal/3"
+                | "fsgg.portable-execution-supplier-journal/4" ->
+                    if stream.Length > int64 PortableSupplierAdmission.MaximumSupplierBytes then invalidOp "supplier-journal-size"
+                    PortableSupplierAdmissionDraft(readSupplier (if schema.EndsWith("/2", StringComparison.Ordinal) then SupplierJournalV2 elif schema.EndsWith("/3", StringComparison.Ordinal) then SupplierJournalV3 else SupplierJournalV4) reader)
+                | "fsgg.portable-host-export-source-journal/1" -> PortableHostExportSource(readExportSource reader)
+                | "fsgg.portable-execution-host-journal/1" -> PortableHost(readHost reader)
+                | "fsgg.portable-execution-journal/1" ->
+                  match reader.ReadByte() with
+                  | 1uy ->
+                      PortableRunning(
+                          Guid.ParseExact(reader.ReadString(), "D"),
+                          reader.ReadString(),
+                          reader.ReadString()
+                      )
+                  | 2uy -> PortableSettled(reader.ReadString(), readReceipt reader)
+                  | _ -> invalidOp "portable-journal-state-refused"
+                | _ -> invalidOp "portable-journal-schema-refused"
 
-                let schema = reader.ReadString()
-                let entry =
-                    match schema with
-                    | "fsgg.portable-execution-supplier-journal/2"
-                    | "fsgg.portable-execution-supplier-journal/3"
-                    | "fsgg.portable-execution-supplier-journal/4" ->
-                        if info.Length > int64 PortableSupplierAdmission.MaximumSupplierBytes then invalidOp "supplier-journal-size"
-                        PortableSupplierAdmissionDraft(readSupplier (if schema.EndsWith("/2", StringComparison.Ordinal) then SupplierJournalV2 elif schema.EndsWith("/3", StringComparison.Ordinal) then SupplierJournalV3 else SupplierJournalV4) reader)
-                    | "fsgg.portable-host-export-source-journal/1" -> PortableHostExportSource(readExportSource reader)
-                    | "fsgg.portable-execution-host-journal/1" -> PortableHost(readHost reader)
-                    | "fsgg.portable-execution-journal/1" ->
-                      match reader.ReadByte() with
-                      | 1uy ->
-                          PortableRunning(
-                              Guid.ParseExact(reader.ReadString(), "D"),
-                              reader.ReadString(),
-                              reader.ReadString()
-                          )
-                      | 2uy -> PortableSettled(reader.ReadString(), readReceipt reader)
-                      | _ -> invalidOp "portable-journal-state-refused"
-                    | _ -> invalidOp "portable-journal-schema-refused"
+            if stream.Position <> stream.Length then
+                invalidOp "portable-journal-trailing-bytes-refused"
 
-                if stream.Position <> stream.Length then
-                    invalidOp "portable-journal-trailing-bytes-refused"
+            match entry with
+            | PortableHostExportSource state ->
+                let expected = exportSourceBytes state
+                if stream.Length <> int64 expected.Length then invalidOp "host-export-source-noncanonical"
+                stream.Position <- 0L
+                let actual = Array.zeroCreate<byte> expected.Length
+                stream.ReadExactly(actual.AsSpan())
+                if actual <> expected then invalidOp "host-export-source-noncanonical"
+            | _ -> ()
+            Some entry
 
-                match entry with
-                | PortableHostExportSource state ->
-                    let expected = exportSourceBytes state
-                    if stream.Length <> int64 expected.Length then invalidOp "host-export-source-noncanonical"
-                    stream.Position <- 0L
-                    let actual = Array.zeroCreate<byte> expected.Length
-                    stream.ReadExactly(actual.AsSpan())
-                    if actual <> expected then invalidOp "host-export-source-noncanonical"
-                | _ -> ()
-                Some entry
+        let openRead location =
+            match location.Source with
+            | Some context -> context.OpenRead()
+            | None ->
+                if not (File.Exists location.Path) then None
+                else Some(new FileStream(location.Path, FileMode.Open, FileAccess.Read, FileShare.Read))
 
-        let write path entry =
+        let read location =
+            match openRead location with
+            | None -> None
+            | Some stream ->
+                use stream = stream
+                decode stream
+
+        let write location entry =
             // /4 checks the complete candidate size before any temporary-file effect.
             let prepared = match entry with
                            | PortableHostExportSource state -> Some(exportSourceBytes state)
                            | PortableSupplierAdmissionDraft state when state.JournalVersion = SupplierJournalV4 -> Some(supplierSourceBytes state)
                            | _ -> None
-            let temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp"
+            let path = location.Path
+            match prepared with
+            | Some candidate ->
+                let context = source location
+                context.Write(candidate,
+                    (fun () -> failSourceAt BeforeSourceWrite),
+                    (fun () -> failSourceAt BeforeSourceFileFlush),
+                    (fun () -> failSourceAt BeforeSourceReplacement),
+                    (fun () ->
+                        failSourceAt AfterSourceReplacementBeforeReadback
+                        failSourceAt BeforeSourceDirectorySync
+                        failSourceAt SimulatedSourceDirectorySyncError),
+                    (fun () -> failSourceAt AfterSourceDirectorySyncBeforeReadback))
+            | None ->
+              let temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp"
 
-            try
-                if prepared.IsSome then failSourceAt BeforeSourceWrite
-                use stream =
-                    new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None)
+              try
+                  if prepared.IsSome then failSourceAt BeforeSourceWrite
+                  use stream =
+                      new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None)
 
-                use writer = new BinaryWriter(stream, Encoding.UTF8, true)
-                match entry with
-                | PortableHostExportSource _ -> writer.Write(prepared.Value: byte array)
-                | PortableSupplierAdmissionDraft state when state.JournalVersion = SupplierJournalV4 ->
-                    writer.Write(prepared.Value: byte array)
-                | PortableSupplierAdmissionDraft state ->
-                    writer.Write(match state.JournalVersion with SupplierJournalV2 -> "fsgg.portable-execution-supplier-journal/2" | SupplierJournalV3 -> "fsgg.portable-execution-supplier-journal/3" | SupplierJournalV4 -> "fsgg.portable-execution-supplier-journal/4")
-                    writeSupplier writer state
-                | PortableHost host ->
-                    writer.Write "fsgg.portable-execution-host-journal/1"
-                    writeHost writer host
-                | _ ->
-                  writer.Write "fsgg.portable-execution-journal/1"
+                  use writer = new BinaryWriter(stream, Encoding.UTF8, true)
                   match entry with
-                  | PortableRunning(commandId, binding, containerName) ->
-                      writer.Write 1uy
-                      writer.Write(commandId.ToString("D"))
-                      writer.Write binding
-                      writer.Write containerName
-                  | PortableSettled(binding, receipt) ->
-                      writer.Write 2uy
-                      writer.Write binding
-                      writeReceipt writer receipt
-                  | PortableHost _ | PortableSupplierAdmissionDraft _ | PortableHostExportSource _ -> invalidOp "portable-journal-state-refused"
+                  | PortableHostExportSource _ -> writer.Write(prepared.Value: byte array)
+                  | PortableSupplierAdmissionDraft state when state.JournalVersion = SupplierJournalV4 ->
+                      writer.Write(prepared.Value: byte array)
+                  | PortableSupplierAdmissionDraft state ->
+                      writer.Write(match state.JournalVersion with SupplierJournalV2 -> "fsgg.portable-execution-supplier-journal/2" | SupplierJournalV3 -> "fsgg.portable-execution-supplier-journal/3" | SupplierJournalV4 -> "fsgg.portable-execution-supplier-journal/4")
+                      writeSupplier writer state
+                  | PortableHost host ->
+                      writer.Write "fsgg.portable-execution-host-journal/1"
+                      writeHost writer host
+                  | _ ->
+                    writer.Write "fsgg.portable-execution-journal/1"
+                    match entry with
+                    | PortableRunning(commandId, binding, containerName) ->
+                        writer.Write 1uy
+                        writer.Write(commandId.ToString("D"))
+                        writer.Write binding
+                        writer.Write containerName
+                    | PortableSettled(binding, receipt) ->
+                        writer.Write 2uy
+                        writer.Write binding
+                        writeReceipt writer receipt
+                    | PortableHost _ | PortableSupplierAdmissionDraft _ | PortableHostExportSource _ -> invalidOp "portable-journal-state-refused"
 
-                if prepared.IsSome then failSourceAt BeforeSourceFileFlush
-                writer.Flush()
-                stream.Flush true
-                if stream.Length > int64 PortableWorkspaceContract.maximumDocumentBytes * 4L then
-                    invalidOp "portable-journal-size-refused"
-                match entry with
-                | PortableSupplierAdmissionDraft _ when stream.Length > int64 PortableSupplierAdmission.MaximumSupplierBytes ->
-                    invalidOp "supplier-journal-size"
-                | _ -> ()
-                if prepared.IsSome then failSourceAt BeforeSourceReplacement
-                File.Move(temporary, path, true)
-            finally
-                if File.Exists temporary then
-                    File.Delete temporary
+                  if prepared.IsSome then failSourceAt BeforeSourceFileFlush
+                  writer.Flush()
+                  stream.Flush true
+                  if stream.Length > int64 PortableWorkspaceContract.maximumDocumentBytes * 4L then
+                      invalidOp "portable-journal-size-refused"
+                  match entry with
+                  | PortableSupplierAdmissionDraft _ when stream.Length > int64 PortableSupplierAdmission.MaximumSupplierBytes ->
+                      invalidOp "supplier-journal-size"
+                  | _ -> ()
+                  if prepared.IsSome then failSourceAt BeforeSourceReplacement
+                  File.Move(temporary, path, true)
+              finally
+                  if File.Exists temporary then
+                      File.Delete temporary
 
         let locked workspaceScope idempotencyId action =
             try
@@ -1443,9 +1477,14 @@ module PortableWorkspaceExecutor =
                 use lockStream =
                     new FileStream(lockPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None)
 
-                Ok(action path)
+                let location = { Path = path; Owner = lockStream; Source = None }
+                try Ok(action location)
+                finally location.Source |> Option.iter (fun context -> (context :> IDisposable).Dispose())
             with
             | SupplierSourceConflictException -> Error "supplier-source-conflict"
+            | :? EntryPointNotFoundException
+            | :? DllNotFoundException
+            | :? PlatformNotSupportedException
             | :? IOException
             | :? UnauthorizedAccessException
             | :? InvalidDataException
@@ -1460,13 +1499,14 @@ module PortableWorkspaceExecutor =
                                         expectedRevision: uint64, expectedFence: uint64)
             : Result<PortableSupplierAuthenticatedSourceReadback * PortableEvidence<unit>, string> =
             locked original.Command.WorkspaceScope original.Command.IdempotencyId (fun path ->
+                source path |> ignore
                 match read path with
                 | Some(PortableSupplierAdmissionDraft state)
                     when state.JournalVersion = SupplierJournalV4 && state.Original = original && state.Revision = expectedRevision
                          && (state.CheckpointCustody |> Option.exists (fun custody -> custody.StoreFence = expectedFence)) ->
                     // Bind the cold value to exact canonical current-record bytes under this same owner lock.
                     let expected = supplierSourceBytes state
-                    use fresh = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read)
+                    use fresh = (source path).OpenRead() |> Option.defaultWith (fun () -> invalidOp "supplier-source-readback-missing")
                     if fresh.Length <> int64 expected.Length then invalidOp "supplier-source-readback-size"
                     let actual = Array.zeroCreate<byte> expected.Length
                     fresh.ReadExactly(actual.AsSpan())
@@ -1478,8 +1518,14 @@ module PortableWorkspaceExecutor =
                 | _ -> Error "supplier-source-conflict")
             |> Result.bind id
 
+        member _.ReadExportSource(workspaceScope, idempotencyId) =
+            locked workspaceScope idempotencyId (fun path ->
+                source path |> ignore
+                read path)
+
         member _.StageSupplier(state: PortableSupplierAdmissionState, expectedRevision: uint64 option, expectedFence: uint64 option) =
             locked state.Original.Command.WorkspaceScope state.Original.Command.IdempotencyId (fun path ->
+                if state.JournalVersion = SupplierJournalV4 then source path |> ignore
                 let eligible =
                     match read path, expectedRevision with
                     | None, None -> state.Revision = 1UL && expectedFence.IsNone
@@ -1537,9 +1583,8 @@ module PortableWorkspaceExecutor =
                 let expectedBytes = if state.JournalVersion = SupplierJournalV4 then Some(supplierSourceBytes state) else None
                 write path (PortableSupplierAdmissionDraft state)
                 expectedBytes |> Option.iter (fun expected ->
-                    failSourceAt AfterSourceReplacementBeforeReadback
                     // New descriptor, bounded exact bytes, still under the same owner lock.
-                    use fresh = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read)
+                    use fresh = (source path).OpenRead() |> Option.defaultWith (fun () -> invalidOp "supplier-source-readback-missing")
                     if fresh.Length <> int64 expected.Length then invalidOp "supplier-source-readback-size"
                     let actual = Array.zeroCreate<byte> expected.Length
                     fresh.ReadExactly(actual.AsSpan())
@@ -1549,15 +1594,15 @@ module PortableWorkspaceExecutor =
                     match read path with
                     | Some(PortableSupplierAdmissionDraft decoded) when decoded = state -> ()
                     | _ -> invalidOp "supplier-source-cold-readback-mismatch")
-                // Flush+rename is NOT a qualified directory-durable commit. No ACK/runner receipt.
+                // Syscall completion is NOT qualified filesystem/ancestry durability. No ACK/runner receipt.
                 "supplier-admission-commit-unknown: directory durability is unavailable")
 
         member _.BeginExportSource(entry: PortableHostExportSourceEntry) =
             let command = entry.Host.State.Reservation.Binding.Command
             locked command.WorkspaceScope command.IdempotencyId (fun path ->
+                source path |> ignore
                 if read path |> Option.isSome then invalidOp "host-export-source-existing-original"
                 write path (PortableHostExportSource entry)
-                failSourceAt AfterSourceReplacementBeforeReadback
                 failSourceAt BeforeSourceColdReopen
                 match read path with
                 | Some(PortableHostExportSource restored) when exportSourceBytes restored = exportSourceBytes entry -> ()
@@ -1566,13 +1611,13 @@ module PortableWorkspaceExecutor =
         member _.ChangeExportSource(original: PortableHostExportSourceOriginal, change) =
             let command = original.Context.Reservation.Binding.Command
             locked command.WorkspaceScope command.IdempotencyId (fun path ->
+                source path |> ignore
                 match read path with
                 | Some(PortableHostExportSource entry) when entry.Original.CanonicalBytes = original.CanonicalBytes ->
                     let updated, result = change entry
                     if updated.Original.CanonicalBytes <> entry.Original.CanonicalBytes
                        || updated.SupplierIdentity <> entry.SupplierIdentity then invalidOp "host-export-original-change"
                     write path (PortableHostExportSource updated)
-                    failSourceAt AfterSourceReplacementBeforeReadback
                     failSourceAt BeforeSourceColdReopen
                     match read path with
                     | Some(PortableHostExportSource restored) when exportSourceBytes restored = exportSourceBytes updated -> result
@@ -1605,7 +1650,7 @@ module PortableWorkspaceExecutor =
         member _.Abandon(workspaceScope, idempotencyId, binding) =
             locked workspaceScope idempotencyId (fun path ->
                 match read path with
-                | Some(PortableRunning(_, existing, _)) when existing = binding -> File.Delete path; true
+                | Some(PortableRunning(_, existing, _)) when existing = binding -> File.Delete path.Path; true
                 | _ -> false)
 
         member _.Settle(workspaceScope, idempotencyId, binding, receipt) =
@@ -1625,7 +1670,7 @@ module PortableWorkspaceExecutor =
                 | _ -> false)
 
     /// Inactive original/attempt journal under the SAME owner key and lock. No copy/delete port exists.
-    /// Flush, rename and cold readback do not establish directory durability or recreate authentication.
+    /// Ordered file flush/rename/directory sync/readback never recreates authentication or qualifies backing/ancestry.
     type HostExportSourceJournal private (stateRoot: string, sourceFailure: ControlledSupplierStoreFailurePoint option) =
         let journal = DurableJournal(stateRoot, sourceFailure)
         let unknown = EvidenceUnknown "host-export source directory durability unqualified"
@@ -1655,7 +1700,7 @@ module PortableWorkspaceExecutor =
                 journal.BeginExportSource entry |> Result.map (fun () -> snapshot entry, unknown)
         member _.Read(original: PortableHostExportSourceOriginal) =
             let command = original.Context.Reservation.Binding.Command
-            journal.Read(command.WorkspaceScope, command.IdempotencyId)
+            journal.ReadExportSource(command.WorkspaceScope, command.IdempotencyId)
             |> Result.bind (function
                 | Some(PortableHostExportSource entry) when entry.Original.CanonicalBytes = original.CanonicalBytes -> Ok(snapshot entry, unknown)
                 | _ -> Error "host-export-source-original-missing")

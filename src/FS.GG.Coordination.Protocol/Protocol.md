@@ -7630,3 +7630,135 @@ Custody binds the held bootstrap before ACK, observes its fixed filter, and requ
 pidfd termination and output/scratch settlement. A leader exit or checker JSON cannot establish cleanup.
 No native operation authority, kernel provenance or product supervisor is supplied by these models.
 Sampling bounds and completion witnesses are qualification evidence, never exhaustive proof.
+
+## Local source-journal directory synchronization
+
+This finite shared-directory model covers one key, two competing owners, one original and one
+fully bounded candidate. It is separate from `GS20310JournalModel`, whose commit is Git CAS.
+The local syscall order does not authenticate the directory ancestry, filesystem, hardware,
+receiver, clock or original. Conditional persistence after directory synchronization assumes
+an independently qualified, durably provisioned pre-existing directory and stable namespace
+custody. Process interruption before that point can expose old or new bytes; neither authorizes
+resending an uncertain attempt. A blocked synchronization syscall can stutter indefinitely:
+there is no unconditional progress or managed-timeout release rule.
+
+```quint protocol.qnt +=
+module SourceDirectoryCommitModel {
+  type CommitState = {
+    owner: int, phase: int, original: int, bounded: bool,
+    fileFlushed: bool, renamed: bool, directorySynced: bool,
+    coldRead: bool, responded: bool, visible: int, durable: int,
+    consumed: bool, uncertain: bool, qualifiedBacking: bool,
+    issued: int, firstFailure: bool, effects: Set[str]
+  }
+  var commit: CommitState
+  pure val emptyCommit: CommitState = {
+    owner: 0, phase: 0, original: 1, bounded: false,
+    fileFlushed: false, renamed: false, directorySynced: false,
+    coldRead: false, responded: false, visible: 0, durable: 0,
+    consumed: false, uncertain: false, qualifiedBacking: true,
+    issued: 0, firstFailure: false, effects: Set()
+  }
+  action init = commit' = emptyCommit
+  action unqualifiedInit = commit' = { ...emptyCommit, qualifiedBacking: false }
+  pure def canAcquire(s: CommitState): bool = s.owner == 0 and s.phase == 0 and not(s.uncertain)
+  pure def acquired(s: CommitState, owner: int): CommitState = { ...s, owner: owner, phase: 1 }
+  action lockA = all { canAcquire(commit), commit' = acquired(commit, 1) }
+  action lockB = all { canAcquire(commit), commit' = acquired(commit, 2) }
+  action boundCandidate = all { commit.phase == 1, commit' = { ...commit, phase: 2, bounded: true } }
+  action createAndWrite = all { commit.phase == 2, commit.bounded, commit' = { ...commit, phase: 3, effects: Set("temp") } }
+  action fileFlush = all { commit.phase == 3, commit' = { ...commit, phase: 4, fileFlushed: true } }
+  action replace = all { commit.phase == 4, commit.fileFlushed,
+    commit' = { ...commit, phase: 5, renamed: true, visible: 1, consumed: true } }
+  action directorySync = all { commit.phase == 5,
+    commit' = { ...commit, phase: 6, directorySynced: true, durable: if (commit.qualifiedBacking) 1 else 0 } }
+  action coldRead = all { commit.phase == 6, commit.visible == 1,
+    commit' = { ...commit, phase: 7, coldRead: true } }
+  action respond = all { commit.phase == 7, not(commit.firstFailure), commit.issued == 0,
+    commit' = { ...commit, phase: 8, responded: true, issued: 1 } }
+  action release = all { commit.phase == 8, commit' = { ...commit, owner: 0, phase: 9 } }
+  action failBeforeReplace = all { commit.phase >= 1, commit.phase <= 4,
+    commit' = { ...commit, phase: 9, owner: 0, firstFailure: true, uncertain: true, effects: Set() } }
+  action failAfterReplace = all { commit.phase >= 5, commit.phase <= 7,
+    commit' = { ...commit, phase: 9, owner: 0, firstFailure: true, uncertain: true } }
+  action crashBeforeSync = {
+    nondet recovered = Set(0, 1).oneOf()
+    all { commit.phase == 5,
+      commit' = { ...commit, phase: 9, owner: 0, visible: recovered, uncertain: true, firstFailure: true } }
+  }
+  action crashAfterSync = all { commit.phase >= 6, commit.phase <= 8,
+    commit' = { ...commit, phase: 9, owner: 0,
+      visible: if (commit.qualifiedBacking) 1 else commit.visible,
+      uncertain: true, firstFailure: true } }
+  action blockedSync = all { commit.phase == 5, commit' = commit }
+  action stutter = commit' = commit
+  action step = any { lockA, lockB, boundCandidate, createAndWrite, fileFlush, replace,
+    directorySync, coldRead, respond, release, failBeforeReplace, failAfterReplace,
+    crashBeforeSync, crashAfterSync, blockedSync, stutter }
+  val safety = and {
+    commit.original == 1,
+    Set(0, 1, 2).contains(commit.owner),
+    (commit.phase >= 1 and commit.phase <= 8) implies commit.owner != 0,
+    commit.effects.size() > 0 implies commit.bounded,
+    commit.renamed implies commit.fileFlushed,
+    commit.responded implies (commit.directorySynced and commit.coldRead),
+    commit.issued <= 1,
+    commit.issued > 0 implies commit.consumed,
+    commit.directorySynced and commit.qualifiedBacking implies commit.durable == 1,
+    not(commit.effects.contains("ack")),
+    not(commit.effects.contains("run")),
+    not(commit.effects.contains("export"))
+  }
+  val done = commit.responded
+  action omittedSync = all { commit.phase == 5, commit' = { ...commit, phase: 7, coldRead: true } }
+  action prematureResponse = all { commit.phase == 5, commit' = { ...commit, phase: 8, responded: true, issued: 1 } }
+  action reissueConsumed = all { commit.consumed, commit.phase == 9,
+    commit' = { ...commit, issued: 2 } }
+  action omittedSyncStep = any { step, omittedSync }
+  action prematureResponseStep = any { step, prematureResponse }
+  action consumedReplayStep = any { step, reissueConsumed }
+  run successfulCommit = init.then(lockA).then(boundCandidate).then(createAndWrite)
+    .then(fileFlush).then(replace).then(directorySync).then(coldRead).then(respond)
+    .expect(done and safety)
+  run unqualifiedBackingRemainsUnknown = unqualifiedInit.then(lockA).then(boundCandidate).then(createAndWrite)
+    .then(fileFlush).then(replace).then(directorySync).then(coldRead).then(respond)
+    .expect(commit.directorySynced and commit.durable == 0 and safety)
+  run blockedDoesNotRelease = init.then(lockB).then(boundCandidate).then(createAndWrite)
+    .then(fileFlush).then(replace).then(blockedSync).expect(commit.owner == 2 and not(commit.responded) and safety)
+  run oldBytesDoNotAuthorizeReplay = init.then(lockA).then(boundCandidate).then(createAndWrite)
+    .then(fileFlush).then(replace).then(crashBeforeSync).expect(commit.uncertain and commit.consumed and safety)
+  run omittedSyncDetected = init.then(lockA).then(boundCandidate).then(createAndWrite)
+    .then(fileFlush).then(replace).then(omittedSync).then(respond).expect(not(safety))
+  run prematureResponseDetected = init.then(lockA).then(boundCandidate).then(createAndWrite)
+    .then(fileFlush).then(replace).then(prematureResponse).expect(not(safety))
+  run consumedReplayDetected = init.then(lockA).then(boundCandidate).then(createAndWrite)
+    .then(fileFlush).then(replace).then(crashBeforeSync).then(reissueConsumed).expect(not(safety))
+}
+
+module SourceDirectoryCommitReplay {
+  import SourceDirectoryCommitModel.*
+  var phase: int
+  action replayInit = all { init, phase' = 0 }
+  action replayStep = any {
+    all { phase == 0, lockA, phase' = 1 },
+    all { phase == 1, boundCandidate, phase' = 2 },
+    all { phase == 2, createAndWrite, phase' = 3 },
+    all { phase == 3, fileFlush, phase' = 4 },
+    all { phase == 4, replace, phase' = 5 },
+    all { phase == 5, directorySync, phase' = 6 },
+    all { phase == 6, coldRead, phase' = 7 },
+    all { phase == 7, respond, phase' = 8 },
+    all { phase == 8, stutter, phase' = phase }
+  }
+}
+```
+
+Implementation correspondence: `PortableSourceJournalIO.Context.Write` performs the bounded
+candidate write, successful file flush, descriptor-relative replacement and same-directory fsync.
+`DurableJournal` retains the original owner lock through exact descriptor-relative readback and the
+shared existing decoder. The finite source failure controls observe the same boundaries without
+claiming hardware failure. `BeforeSourceDirectorySync`, `AfterSourceDirectorySyncBeforeReadback`
+and `SimulatedSourceDirectorySyncError` are fixed test cuts, not alternative stores or qualifiers.
+Every source result remains Unknown and all ACK/run/export production refusals remain intact.
+The `uncertain` bit models outer-owner retained custody after a failed or interrupted operation;
+it cannot be reconstructed from old disk bytes alone. This model does not qualify arbitrary rollback.

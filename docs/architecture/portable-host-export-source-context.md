@@ -69,8 +69,27 @@ must authenticate these observations and independent custody; returning a caller
 
 The journal rechecks the cap's joins under its owner lock. The existing lifecycle reconciler retains
 original first failure and conflicts. Cold records retain observation bytes and lifecycle data but never
-recreate an authentication capability. Every successful source write/readback still reports directory
-durability Unknown: file flush, rename and byte-exact cold reopen do not qualify a directory crash barrier.
+recreate an authentication capability. Fully pre-encoded supplier `/4` and export-source `/1` writes
+now use the Linux descriptor-relative source primitive. Under the existing exclusive owner lock it
+pins an `O_RDONLY|O_DIRECTORY|O_CLOEXEC|O_NOFOLLOW` journal descriptor, binds the held lock identity
+to its directory entry using the documented Linux `statx` ABI, creates a private exclusive temporary
+file, writes the bounded candidate exactly, flushes the file, replaces the record with `renameat`,
+then calls `fsync` on that same directory before descriptor-relative exact and cold structural readback.
+Unsupported platforms or native operations refuse; legacy record write paths retain their behavior.
+
+Successful completion establishes this syscall ordering only. Every successful source write/readback
+still reports directory durability Unknown. Production separately requires authenticated, durably
+provisioned pre-existing `stateRoot/journal-v1` ancestry, qualified backing/filesystem assumptions and
+stable namespace custody. The unchanged root initializer supplies none of that provenance; this is
+not a hardware or power-loss durability claim. A blocked syscall retains its owner lock until it
+returns; managed timeout cannot release custody while fsync continues. An outer process owner must
+retain an interrupted or unconfirmed operation as Unknown.
+
+Failures before replacement preserve the exact previous record. Failures after replacement are
+potentially committed and return the existing generic journal refusal. Cleanup removes only this
+attempt's own temporary name, preserves the first failure and never deletes the record or lock.
+Cold-read the same original; a retained consumed intent refuses another preparation. Old bytes after
+storage rollback cannot prove that an earlier attempt never escaped or authorize resending it.
 No production Executor interprets this source record as a runnable or destructively recoverable host record.
 
 ## Compatibility and remaining delivery
@@ -84,7 +103,7 @@ The containing Execution project is not independently packable. Its API is proje
 packable Coordination CLI. This change does not publish or reinstall a CLI or contracts package, and
 cannot authorize a different payload under an already published version. A future coherent release
 must select a new applicable version and qualify its exact consumer bytes and versioned reader behavior.
-Installed adoption, concrete verifier/authenticated transport, descriptor-backed copy, qualified commit
+Installed adoption, concrete verifier/authenticated transport, descriptor-backed copy, independently qualified storage/ancestry commit
 barrier and any native export or retirement remain separate work.
 
 An ordinary owner copy from an old held allocation can be a separately admitted fresh non-destructive
