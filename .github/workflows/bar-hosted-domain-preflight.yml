@@ -24,6 +24,8 @@ env:
   ARCH_IMAGE: docker.io/library/archlinux@sha256:52dfbd5afb23a220d5ee92dafcb4c788d96c026ed04179890c23adef4c897fa0
   ARCH_ARCHIVE_DATE: 2026/10/18
   BUILDAH_PACKAGE: https://archive.archlinux.org/packages/b/buildah/buildah-1.43.1-1-x86_64.pkg.tar.zst
+  # Signature is verified by pacman; this hash was recorded by probe run 39944268141.
+  BUILDAH_SHA256: 1c6e64e56eb72ba98b3771de583a7dbc2ff78fceca498a0d1555e401d4e23dcb
   USERLAND: /opt/fsgg-bar-userland
   VOLUME: /fsgg-bar
   VOLUME_IMAGE: /fsgg-bar-volume.img
@@ -61,7 +63,8 @@ jobs:
             pacman-key --populate archlinux >/dev/null 2>&1
             pacman -Syu --noconfirm --needed podman crun conmon git python shadow util-linux libcap >/dev/null
             pacman -U --noconfirm "$BUILDAH_PACKAGE" >/dev/null
-            echo "userland.buildahPackageSha256=$(sha256sum /var/cache/pacman/pkg/buildah-1.43.1-1-x86_64.pkg.tar.zst | cut -d ' ' -f 1)"
+            echo "$BUILDAH_SHA256  /var/cache/pacman/pkg/buildah-1.43.1-1-x86_64.pkg.tar.zst" | sha256sum -c --quiet -
+            echo "userland.buildahPackageSha256=$BUILDAH_SHA256"
             for helper in newuidmap newgidmap; do
               if [ -z "$(getcap "/usr/bin/$helper")" ] && [ ! -u "/usr/bin/$helper" ]; then
                 capability=cap_setuid; [ "$helper" = newgidmap ] && capability=cap_setgid
@@ -97,7 +100,7 @@ jobs:
             mount --rbind /dev "$USERLAND/dev"
             mount -t sysfs sysfs "$USERLAND/sys"
             exec chroot "$USERLAND" /usr/bin/env -i PATH=/usr/bin ARCH_ARCHIVE_DATE="$ARCH_ARCHIVE_DATE" \
-              BUILDAH_PACKAGE="$BUILDAH_PACKAGE" /bin/bash -c "$PACMAN_SCRIPT"' | tee "$EVIDENCE/facts.env"
+              BUILDAH_PACKAGE="$BUILDAH_PACKAGE" BUILDAH_SHA256="$BUILDAH_SHA256" /bin/bash -c "$PACMAN_SCRIPT"' | tee "$EVIDENCE/facts.env"
           sudo install -D -m 0644 source/eng/portable_workspace_sc2.py "$USERLAND/opt/fsgg/eng/portable_workspace_sc2.py"
           sudo install -D -m 0644 source/eng/bar_hosted_domain.py "$USERLAND/opt/fsgg/eng/bar_hosted_domain.py"
           echo "userland.image=$ARCH_IMAGE" | tee -a "$EVIDENCE/facts.env"
@@ -111,7 +114,7 @@ jobs:
             /usr/local/share/chromium /opt/microsoft /opt/google /opt/az /usr/lib/jvm \
             /usr/local/lib/node_modules /usr/share/miniconda /opt/pipx /usr/local/aws-cli
           sudo docker system prune --all --force >/dev/null
-          sudo systemctl stop docker.socket docker.service containerd.service
+          sudo systemctl stop docker.socket docker.service containerd.service fstrim.timer fstrim.service
           sudo swapoff -a
           sudo rm -f /swapfile /mnt/swapfile
           sudo sysctl -q -w kernel.apparmor_restrict_unprivileged_userns=0
@@ -160,12 +163,14 @@ jobs:
             mount -t sysfs sysfs "$USERLAND/sys"
             mount -t cgroup2 cgroup2 "$USERLAND/sys/fs/cgroup"
             mount -t tmpfs -o mode=1777 tmpfs "$USERLAND/tmp"
-            mkdir -p "$USERLAND/fsgg-bar" "$USERLAND/home/runner/.local/share/fsgg"
+            mkdir -p "$USERLAND/fsgg-bar"
+            install -d -m 0700 -o 1001 -g 1001 "$USERLAND/home/runner/.local" "$USERLAND/home/runner/.local/share" \
+              "$USERLAND/home/runner/.local/share/fsgg"
             mount --bind "$VOLUME" "$USERLAND/fsgg-bar"
             mount --bind "$VOLUME/load-store" "$USERLAND/home/runner/.local/share/fsgg"
             exec chroot "$USERLAND" /usr/bin/setpriv --reuid=1001 --regid=1001 --init-groups --reset-env \
               /usr/bin/env HOME=/home/runner XDG_RUNTIME_DIR=/tmp/runtime-1001 PATH=/usr/bin /bin/sh -c \
-              'mkdir -p -m 0700 /tmp/runtime-1001 && exec python3 -I /opt/fsgg/eng/bar_hosted_domain.py userland-check --allocation /fsgg-bar/allocation --load-store /home/runner/.local/share/fsgg/headless-images/bar/preflight --controller-module /opt/fsgg/eng/portable_workspace_sc2.py'
+              'mkdir -p -m 0700 /tmp/runtime-1001 && exec python3 -I /opt/fsgg/eng/bar_hosted_domain.py userland-check --allocation /fsgg-bar/allocation --load-store /home/runner/.local/share/fsgg/headless-images/bar/preflight --controller-module /opt/fsgg/eng/portable_workspace_sc2.py --expected-uid 1001'
         run: |
           set -euo pipefail
           printf '%s\n' "$ENTER_SCRIPT" > "$EVIDENCE/enter-userland.sh"

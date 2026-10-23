@@ -35,7 +35,11 @@ SCHEMA = 'fsgg.bar-hosted-domain/1'
 CHECK_SCHEMA = 'fsgg.bar-hosted-userland-check/1'
 RELATION = 'dedicated-ephemeral-hosted-vm'
 RUNNER_IMAGE = 'ubuntu24'
-STOPPED_SERVICES = ('containerd.service', 'docker.service', 'docker.socket')
+# Explicitly selected image version (Atlas learn/hosted-image-candidate-
+# qualification-boundary): image drift refuses until source selects it.
+RUNNER_IMAGE_VERSION = '20261012.334.1'
+# fstrim.timer would punch holes through the loop device into the backing file.
+STOPPED_SERVICES = ('containerd.service', 'docker.service', 'docker.socket', 'fstrim.timer')
 DAEMONS = ('dockerd', 'containerd', 'containerd-shim')
 DISK_BYTES = 80 * 1024**3
 MEMORY_BYTES = 14 * 1024**3
@@ -70,11 +74,13 @@ def device_text(value: Path) -> str:
     return f'{os.major(dev)}:{os.minor(dev)}'
 
 
-def mount_row(value: Path):
+def mount_row(value: Path, mountinfo=None):
     """Deepest mountinfo row for the value's device: (source, fstype, options)."""
     device = device_text(value)
     best = None
-    for line in Path('/proc/self/mountinfo').read_text().splitlines():
+    if mountinfo is None:
+        mountinfo = Path('/proc/self/mountinfo').read_text()
+    for line in mountinfo.splitlines():
         row = line.split()
         separator = row.index('-')
         mount = Path(re.sub(r'\\([0-7]{3})', lambda m: chr(int(m[1], 8)), row[4]))
@@ -87,6 +93,16 @@ def mount_row(value: Path):
     return best[1], best[2], best[3]
 
 
+def loop_backing(device: str, sysfs=Path('/sys')):
+    """Backing file, offset and size limit of a loop block device ``major:minor``."""
+    loop = sysfs / 'dev/block' / device / 'loop'
+    try:
+        backing = Path((loop / 'backing_file').read_text().strip())
+        return backing, int((loop / 'offset').read_text()), int((loop / 'sizelimit').read_text())
+    except (OSError, ValueError):
+        return None, None, None
+
+
 def builder_version_ok(version: str) -> bool:
     return re.fullmatch(r'buildah version ' + re.escape(BUILDER_VERSION) + r'(?: \([^\r\n]{1,512}\))?', version) is not None
 
@@ -96,16 +112,19 @@ def evaluate(evidence) -> list[str]:
     refusals = []
     runner, services, userns = evidence['runner'], evidence['services'], evidence['userns']
     volume, resources = evidence['volume'], evidence['resources']
-    if runner['imageOS'] != RUNNER_IMAGE or not runner['githubHosted'] \
-            or re.fullmatch(r'[0-9]{8}\.[0-9]{1,6}(?:\.[0-9]{1,6})?', runner['imageVersion'] or '') is None:
+    if runner['imageOS'] != RUNNER_IMAGE or runner['githubHosted'] is not True \
+            or runner['imageVersion'] != RUNNER_IMAGE_VERSION:
         refusals.append('runner-image')
+    if re.fullmatch(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', evidence['bootId'] or '') is None:
+        refusals.append('boot-identity')
     if services['stopped'] != list(STOPPED_SERVICES) or services['active'] or services['daemonProcesses']:
         refusals.append('service-stop')
     if userns['apparmorRestrictUnprivileged'] != 0 or not userns['maxUserNamespaces']:
         refusals.append('rootless-userns')
     if volume['filesystem'] != 'ext4' or volume['discard'] != 'nodiscard':
         refusals.append('volume-format')
-    if not 0 < volume['bytes'] <= volume['allocatedBytes']:
+    if not 0 < volume['bytes'] <= volume['allocatedBytes'] or not volume['loopBacked'] \
+            or volume['backingDevice'] == volume['device']:
         refusals.append('volume-preallocation')
     if volume['freeBytes'] < DISK_BYTES or volume['loadStoreDevice'] != volume['device'] or volume['freeInodes'] <= 0:
         refusals.append('volume-capacity')
@@ -125,8 +144,9 @@ def finish(observed):
     evidence['refusals'] = refusals
     evidence['verdict'] = 'refused' if refusals else 'admitted'
     # The controller's closed reader accepts exactly its declared volume fields;
-    # the load-store device correspondence is rechecked there from the paths.
+    # the load-store device and loop correspondence are rechecked there or above.
     evidence['volume'].pop('loadStoreDevice')
+    evidence['volume'].pop('loopBacked')
     return evidence
 
 
@@ -159,14 +179,21 @@ def admit(args) -> int:
     source, filesystem, options = mount_row(allocation)
     stats = os.statvfs(allocation)
     info = backing.stat()
-    backing_rdev = Path(source).stat().st_rdev if source.startswith('/dev/') else 0
+    # The preallocation must be the actual backing file of the mounted loop device.
+    loop_file, offset, size_limit = loop_backing(device_text(allocation))
+    loop_backed = (loop_file is not None and offset == 0 and size_limit == 0
+                   and source.startswith('/dev/loop')
+                   and (loop_file.stat().st_dev, loop_file.stat().st_ino) == (info.st_dev, info.st_ino))
     memory = {}
     for row in Path('/proc/meminfo').read_text().splitlines():
         key, value = row.split(':', 1)
         memory[key] = int(value.split()[0]) * 1024
-    exit_code, out, err = command(['chroot', str(userland), '/usr/bin/buildah', '--version'])
+    exit_code, out, err = command(['unshare', '--mount', '--pid', '--fork', '/bin/sh', '-c',
+                                   'mount --make-rprivate / && mount -t proc proc "$1/proc" && '
+                                   'exec chroot "$1" /usr/bin/buildah --version', 'sh', str(userland)])
     evidence = {
         'schema': SCHEMA, 'relation': RELATION, 'verdict': None, 'refusals': None,
+        'bootId': Path('/proc/sys/kernel/random/boot_id').read_text().strip(),
         'runner': {'imageOS': os.environ.get('ImageOS', ''), 'imageVersion': os.environ.get('ImageVersion', ''),
                    'githubHosted': os.environ.get('RUNNER_ENVIRONMENT') == 'github-hosted'},
         'services': {'stopped': list(STOPPED_SERVICES), 'active': active, 'daemonProcesses': daemons},
@@ -175,8 +202,8 @@ def admit(args) -> int:
         'volume': {'device': device_text(allocation), 'loadStoreDevice': device_text(load_store),
                    'filesystem': filesystem, 'bytes': info.st_size, 'allocatedBytes': info.st_blocks * 512,
                    'freeBytes': stats.f_bavail * stats.f_frsize, 'freeInodes': stats.f_favail,
-                   'discard': 'discard' if 'discard' in options else 'nodiscard',
-                   'backingDevice': f'{os.major(backing_rdev)}:{os.minor(backing_rdev)}'},
+                   'discard': 'discard' if 'discard' in options else 'nodiscard', 'loopBacked': loop_backed,
+                   'backingDevice': f'{os.major(info.st_dev)}:{os.minor(info.st_dev)}'},
         'builder': {'version': out.strip() if exit_code == 0 else 'unavailable: ' + err.strip()[-256:]},
         'resources': {'memAvailableBytes': memory['MemAvailable'], 'logicalCpus': os.cpu_count(),
                       'affinity': len(os.sched_getaffinity(0))}}
@@ -219,10 +246,11 @@ def userland_check(args) -> int:
     checks['builderVersion'] = version[1].strip()
     if version[0] != 0 or not builder_version_ok(checks['builderVersion']):
         refusals.append('builder-version')
-    mapping = command(builder + ['unshare', 'cat', '/proc/self/uid_map'])
-    checks['rootlessUidMap'] = mapping[1].strip() if mapping[0] == 0 else 'failed: ' + mapping[2].strip()[-512:]
-    if mapping[0] != 0 or not uid_map_covers(mapping[1], IMAGE_USER):
-        refusals.append('rootless-mapping')
+    for kind in ('uid', 'gid'):
+        mapping = command(builder + ['unshare', 'cat', f'/proc/self/{kind}_map'])
+        checks[f'rootless{kind.title()}Map'] = mapping[1].strip() if mapping[0] == 0 else 'failed: ' + mapping[2].strip()[-512:]
+        if mapping[0] != 0 or not uid_map_covers(mapping[1], IMAGE_USER):
+            refusals.append(f'rootless-{kind}-mapping')
     scratch = command(builder + ['from', '--pull=never', 'scratch'])
     checks['scratchContainer'] = scratch[1].strip() if scratch[0] == 0 else 'failed: ' + scratch[2].strip()[-512:]
     if scratch[0] == 0:
@@ -248,6 +276,11 @@ def userland_check(args) -> int:
         refusals.append('enclosing-memory')
     if tasks is not None and tasks - resources['enclosingTasksCurrent'] < 512:
         refusals.append('enclosing-tasks')
+    if resources['enclosingCpuCapacity'] is not None and resources['enclosingCpuCapacity'] < CPUS:
+        refusals.append('enclosing-cpu')
+    # Delegated unit with its own cgroup namespace: the controller sees its root.
+    if resources['cgroup'] != '0::/':
+        refusals.append('cgroup-namespace')
     checks['sameVolume'] = device_text(allocation) == device_text(load_store)
     if not checks['sameVolume']:
         refusals.append('volume')
@@ -257,6 +290,8 @@ def userland_check(args) -> int:
     if not all(pins.values()):
         refusals.append('support-pins')
     checks['uid'] = os.getuid()
+    if checks['uid'] != args.expected_uid:
+        refusals.append('unprivileged-identity')
     result = {'schema': CHECK_SCHEMA, 'verdict': 'refused' if refusals else 'passed', 'refusals': refusals,
               'checks': checks, 'scope': 'hosted Arch-userland domain preflight; no image pull, product source or BAR content'}
     print(json.dumps(result, sort_keys=True, default=str))
@@ -274,6 +309,7 @@ def main(argv=None) -> int:
     check_parser = modes.add_parser('userland-check')
     for name in ('--allocation', '--load-store', '--controller-module'):
         check_parser.add_argument(name, required=True)
+    check_parser.add_argument('--expected-uid', type=int, required=True)
     args = parser.parse_args(argv)
     return admit(args) if args.mode == 'admit' else userland_check(args)
 

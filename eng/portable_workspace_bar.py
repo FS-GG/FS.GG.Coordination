@@ -51,7 +51,9 @@ SHARED_HOST_RELATION = 'shared-host-reservations-outside-enclosing-cgroup'
 HOSTED_RELATION = 'dedicated-ephemeral-hosted-vm'
 HOSTED_DOMAIN_SCHEMA = 'fsgg.bar-hosted-domain/1'
 HOSTED_RUNNER_IMAGE = 'ubuntu24'
-HOSTED_STOPPED_SERVICES = ('containerd.service', 'docker.service', 'docker.socket')
+# An explicitly selected hosted image version; image drift refuses until selected.
+HOSTED_RUNNER_IMAGE_VERSION = '20261012.334.1'
+HOSTED_STOPPED_SERVICES = ('containerd.service', 'docker.service', 'docker.socket', 'fstrim.timer')
 
 def require(condition, message):
     if not condition:
@@ -116,19 +118,21 @@ def hosted_domain(selection, allocation, load_root):
         return None
     reference = selection['admission']['domain']
     evidence = strict_json(regular_bytes(path(reference['path']), MAX_JSON_BYTES, reference['sha256'])[0])
-    fields(evidence, 'schema relation verdict refusals runner services userns volume builder resources')
+    fields(evidence, 'schema relation verdict refusals bootId runner services userns volume builder resources')
     require(evidence['schema'] == HOSTED_DOMAIN_SCHEMA and evidence['relation'] == HOSTED_RELATION,
             'hosted domain evidence schema differs')
     require(evidence['verdict'] == 'admitted' and evidence['refusals'] == [], 'hosted domain evidence refused')
+    # Evidence belongs to this operation's own fresh VM boot; replay elsewhere refuses.
+    require(text(evidence['bootId'], r'[0-9a-f-]{36}') == selection['clock']['bootId'],
+            'hosted domain evidence is from another boot')
     runner = evidence['runner']; fields(runner, 'imageOS imageVersion githubHosted')
-    require(runner['imageOS'] == HOSTED_RUNNER_IMAGE and runner['githubHosted'] is True,
-            'hosted runner image differs')
-    text(runner['imageVersion'], r'[0-9]{8}\.[0-9]{1,6}(?:\.[0-9]{1,6})?')
+    require(runner['imageOS'] == HOSTED_RUNNER_IMAGE and runner['githubHosted'] is True
+            and runner['imageVersion'] == HOSTED_RUNNER_IMAGE_VERSION, 'hosted runner image differs')
     services = evidence['services']; fields(services, 'stopped active daemonProcesses')
     require(services['stopped'] == list(HOSTED_STOPPED_SERVICES) and services['active'] == []
-            and services['daemonProcesses'] == 0, 'hosted container daemons not stopped')
+            and integer(services['daemonProcesses']) == 0, 'hosted container daemons not stopped')
     userns = evidence['userns']; fields(userns, 'apparmorRestrictUnprivileged maxUserNamespaces')
-    require(userns['apparmorRestrictUnprivileged'] == 0 and integer(userns['maxUserNamespaces']) > 0,
+    require(integer(userns['apparmorRestrictUnprivileged']) == 0 and integer(userns['maxUserNamespaces']) > 0,
             'hosted rootless user namespaces unavailable')
     volume = evidence['volume']
     fields(volume, 'device filesystem bytes allocatedBytes freeBytes freeInodes discard backingDevice')
@@ -136,8 +140,8 @@ def hosted_domain(selection, allocation, load_root):
     require(integer(volume['allocatedBytes']) >= integer(volume['bytes']) > 0, 'hosted volume backing not preallocated')
     require(integer(volume['freeBytes']) >= shared.DISK_BYTES and integer(volume['freeInodes']) > 0,
             'hosted volume free floor not met')
-    text(volume['backingDevice'], r'[0-9]+:[0-9]+')
     device = text(volume['device'], r'[0-9]+:[0-9]+')
+    require(text(volume['backingDevice'], r'[0-9]+:[0-9]+') != device, 'hosted volume backing is not a separate file')
     for value in (allocation, load_root):
         actual = value.stat().st_dev
         require(f'{os.major(actual)}:{os.minor(actual)}' == device, 'hosted allocation/load store outside the domain volume')

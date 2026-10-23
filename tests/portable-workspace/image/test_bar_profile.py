@@ -221,14 +221,15 @@ class BarProfile(unittest.TestCase):
         the closed relation join in the actual BAR selection reader."""
         device = Path(args.engine_allocation).stat().st_dev
         evidence = {'schema': BAR.HOSTED_DOMAIN_SCHEMA, 'relation': BAR.HOSTED_RELATION,
-                    'verdict': 'admitted', 'refusals': [],
-                    'runner': {'imageOS': 'ubuntu24', 'imageVersion': '20261012.334.1', 'githubHosted': True},
+                    'verdict': 'admitted', 'refusals': [], 'bootId': selection['clock']['bootId'],
+                    'runner': {'imageOS': 'ubuntu24', 'imageVersion': BAR.HOSTED_RUNNER_IMAGE_VERSION, 'githubHosted': True},
                     'services': {'stopped': list(BAR.HOSTED_STOPPED_SERVICES), 'active': [], 'daemonProcesses': 0},
                     'userns': {'apparmorRestrictUnprivileged': 0, 'maxUserNamespaces': 63838},
                     'volume': {'device': f'{os.major(device)}:{os.minor(device)}', 'filesystem': 'ext4',
                                'bytes': 127 * 1024**3, 'allocatedBytes': 127 * 1024**3,
                                'freeBytes': 116 * 1024**3, 'freeInodes': 7_806_964,
-                               'discard': 'nodiscard', 'backingDevice': '7:0'},
+                               'discard': 'nodiscard',
+                               'backingDevice': '8:2' if os.major(device) == 8 and os.minor(device) == 1 else '8:1'},
                     'builder': {'version': 'buildah version 1.43.1 (image-spec 1.1.1, runtime-spec 1.2.1)'},
                     'resources': {'memAvailableBytes': 15 * 1024**3, 'logicalCpus': 4, 'affinity': 4}}
         if mutate: mutate(evidence)
@@ -259,6 +260,13 @@ class BarProfile(unittest.TestCase):
         cases = {
             'refused': (lambda e: e.update(verdict='refused', refusals=['synthetic']), None, 'evidence refused'),
             'runner': (lambda e: e['runner'].update(imageOS='ubuntu22'), None, 'runner image differs'),
+            'image-version': (lambda e: e['runner'].update(imageVersion='20261019.340.1'), None, 'runner image differs'),
+            'replayed-boot': (lambda e: e.update(bootId='00000000-0000-0000-0000-000000000000'), None, 'another boot'),
+            'backing-not-separate': (lambda e: e['volume'].update(backingDevice=e['volume']['device']), None,
+                                     'backing is not a separate file'),
+            'daemon-bool': (lambda e: e['services'].update(daemonProcesses=False), None, 'bounded integer required'),
+            'userns-float': (lambda e: e['userns'].update(apparmorRestrictUnprivileged=0.0), None, 'bounded integer required'),
+            'fstrim': (lambda e: e['services'].update(stopped=e['services']['stopped'][:3]), None, 'daemons not stopped'),
             'services': (lambda e: e['services'].update(active=['docker.service']), None, 'daemons not stopped'),
             'userns': (lambda e: e['userns'].update(apparmorRestrictUnprivileged=1), None, 'user namespaces'),
             'sparse': (lambda e: e['volume'].update(allocatedBytes=1024**3), None, 'not preallocated'),

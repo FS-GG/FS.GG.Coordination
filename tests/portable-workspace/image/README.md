@@ -597,17 +597,18 @@ value, `dedicated-ephemeral-hosted-vm`. That relation additionally requires
 
 - **Evidence.** The admission document is root-produced `fsgg.bar-hosted-domain/1` evidence from
   `eng/bar_hosted_domain.py admit`, with verdict `admitted` and no refusals. It records:
-  - the `ubuntu24` GitHub-hosted runner image;
-  - `containerd.service`, `docker.service` and `docker.socket` stopped, with no daemon processes left;
+  - the operation's own boot ID, which must equal `clock.bootId`, so evidence from another VM or boot refuses;
+  - the `ubuntu24` GitHub-hosted runner at the explicitly selected image version `20261012.334.1`. Image drift refuses until source selects the new version;
+  - `containerd.service`, `docker.service`, `docker.socket` and `fstrim.timer` stopped, with no daemon processes left (a periodic trim would punch the loop backing sparse);
   - rootless user namespaces allowed;
-  - one ext4 operation volume, formatted `nodiscard`, whose backing file still holds at least its full size after `mkfs`;
+  - one ext4 operation volume, formatted `nodiscard`. It is the mounted loop device's actual backing file (offset 0, no size limit) on a separate device, and that file still holds at least its full size after `mkfs`;
   - Buildah 1.43.1 in the userland;
   - at least 14 GiB MemAvailable and four CPUs.
 - **Reader checks.** The BAR reader requires the allocation and the load store to be on that volume's device. It also requires a resource disposition with zero shared-host reservations.
 - **What still runs.** The shared resource admission and every other profile check still run unchanged at the operation boundary. The evidence is correspondence, not authority.
 
 `.github/workflows/bar-hosted-domain-preflight.yml` is dispatch-only and uses no product content. It does the following:
-- builds the digest-pinned Arch userland, with Buildah 1.43.1 from the dated archive;
+- builds the digest-pinned Arch userland, with Buildah 1.43.1 from the dated archive (signature-verified and checked against the probe's recorded sha256);
 - removes preinstalled toolchains;
 - stops the container daemons and turns swap off;
 - allows rootless user namespaces;
@@ -617,7 +618,8 @@ value, `dedicated-ephemeral-hosted-vm`. That relation additionally requires
 
 `userland-check` exercises the following:
 - the controller's own `host_resources` observation;
-- rootless UID 10001 mapping;
+- rootless UID and GID 10001 mapping;
+- the `0::/` cgroup-namespace view, the enclosing CPU/memory/task headroom and the runner's uid 1001;
 - a scratch working container in the VFS build store;
 - an empty load-store census;
 - the Arch support pins.

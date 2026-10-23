@@ -282,7 +282,7 @@
 {
   "kind": "workflow",
   "path": ".github/workflows/bar-hosted-domain-preflight.yml",
-  "sha256": "3fe14c28b725c99a2156421425b8dbaa7422348f144e1b72f01dd3317fa06370",
+  "sha256": "e094cee868c3da74a296e1d0cd82845fb43952f03e7da84d2f716aaf53c830a6",
   "externalReferences": [
     "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
     "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
