@@ -672,7 +672,7 @@ The dispatch-only `bar-hosted-image-qualification.yml` is the complete image
 route for the same issue1032. It uses the existing `bar-headless` controller,
 with the accepted FSBar recipe at `4ddd070650e3131916a13bb2c5e75f99376e1c3a`
 and tree `f6e4dc108bf065cd2fd44d48e0faf8807e1b8e3c`. The fixed wrapper
-`eng/bar_hosted_operation.py` binds all six recipe files and the three unchanged
+`eng/bar_hosted_operation.py` binds all six recipe files and the three pinned
 executing controller files. The recipe retains its exact Ubuntu snapshot,
 vcpkg/toolchain, Recoil headers/archive, HighBar stock plugin and compiled
 controls, complete BAR Rapid game graph, and Avalanche3.4 map selections.
@@ -697,6 +697,19 @@ runs the existing strict source-identity guard. Missing, duplicate, nonzero or
 unexpected configuration refuses before image work. Global/system configuration
 and credentials are left untouched; this is not a general configuration cleaner.
 The first refusal and any already completed role receipt are retained.
+
+The shared preflight uses the distinct pinned CLI protocols: Buildah1.43.1
+`info` emits JSON by default and accepts only a Go template for `--format`;
+Podman6.1.4 `info --format=json` explicitly selects JSON instead of YAML.
+See the pinned [Buildah implementation](https://github.com/containers/buildah/blob/310b1c8f53f3c0a7884f82fe51083577c473490a/cmd/buildah/info.go)
+and [Podman implementation](https://github.com/containers/podman/blob/464c15fec06f0074c916f9eff87c4806869c2833/cmd/podman/system/info.go).
+The source controls exercise both actual profile preflights with a closed
+role-specific CLI port, rejecting the original shared-format command before
+image work. JSON parsing and exact store/rootless/platform guards remain in
+force. A successful support-byte or no-content domain probe does not establish
+that the full controller's command protocol is valid. The failed original full
+attempt remains failed; direct-child EOF does not prove descendant settlement
+or provider disposal.
 
 The fresh VM repeats the selected image-version, preallocated nodiscard volume,
 daemon/user-namespace and capacity refusals. The maintained pivot-root entry
