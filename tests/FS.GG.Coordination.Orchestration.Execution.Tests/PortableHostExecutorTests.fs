@@ -1836,8 +1836,8 @@ type PortableHostExecutorTests_ControlledAuthenticatedSource() =
                     File.WriteAllBytes(failedPath,before)
                     let failed = PortableWorkspaceExecutor.SupplierAdmissionJournal.CreateControlledFailureTest(failedFixture.Policy.Runtime.StateRoot,point)
                     Assert.Equal(SupplierSourceCommitUnknown,failed.StageControlledV4 transition)
-                    let replaced = List.contains point [PortableWorkspaceExecutor.AfterSourceReplacementBeforeReadback; PortableWorkspaceExecutor.BeforeSourceColdReopen
-                                                       PortableWorkspaceExecutor.BeforeSourceDirectorySync; PortableWorkspaceExecutor.AfterSourceDirectorySyncBeforeReadback
+                    let replaced = List.contains point [PortableWorkspaceExecutor.AfterSourceReplacementBeforeReadback; PortableWorkspaceExecutor.BeforeSourceColdReopen;
+                                                       PortableWorkspaceExecutor.BeforeSourceDirectorySync; PortableWorkspaceExecutor.AfterSourceDirectorySyncBeforeReadback;
                                                        PortableWorkspaceExecutor.SimulatedSourceDirectorySyncError]
                     let fresh = PortableWorkspaceExecutor.SupplierAdmissionJournal failedFixture.Policy.Runtime.StateRoot
                     let retained,durability = fresh.Read pending.Original.Command |> SupplierCheckpointFixtures.ok
