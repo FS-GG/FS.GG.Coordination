@@ -7686,10 +7686,13 @@ module SourceDirectoryCommitModel {
     all { commit.phase == 5,
       commit' = { ...commit, phase: 9, owner: 0, visible: recovered, uncertain: true, firstFailure: true } }
   }
-  action crashAfterSync = all { commit.phase >= 6, commit.phase <= 8,
-    commit' = { ...commit, phase: 9, owner: 0,
-      visible: if (commit.qualifiedBacking) 1 else commit.visible,
-      uncertain: true, firstFailure: true } }
+  action crashAfterSync = {
+    nondet recovered = Set(0, 1).oneOf()
+    all { commit.phase >= 6, commit.phase <= 8,
+      commit' = { ...commit, phase: 9, owner: 0,
+        visible: if (commit.qualifiedBacking) 1 else recovered,
+        uncertain: true, firstFailure: true } }
+  }
   action blockedSync = all { commit.phase == 5, commit' = commit }
   action stutter = commit' = commit
   action step = any { lockA, lockB, boundCandidate, createAndWrite, fileFlush, replace,
