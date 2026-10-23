@@ -1,0 +1,315 @@
+name: BAR hosted full-image qualification
+
+# One separately selected full1032 generation on a fresh hosted VM. This fixed
+# route acquires/builds the complete pinned BAR image, verifies its exported OCI
+# bytes/static ELF correspondence, and loads/readbacks only that archive. It does
+# not start spring-headless, invoke gameplay, publish plaintext image bytes,
+# resume or retry. Only recipient-encrypted candidate bytes leave the runner.
+# Root must bind each dispatch to accepted source and current admission; source
+# delivery and a successful no-content preflight are not invocation authority.
+
+on:
+  workflow_dispatch:
+    inputs:
+      full_image:
+        description: A separately admitted complete BAR image generation
+        type: boolean
+        required: true
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bar-hosted-full-image-qualification
+  cancel-in-progress: false
+
+env:
+  ARCH_IMAGE: docker.io/library/archlinux@sha256:52dfbd5afb23a220d5ee92dafcb4c788d96c026ed04179890c23adef4c897fa0
+  ARCH_ARCHIVE_DATE: 2026/10/18
+  BUILDAH_PACKAGE: https://archive.archlinux.org/packages/b/buildah/buildah-1.43.1-1-x86_64.pkg.tar.zst
+  # Signature is verified by pacman; this hash was recorded by probe run 39944268141.
+  BUILDAH_SHA256: 1c6e64e56eb72ba98b3771de583a7dbc2ff78fceca498a0d1555e401d4e23dcb
+  USERLAND: /opt/fsgg-bar-userland
+  VOLUME: /fsgg-bar
+  VOLUME_IMAGE: /fsgg-bar-volume.img
+
+jobs:
+  full-image:
+    if: ${{ inputs.full_image }}
+    runs-on: ubuntu-24.04
+    # Includes provisioning and bounded transport; controller retains3600+120s.
+    timeout-minutes: 90
+    env:
+      EVIDENCE: ${{ github.workspace }}/evidence
+      OPERATION_ID: bar-image-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - name: Retain the original outer job clock
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_EVENT_NAME" = workflow_dispatch
+          test "$GITHUB_REF" = refs/heads/main
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          echo "HOST_JOB_STARTED=$(date +%s)" >> "$GITHUB_ENV"
+          echo "HOST_JOB_MONOTONIC=$(python3 -I -B -c 'import time; print(time.monotonic())')" >> "$GITHUB_ENV"
+
+      - name: Check out the exact candidate without persisted credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        timeout-minutes: 5
+        with:
+          ref: ${{ github.sha }}
+          path: source
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Check out the fixed complete product context
+        timeout-minutes: 5
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: FS-GG/FSBarV2
+          ref: 4ddd070650e3131916a13bb2c5e75f99376e1c3a
+          path: product
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Run the synthetic domain controls on the exact source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = refs/heads/main
+          test "$(git -C source rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git -C product rev-parse HEAD)" = 4ddd070650e3131916a13bb2c5e75f99376e1c3a
+          test "$(git -C product rev-parse 'HEAD^{tree}')" = f6e4dc108bf065cd2fd44d48e0faf8807e1b8e3c
+          test ! -e source/.git/shallow && test ! -e product/.git/shallow
+          test -z "$(git -C source status --porcelain --untracked-files=all --ignored)"
+          test -z "$(git -C product status --porcelain --untracked-files=all --ignored)"
+          # Source copies are provisioned before loop sizing, with a2GiB cap.
+          test "$(du -sb source product | awk '{sum += $1} END {print sum}')" -le 2147483648
+          mkdir -m 0700 "$EVIDENCE"
+          python3 -I -B source/tests/portable-workspace/image/test_bar_hosted_operation.py
+          python3 -I -B source/tests/portable-workspace/image/test_bar_hosted_domain.py
+          python3 -I -B source/eng/bar_hosted_operation.py seal-transport --operation-id "$OPERATION_ID" \
+            > "$EVIDENCE/crypto-seal-result.json"
+
+      - name: Build the pinned daemonless Arch userland
+        timeout-minutes: 8
+        shell: bash
+        env:
+          PACMAN_SCRIPT: |
+            set -euo pipefail
+            printf 'Server = https://archive.archlinux.org/repos/%s/$repo/os/$arch\n' "$ARCH_ARCHIVE_DATE" > /etc/pacman.d/mirrorlist
+            pacman-key --init >/dev/null 2>&1
+            pacman-key --populate archlinux >/dev/null 2>&1
+            pacman -Syu --noconfirm --needed podman crun conmon git python shadow util-linux libcap >/dev/null
+            pacman -U --noconfirm "$BUILDAH_PACKAGE" >/dev/null
+            echo "$BUILDAH_SHA256  /var/cache/pacman/pkg/buildah-1.43.1-1-x86_64.pkg.tar.zst" | sha256sum -c --quiet -
+            echo "userland.buildahPackageSha256=$BUILDAH_SHA256"
+            for helper in newuidmap newgidmap; do
+              if [ -z "$(getcap "/usr/bin/$helper")" ] && [ ! -u "/usr/bin/$helper" ]; then
+                capability=cap_setuid; [ "$helper" = newgidmap ] && capability=cap_setgid
+                setcap "$capability=ep" "/usr/bin/$helper"
+                echo "userland.$helper=capability-restored"
+              else
+                echo "userland.$helper=$(getcap "/usr/bin/$helper" | cut -d ' ' -f 2-)"
+              fi
+            done
+            getent group runner >/dev/null || groupadd -g 1001 runner
+            getent passwd runner >/dev/null || useradd -u 1001 -g 1001 -m -s /bin/bash runner
+            echo 'runner:165536:65536' > /etc/subuid
+            echo 'runner:165536:65536' > /etc/subgid
+            gpgconf --kill all >/dev/null 2>&1 || true
+            pacman -Scc --noconfirm >/dev/null
+            echo "userland.buildah=$(buildah --version)"
+            echo "userland.podman=$(podman --version)"
+            echo "userland.packages=$(pacman -Q buildah podman crun conmon python shadow | tr '\n' ' ')"
+        run: |
+          set -euo pipefail
+          sudo docker pull --quiet "$ARCH_IMAGE"
+          container=$(sudo docker create "$ARCH_IMAGE" /bin/true)
+          sudo mkdir -m 0755 "$USERLAND"
+          sudo docker export "$container" | sudo tar -x -C "$USERLAND" --numeric-owner
+          sudo docker rm "$container" >/dev/null
+          sudo rm -f "$USERLAND/etc/resolv.conf"
+          sudo cp -L /etc/resolv.conf "$USERLAND/etc/resolv.conf"
+          # Package installation runs in a private mount namespace that ends with it.
+          sudo -E unshare --mount --pid --fork /bin/bash -c '
+            set -euo pipefail
+            mount --make-rprivate /
+            mount -t proc proc "$USERLAND/proc"
+            mount --rbind /dev "$USERLAND/dev"
+            mount -t sysfs sysfs "$USERLAND/sys"
+            exec chroot "$USERLAND" /usr/bin/env -i PATH=/usr/bin ARCH_ARCHIVE_DATE="$ARCH_ARCHIVE_DATE" \
+              BUILDAH_PACKAGE="$BUILDAH_PACKAGE" BUILDAH_SHA256="$BUILDAH_SHA256" /bin/bash -c "$PACMAN_SCRIPT"' | tee "$EVIDENCE/facts.env"
+          echo "userland.image=$ARCH_IMAGE" | tee -a "$EVIDENCE/facts.env"
+
+      - name: Free preinstalled toolchains, stop container daemons and swap
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache \
+            /usr/local/share/boost /usr/local/share/powershell /usr/share/swift /usr/local/julia* \
+            /usr/local/share/chromium /opt/microsoft /opt/google /opt/az /usr/lib/jvm \
+            /usr/local/lib/node_modules /usr/share/miniconda /opt/pipx /usr/local/aws-cli
+          sudo docker system prune --all --force >/dev/null
+          sudo systemctl stop docker.socket docker.service containerd.service fstrim.timer fstrim.service
+          sudo swapoff -a
+          sudo rm -f /swapfile /mnt/swapfile
+          sudo sysctl -q -w kernel.apparmor_restrict_unprivileged_userns=0
+          echo "provision.rootAvailBytes=$(df -B1 --output=avail / | tail -n 1 | tr -d ' ')" | tee -a "$EVIDENCE/facts.env"
+
+      - name: Provision the preallocated nodiscard operation volume
+        shell: bash
+        run: |
+          set -euo pipefail
+          gib=$((1024 ** 3)); mib=$((1024 ** 2))
+          size=$(( ( $(df -B1 --output=avail / | tail -n 1 | tr -d ' ') - 6 * gib ) / mib * mib ))
+          sudo fallocate -l "$size" "$VOLUME_IMAGE"
+          loop=$(sudo losetup --find --show "$VOLUME_IMAGE")
+          sudo mkfs.ext4 -q -m 0 -E nodiscard,lazy_itable_init=0,lazy_journal_init=0 "$loop"
+          sudo mkdir -m 0755 "$VOLUME"
+          sudo mount -o nodiscard "$loop" "$VOLUME"
+          sudo install -d -m 0700 -o 1001 -g 1001 "$VOLUME/allocation" "$VOLUME/load-store" "$VOLUME/transport-candidate" "$VOLUME/transport-metadata"
+          echo "provision.volumeImageBytes=$size" | tee -a "$EVIDENCE/facts.env"
+          echo "provision.volumeAllocatedAfterMkfs=$(( $(stat -c %b "$VOLUME_IMAGE") * $(stat -c %B "$VOLUME_IMAGE") ))" \
+            | tee -a "$EVIDENCE/facts.env"
+          echo "provision.loop=$loop" | tee -a "$EVIDENCE/facts.env"
+          install -d -m 0700 "$VOLUME/allocation/context"
+          cp -a product/. "$VOLUME/allocation/context/"
+          chmod 0700 "$VOLUME/allocation/context"
+          test "$(git -C "$VOLUME/allocation/context" rev-parse HEAD)" = 4ddd070650e3131916a13bb2c5e75f99376e1c3a
+          echo "source.helperRevision=$GITHUB_SHA" | tee -a "$EVIDENCE/facts.env"
+          echo "source.helperTree=$(git -C source rev-parse 'HEAD^{tree}')" | tee -a "$EVIDENCE/facts.env"
+
+      - name: Admit the hosted domain as root-produced evidence
+        id: admit
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo env ImageOS="$ImageOS" ImageVersion="$ImageVersion" RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" \
+            python3 -I source/eng/bar_hosted_domain.py admit \
+            --allocation "$VOLUME/allocation" --load-store "$VOLUME/load-store" \
+            --backing-image "$VOLUME_IMAGE" --userland "$USERLAND" \
+            --evidence "$EVIDENCE/domain.json" --owner-uid "$(id -u)" --owner-gid "$(id -g)" \
+            | tee "$EVIDENCE/admit-result.json"
+
+      - name: Qualify one complete BAR image in the delegated Arch userland
+        id: qualify
+        shell: bash
+        env:
+          ENTER_SCRIPT: |
+            set -euo pipefail
+            mount --make-rprivate /
+            # CLONE_NEWUSER refuses a chroot whose root differs from the mount
+            # namespace root. Make this userland the namespace root instead.
+            # pivot_root(2): private propagation and a self-bind mount are required.
+            mount --bind "$USERLAND" "$USERLAND"
+            mount -t proc proc "$USERLAND/proc"
+            mount --rbind /dev "$USERLAND/dev"
+            mount -t sysfs sysfs "$USERLAND/sys"
+            mount -t cgroup2 cgroup2 "$USERLAND/sys/fs/cgroup"
+            mount -t tmpfs -o mode=1777 tmpfs "$USERLAND/tmp"
+            mkdir -p "$USERLAND/fsgg-bar"
+            install -d -m 0700 -o 1001 -g 1001 "$USERLAND/home/runner/.local" "$USERLAND/home/runner/.local/share" \
+              "$USERLAND/home/runner/.local/share/fsgg"
+            mount --bind "$VOLUME" "$USERLAND/fsgg-bar"
+            mount --bind "$VOLUME/load-store" "$USERLAND/home/runner/.local/share/fsgg"
+            mkdir -p "$USERLAND/opt/fsgg/source" "$USERLAND/fsgg-bar/evidence"
+            mount --bind "$SOURCE" "$USERLAND/opt/fsgg/source"
+            mount -o remount,bind,ro "$USERLAND/opt/fsgg/source"
+            mount --bind "$EVIDENCE" "$USERLAND/fsgg-bar/evidence"
+            mkdir "$USERLAND/.old-root"
+            cd "$USERLAND"
+            pivot_root . .old-root
+            cd /
+            umount --lazy /.old-root
+            rmdir /.old-root
+            exec /usr/bin/setpriv --reuid=1001 --regid=1001 --init-groups --reset-env \
+              /usr/bin/env HOME=/home/runner XDG_RUNTIME_DIR=/tmp/runtime-1001 PATH=/usr/bin \
+              HELPER_TREE="$HELPER_TREE" HOST_JOB_STARTED="$HOST_JOB_STARTED" HOST_JOB_MONOTONIC="$HOST_JOB_MONOTONIC" /bin/sh -c \
+              'mkdir -p -m 0700 /tmp/runtime-1001 && exec python3 -I -B /opt/fsgg/source/eng/bar_hosted_operation.py qualify --operation-id "$1" --source-revision "$2"' sh "$OPERATION_ID" "$SOURCE_REVISION"
+        run: |
+          set -euo pipefail
+          printf '%s\n' "$ENTER_SCRIPT" > "$EVIDENCE/enter-userland.sh"
+          if
+            # The runner owns/opens these evidence files; only the unit is elevated.
+            # shellcheck disable=SC2024
+            sudo -n systemd-run --quiet --wait --pipe --collect --unit="fsgg-$OPERATION_ID" \
+            -p Delegate=yes -p TasksMax=4096 -p RuntimeMaxSec=3900 -p TimeoutStopSec=120 -p KillMode=control-group \
+            --setenv=USERLAND="$USERLAND" --setenv=VOLUME="$VOLUME" --setenv=SOURCE="$GITHUB_WORKSPACE/source" \
+            --setenv=EVIDENCE="$EVIDENCE" --setenv=OPERATION_ID="$OPERATION_ID" --setenv=SOURCE_REVISION="$GITHUB_SHA" \
+            --setenv=HELPER_TREE="$(git -C source rev-parse 'HEAD^{tree}')" --setenv=HOST_JOB_STARTED="$HOST_JOB_STARTED" --setenv=HOST_JOB_MONOTONIC="$HOST_JOB_MONOTONIC" \
+            /usr/bin/unshare --mount --cgroup --pid --fork /bin/bash "$EVIDENCE/enter-userland.sh" \
+            > "$EVIDENCE/qualification-result.json" 2> "$EVIDENCE/qualification.stderr.log"
+          then
+            :
+          else
+            status=$?
+            head -c 65536 "$EVIDENCE/qualification.stderr.log" >&2
+            exit "$status"
+          fi
+
+      - name: Retain the bounded generation receipt
+        id: receipt
+        if: always()
+        timeout-minutes: 9
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$EVIDENCE"
+          if python3 -I -B source/eng/bar_hosted_operation.py receipt --operation-id "$OPERATION_ID" \
+            > "$EVIDENCE/receipt-result.json" 2> "$EVIDENCE/receipt.stderr.log"; then
+            :
+          else
+            status=$?
+            head -c 65536 "$EVIDENCE/receipt.stderr.log" >&2
+            exit "$status"
+          fi
+
+      - name: Retain metadata and original command streams
+        id: metadata
+        if: ${{ always() && steps.receipt.outcome == 'success' }}
+        timeout-minutes: 1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: bar-image-metadata-${{ github.run_id }}-${{ github.run_attempt }}
+          path: /fsgg-bar/transport-metadata/${{ env.OPERATION_ID }}
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 30
+          compression-level: 0
+
+      - name: Retain only the encrypted verified OCI candidate
+        id: candidate
+        if: ${{ steps.qualify.outcome == 'success' && steps.receipt.outcome == 'success' && steps.receipt.outputs.candidate-permitted == 'true' }}
+        timeout-minutes: 10
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: bar-image-encrypted-candidate-${{ github.run_id }}-${{ github.run_attempt }}
+          path: /fsgg-bar/transport-candidate/${{ env.OPERATION_ID }}/candidate.cms
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+
+      - name: Summarize the complete generation
+        if: always()
+        shell: bash
+        env:
+          ADMIT_OUTCOME: ${{ steps.admit.outcome }}
+          QUALIFY_OUTCOME: ${{ steps.qualify.outcome }}
+          RECEIPT_OUTCOME: ${{ steps.receipt.outcome }}
+          CANDIDATE_PERMITTED: ${{ steps.receipt.outputs.candidate-permitted }}
+          METADATA_OUTCOME: ${{ steps.metadata.outcome }}
+          CANDIDATE_OUTCOME: ${{ steps.candidate.outcome }}
+        run: |
+          set -euo pipefail
+          {
+            echo "operation=$OPERATION_ID source=$GITHUB_SHA"
+            echo "admit=$ADMIT_OUTCOME qualify=$QUALIFY_OUTCOME receipt=$RECEIPT_OUTCOME"
+            echo "candidateTransportPermitted=$CANDIDATE_PERMITTED"
+            echo 'Scope: complete image correspondence; loaded ABI/gameplay/publication remain separate.'
+            echo 'Provider physical disposal is Unknown; native termination and scoped retirement need readback.'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+          test "$ADMIT_OUTCOME" = success && test "$QUALIFY_OUTCOME" = success
+          test "$RECEIPT_OUTCOME" = success && test "$CANDIDATE_PERMITTED" = true
+          test "$METADATA_OUTCOME" = success && test "$CANDIDATE_OUTCOME" = success
