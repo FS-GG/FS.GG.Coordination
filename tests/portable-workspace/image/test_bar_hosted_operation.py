@@ -757,6 +757,22 @@ class ClockBudget(unittest.TestCase):
         text=WORKFLOW.read_text();self.assertLess(text.index('Retain the original outer job clock'),text.index('Check out the exact candidate'))
         self.assertNotIn('retry',self.producer)
 
+    def test_runner_temp_context_is_step_scoped_and_propagates_only_accepted_path(self):
+        text=WORKFLOW.read_text();job_header=text.split('    steps:',1)[0]
+        self.assertNotIn('${{ runner.temp }}',job_header)
+        clock_step=text.split('      - name: Retain the original outer job clock',1)[1].split('      - name: Check out the exact candidate',1)[0]
+        self.assertIn('          STARTUP_EVIDENCE: ${{ runner.temp }}',clock_step)
+        value=self.produce()
+        self.assertEqual(value['verdict'],'accepted')
+        self.assertIn('STARTUP_EVIDENCE='+self.env['STARTUP_EVIDENCE']+'\n',Path(self.env['GITHUB_ENV']).read_text())
+        self.assertIn('startup-path='+self.env['STARTUP_EVIDENCE'],Path(self.env['GITHUB_OUTPUT']).read_text())
+
+    def test_refused_clock_retains_safe_output_without_success_environment_export(self):
+        with self.assertRaises(OSError):self.produce(error=OSError('original API refusal'))
+        self.assertFalse(Path(self.env['GITHUB_ENV']).exists())
+        self.assertIn('startup-path='+self.env['STARTUP_EVIDENCE'],Path(self.env['GITHUB_OUTPUT']).read_text())
+        self.assertIn('original API refusal',(Path(self.env['STARTUP_EVIDENCE'])/'clock.json').read_text())
+
     def test_whole_api_timeout_and_remaining_checkout_budget_refuse_before_effects(self):
         import signal
         def timer_port(*args,**kwargs):signal.getsignal(signal.SIGALRM)(signal.SIGALRM,None)

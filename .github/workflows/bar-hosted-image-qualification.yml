@@ -63,7 +63,6 @@ jobs:
     timeout-minutes: 90
     env:
       EVIDENCE: ${{ github.workspace }}/evidence
-      STARTUP_EVIDENCE: ${{ runner.temp }}/bar-image-${{ github.run_id }}-${{ github.run_attempt }}-startup
       SELECTED_UTC: ${{ inputs.selected_utc }}
       LATEST_START_UTC: ${{ inputs.latest_start_utc }}
       OBSERVER_DEADLINE_UTC: ${{ inputs.observer_deadline_utc }}
@@ -74,6 +73,7 @@ jobs:
         id: clock
         shell: bash
         env:
+          STARTUP_EVIDENCE: ${{ runner.temp }}/bar-image-${{ github.run_id }}-${{ github.run_attempt }}-startup
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
@@ -139,7 +139,7 @@ jobs:
           with os.fdopen(fd,'wb') as stream:stream.write(data)
           if failure is not None:raise failure
           with open(env['GITHUB_ENV'],'a') as stream:
-              stream.write('HOST_JOB_STARTED='+str(int(utc.timestamp()))+'\nHOST_JOB_MONOTONIC='+str(mono)+'\n')
+              stream.write('HOST_JOB_STARTED='+str(int(utc.timestamp()))+'\nHOST_JOB_MONOTONIC='+str(mono)+'\nSTARTUP_EVIDENCE='+str(stage)+'\n')
           PY_CLOCK
 
       - name: Check out the exact candidate without persisted credentials
