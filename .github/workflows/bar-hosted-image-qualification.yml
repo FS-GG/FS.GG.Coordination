@@ -1,6 +1,7 @@
 name: BAR hosted full-image qualification
 
-# One separately selected full1032 generation on a fresh hosted VM. This fixed
+# One separately selected full1032 generation or fixed network prerequisite on
+# a fresh hosted VM. Prerequisite-only purpose never produces a BAR candidate. This fixed
 # route acquires/builds the complete pinned BAR image, verifies its exported OCI
 # bytes/static ELF correspondence, and loads/readbacks only that archive. It does
 # not start spring-headless, invoke gameplay, publish plaintext image bytes,
@@ -11,6 +12,12 @@ name: BAR hosted full-image qualification
 on:
   workflow_dispatch:
     inputs:
+      purpose:
+        description: Separately admitted fixed operation purpose
+        type: choice
+        required: true
+        default: full-image
+        options: [full-image, network-prerequisite]
       full_image:
         description: A separately admitted complete BAR image generation
         type: boolean
@@ -36,12 +43,13 @@ env:
 
 jobs:
   full-image:
-    if: ${{ inputs.full_image }}
+    if: ${{ (inputs.purpose == 'full-image' && inputs.full_image) || (inputs.purpose == 'network-prerequisite' && !inputs.full_image) }}
     runs-on: ubuntu-24.04
     # Includes provisioning and bounded transport; controller retains3600+120s.
     timeout-minutes: 90
     env:
       EVIDENCE: ${{ github.workspace }}/evidence
+      QUALIFICATION_MODE: ${{ inputs.purpose == 'network-prerequisite' && 'network-prerequisite' || 'qualify' }}
       OPERATION_ID: bar-image-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - name: Retain the original outer job clock
@@ -51,6 +59,7 @@ jobs:
           test "$GITHUB_EVENT_NAME" = workflow_dispatch
           test "$GITHUB_REF" = refs/heads/main
           test "$GITHUB_RUN_ATTEMPT" = 1
+          case "$QUALIFICATION_MODE" in qualify|network-prerequisite) ;; *) exit 2 ;; esac
           echo "HOST_JOB_STARTED=$(date +%s)" >> "$GITHUB_ENV"
           echo "HOST_JOB_MONOTONIC=$(python3 -I -B -c 'import time; print(time.monotonic())')" >> "$GITHUB_ENV"
 
@@ -122,6 +131,8 @@ jobs:
             echo 'runner:165536:65536' > /etc/subgid
             gpgconf --kill all >/dev/null 2>&1 || true
             pacman -Scc --noconfirm >/dev/null
+            pacman -Qkk passt
+            echo "userland.pastaPackage=$(pacman -Q passt)"
             echo "userland.buildah=$(buildah --version)"
             echo "userland.podman=$(podman --version)"
             echo "userland.packages=$(pacman -Q buildah podman crun conmon python shadow | tr '\n' ' ')"
@@ -228,8 +239,8 @@ jobs:
             rmdir /.old-root
             exec /usr/bin/setpriv --reuid=1001 --regid=1001 --init-groups --reset-env \
               /usr/bin/env HOME=/home/runner XDG_RUNTIME_DIR=/tmp/runtime-1001 PATH=/usr/bin \
-              HELPER_TREE="$HELPER_TREE" HOST_JOB_STARTED="$HOST_JOB_STARTED" HOST_JOB_MONOTONIC="$HOST_JOB_MONOTONIC" /bin/sh -c \
-              'mkdir -p -m 0700 /tmp/runtime-1001 && exec python3 -I -B /opt/fsgg/source/eng/bar_hosted_operation.py qualify --operation-id "$1" --source-revision "$2"' sh "$OPERATION_ID" "$SOURCE_REVISION"
+              QUALIFICATION_MODE="$QUALIFICATION_MODE" HELPER_TREE="$HELPER_TREE" HOST_JOB_STARTED="$HOST_JOB_STARTED" HOST_JOB_MONOTONIC="$HOST_JOB_MONOTONIC" /bin/sh -c \
+              'mkdir -p -m 0700 /tmp/runtime-1001 && exec python3 -I -B /opt/fsgg/source/eng/bar_hosted_operation.py "$QUALIFICATION_MODE" --operation-id "$1" --source-revision "$2"' sh "$OPERATION_ID" "$SOURCE_REVISION"
         run: |
           set -euo pipefail
           printf '%s\n' "$ENTER_SCRIPT" > "$EVIDENCE/enter-userland.sh"
@@ -240,7 +251,7 @@ jobs:
             -p Delegate=yes -p TasksMax=4096 -p RuntimeMaxSec=3900 -p TimeoutStopSec=120 -p KillMode=control-group \
             --setenv=USERLAND="$USERLAND" --setenv=VOLUME="$VOLUME" --setenv=SOURCE="$GITHUB_WORKSPACE/source" \
             --setenv=EVIDENCE="$EVIDENCE" --setenv=OPERATION_ID="$OPERATION_ID" --setenv=SOURCE_REVISION="$GITHUB_SHA" \
-            --setenv=HELPER_TREE="$(git -C source rev-parse 'HEAD^{tree}')" --setenv=HOST_JOB_STARTED="$HOST_JOB_STARTED" --setenv=HOST_JOB_MONOTONIC="$HOST_JOB_MONOTONIC" \
+            --setenv=QUALIFICATION_MODE="$QUALIFICATION_MODE" --setenv=HELPER_TREE="$(git -C source rev-parse 'HEAD^{tree}')" --setenv=HOST_JOB_STARTED="$HOST_JOB_STARTED" --setenv=HOST_JOB_MONOTONIC="$HOST_JOB_MONOTONIC" \
             /usr/bin/unshare --mount --cgroup --pid --fork /bin/bash "$EVIDENCE/enter-userland.sh" \
             > "$EVIDENCE/qualification-result.json" 2> "$EVIDENCE/qualification.stderr.log"
           then
@@ -259,7 +270,33 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$EVIDENCE"
-          if python3 -I -B source/eng/bar_hosted_operation.py receipt --operation-id "$OPERATION_ID" \
+          # Optional diagnostics share this9-minute aperture but cannot skip
+          # canonical primary receipt or poison its evidence inventory.
+          security_stage=()
+          if {
+            security_directory="${RUNNER_TEMP:-/nonexistent}/fsgg-$OPERATION_ID-security"
+            if [ -n "${RUNNER_TEMP:-}" ] && mkdir -m 0700 "$security_directory"; then
+              security_stage=(--security-stage "$security_directory")
+              if [ -f "$EVIDENCE/domain.json" ]; then
+                if (ulimit -f 1024; sudo env HOST_JOB_STARTED="$HOST_JOB_STARTED" python3 -I -B source/eng/bar_hosted_domain.py security-readback \
+                    --evidence "$security_directory/readback.json" --owner-uid "$(id -u)" --owner-gid "$(id -g)") \
+                    > "$security_directory/stdout" 2> "$security_directory/stderr"; then
+                  security_status=0
+                else
+                  security_status=$?
+                fi
+              else
+                security_status=125
+                printf '%s\n' 'root domain unavailable; security readback Unknown' > "$security_directory/stderr"
+              fi
+              printf '%s\n' "$security_status" > "$security_directory/status"
+            else
+              printf '%s\n' 'optional security stage unavailable; Unknown' >&2
+            fi
+          }; then :; else
+            printf '%s\n' 'optional security capture failed; Unknown' >&2
+          fi
+          if python3 -I -B source/eng/bar_hosted_operation.py receipt --operation-id "$OPERATION_ID" "${security_stage[@]}" \
             > "$EVIDENCE/receipt-result.json" 2> "$EVIDENCE/receipt.stderr.log"; then
             :
           else
@@ -283,7 +320,7 @@ jobs:
 
       - name: Retain only the encrypted verified OCI candidate
         id: candidate
-        if: ${{ steps.qualify.outcome == 'success' && steps.receipt.outcome == 'success' && steps.receipt.outputs.candidate-permitted == 'true' }}
+        if: ${{ env.QUALIFICATION_MODE == 'qualify' && steps.qualify.outcome == 'success' && steps.receipt.outcome == 'success' && steps.receipt.outputs.candidate-permitted == 'true' }}
         timeout-minutes: 10
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
@@ -300,6 +337,7 @@ jobs:
           ADMIT_OUTCOME: ${{ steps.admit.outcome }}
           QUALIFY_OUTCOME: ${{ steps.qualify.outcome }}
           RECEIPT_OUTCOME: ${{ steps.receipt.outcome }}
+          PREREQUISITE_PASSED: ${{ steps.receipt.outputs.prerequisite-passed }}
           CANDIDATE_PERMITTED: ${{ steps.receipt.outputs.candidate-permitted }}
           METADATA_OUTCOME: ${{ steps.metadata.outcome }}
           CANDIDATE_OUTCOME: ${{ steps.candidate.outcome }}
@@ -309,9 +347,18 @@ jobs:
             echo "operation=$OPERATION_ID source=$GITHUB_SHA"
             echo "admit=$ADMIT_OUTCOME qualify=$QUALIFY_OUTCOME receipt=$RECEIPT_OUTCOME"
             echo "candidateTransportPermitted=$CANDIDATE_PERMITTED"
-            echo 'Scope: complete image correspondence; loaded ABI/gameplay/publication remain separate.'
+            if [ "$QUALIFICATION_MODE" = network-prerequisite ]; then
+              echo 'Scope: network/RUN prerequisite only; no BAR candidate or full acceptance.'
+            else
+              echo 'Scope: complete image correspondence; loaded ABI/gameplay/publication remain separate.'
+            fi
             echo 'Provider physical disposal is Unknown; native termination and scoped retirement need readback.'
           } | tee -a "$GITHUB_STEP_SUMMARY"
           test "$ADMIT_OUTCOME" = success && test "$QUALIFY_OUTCOME" = success
-          test "$RECEIPT_OUTCOME" = success && test "$CANDIDATE_PERMITTED" = true
-          test "$METADATA_OUTCOME" = success && test "$CANDIDATE_OUTCOME" = success
+          test "$RECEIPT_OUTCOME" = success && test "$METADATA_OUTCOME" = success
+          if [ "$QUALIFICATION_MODE" = network-prerequisite ]; then
+            test "$PREREQUISITE_PASSED" = true && test "$CANDIDATE_PERMITTED" = false
+            test "$CANDIDATE_OUTCOME" = skipped
+          else
+            test "$CANDIDATE_PERMITTED" = true && test "$CANDIDATE_OUTCOME" = success
+          fi
