@@ -168,7 +168,7 @@ jobs:
             sudo -n env RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" python3 -I -B source/eng/bar_hosted_domain.py dedicated-profile
         run: |
           set -euo pipefail
-          mkdir -m 0700 -p "$EVIDENCE"
+          install -d -m 0700 "$EVIDENCE"
           cp -- "$STARTUP_EVIDENCE/clock.json" "$EVIDENCE/original-clock.json"
           prep_env=()
           for name in GITHUB_SHA GITHUB_EVENT_NAME GITHUB_REF GITHUB_RUN_ATTEMPT GITHUB_REPOSITORY GITHUB_WORKSPACE \

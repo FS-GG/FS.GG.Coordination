@@ -1,3 +1,8 @@
+# Static label declaration only; physical registration and native admission remain held.
+self-hosted-runner:
+  labels:
+    - fsgg-native-linux-x64-v1
+
 # These source-only proposals deliberately have constant refusal gates and
 # runner labels that are not registered. Keep actionlint's other checks active.
 paths:
