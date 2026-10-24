@@ -49,7 +49,10 @@ LOCK_WAIT_MINUTES = 30
 
 
 def without_lock_gate(text):
-    """Undo exactly the ADR-0097 adoption: gate steps, name markers and the added wait in job timeouts."""
+    """Undo exactly the ADR-0097 adoption: gate steps, name markers and the added wait in job timeouts.
+
+    This proves only that no other byte of the original publisher changed. The gate's own shape and
+    position are held by the whole-file digests and by FS-GG/.github's check-publication-writer-coverage.py."""
     out, job_marked, skipping = [], False, False
     lines = text.split('\n')
     for index, line in enumerate(lines):
