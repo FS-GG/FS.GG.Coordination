@@ -53,9 +53,10 @@ module internal PortableSourceJournalIO =
     /// No timeout/cancellation detaches an in-flight fsync from that owner.
     type Context(journalRoot: string, path: string, owner: SafeFileHandle) =
         do
+            // The open-flag literals below are the x86-64 Linux values (arm64 numbers O_DIRECTORY and
+            // O_NOFOLLOW differently), so every other architecture refuses rather than reinterpret them.
             if not (OperatingSystem.IsLinux())
-               || (RuntimeInformation.ProcessArchitecture <> Architecture.X64
-                   && RuntimeInformation.ProcessArchitecture <> Architecture.Arm64) then unavailable ()
+               || RuntimeInformation.ProcessArchitecture <> Architecture.X64 then unavailable ()
         // O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW; O_PATH cannot be fsynced.
         let directory = openDirectory(journalRoot, 0x90000 ||| 0x20000) |> checkedDescriptor
         let name = Path.GetFileName path
