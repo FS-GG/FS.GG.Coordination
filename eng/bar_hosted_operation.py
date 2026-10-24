@@ -283,14 +283,17 @@ def group_birth_observations(group,members):
         try:
             fields=Path('/proc/'+str(pid)+'/stat').read_text().rsplit(') ',1)[1].split()
             value.update(status='observed',state=fields[0],startTicks=int(fields[19]),pgrp=int(fields[2]),session=int(fields[3]))
-        except (OSError,ValueError,IndexError) as error:value['reason']=str(error)[:256]
+        except FileNotFoundError:value['status']='gone'
+        except (OSError,ValueError,IndexError) as error:value['reason']=type(error).__name__+': '+str(error)[:256]
         observations.append(value)
     return observations
 
 
 def live_group_births(group,members):
-    return [v['pid'] for v in group_birth_observations(group,members) if v['status']=='observed' and v['state']!='Z'
-            and v['startTicks']==v['expectedStartTicks'] and v['pgrp']==group and v['session']==group]
+    # Unknown custody and same-birth escape block success; signalling below
+    # still requires a fresh original PGID/SID/birth join.
+    return [v['pid'] for v in group_birth_observations(group,members) if v['status']=='Unknown' or
+            (v['status']=='observed' and v['state']!='Z' and v['startTicks']==v['expectedStartTicks'])]
 
 
 def run_preparation(operation_id,phase,*,evidence=EVIDENCE,launch=None):
@@ -347,7 +350,9 @@ def run_preparation(operation_id,phase,*,evidence=EVIDENCE,launch=None):
                 signal_owned(signal.SIGTERM);stop_at=min(intent['hardEnd']-.1,now+.9)
             if now>=intent['termAt'] and stop_at is None:
                 result['firstCause']=result['firstCause'] or 'original preparation deadline exhausted';signal_owned(signal.SIGTERM);stop_at=min(intent['hardEnd']-.1,now+.9)
-            if stop_at is not None and now>=stop_at:signal_owned(signal.SIGKILL)
+            if stop_at is not None and now>=stop_at:
+                signal_owned(signal.SIGKILL)
+                if child.poll() is not None and not selector.get_map():break
             if now>=intent['hardEnd']:break
             for key,_ in selector.select(min(.05,max(0,intent['hardEnd']-now))):
                 data=os.read(key.fd,65536);stream=streams[key.fd]

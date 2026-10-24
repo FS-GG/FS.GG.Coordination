@@ -883,10 +883,21 @@ class PreparationDeadline(ClockBudget):
             self.assertIn('canonicalize-checkouts',argv[-1])
 
     def test_group_birth_liveness_excludes_zombies_reused_and_foreign_members(self):
-        for state,start,pgrp,expected in [('S',44,4321,[123]),('Z',44,4321,[]),('S',45,4321,[]),('S',44,999,[])]:
+        for state,start,pgrp,expected in [('S',44,4321,[123]),('Z',44,4321,[]),('S',45,4321,[]),('S',44,999,[123])]:
             fields=['0']*20;fields[0]=state;fields[2]=str(pgrp);fields[3]='4321';fields[19]=str(start)
             with patch.object(Path,'read_text',return_value='123 (fixture) '+' '.join(fields)):
                 self.assertEqual(WRAPPER.live_group_births(4321,{123:44}),expected)
+
+    def test_unknown_and_moved_known_birth_never_count_as_retired(self):
+        for error in (PermissionError('fixture proc denied'),ValueError('fixture malformed proc')):
+            with patch.object(Path,'read_text',side_effect=error):
+                self.assertEqual(WRAPPER.live_group_births(4321,{123:44}),[123])
+                self.assertEqual(WRAPPER.group_birth_observations(4321,{123:44})[0]['status'],'Unknown')
+        with patch.object(Path,'read_text',side_effect=FileNotFoundError('confirmed absent')):
+            self.assertEqual(WRAPPER.live_group_births(4321,{123:44}),[])
+            self.assertEqual(WRAPPER.group_birth_observations(4321,{123:44})[0]['status'],'gone')
+        with patch.object(Path,'read_text',return_value='malformed proc row'):
+            self.assertEqual(WRAPPER.live_group_births(4321,{123:44}),[123])
 
     def test_known_live_group_birth_blocks_success_after_leader_and_eof(self):
         real_popen=subprocess.Popen;state={'calls':0}
