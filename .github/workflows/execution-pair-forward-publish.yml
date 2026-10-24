@@ -117,12 +117,12 @@ jobs:
           retention-days: 30
 
   packages:
-    name: packages
+    name: packages [org-publication-writer]
     if: inputs.mode != 'preflight' && needs.preflight.outputs.plan == 'packages' && github.ref == 'refs/heads/main' && github.actor == 'EHotwagner'
     needs: preflight
     runs-on: ubuntu-24.04
     environment: execution-pair-forward
-    timeout-minutes: 75
+    timeout-minutes: 105
     permissions:
       contents: read
       actions: read
@@ -142,6 +142,21 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
+      - name: Acquire org publication writer lock
+        shell: bash
+        timeout-minutes: 32
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LOCK_COMMIT: c799a9f9b21d52eb9766cf0950722e3e55145d39
+          LOCK_SCRIPT_SHA256: dca3fe60e5ebf4a6ff33e52b1ede6ee255b377790688e0958cb4ebcc90df53e6
+          LOCK_MAX_WAIT_MINUTES: '30'
+        run: |
+          set -euo pipefail
+          lock="$RUNNER_TEMP/publication_writer_lock.py"
+          curl --fail --silent --show-error --location --output "$lock" \
+            "https://raw.githubusercontent.com/FS-GG/.github/${LOCK_COMMIT}/scripts/publication_writer_lock.py"
+          echo "${LOCK_SCRIPT_SHA256}  ${lock}" | sha256sum --check --strict
+          python3 -I -B "$lock" acquire --max-wait-minutes "$LOCK_MAX_WAIT_MINUTES"
       - name: Require the enabled admission and exact publisher binding before any credential exists
         id: admitted
         shell: bash
@@ -239,12 +254,12 @@ jobs:
           retention-days: 90
 
   finalize:
-    name: finalize
+    name: finalize [org-publication-writer]
     if: ${{ !cancelled() && inputs.mode != 'preflight' && needs.public-load.result == 'success' && github.ref == 'refs/heads/main' && github.actor == 'EHotwagner' }}
     needs: [preflight, public-load]
     runs-on: ubuntu-24.04
     environment: execution-pair-forward
-    timeout-minutes: 75
+    timeout-minutes: 105
     permissions:
       contents: write
       actions: read
@@ -260,6 +275,21 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
+      - name: Acquire org publication writer lock
+        shell: bash
+        timeout-minutes: 32
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LOCK_COMMIT: c799a9f9b21d52eb9766cf0950722e3e55145d39
+          LOCK_SCRIPT_SHA256: dca3fe60e5ebf4a6ff33e52b1ede6ee255b377790688e0958cb4ebcc90df53e6
+          LOCK_MAX_WAIT_MINUTES: '30'
+        run: |
+          set -euo pipefail
+          lock="$RUNNER_TEMP/publication_writer_lock.py"
+          curl --fail --silent --show-error --location --output "$lock" \
+            "https://raw.githubusercontent.com/FS-GG/.github/${LOCK_COMMIT}/scripts/publication_writer_lock.py"
+          echo "${LOCK_SCRIPT_SHA256}  ${lock}" | sha256sum --check --strict
+          python3 -I -B "$lock" acquire --max-wait-minutes "$LOCK_MAX_WAIT_MINUTES"
       - name: Require the enabled admission and exact publisher binding before any credential exists
         shell: bash
         run: |

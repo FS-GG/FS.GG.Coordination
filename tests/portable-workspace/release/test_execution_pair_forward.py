@@ -40,7 +40,36 @@ COUNTS = {}
 SOURCE, TREE, PUBLISHER, RUN, OPERATOR = '7' * 40, 'b' * 40, '9' * 40, 4242, 'EHotwagner'
 POLICY_HASH = '5182bb35a6dd682cef84ac9ce4210cfd09f38b7410d8c9cf9bae42866bcb81da'
 ORIGINAL_ADMISSION_SHA256 = 'f0859d88276effeaf3a3b038b79b448809557cb7b8c6e32d509b2bd791e20826'
-ORIGINAL_PUBLISHER_SHA256 = 'ac736727db6dbf7a4d4c16d8daea9e9e684a2bca32c970389b4df80324a44908'
+ORIGINAL_PUBLISHER_SHA256 = '5847d9ecb31ef4bd4382a332bd27fa31cbac2b9ee8a8252f5e2d16cc6dc6a54f'
+# The original 0.3.0 publisher as admitted, before the org publication writer lock (FS-GG/.github ADR-0097).
+# The only change since is the lock gate, its job-name marker and the bounded wait added to job timeouts.
+PRE_LOCK_PUBLISHER_SHA256 = 'ac736727db6dbf7a4d4c16d8daea9e9e684a2bca32c970389b4df80324a44908'
+LOCK_MARKER = ' [org-publication-writer]'
+LOCK_WAIT_MINUTES = 30
+
+
+def without_lock_gate(text):
+    """Undo exactly the ADR-0097 adoption: gate steps, name markers and the added wait in job timeouts."""
+    out, job_marked, skipping = [], False, False
+    lines = text.split('\n')
+    for index, line in enumerate(lines):
+        if re.fullmatch(r'  [A-Za-z0-9_-]+:', line):
+            job_marked = False
+        if skipping:
+            if line.startswith('      - ') or (line and not line.startswith(' ')):
+                skipping = False
+            else:
+                continue
+        if line == '      - name: Acquire org publication writer lock':
+            skipping = True
+            continue
+        if re.match(r'^    name: .*' + re.escape(LOCK_MARKER) + r'$', line):
+            job_marked = True
+            line = line[:-len(LOCK_MARKER)]
+        elif job_marked and (match := re.fullmatch(r'    timeout-minutes: (\d+)', line)):
+            line = '    timeout-minutes: %d' % (int(match.group(1)) - LOCK_WAIT_MINUTES)
+        out.append(line)
+    return '\n'.join(out)
 READBACK = runpy.run_path(str(ROOT / 'eng/write-callable-cli-release-readback.py'))
 # Synthetic forward S1 receivers: the fixed originals pin exactly 0.3.0 and cannot receive a forward pair.
 FORWARD_RECEIVERS = {'sdd-s1': {'commit': 'd' * 40},
@@ -534,6 +563,7 @@ def committed_state_controls():
     assert sha(original) == ORIGINAL_ADMISSION_SHA256, 'original 0.3.0 admission changed'
     publish = (ROOT / '.github/workflows/callable-cli-release-publish.yml').read_bytes()
     assert sha(publish) == ORIGINAL_PUBLISHER_SHA256, 'original 0.3.0 publisher changed'
+    assert sha(without_lock_gate(publish.decode()).encode()) == PRE_LOCK_PUBLISHER_SHA256, 'original 0.3.0 publisher differs by more than the publication writer lock'
     original_admission = json.loads(original)
     assert original_admission['enabled'] is False and original_admission['version'] == '0.3.0'
     must_refuse('original admission is not a forward admission', F.validate_admission, original_admission)
@@ -1608,7 +1638,7 @@ def workflow_controls():
             '      - name: Require the enabled admission and exact publisher binding before any credential exists\n        id: admitted\n',
             '      - name: Exchange early\n        uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841\n        with:\n          user: x\n'
             '      - name: Require the enabled admission and exact publisher binding before any credential exists\n        id: admitted\n', 1),
-        'retry-or-tolerance': lambda t: t.replace('    timeout-minutes: 75\n    permissions:\n      contents: read\n      actions: read\n      packages: write', '    continue-on-error: true\n    timeout-minutes: 75\n    permissions:\n      contents: read\n      actions: read\n      packages: write', 1),
+        'retry-or-tolerance': lambda t: t.replace('    timeout-minutes: 105\n    permissions:\n      contents: read\n      actions: read\n      packages: write', '    continue-on-error: true\n    timeout-minutes: 105\n    permissions:\n      contents: read\n      actions: read\n      packages: write', 1),
         'unpinned-action:actions/checkout@v4': lambda t: t.replace('actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1', 'actions/checkout@v4', 1),
         'trigger-not-manual': lambda t: t.replace('on:\n  workflow_dispatch:', 'on:\n  push:\n  workflow_dispatch:', 1),
         'touches-original-operation': lambda t: t.replace("PYTHONOPTIMIZE: '0'", "PYTHONOPTIMIZE: '0'\n      ORIGINAL: execution/v0.3.0", 1),

@@ -63,15 +63,30 @@ concurrency:
 # Partial publication is retained for scoped recovery; this job never repacks.
 jobs:
   preflight:
-    name: Read-only migration release feasibility
+    name: Read-only migration release feasibility [org-publication-writer]
     if: inputs.preflight_only == true && !inputs.cli_only && !inputs.readback_only && !inputs.execution_pair && !inputs.pair_recovery
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 35
     permissions:
       contents: read
       packages: read
       id-token: write
     steps:
+      - name: Acquire org publication writer lock
+        shell: bash
+        timeout-minutes: 32
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LOCK_COMMIT: c799a9f9b21d52eb9766cf0950722e3e55145d39
+          LOCK_SCRIPT_SHA256: dca3fe60e5ebf4a6ff33e52b1ede6ee255b377790688e0958cb4ebcc90df53e6
+          LOCK_MAX_WAIT_MINUTES: '30'
+        run: |
+          set -euo pipefail
+          lock="$RUNNER_TEMP/publication_writer_lock.py"
+          curl --fail --silent --show-error --location --output "$lock" \
+            "https://raw.githubusercontent.com/FS-GG/.github/${LOCK_COMMIT}/scripts/publication_writer_lock.py"
+          echo "${LOCK_SCRIPT_SHA256}  ${lock}" | sha256sum --check --strict
+          python3 -I -B "$lock" acquire --max-wait-minutes "$LOCK_MAX_WAIT_MINUTES"
       - name: Observe exact main and complete known package namespace on both feeds
         shell: bash
         env:
@@ -164,9 +179,9 @@ jobs:
 
   publish:
     if: inputs.preflight_only != true && !inputs.cli_only && !inputs.readback_only && !inputs.execution_pair && !inputs.pair_recovery
-    name: Qualify, publish, and read back exact portable CLI
+    name: Qualify, publish, and read back exact portable CLI [org-publication-writer]
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 90
     permissions:
       actions: read
       contents: write
@@ -208,6 +223,21 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Acquire org publication writer lock
+        shell: bash
+        timeout-minutes: 32
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LOCK_COMMIT: c799a9f9b21d52eb9766cf0950722e3e55145d39
+          LOCK_SCRIPT_SHA256: dca3fe60e5ebf4a6ff33e52b1ede6ee255b377790688e0958cb4ebcc90df53e6
+          LOCK_MAX_WAIT_MINUTES: '30'
+        run: |
+          set -euo pipefail
+          lock="$RUNNER_TEMP/publication_writer_lock.py"
+          curl --fail --silent --show-error --location --output "$lock" \
+            "https://raw.githubusercontent.com/FS-GG/.github/${LOCK_COMMIT}/scripts/publication_writer_lock.py"
+          echo "${LOCK_SCRIPT_SHA256}  ${lock}" | sha256sum --check --strict
+          python3 -I -B "$lock" acquire --max-wait-minutes "$LOCK_MAX_WAIT_MINUTES"
       - name: Set up the pinned .NET SDK
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with:
@@ -586,9 +616,9 @@ jobs:
 
   cli_successor:
     if: inputs.cli_only && !inputs.preflight_only && !inputs.execution_pair && !inputs.pair_recovery
-    name: Publish the admitted original CLI-only candidate
+    name: Publish the admitted original CLI-only candidate [org-publication-writer]
     runs-on: ubuntu-24.04
-    timeout-minutes: 35
+    timeout-minutes: 65
     permissions:
       actions: read
       contents: write
@@ -616,6 +646,21 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      - name: Acquire org publication writer lock
+        shell: bash
+        timeout-minutes: 32
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LOCK_COMMIT: c799a9f9b21d52eb9766cf0950722e3e55145d39
+          LOCK_SCRIPT_SHA256: dca3fe60e5ebf4a6ff33e52b1ede6ee255b377790688e0958cb4ebcc90df53e6
+          LOCK_MAX_WAIT_MINUTES: '30'
+        run: |
+          set -euo pipefail
+          lock="$RUNNER_TEMP/publication_writer_lock.py"
+          curl --fail --silent --show-error --location --output "$lock" \
+            "https://raw.githubusercontent.com/FS-GG/.github/${LOCK_COMMIT}/scripts/publication_writer_lock.py"
+          echo "${LOCK_SCRIPT_SHA256}  ${lock}" | sha256sum --check --strict
+          python3 -I -B "$lock" acquire --max-wait-minutes "$LOCK_MAX_WAIT_MINUTES"
       - name: Bind disabled-by-default CLI admission and both source identities
         shell: bash
         env:
@@ -1001,9 +1046,9 @@ jobs:
 
   execution_pair:
     if: inputs.execution_pair && inputs.pair_recovery && !inputs.preflight_only && !inputs.cli_only && !inputs.readback_only
-    name: Publish the admitted original routine Execution pair
+    name: Publish the admitted original routine Execution pair [org-publication-writer]
     runs-on: ubuntu-24.04
-    timeout-minutes: 35
+    timeout-minutes: 65
     permissions:
       actions: read
       contents: write
@@ -1024,6 +1069,21 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      - name: Acquire org publication writer lock
+        shell: bash
+        timeout-minutes: 32
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LOCK_COMMIT: c799a9f9b21d52eb9766cf0950722e3e55145d39
+          LOCK_SCRIPT_SHA256: dca3fe60e5ebf4a6ff33e52b1ede6ee255b377790688e0958cb4ebcc90df53e6
+          LOCK_MAX_WAIT_MINUTES: '30'
+        run: |
+          set -euo pipefail
+          lock="$RUNNER_TEMP/publication_writer_lock.py"
+          curl --fail --silent --show-error --location --output "$lock" \
+            "https://raw.githubusercontent.com/FS-GG/.github/${LOCK_COMMIT}/scripts/publication_writer_lock.py"
+          echo "${LOCK_SCRIPT_SHA256}  ${lock}" | sha256sum --check --strict
+          python3 -I -B "$lock" acquire --max-wait-minutes "$LOCK_MAX_WAIT_MINUTES"
       - name: Bind exclusive disabled-by-default pair admission
         shell: bash
         env:

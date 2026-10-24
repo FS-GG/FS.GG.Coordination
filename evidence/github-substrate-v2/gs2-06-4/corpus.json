@@ -20,7 +20,7 @@
     },
     {
       "path": ".github/workflows/candidate-supply-chain.yml",
-      "sha256": "42d3cfffac402269fbb3b4a856dadcd20716bbe75869bf16cf7101ab60323b9e",
+      "sha256": "8d53077154e42e838170171bb54988988bcf0617176146ae33d49b12df74bf82",
       "references": [
         { "kind": "action", "repository": "actions/checkout", "path": null, "revision": "3d3c42e5aac5ba805825da76410c181273ba90b1" },
         { "kind": "action", "repository": "actions/setup-dotnet", "path": null, "revision": "a98b56852c35b8e3190ac28c8c2271da59106c68" },
