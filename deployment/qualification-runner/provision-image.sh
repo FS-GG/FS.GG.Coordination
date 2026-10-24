@@ -25,15 +25,16 @@ python3 -I -B "$runner_source/eng/dedicated_qualification_runner.py" validate-in
   --target "$runner_target" --lock "$runner_lock" --inputs "$runner_inputs"
 # shellcheck source=/dev/null
 . /etc/os-release
-[[ $ID == ubuntu && $VERSION_ID == 26.10 ]]
+[[ $ID == ubuntu && $VERSION_ID == 24.04 ]]
 # Offline complete signed transaction. No moving repository, remote resolver or signature bypass.
 [[ $runner_inputs == /mnt/fsgg-qualification-inputs ]]
-runner_apt=(-o Dir::Etc::sourcelist="$runner_source/deployment/qualification-runner/runner.sources.list" -o Dir::Etc::sourceparts=-)
+# The image-build VM must be offline from archive mirrors and must not have run apt-daily or unattended-upgrades:
+# the final inventory below is compared byte for byte with the locked expectation for this image release.
+runner_apt_sources=$runner_source/deployment/qualification-runner/runner.sources.list
+# shellcheck source=noble-apt.sh
+. "$runner_source/deployment/qualification-runner/noble-apt.sh"
 apt-get "${runner_apt[@]}" update
-apt-get "${runner_apt[@]}" --assume-yes --no-install-recommends install \
-  build-essential binutils libc6-dev pkg-config git curl ca-certificates python3 sudo \
-  uidmap libcap2-bin util-linux e2fsprogs jq docker.io apparmor apparmor-utils \
-  libicu78 libkrb5-3 zlib1g
+apt-get "${runner_apt[@]}" --assume-yes --no-install-recommends install "${runner_packages[@]}"
 runner_inventory=$(mktemp)
 trap 'rm -f -- "$runner_inventory"' EXIT
 dpkg-query -W -f='${binary:Package}\t${Version}\n' | LC_ALL=C sort > "$runner_inventory"

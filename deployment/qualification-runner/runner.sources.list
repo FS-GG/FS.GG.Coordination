@@ -1,4 +1,8 @@
-# Image-build input only. This local repository must carry the complete locked,
-# signed Ubuntu26.10 package transaction, InRelease and trusted archive keyring.
+# Image-build input only. This local repository is the signed Ubuntu 24.04 (noble) archive as served by the
+# immutable snapshot named in noble/apt-transaction.json: the archive's own InRelease and Packages indexes for
+# noble, noble-updates and noble-security (main, universe) plus the .deb files of the locked transaction.
+# The trusted archive keyring is the guest's own ubuntu-archive-keyring.gpg.
 # No job or shared Codex-host package installation is selected by this file.
-deb [signed-by=/usr/share/keyrings/ubuntu-archive-keyring.gpg] file:/mnt/fsgg-qualification-inputs/apt stonking main universe
+deb [signed-by=/usr/share/keyrings/ubuntu-archive-keyring.gpg] file:/mnt/fsgg-qualification-inputs/apt noble main universe
+deb [signed-by=/usr/share/keyrings/ubuntu-archive-keyring.gpg] file:/mnt/fsgg-qualification-inputs/apt noble-updates main universe
+deb [signed-by=/usr/share/keyrings/ubuntu-archive-keyring.gpg] file:/mnt/fsgg-qualification-inputs/apt noble-security main universe

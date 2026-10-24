@@ -157,7 +157,7 @@ class DedicatedDomain(unittest.TestCase):
     def dedicated(self, device='7:0'):
         value = observed(device, '8:2' if device == '8:1' else '8:1')
         value['relation'] = BAR.DEDICATED_RELATION
-        value['runner'] = {'imageOS': 'ubuntu26.10', 'imageVersion': 'a' * 64, 'githubHosted': False,
+        value['runner'] = {'imageOS': 'ubuntu24.04', 'imageVersion': 'a' * 64, 'githubHosted': False,
             'dedicated': {'baselineId': BAR.shared.DEDICATED_BASELINE, 'providerInstanceId': 'authored-vm',
                 'providerImageId': 'authored-image', 'systemUuid': 'authored-uuid', 'bootId': value['bootId'],
                 'bindingSha256': 'b' * 64, 'oneJobOnly': True, 'runnerGroup': 'Default',

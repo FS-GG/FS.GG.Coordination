@@ -5,20 +5,23 @@ No machine, acquired image, runner registration or native qualification is accep
 by this source. `baseline.json` deliberately leaves those inputs unset. Ordinary
 pull-request CI remains on GitHub-hosted runners.
 
-The candidate carrier is released Ubuntu 26.10 x86_64. Its official cloud manifest
-lists glibc `2.44-1ubuntu2` and AppArmor. This matches the *version input* required
-by SDD's catalog source; it does not establish its 30 exports, layouts, executable
-closure, user namespaces or actual catalog behavior. Ubuntu 26.10 is not yet in
-the published .NET 10 supported-OS table. Its OpenSSL 4 compatibility is unqualified.
-Fedora 45 was still prerelease on 2026-10-24; an absent AppArmor knob cannot satisfy
-the maintained policy-zero contract. Neither SELinux nor NoNewPrivileges is disabled.
+The carrier is the released Ubuntu 24.04 LTS (noble) x86_64 cloud image,
+`releases/noble/release-20261017`, pinned by the sha256 in its signed `SHA256SUMS`
+(UEC Image Automatic Signing Key `D2EB4462...7C81`). Root chose it over Ubuntu 26.10
+([#4778](https://github.com/FS-GG/.github/issues/4778#issuecomment-6390313337)) because
+noble ships OpenSSL 3.0.x, which satisfies the unchanged `crypto_identity` OpenSSL-3 gate
+of `eng/bar_hosted_operation.py`, while 26.10's OpenSSL 4 does not; the gate is not relaxed.
+Noble carries the AppArmor `apparmor_restrict_unprivileged_userns` knob, so the
+policy-zero drop-in applies. Neither SELinux nor NoNewPrivileges is disabled.
 
-The source identities and complete 30-export requirement are in `baseline.json`.
-The determining gate remains the actual published SDD catalog, with SDK 10.0.401
-and runtime 10.0.12 on the actual carrier. Governance's separate >=2.40/four-export
-contract remains unchanged. The accepted complete SDK input manifest is an input
-identity, not an installed image or host qualification. Optional tracing's unresolved
-`liblttng-ust.so.0` remains separate.
+Known consequence, stated here rather than hidden: noble's glibc is `2.39`, whereas
+`FS.GG.SDD`'s `CatalogScaffoldLinux.fs` accepts exactly glibc `2.44`. This carrier therefore
+serves the BAR image qualification (which does not use that catalog) but **cannot satisfy
+the SDD catalog scaffold gate**; the Templates callers that need that catalog remain
+unrouted. The source identities and 30-export requirement for that separate supplier stay
+in `baseline.json`. Governance's separate >=2.40/four-export contract is unchanged. The
+accepted SDK input manifest is an input identity, not an installed image or host
+qualification. Optional tracing's `liblttng-ust.so.0` remains a separate, uninstalled role.
 
 ## Reprovisioning contract
 
@@ -42,7 +45,8 @@ identity, not an installed image or host qualification. Optional tracing's unres
    signer identity; the moving `current` index is discovery metadata only. Acquire
    a complete signed offline APT transaction and expected final package inventory,
    the fixed runner release, SDK archive and Go archive. Retain full file/hash
-   population and qualification receipts in the acquired-input lock. No credentials
+   population and qualification receipts in the acquired-input lock
+   (`noble/acquired-input-lock.json`, see "Noble inputs" below). No credentials
    belong in that lock. A matching digest is not signature or provider authority.
 3. Admit the image-build operation on that exact machine. The operator installs a
    root-owned mode-0600 `/run/fsgg-image-build-selection.json` binding target bytes,
@@ -71,7 +75,7 @@ all new native/compiler qualification costs remain unselected.
 
 The GitHub Free plan has no restricted runner groups, so the runner serves exactly one
 **private** repository, `FS-GG/FS.GG.Native.Qualification` (see `native-qualification/`).
-The layer below is what makes an ephemeral Ubuntu 26.10 guest the *qualified image*
+The layer below is what makes an ephemeral Ubuntu 24.04 (noble) guest the *qualified image*
 for that caller. Everything slow is baked ahead of time so the caller's 300 s first-step
 deadline is not spent on installation.
 
@@ -82,7 +86,7 @@ deadline is not spent on installation.
 | SDK 10.0.401 / runtime 10.0.12, Go 1.27.1 | bake, from the hash-checked acquired inputs | fixed roots `/opt/fsgg/toolchains/{dotnet-10.0.401,go-1.27.1}`; exactly one SDK; `VERSION` is `go1.27.1` |
 | Buildah 1.43.1 | not a guest package: the job builds the sha256-pinned Arch userland | reported as a fact; the domain gate checks the version in the job |
 | Runner path, name and UID | bake: `/opt/fsgg/actions-runner`, user `runner` UID/GID 1001, `/home/runner`; names `fsgg-q-*` | account, group, path, ownership, never-configured runner |
-| Runner dependencies | bake (`libicu78 libkrb5-3 zlib1g`) instead of a live `installdependencies.sh` | `Runner.Listener` present |
+| Runner dependencies | bake (`libicu74 libkrb5-3 zlib1g`; `libssl3t64` is in the image) instead of a live `installdependencies.sh` | `Runner.Listener` present; its version equals the lock |
 | Passwordless root for `runner` | bake: `runner.sudoers`, this disposable guest only | sudoers bytes equal `runner.sudoers`, 0440 |
 | The layer itself | bake: `/opt/fsgg/qualification-layer` with `MANIFEST.sha256` | every listed file hashes equal, the five required files are listed, nothing is unlisted |
 | `instance-binding.json` (root, 0644) | **per boot**: `guest-boot.sh --apply REQUEST.json fsgg-q-NAME` | schema, `Default` group, label, repository, `jit-config`, runner name, actual DMI UUID |
@@ -111,21 +115,52 @@ Neither script accepts a PAT or registration token, uses `--replace`, or reuses 
 `ACTIONS_RUNNER_INPUT_JITCONFIG` environment input and refuses unless the baked layer and
 sealed binding read back clean immediately before it `exec`s the runner.
 
-Known blocker found by the readback: the official Ubuntu 26.10 cloud package manifest
-(`stonking-server-cloudimg-amd64.manifest`, read 2026-10-24) lists `openssl 4.0.3-1ubuntu1`, while
-`eng/bar_hosted_operation.py` accepts only the OpenSSL 3 family for the encrypted candidate.
-`verify-guest` therefore reports `openssl-family-not-3` (from the installed `openssl` package
-version, because it executes nothing from the guest) and the bake exits non-zero after
-installing: do not publish that image. It needs a Root decision (qualify OpenSSL 4 for the CMS
-sealing, or provide a pinned OpenSSL 3 binary at the path `crypto_identity` reads, with the
-matching readback rule) before the first dispatch; it is not silently relaxed here.
+OpenSSL: the guest's `openssl` package must be the 3.x family (noble: `3.0.13`), because
+`eng/bar_hosted_operation.py` `crypto_identity` accepts only `OpenSSL 3.`. `verify-guest` reads
+the installed package version (nothing is executed from the guest) and reports
+`openssl-family-not-3` otherwise, so a later carrier with OpenSSL 4 stays refused.
 
-Baking changes the package inventory: `libicu78 libkrb5-3 zlib1g` must be in the acquired lock's
-signed APT transaction and in `apt/package-inventory.expected`, so the lock must be regenerated.
 A baked runner ages. The retired registration path passed `--disableupdate`; whether a
 JIT-launched runner self-updates is unverified and `run-jit-runner.sh` cannot control it, so
 re-bake the current runner before GitHub's runner update deadline instead of spending an
 update, or running unpinned bytes, inside the 300 s first-step window.
+
+## Noble inputs: acquisition, lock and expected inventory
+
+`noble/` holds the reviewed, credential-free records of the acquired-input population:
+
+| File | Meaning |
+|---|---|
+| `acquired-input-lock.json` | schema `fsgg.dedicated-qualification-acquired-inputs/1`; image, SDK, runner, Go, compiler identities and the complete 76-row file population (path, sha256, bytes, origin URL) |
+| `package-inventory.expected` | the exact `dpkg-query` inventory (717 packages) the bake must reproduce: the image's 664 packages, 4 upgrades and 53 additions |
+| `apt-transaction.json` | the signed transaction: immutable Ubuntu snapshot `20261024T000000Z`, signer, the three suites' InRelease digests, the install request and every locked `.deb` |
+| `image-acquisition-receipt.json`, `image/SHA256SUMS(.gpg)` | the signed checksum file, its detached signature and what was verified |
+| `runner-release.json` | the GitHub release record whose asset digest pins runner 2.338.1 |
+
+Verification chain, all without credentials: the image sha256 comes from `SHA256SUMS`, whose
+detached signature verifies under the UEC Image Automatic Signing Key (the same fingerprint
+was fetched from keyserver.ubuntu.com and appears in `docker.io/library/ubuntu:24.04`'s
+`ubuntu-cloudimage-keyring.gpg`). APT inputs are the archive's own `InRelease` files (Ubuntu
+Archive Automatic Signing Key 2018, `F6ECB376...C93C`), their `Packages.xz` hashes, and each
+`.deb` against the signed index; the guest's apt re-verifies the same signatures offline.
+The SDK bytes equal the accepted sha512 pin, the runner bytes equal GitHub's release digest
+(and Home's r3 pin `08e9ccb3...`), and Go 1.27.1's sha256 is go.dev's published value.
+
+`noble-inputs.py acquire --out FRESH_DIR` downloads exactly the locked URLs and verifies all of it;
+`noble-inputs.py verify --inputs DIR` re-verifies an existing population; `provision-image.sh` then
+runs `dedicated_qualification_runner.py validate-inputs` over `/mnt/fsgg-qualification-inputs`.
+Package-level compiler identities in the lock (`compilerSha256`, `headersManifestSha256`,
+`linkerSha256`, `runtimeClosureSha256`) hash the locked package set per role; actual cgo/race stays a
+separately selected qualification.
+
+The expected inventory was produced, not guessed: the cloud image was extracted rootlessly
+(`qemu-img convert` plus `debugfs rdump` of its root partition) in a scratch directory; its
+`dpkg` package set equals the signed `.manifest` exactly; then `simulate-noble-bake.sh` (the same
+`noble-apt.sh` and `runner.sources.list` as the bake, network disabled, apt sandbox user off only
+because rootless containers cannot map `_apt`) installed the transaction offline and wrote the
+inventory. Regenerate everything with `noble-inputs.py lock` after choosing a new snapshot.
+The image-build VM must be offline from mirrors and must not have run `apt-daily` or
+`unattended-upgrades` before the bake, or the byte-for-byte inventory comparison refuses.
 
 ## Caller and security boundary
 
@@ -155,7 +190,7 @@ change that fact. Control-group retirement and existing delegation remain.
 
 The maintained gate is `eng/bar_hosted_domain.py`, called by `bar-hosted-domain-preflight.yml`
 (hosted, no content) and by the private caller's fixed `dedicated-preconfigured` profile. Its
-legacy profile requires actual GitHub Ubuntu24 image identity; a self-hosted Ubuntu26.10 VM
+legacy profile requires actual GitHub Ubuntu24 image identity; a self-hosted Ubuntu 24.04 dedicated VM
 must not fabricate those facts. `DEDICATED_IMAGE_SHA256` and `DEDICATED_PROVIDER_IMAGE_ID` in
 `eng/portable_workspace_sc2.py` stay unset, so the profile refuses until a later reviewed source
 change records the accepted baked image's identity. No acquired image, registration, source
@@ -183,9 +218,9 @@ The manual owned preparation also calls the14controls. This is source wiring, no
 an observed CI result. The focused unittest module exercises authored DATA/refusal
 and tiny file-population checks only. It does not run SDKs, compilers, userns probes, provisioning or registration.
 
-- [Ubuntu 26.10 release notes](https://documentation.ubuntu.com/release-notes/26.10/)
-- [Official Ubuntu cloud image metadata](https://cloud-images.ubuntu.com/stonking/current/)
-- [Official cloud package manifest](https://cloud-images.ubuntu.com/stonking/current/stonking-server-cloudimg-amd64.manifest)
+- [Ubuntu 24.04 cloud image releases](https://cloud-images.ubuntu.com/releases/noble/)
+- [Pinned release SHA256SUMS](https://cloud-images.ubuntu.com/releases/noble/release-20261017/SHA256SUMS) and its [signature](https://cloud-images.ubuntu.com/releases/noble/release-20261017/SHA256SUMS.gpg)
+- [Ubuntu archive snapshot service](https://snapshot.ubuntu.com/)
 - [.NET supported OS policy](https://github.com/dotnet/core/blob/main/release-notes/10.0/supported-os.md)
 - [GitHub self-hosted runner requirements](https://docs.github.com/en/actions/reference/runners/self-hosted-runners)
 - [GitHub ephemeral runner guidance](https://docs.github.com/en/actions/how-tos/manage-runners/self-hosted-runners/autoscale)

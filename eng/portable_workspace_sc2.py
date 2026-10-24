@@ -1440,7 +1440,7 @@ def main(args, api):
 # Dedicated qualification IMAGE source selection. Unset pins cannot admit a VM.
 # Populate only from independently accepted signed image/target evidence.
 DEDICATED_RELATION = 'dedicated-preconfigured-ephemeral-vm'
-DEDICATED_BASELINE = 'ubuntu2610-linux-x64-v1'
+DEDICATED_BASELINE = 'ubuntu2404-linux-x64-v1'
 # Repository-level JIT runner on the private caller repository; the Free plan has no restricted group.
 DEDICATED_RUNNER_GROUP = 'Default'
 DEDICATED_IMAGE_SHA256 = None
@@ -1457,7 +1457,7 @@ def dedicated_runner_refusals(runner):
     if not isinstance(pin, str) or re.fullmatch(r'[0-9a-f]{64}', pin) is None \
             or not isinstance(DEDICATED_PROVIDER_IMAGE_ID, str) or not DEDICATED_PROVIDER_IMAGE_ID:
         failures.append('dedicated-image-unselected')
-    if runner['imageOS'] != 'ubuntu26.10' or runner['githubHosted'] is not False or runner['imageVersion'] != pin:
+    if runner['imageOS'] != 'ubuntu24.04' or runner['githubHosted'] is not False or runner['imageVersion'] != pin:
         failures.append('dedicated-image')
     value = runner['dedicated']
     if type(value) is not dict or set(value) != {'baselineId', 'providerInstanceId', 'providerImageId',
