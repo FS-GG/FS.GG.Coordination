@@ -187,7 +187,7 @@ jobs:
               GITHUB_RUN_ID GITHUB_WORKFLOW_REF OPERATION_ID HOST_JOB_STARTED HOST_JOB_MONOTONIC EVIDENCE STARTUP_EVIDENCE RUNNER_TEMP ImageOS ImageVersion RUNNER_ENVIRONMENT; do
             if [[ -v "$name" ]]; then prep_env+=("$name=${!name}"); fi
           done
-          sudo -n env "${prep_env[@]}" python3 -I -B source/eng/bar_hosted_operation.py prep-run \
+          sudo -n env "${prep_env[@]}" /usr/bin/python3 -I -B source/eng/bar_hosted_operation.py prep-run \
             --phase controls --operation-id "$OPERATION_ID"
 
       - name: Build the pinned daemonless Arch userland
@@ -243,6 +243,38 @@ jobs:
               exec chroot "$USERLAND" /usr/bin/env -i PATH=/usr/bin ARCH_ARCHIVE_DATE="$ARCH_ARCHIVE_DATE" \
                 BUILDAH_PACKAGE="$BUILDAH_PACKAGE" BUILDAH_SHA256="$BUILDAH_SHA256" /bin/bash -c "$PACMAN_SCRIPT"' | tee "$EVIDENCE/facts.env"
             echo "userland.image=$ARCH_IMAGE" | tee -a "$EVIDENCE/facts.env"
+            set -euo pipefail
+            sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache \
+              /usr/local/share/boost /usr/local/share/powershell /usr/share/swift /usr/local/julia* \
+              /usr/local/share/chromium /opt/microsoft /opt/google /opt/az /usr/lib/jvm \
+              /usr/local/lib/node_modules /usr/share/miniconda /opt/pipx /usr/local/aws-cli
+            sudo docker system prune --all --force >/dev/null
+            sudo systemctl stop docker.socket docker.service containerd.service fstrim.timer fstrim.service
+            sudo swapoff -a
+            sudo rm -f /swapfile /mnt/swapfile
+            sudo sysctl -q -w kernel.apparmor_restrict_unprivileged_userns=0
+            echo "provision.rootAvailBytes=$(df -B1 --output=avail / | tail -n 1 | tr -d ' ')" | tee -a "$EVIDENCE/facts.env"
+
+            set -euo pipefail
+            gib=$((1024 ** 3)); mib=$((1024 ** 2))
+            size=$(( ( $(df -B1 --output=avail / | tail -n 1 | tr -d ' ') - 6 * gib ) / mib * mib ))
+            sudo fallocate -l "$size" "$VOLUME_IMAGE"
+            loop=$(sudo losetup --find --show "$VOLUME_IMAGE")
+            sudo mkfs.ext4 -q -m 0 -E nodiscard,lazy_itable_init=0,lazy_journal_init=0 "$loop"
+            sudo mkdir -m 0755 "$VOLUME"
+            sudo mount -o nodiscard "$loop" "$VOLUME"
+            sudo install -d -m 0700 -o 1001 -g 1001 "$VOLUME/allocation" "$VOLUME/load-store" "$VOLUME/transport-candidate" "$VOLUME/transport-metadata"
+            echo "provision.volumeImageBytes=$size" | tee -a "$EVIDENCE/facts.env"
+            echo "provision.volumeAllocatedAfterMkfs=$(( $(stat -c %b "$VOLUME_IMAGE") * $(stat -c %B "$VOLUME_IMAGE") ))" \
+              | tee -a "$EVIDENCE/facts.env"
+            echo "provision.loop=$loop" | tee -a "$EVIDENCE/facts.env"
+            install -d -m 0700 "$VOLUME/allocation/context"
+            cp -a product/. "$VOLUME/allocation/context/"
+            chmod 0700 "$VOLUME/allocation/context"
+            test "$(git -C "$VOLUME/allocation/context" rev-parse HEAD)" = 4ddd070650e3131916a13bb2c5e75f99376e1c3a
+            echo "source.helperRevision=$GITHUB_SHA" | tee -a "$EVIDENCE/facts.env"
+            echo "source.helperTree=$(git -C source rev-parse 'HEAD^{tree}')" | tee -a "$EVIDENCE/facts.env"
+
         run: |
           set -euo pipefail
           prep_env=()
@@ -250,46 +282,8 @@ jobs:
               GITHUB_RUN_ID GITHUB_WORKFLOW_REF OPERATION_ID HOST_JOB_STARTED HOST_JOB_MONOTONIC EVIDENCE STARTUP_EVIDENCE RUNNER_TEMP ImageOS ImageVersion RUNNER_ENVIRONMENT; do
             if [[ -v "$name" ]]; then prep_env+=("$name=${!name}"); fi
           done
-          sudo -n env "${prep_env[@]}" python3 -I -B source/eng/bar_hosted_operation.py prep-run \
+          sudo -n env "${prep_env[@]}" /usr/bin/python3 -I -B source/eng/bar_hosted_operation.py prep-run \
             --phase userland --operation-id "$OPERATION_ID"
-
-      - name: Free preinstalled toolchains, stop container daemons and swap
-        shell: bash
-        run: |
-          set -euo pipefail
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache \
-            /usr/local/share/boost /usr/local/share/powershell /usr/share/swift /usr/local/julia* \
-            /usr/local/share/chromium /opt/microsoft /opt/google /opt/az /usr/lib/jvm \
-            /usr/local/lib/node_modules /usr/share/miniconda /opt/pipx /usr/local/aws-cli
-          sudo docker system prune --all --force >/dev/null
-          sudo systemctl stop docker.socket docker.service containerd.service fstrim.timer fstrim.service
-          sudo swapoff -a
-          sudo rm -f /swapfile /mnt/swapfile
-          sudo sysctl -q -w kernel.apparmor_restrict_unprivileged_userns=0
-          echo "provision.rootAvailBytes=$(df -B1 --output=avail / | tail -n 1 | tr -d ' ')" | tee -a "$EVIDENCE/facts.env"
-
-      - name: Provision the preallocated nodiscard operation volume
-        shell: bash
-        run: |
-          set -euo pipefail
-          gib=$((1024 ** 3)); mib=$((1024 ** 2))
-          size=$(( ( $(df -B1 --output=avail / | tail -n 1 | tr -d ' ') - 6 * gib ) / mib * mib ))
-          sudo fallocate -l "$size" "$VOLUME_IMAGE"
-          loop=$(sudo losetup --find --show "$VOLUME_IMAGE")
-          sudo mkfs.ext4 -q -m 0 -E nodiscard,lazy_itable_init=0,lazy_journal_init=0 "$loop"
-          sudo mkdir -m 0755 "$VOLUME"
-          sudo mount -o nodiscard "$loop" "$VOLUME"
-          sudo install -d -m 0700 -o 1001 -g 1001 "$VOLUME/allocation" "$VOLUME/load-store" "$VOLUME/transport-candidate" "$VOLUME/transport-metadata"
-          echo "provision.volumeImageBytes=$size" | tee -a "$EVIDENCE/facts.env"
-          echo "provision.volumeAllocatedAfterMkfs=$(( $(stat -c %b "$VOLUME_IMAGE") * $(stat -c %B "$VOLUME_IMAGE") ))" \
-            | tee -a "$EVIDENCE/facts.env"
-          echo "provision.loop=$loop" | tee -a "$EVIDENCE/facts.env"
-          install -d -m 0700 "$VOLUME/allocation/context"
-          cp -a product/. "$VOLUME/allocation/context/"
-          chmod 0700 "$VOLUME/allocation/context"
-          test "$(git -C "$VOLUME/allocation/context" rev-parse HEAD)" = 4ddd070650e3131916a13bb2c5e75f99376e1c3a
-          echo "source.helperRevision=$GITHUB_SHA" | tee -a "$EVIDENCE/facts.env"
-          echo "source.helperTree=$(git -C source rev-parse 'HEAD^{tree}')" | tee -a "$EVIDENCE/facts.env"
 
       - name: Admit the hosted domain as root-produced evidence
         id: admit
@@ -311,7 +305,7 @@ jobs:
               GITHUB_RUN_ID GITHUB_WORKFLOW_REF OPERATION_ID HOST_JOB_STARTED HOST_JOB_MONOTONIC EVIDENCE STARTUP_EVIDENCE RUNNER_TEMP ImageOS ImageVersion RUNNER_ENVIRONMENT; do
             if [[ -v "$name" ]]; then prep_env+=("$name=${!name}"); fi
           done
-          sudo -n env "${prep_env[@]}" python3 -I -B source/eng/bar_hosted_operation.py prep-run \
+          sudo -n env "${prep_env[@]}" /usr/bin/python3 -I -B source/eng/bar_hosted_operation.py prep-run \
             --phase admit --operation-id "$OPERATION_ID"
 
       - name: Qualify one complete BAR image in the delegated Arch userland

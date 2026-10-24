@@ -276,6 +276,23 @@ def preparation_child(operation_id,phase,*,evidence=EVIDENCE):
     os.execve(argv[0],argv,dict(os.environ))
 
 
+def group_birth_observations(group,members):
+    observations=[]
+    for pid,start in members.items():
+        value={'pid':pid,'expectedStartTicks':start,'status':'Unknown'}
+        try:
+            fields=Path('/proc/'+str(pid)+'/stat').read_text().rsplit(') ',1)[1].split()
+            value.update(status='observed',state=fields[0],startTicks=int(fields[19]),pgrp=int(fields[2]),session=int(fields[3]))
+        except (OSError,ValueError,IndexError) as error:value['reason']=str(error)[:256]
+        observations.append(value)
+    return observations
+
+
+def live_group_births(group,members):
+    return [v['pid'] for v in group_birth_observations(group,members) if v['status']=='observed' and v['state']!='Z'
+            and v['startTicks']==v['expectedStartTicks'] and v['pgrp']==group and v['session']==group]
+
+
 def run_preparation(operation_id,phase,*,evidence=EVIDENCE,launch=None):
     """Own only one source-fixed prep group. No argv, duration or script CLI port."""
     require(os.geteuid()==0,'root preparation capture owner required')
@@ -322,8 +339,12 @@ def run_preparation(operation_id,phase,*,evidence=EVIDENCE,launch=None):
             streams[pipe.fileno()]={'name':name,'pipe':pipe,'sink':os.fdopen(fd,'wb'),'bytes':0,'eof':False}
             os.set_blocking(pipe.fileno(),False);selector.register(pipe,selectors.EVENT_READ)
         total=0
-        while selector.get_map() or child.poll() is None:
-            observe_group();now=time.monotonic()
+        while True:
+            observe_group();now=time.monotonic();live=live_group_births(child.pid,members)
+            if not selector.get_map() and child.poll() is not None and not live:break
+            if child.poll() is not None and live and stop_at is None:
+                result['firstCause']=result['firstCause'] or 'known original preparation group members remain'
+                signal_owned(signal.SIGTERM);stop_at=min(intent['hardEnd']-.1,now+.9)
             if now>=intent['termAt'] and stop_at is None:
                 result['firstCause']=result['firstCause'] or 'original preparation deadline exhausted';signal_owned(signal.SIGTERM);stop_at=min(intent['hardEnd']-.1,now+.9)
             if stop_at is not None and now>=stop_at:signal_owned(signal.SIGKILL)
@@ -354,6 +375,7 @@ def run_preparation(operation_id,phase,*,evidence=EVIDENCE,launch=None):
             for handle in (stream['sink'],stream['pipe']):
                 try:handle.close()
                 except OSError as error:result['firstCause']=result['firstCause'] or 'preparation stream close Unknown: '+str(error)[:256]
+        result['finalGroupObservations']=group_birth_observations(child.pid,members) if child is not None else []
         result['observedGroupMembers']=[{'pid':pid,'startTicks':start} for pid,start in sorted(members.items())]
         result['completedMonotonic']=time.monotonic()
         try:

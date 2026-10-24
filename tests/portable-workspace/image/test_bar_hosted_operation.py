@@ -848,6 +848,18 @@ class PreparationDeadline(ClockBudget):
             self.assertIn('--phase '+phase+' --operation-id',text)
         self.assertNotIn('--command',text)
 
+    def test_all_preunit_run_blocks_are_fixed_owned_phases(self):
+        text=WORKFLOW.read_text();prefix=text.split('      - name: Qualify one complete BAR image',1)[0]
+        chunks=prefix.split('      - name:')[1:]
+        for chunk in chunks:
+            if 'run: |' not in chunk:continue
+            body=literal_block(chunk,'run')
+            if 'Retain the original outer job clock' in chunk:continue
+            self.assertIn('prep-run',body)
+        body,_=WRAPPER.fixed_preparation('userland')
+        self.assertIn('sudo swapoff -a',body);self.assertIn('sudo fallocate',body);self.assertIn('sudo systemctl stop',body)
+        self.assertLess(body.index('sudo docker'),body.index('sudo swapoff'));self.assertLess(body.index('sudo swapoff'),body.index('sudo fallocate'))
+
     def test_actual_late_phase_cannot_start480s_past_original_transport_reserve(self):
         end=self.clock['overallDeadlineMonotonic']
         with patch.object(time,'monotonic',return_value=end-20),self.assertRaisesRegex(RuntimeError,'aperture exhausted'):
@@ -869,6 +881,23 @@ class PreparationDeadline(ClockBudget):
             argv=execute.call_args.args[1];self.assertEqual(argv[:4],['/usr/bin/timeout','--foreground','--signal=TERM','--kill-after=1'])
             self.assertLessEqual(float(argv[4][:-1]),intent['termAt']-intent['startedMonotonic'])
             self.assertIn('canonicalize-checkouts',argv[-1])
+
+    def test_group_birth_liveness_excludes_zombies_reused_and_foreign_members(self):
+        for state,start,pgrp,expected in [('S',44,4321,[123]),('Z',44,4321,[]),('S',45,4321,[]),('S',44,999,[])]:
+            fields=['0']*20;fields[0]=state;fields[2]=str(pgrp);fields[3]='4321';fields[19]=str(start)
+            with patch.object(Path,'read_text',return_value='123 (fixture) '+' '.join(fields)):
+                self.assertEqual(WRAPPER.live_group_births(4321,{123:44}),expected)
+
+    def test_known_live_group_birth_blocks_success_after_leader_and_eof(self):
+        real_popen=subprocess.Popen;state={'calls':0}
+        def launch(argv,**kwargs):return real_popen(['/bin/bash','-c','printf original; exit 0'],**kwargs)
+        def live(group,members):
+            state['calls']+=1
+            return [group] if state['calls']<4 else []
+        with patch.object(WRAPPER.os,'geteuid',return_value=0),patch.object(WRAPPER.os,'chown'),patch.dict(os.environ,{'GITHUB_WORKSPACE':str(self.root)}),patch.object(WRAPPER,'live_group_births',side_effect=live),patch.object(WRAPPER.os,'killpg'):
+            with self.assertRaisesRegex(RuntimeError,'known original'):WRAPPER.run_preparation(OPERATION,'controls',evidence=self.evidence,launch=launch)
+        value=json.loads((self.evidence/'prep-controls/receipt.json').read_text())
+        self.assertTrue(value['leaderReaped']);self.assertTrue(value['bothStreamsEof']);self.assertIn('known original',value['firstCause'])
 
     def test_actual_owned_parent_timeout_wait_eof_and_failure_streams(self):
         import sys
