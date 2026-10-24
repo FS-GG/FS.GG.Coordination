@@ -23,18 +23,23 @@
   },
   "github": {
     "organization": "FS-GG",
-    "runnerGroup": "fsgg-native-qualification",
+    "plan": "Free: no restricted runner groups; the runner is a repository-level JIT runner of one private repository",
+    "runnerRepository": "FS-GG/FS.GG.Native.Qualification",
+    "runnerGroup": "Default",
+    "runnerNamePrefix": "fsgg-q-",
     "fixedLabel": "fsgg-native-linux-x64-v1",
     "ephemeral": true,
-    "disableUpdate": true,
+    "jitConfiguration": true,
+    "runnerSelfUpdate": "UNVERIFIED for a JIT configuration (the old registration path passed --disableupdate; run-jit-runner.sh cannot); bake the current runner and re-bake before GitHub's update deadline so no update is spent inside the 300 s window",
     "runnerVersion": null,
     "runnerArchiveSha256": null,
     "allowedWorkflows": [
-      "FS-GG/FS.GG.Coordination/.github/workflows/bar-hosted-image-qualification.yml@refs/heads/main",
-      "FS-GG/FS.GG.Templates/.github/workflows/svg-release-d5-current-public.yml@refs/heads/main",
-      "FS-GG/FS.GG.Templates/.github/workflows/retained-reference-rehearsal.yml@refs/heads/main"
+      "FS-GG/FS.GG.Native.Qualification/.github/workflows/bar-hosted-image-qualification.yml@refs/heads/main"
     ],
-    "ordinaryPullRequestCI": "github-hosted; no PR/fork jobs on dedicated group"
+    "callerTemplate": "deployment/qualification-runner/native-qualification/bar-hosted-image-qualification.yml",
+    "publicRepositories": "never enabled for the runner; FS.GG.Coordination holds no workflow that targets the label",
+    "otherNativeCallers": "FS.GG.Templates svg-release-d5-current-public and retained-reference-rehearsal are public and unrouted; each needs its own private-repository dispatch caller",
+    "ordinaryPullRequestCI": "github-hosted; no PR/fork jobs on the dedicated runner"
   },
   "resources": {
     "minimumVcpu": 4,

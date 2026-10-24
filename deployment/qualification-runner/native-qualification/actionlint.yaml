@@ -1,0 +1,4 @@
+# Declares the one self-hosted label of this private caller repository so actionlint accepts it.
+self-hosted-runner:
+  labels:
+    - fsgg-native-linux-x64-v1

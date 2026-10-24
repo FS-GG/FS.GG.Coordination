@@ -160,7 +160,7 @@ class DedicatedDomain(unittest.TestCase):
         value['runner'] = {'imageOS': 'ubuntu26.10', 'imageVersion': 'a' * 64, 'githubHosted': False,
             'dedicated': {'baselineId': BAR.shared.DEDICATED_BASELINE, 'providerInstanceId': 'authored-vm',
                 'providerImageId': 'authored-image', 'systemUuid': 'authored-uuid', 'bootId': value['bootId'],
-                'bindingSha256': 'b' * 64, 'oneJobOnly': True, 'runnerGroup': 'fsgg-native-qualification',
+                'bindingSha256': 'b' * 64, 'oneJobOnly': True, 'runnerGroup': 'Default',
                 'runnerLabel': 'fsgg-native-linux-x64-v1'}}
         return value
 

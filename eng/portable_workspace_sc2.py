@@ -1441,6 +1441,8 @@ def main(args, api):
 # Populate only from independently accepted signed image/target evidence.
 DEDICATED_RELATION = 'dedicated-preconfigured-ephemeral-vm'
 DEDICATED_BASELINE = 'ubuntu2610-linux-x64-v1'
+# Repository-level JIT runner on the private caller repository; the Free plan has no restricted group.
+DEDICATED_RUNNER_GROUP = 'Default'
 DEDICATED_IMAGE_SHA256 = None
 DEDICATED_PROVIDER_IMAGE_ID = None
 
@@ -1462,7 +1464,7 @@ def dedicated_runner_refusals(runner):
             'systemUuid', 'bootId', 'bindingSha256', 'oneJobOnly', 'runnerGroup', 'runnerLabel'}:
         return failures + ['dedicated-binding-shape']
     if value['baselineId'] != DEDICATED_BASELINE or value['providerImageId'] != DEDICATED_PROVIDER_IMAGE_ID \
-            or value['oneJobOnly'] is not True or value['runnerGroup'] != 'fsgg-native-qualification' \
+            or value['oneJobOnly'] is not True or value['runnerGroup'] != DEDICATED_RUNNER_GROUP \
             or value['runnerLabel'] != 'fsgg-native-linux-x64-v1':
         failures.append('dedicated-binding')
     for key in ('providerInstanceId', 'systemUuid', 'bootId'):
