@@ -1,0 +1,145 @@
+{
+  "schema": "fsgg.dedicated-qualification-baseline/1",
+  "classification": "source-recipe-not-provisioned-or-qualified",
+  "id": "ubuntu2610-linux-x64-v1",
+  "ownership": {
+    "programme": "FS-GG/.github#4778",
+    "consumer": "FS-GG/FS.GG.Coordination#1032",
+    "operator": "Root selected dedicated VM operator; provider target not yet supplied"
+  },
+  "carrier": {
+    "os": "ubuntu",
+    "version": "26.10",
+    "architecture": "x86_64",
+    "releaseDate": "2026-10-15",
+    "candidateImageIndex": "https://cloud-images.ubuntu.com/stonking/current/",
+    "imagePayload": null,
+    "imageSha256": null,
+    "signedChecksumIdentity": null,
+    "metadataOnlyManifest": "https://cloud-images.ubuntu.com/stonking/current/stonking-server-cloudimg-amd64.manifest",
+    "metadataObservedImageDate": "20261019",
+    "metadataLibcPackage": "2.44-1ubuntu2",
+    "currentUrlIsNotAnInputLock": true
+  },
+  "github": {
+    "organization": "FS-GG",
+    "runnerGroup": "fsgg-native-qualification",
+    "fixedLabel": "fsgg-native-linux-x64-v1",
+    "ephemeral": true,
+    "disableUpdate": true,
+    "runnerVersion": null,
+    "runnerArchiveSha256": null,
+    "allowedWorkflows": [
+      "FS-GG/FS.GG.Coordination/.github/workflows/bar-hosted-image-qualification.yml@refs/heads/main",
+      "FS-GG/FS.GG.Templates/.github/workflows/svg-release-d5-current-public.yml@refs/heads/main",
+      "FS-GG/FS.GG.Templates/.github/workflows/retained-reference-rehearsal.yml@refs/heads/main"
+    ],
+    "ordinaryPullRequestCI": "github-hosted; no PR/fork jobs on dedicated group"
+  },
+  "resources": {
+    "minimumVcpu": 4,
+    "memoryBytes": 34359738368,
+    "diskBytes": 274877906944,
+    "oneJobPerVm": true,
+    "persistentReuse": false
+  },
+  "policy": {
+    "preconfiguredAppArmorRestrictUnprivilegedUserns": 0,
+    "missingAppArmorKnob": "refuse; never synthesize zero",
+    "noJobPolicySetter": true,
+    "nativeUnitNoNewPrivileges": true,
+    "nativeUnitKillMode": "control-group",
+    "nativeUnitDelegation": true,
+    "newKernelNativeQualificationRequired": true,
+    "securityPolicyFallback": false
+  },
+  "catalogSupplier": {
+    "repository": "FS-GG/FS.GG.SDD",
+    "revision": "c1fee66a34ec8d222586eb708ddff4973ad5594e",
+    "path": "src/FS.GG.SDD.Commands/CatalogScaffoldLinux.fs",
+    "sha256": "0c13db39f219ee01cf95b1f2e4ff69873735f7176e14df5032e5957eea2ce0dd",
+    "glibcVersion": "2.44",
+    "requiredExports": [
+      "pidfd_spawn",
+      "pidfd_send_signal",
+      "waitid",
+      "poll",
+      "pipe2",
+      "posix_spawnattr_init",
+      "posix_spawnattr_destroy",
+      "posix_spawnattr_setflags",
+      "posix_spawnattr_setsigmask",
+      "posix_spawnattr_setsigdefault",
+      "posix_spawn_file_actions_init",
+      "posix_spawn_file_actions_destroy",
+      "posix_spawn_file_actions_addfchdir_np",
+      "posix_spawn_file_actions_adddup2",
+      "posix_spawn_file_actions_addclose",
+      "posix_spawn_file_actions_addclosefrom_np",
+      "sigemptyset",
+      "sigaddset",
+      "openat",
+      "mkdirat",
+      "unlinkat",
+      "renameat2",
+      "statx",
+      "fcntl",
+      "read",
+      "write",
+      "close",
+      "__errno_location",
+      "ftruncate",
+      "fchmod"
+    ],
+    "nativeLayouts": {
+      "SpawnAttributesBytes": 336,
+      "SpawnAttributesAlignment": 8,
+      "SpawnFileActionsBytes": 80,
+      "SpawnFileActionsAlignment": 8,
+      "SignalInfoBytes": 128,
+      "SignalInfoAlignment": 8,
+      "PollDescriptorBytes": 8,
+      "StatxBytes": 256
+    },
+    "determiningGate": "actual published SDK catalog on actual selected execution carrier; observation checks do not replace it",
+    "governanceSeparate": "version>=2.40 and separate four-export guard unchanged"
+  },
+  "dotnet": {
+    "sdk": "10.0.401",
+    "runtime": "10.0.12",
+    "url": "https://builds.dotnet.microsoft.com/dotnet/Sdk/10.0.401/dotnet-sdk-10.0.401-linux-x64.tar.gz",
+    "archiveSha512": "51c8b999af9e8dd9998c9edc5944e19a90788862068acd38694e098889054ce8c23d4f0c5cccfa16bf187d044562359e5ee69a9f8ad0bbe913ba90311fbce25b",
+    "acceptedInputManifestSha256": "3496131c7c354b450035c745b0fbc71533bd7a6ea9f259c43d8183e7e6cd1746",
+    "inputAcceptanceIsHostAcceptance": false,
+    "installRoot": "/opt/fsgg/toolchains/dotnet-10.0.401",
+    "openSsl4Compatibility": "unqualified; actual closure/gate required, no library fallback",
+    "optionalTraceLttng": "unresolved separate optional role; not silently installed or accepted"
+  },
+  "goRace": {
+    "version": "1.27.1",
+    "archiveUrl": null,
+    "archiveSha256": null,
+    "installRoot": "/opt/fsgg/toolchains/go-1.27.1",
+    "CGO_ENABLED": "1",
+    "raceRequired": true,
+    "compilerPackageRoles": [
+      "build-essential",
+      "gcc",
+      "binutils",
+      "libc6-dev",
+      "pkg-config"
+    ],
+    "requiredNativeIdentities": [
+      "compiler",
+      "C headers",
+      "linker",
+      "libgcc runtime",
+      "ELF loader",
+      "complete signed package transaction"
+    ],
+    "qualification": "actual cgo/race under separately selected budget; unsupported/skip is not success"
+  },
+  "acquiredInputLock": null,
+  "target": null,
+  "nativeAdmission": null
+}
