@@ -28,6 +28,10 @@ DOTNET_ROOT = '/opt/fsgg/toolchains/dotnet-10.0.401'
 GO_ROOT = '/opt/fsgg/toolchains/go-1.27.1'
 SYSCTL_DROPIN = '/etc/sysctl.d/90-fsgg-qualification.conf'
 SUDOERS_FILE = '/etc/sudoers.d/fsgg-qualification-runner'
+LAYER_ROOT = '/opt/fsgg/qualification-layer'
+LAYER_FILES = ('eng/dedicated_qualification_runner.py', 'deployment/qualification-runner/90-fsgg-qualification.conf',
+               'deployment/qualification-runner/runner.sudoers', 'deployment/qualification-runner/guest-boot.sh',
+               'deployment/qualification-runner/run-jit-runner.sh')
 USERNS_KNOB = '/proc/sys/kernel/apparmor_restrict_unprivileged_userns'
 # bar_hosted_operation.crypto_identity accepts only this OpenSSL family for the encrypted candidate.
 OPENSSL_FAMILY_PREFIX = 'OpenSSL 3.'
@@ -347,6 +351,24 @@ def verify_guest(root, source, phase, *, system_uuid=None, runner_name=None, own
     facts['packages'] = packages
     if not packages.get('openssl', '').startswith(OPENSSL_PACKAGE_PREFIX):
         refusals.append('openssl-family-not-3')
+    # The installed layer is exactly its reviewed manifest: required files present, hashes equal, nothing extra.
+    layer = under(LAYER_ROOT)
+    manifest = _sealed(layer / 'MANIFEST.sha256', owner_uid, (0o644,), refusals, 'layer-manifest')
+    if manifest is not None:
+        listed = {}
+        for line in manifest.decode(errors='replace').splitlines():
+            digest, _, name = line.partition('  ')
+            listed[name[2:] if name.startswith('./') else name] = digest
+        if set(LAYER_FILES) - set(listed):
+            refusals.append('layer-file-not-listed')
+        for name, digest in listed.items():
+            path = layer / name
+            info = _lstat(path)
+            if info is None or not stat.S_ISREG(info.st_mode) or hashlib.sha256(path.read_bytes()).hexdigest() != digest:
+                refusals.append('layer-file-differs:' + name)
+        present = {str(path.relative_to(layer)) for path in layer.rglob('*') if path.is_file() or path.is_symlink()} - {'MANIFEST.sha256'}
+        if present - set(listed):
+            refusals.append('layer-file-unlisted')
     # Per-boot binding.
     binding = under(STATE_DIRECTORY + '/instance-binding.json')
     if phase == 'image':
@@ -375,7 +397,6 @@ def main():
     parser.add_argument('--system-uuid')
     parser.add_argument('--runner-name')
     parser.add_argument('--request')
-    parser.add_argument('--root', default='/')
     parser.add_argument('--phase', choices=['image', 'boot'])
     args = parser.parse_args()
     source = Path(__file__).resolve().parents[1]
@@ -387,7 +408,7 @@ def main():
         return
     if args.operation == 'verify-guest':
         require(args.phase, 'phase missing')
-        result = verify_guest(args.root, source, args.phase, system_uuid=args.system_uuid, runner_name=args.runner_name)
+        result = verify_guest('/', source, args.phase, system_uuid=args.system_uuid, runner_name=args.runner_name)
         print(json.dumps(result, sort_keys=True))
         raise SystemExit(1 if result['refusals'] else 0)
     require(args.target, 'target missing')

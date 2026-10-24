@@ -77,13 +77,14 @@ deadline is not spent on installation.
 
 | Requirement | Where it is applied | Readback (`dedicated_qualification_runner.py verify-guest`) |
 |---|---|---|
-| AppArmor `apparmor_restrict_unprivileged_userns = 0` drop-in (image only; no job setter) | bake: `provision-image.sh`; re-applied by `guest-boot.sh` | drop-in bytes equal `90-fsgg-qualification.conf`; live value reads `0` |
+| AppArmor `apparmor_restrict_unprivileged_userns = 0` drop-in (image only; no job setter) | bake: `provision-image.sh`; applied by `systemd-sysctl` at boot (no script writes policy at boot) | drop-in bytes equal `90-fsgg-qualification.conf`; live value reads `0` |
 | `acquired-input-lock.json` (root, 0644) | bake | present, valid, runner version equals the baked runner |
 | SDK 10.0.401 / runtime 10.0.12, Go 1.27.1 | bake, from the hash-checked acquired inputs | fixed roots `/opt/fsgg/toolchains/{dotnet-10.0.401,go-1.27.1}`; exactly one SDK; `VERSION` is `go1.27.1` |
 | Buildah 1.43.1 | not a guest package: the job builds the sha256-pinned Arch userland | reported as a fact; the domain gate checks the version in the job |
 | Runner path, name and UID | bake: `/opt/fsgg/actions-runner`, user `runner` UID/GID 1001, `/home/runner`; names `fsgg-q-*` | account, group, path, ownership, never-configured runner |
 | Runner dependencies | bake (`libicu78 libkrb5-3 zlib1g`) instead of a live `installdependencies.sh` | `Runner.Listener` present |
 | Passwordless root for `runner` | bake: `runner.sudoers`, this disposable guest only | sudoers bytes equal `runner.sudoers`, 0440 |
+| The layer itself | bake: `/opt/fsgg/qualification-layer` with `MANIFEST.sha256` | every listed file hashes equal, the five required files are listed, nothing is unlisted |
 | `instance-binding.json` (root, 0644) | **per boot**: `guest-boot.sh --apply REQUEST.json fsgg-q-NAME` | schema, `Default` group, label, repository, `jit-config`, runner name, actual DMI UUID |
 
 Bake once in the separately admitted image build:
@@ -91,11 +92,13 @@ Bake once in the separately admitted image build:
 the reviewed layer under `/opt/fsgg/qualification-layer` (with a `MANIFEST.sha256`) and ends
 by running `verify-guest --phase image`; a refusal means the image must not be published.
 
-Each boot, from the launcher's cloud-init `runcmd` (as root, before the JIT config is used):
+Each boot, from the launcher's root guest script (not from a cloud-init `runcmd` line: cloud-init
+persists those, so the JIT value must come from a root-only tmpfs file, as in Home's
+`guest-runner.sh`), as root and in this order:
 
 ```
 /opt/fsgg/qualification-layer/deployment/qualification-runner/guest-boot.sh --apply /run/fsgg/binding-request.json fsgg-q-NAME
-ACTIONS_RUNNER_INPUT_JITCONFIG=... /opt/fsgg/qualification-layer/deployment/qualification-runner/run-jit-runner.sh --run fsgg-q-NAME
+ACTIONS_RUNNER_INPUT_JITCONFIG=$(cat /run/fsgg/jitconfig) /opt/fsgg/qualification-layer/deployment/qualification-runner/run-jit-runner.sh --run fsgg-q-NAME
 ```
 
 `binding-request.json` has schema `fsgg.dedicated-qualification-binding-request/1` and exactly
@@ -108,11 +111,21 @@ Neither script accepts a PAT or registration token, uses `--replace`, or reuses 
 `ACTIONS_RUNNER_INPUT_JITCONFIG` environment input and refuses unless the baked layer and
 sealed binding read back clean immediately before it `exec`s the runner.
 
-Known blocker found by the readback: Ubuntu 26.10 ships OpenSSL 4.0.x, while
+Known blocker found by the readback: the official Ubuntu 26.10 cloud package manifest
+(`stonking-server-cloudimg-amd64.manifest`, read 2026-10-24) lists `openssl 4.0.3-1ubuntu1`, while
 `eng/bar_hosted_operation.py` accepts only the OpenSSL 3 family for the encrypted candidate.
-`verify-guest` therefore reports `openssl-family-not-3` and the bake refuses to finish. It
-needs a Root decision (qualify OpenSSL 4 for the CMS sealing, or provide a pinned OpenSSL 3
-binary) before the first dispatch; it is not silently relaxed here.
+`verify-guest` therefore reports `openssl-family-not-3` (from the installed `openssl` package
+version, because it executes nothing from the guest) and the bake exits non-zero after
+installing: do not publish that image. It needs a Root decision (qualify OpenSSL 4 for the CMS
+sealing, or provide a pinned OpenSSL 3 binary at the path `crypto_identity` reads, with the
+matching readback rule) before the first dispatch; it is not silently relaxed here.
+
+Baking changes the package inventory: `libicu78 libkrb5-3 zlib1g` must be in the acquired lock's
+signed APT transaction and in `apt/package-inventory.expected`, so the lock must be regenerated.
+A baked runner ages. The retired registration path passed `--disableupdate`; whether a
+JIT-launched runner self-updates is unverified and `run-jit-runner.sh` cannot control it, so
+re-bake the current runner before GitHub's runner update deadline instead of spending an
+update, or running unpinned bytes, inside the 300 s first-step window.
 
 ## Caller and security boundary
 

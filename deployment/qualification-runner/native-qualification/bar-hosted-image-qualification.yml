@@ -182,20 +182,31 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
-      - name: Refuse a changed caller or unselected dedicated image before product or asset acquisition
+      # Plain unprivileged step: no pinned-source code runs as root until the pinned commit is
+      # shown to be reviewed Coordination main and this caller equals its template. A modified
+      # caller could omit this step; the controls against that are the collaborator list, the
+      # host-side assignment guard and review of every change to the private repository.
+      - name: Refuse an unreviewed Coordination commit or a changed caller
+        id: guard
+        shell: bash
+        timeout-minutes: 1
+        run: |
+          set -euo pipefail
+          test "$(git -C caller rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git -C source rev-parse HEAD)" = "$FSGG_SOURCE_REVISION"
+          git -C source merge-base --is-ancestor "$FSGG_SOURCE_REVISION" refs/remotes/origin/main
+          template=source/deployment/qualification-runner/native-qualification
+          cmp -- "$template/bar-hosted-image-qualification.yml" caller/.github/workflows/bar-hosted-image-qualification.yml
+          cmp -- "$template/README.md" caller/README.md
+          cmp -- "$template/actionlint.yaml" caller/.github/actionlint.yaml
+
+      - name: Refuse unselected dedicated image before product or asset acquisition
         id: profile
         shell: bash
         timeout-minutes: 2
         env:
           PREP_PROFILE_SCRIPT: |
             set -euo pipefail
-            # This caller must be the reviewed template at the pinned Coordination main commit.
-            test "$(git -C caller rev-parse HEAD)" = "$GITHUB_SHA"
-            test "$(git -C source rev-parse HEAD)" = "$FSGG_SOURCE_REVISION"
-            git -C source merge-base --is-ancestor "$FSGG_SOURCE_REVISION" refs/remotes/origin/main
-            template=source/deployment/qualification-runner/native-qualification
-            cmp -- "$template/bar-hosted-image-qualification.yml" caller/.github/workflows/bar-hosted-image-qualification.yml
-            cmp -- "$template/README.md" caller/README.md
             test "$RUNNER_ENVIRONMENT" = self-hosted
             test "$GITHUB_EVENT_NAME" = workflow_dispatch
             test "$GITHUB_REF" = refs/heads/main
@@ -450,6 +461,7 @@ jobs:
           CONTROLS_OUTCOME: ${{ steps.prep_controls.outcome }}
           USERLAND_OUTCOME: ${{ steps.prep_userland.outcome }}
           CLOCK_OUTCOME: ${{ steps.clock.outcome }}
+          GUARD_OUTCOME: ${{ steps.guard.outcome }}
           PROFILE_OUTCOME: ${{ steps.profile.outcome }}
           ADMIT_OUTCOME: ${{ steps.admit.outcome }}
           QUALIFY_OUTCOME: ${{ steps.qualify.outcome }}
@@ -461,7 +473,7 @@ jobs:
             if python3 -I -B - <<'PY_STARTUP'
           import json,os
           from pathlib import Path
-          value={k:os.environ.get(k,'Unknown') for k in ('CLOCK_OUTCOME','PROFILE_OUTCOME','CONTROLS_OUTCOME','USERLAND_OUTCOME','ADMIT_OUTCOME','QUALIFY_OUTCOME')}
+          value={k:os.environ.get(k,'Unknown') for k in ('CLOCK_OUTCOME','GUARD_OUTCOME','PROFILE_OUTCOME','CONTROLS_OUTCOME','USERLAND_OUTCOME','ADMIT_OUTCOME','QUALIFY_OUTCOME')}
           path=Path(os.environ['STARTUP_CAPTURE_PATH'])/'outcomes.json'
           fd=os.open(path,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)
           with os.fdopen(fd,'w') as stream:stream.write(json.dumps(value)+'\n')

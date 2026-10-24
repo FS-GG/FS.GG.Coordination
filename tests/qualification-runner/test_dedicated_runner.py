@@ -168,6 +168,12 @@ class DedicatedRunnerDataControls(unittest.TestCase):
             put('/usr/bin/' + tool, b'x', 0o755)
         put('/var/lib/dpkg/status', ('Package: openssl\nStatus: install ok installed\nVersion: ' + openssl + '\n\n'
                                      'Package: docker.io\nStatus: install ok installed\nVersion: 1\n').encode(), 0o644)
+        listing = []
+        for name in owner.LAYER_FILES:
+            data = (ROOT / name).read_bytes()
+            put(owner.LAYER_ROOT + '/' + name, data, 0o755)
+            listing.append(hashlib.sha256(data).hexdigest() + '  ./' + name)
+        put(owner.LAYER_ROOT + '/MANIFEST.sha256', ('\n'.join(sorted(listing, key=lambda row: row.split('  ')[1])) + '\n').encode(), 0o644)
         if binding:
             put(owner.STATE_DIRECTORY + '/instance-binding.json', json.dumps(self.instance()).encode(), 0o644)
         return root
@@ -208,6 +214,10 @@ class DedicatedRunnerDataControls(unittest.TestCase):
             'go-1.27.1': lambda r: (r / owner.GO_ROOT.lstrip('/') / 'VERSION').write_bytes(b'go1.24.1\n'),
             'tool-missing:docker': lambda r: (r / 'usr/bin/docker').unlink(),
             'instance-binding-missing': lambda r: (r / owner.STATE_DIRECTORY.lstrip('/') / 'instance-binding.json').unlink(),
+            'layer-file-differs:eng/dedicated_qualification_runner.py': lambda r: (r / owner.LAYER_ROOT.lstrip('/') / 'eng/dedicated_qualification_runner.py').write_bytes(b'tampered'),
+            'layer-file-unlisted': lambda r: (r / owner.LAYER_ROOT.lstrip('/') / 'extra.sh').write_bytes(b'x'),
+            'layer-manifest-missing': lambda r: (r / owner.LAYER_ROOT.lstrip('/') / 'MANIFEST.sha256').unlink(),
+            'layer-file-not-listed': lambda r: (r / owner.LAYER_ROOT.lstrip('/') / 'MANIFEST.sha256').write_bytes(b''),
         }
         for expected, damage in cases.items():
             with self.subTest(expected), tempfile.TemporaryDirectory() as directory:
@@ -236,12 +246,14 @@ class DedicatedRunnerDataControls(unittest.TestCase):
         environment = {'PATH': '/usr/bin:/bin'}
         cases = [(['guest-boot.sh'], 2), (['guest-boot.sh', '--apply', '/nonexistent', 'fsgg-q-a'], 2),
                  (['guest-boot.sh', '--apply', '/nonexistent', 'fsgg-qualification-a'], 2),
-                 (['run-jit-runner.sh'], 2), (['run-jit-runner.sh', '--run', 'fsgg-q-a'], 2),
-                 (['provision-image.sh'], 2)]
+                 (['run-jit-runner.sh'], 2), (['provision-image.sh'], 2)]
         for argv, code in cases:
             with self.subTest(argv=argv):
                 result = subprocess.run(['/bin/bash', str(directory / argv[0]), *argv[1:]], env=environment, capture_output=True, text=True, timeout=20)
                 self.assertEqual(result.returncode, code, result.stderr)
+        # Without the JIT configuration (and, off-guest, without root) the runner never starts.
+        result = subprocess.run(['/bin/bash', str(directory / 'run-jit-runner.sh'), '--run', 'fsgg-q-a'], env=environment, capture_output=True, text=True, timeout=20)
+        self.assertNotEqual(result.returncode, 0)
         for name in ('guest-boot.sh', 'run-jit-runner.sh', 'provision-image.sh'):
             self.assertEqual(subprocess.run(['/bin/bash', '-n', str(directory / name)], capture_output=True).returncode, 0, name)
         self.assertFalse((directory / 'register-ephemeral-runner.sh').exists(), 'org registration-token route is retired')

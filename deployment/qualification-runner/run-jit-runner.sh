@@ -15,6 +15,6 @@ runner_layer=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
 : "${ACTIONS_RUNNER_INPUT_JITCONFIG:?the launcher must supply one JIT configuration through the protected environment}"
 # Fresh readback immediately before launch: baked layer, fixed paths and UID 1001, sealed binding, unconfigured runner.
 python3 -I -B "$runner_layer/eng/dedicated_qualification_runner.py" verify-guest --phase boot \
-  --runner-name "$runner_name" --system-uuid "$(cat /sys/class/dmi/id/product_uuid)" >/dev/null
+  --runner-name "$runner_name" --system-uuid "$(cat /sys/class/dmi/id/product_uuid)" >&2
 cd /opt/fsgg/actions-runner
 exec runuser -u runner -- /opt/fsgg/actions-runner/run.sh

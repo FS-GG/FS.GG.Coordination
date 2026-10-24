@@ -66,6 +66,7 @@ for runner_file in guest-boot.sh run-jit-runner.sh; do
   install -m 0755 "$runner_source/deployment/qualification-runner/$runner_file" "$runner_layer/deployment/qualification-runner/$runner_file"
 done
 (cd "$runner_layer" && find . -type f ! -name MANIFEST.sha256 -print0 | LC_ALL=C sort -z | xargs -0 sha256sum) > "$runner_layer/MANIFEST.sha256"
+chmod 0644 "$runner_layer/MANIFEST.sha256"
 visudo -cf "$runner_source/deployment/qualification-runner/runner.sudoers"
 install -m 0440 "$runner_source/deployment/qualification-runner/runner.sudoers" /etc/sudoers.d/fsgg-qualification-runner
 install -d -m 0755 /etc/fsgg-qualification-runner

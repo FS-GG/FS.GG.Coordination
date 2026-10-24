@@ -30,7 +30,7 @@
     "fixedLabel": "fsgg-native-linux-x64-v1",
     "ephemeral": true,
     "jitConfiguration": true,
-    "disableUpdate": true,
+    "runnerSelfUpdate": "UNVERIFIED for a JIT configuration (the old registration path passed --disableupdate; run-jit-runner.sh cannot); bake the current runner and re-bake before GitHub's update deadline so no update is spent inside the 300 s window",
     "runnerVersion": null,
     "runnerArchiveSha256": null,
     "allowedWorkflows": [

@@ -15,8 +15,8 @@ runner_tool=$runner_layer/eng/dedicated_qualification_runner.py
 [[ $runner_name =~ ^fsgg-q-[A-Za-z0-9][A-Za-z0-9-]{0,63}$ ]] || exit 2
 [[ -f $runner_request && ! -L $runner_request ]] || exit 2
 runner_uuid=$(cat /sys/class/dmi/id/product_uuid)
-# The image drop-in is the only AppArmor userns policy; this re-applies the same file, nothing else.
-sysctl -p /etc/sysctl.d/90-fsgg-qualification.conf >/dev/null
+# No policy is written here: the baked sysctl.d drop-in is applied by systemd-sysctl at boot and
+# verify-guest only reads the live AppArmor userns value back.
 python3 -I -B "$runner_tool" write-binding --request "$runner_request" \
   --lock /etc/fsgg-qualification-runner/acquired-input-lock.json --system-uuid "$runner_uuid"
 python3 -I -B "$runner_tool" verify-guest --phase boot --runner-name "$runner_name" --system-uuid "$runner_uuid"

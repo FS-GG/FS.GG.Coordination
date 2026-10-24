@@ -10,6 +10,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import tempfile
 import textwrap
@@ -677,7 +678,7 @@ exit 41
         # external action it uses is an immutable full-length commit.
         template = WORKFLOW.parent
         pins = {line.split('  ', 1)[1]: line.split('  ', 1)[0] for line in (template / 'MANIFEST.sha256').read_text().splitlines()}
-        self.assertEqual(sorted(pins), ['README.md', 'bar-hosted-image-qualification.yml'])
+        self.assertEqual(sorted(pins), ['README.md', 'actionlint.yaml', 'bar-hosted-image-qualification.yml'])
         for name, digest in pins.items():
             self.assertEqual(hashlib.sha256((template / name).read_bytes()).hexdigest(), digest, name)
         uses = set(re.findall(r'^\s*(?:-\s*)?uses:\s*([^\s#]+)', WORKFLOW.read_text(), re.MULTILINE))
@@ -685,6 +686,50 @@ exit 41
         self.assertFalse((ROOT / '.github/workflows/bar-hosted-image-qualification.yml').exists())
         registry = (ROOT / 'evidence/github-substrate-v2/gs2-06-7/execution-pins-extension.json').read_text()
         self.assertNotIn('bar-hosted-image-qualification', registry)
+
+    def test_guard_step_accepts_only_main_ancestor_commit_and_identical_caller(self):
+        text = WORKFLOW.read_text()
+        script = literal_block(text.split('- name: Refuse an unreviewed Coordination commit or a changed caller', 1)[1], 'run')
+        template_directory = 'deployment/qualification-runner/native-qualification'
+        def git(path, *arguments):
+            return subprocess.run(['git', '-C', str(path), '-c', 'user.name=t', '-c', 'user.email=t@example.invalid', *arguments],
+                                  capture_output=True, text=True, check=True).stdout.strip()
+        def run(root, revision, caller):
+            env = {'PATH': '/usr/bin:/bin', 'FSGG_SOURCE_REVISION': revision, 'GITHUB_SHA': caller}
+            return subprocess.run(['/bin/bash', '-c', script], cwd=root, env=env, capture_output=True, text=True, timeout=20)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source, caller = root / 'source', root / 'caller'
+            for path in (source, caller):
+                path.mkdir(); git(path, 'init', '-q', '-b', 'main')
+            names = ('bar-hosted-image-qualification.yml', 'README.md', 'actionlint.yaml')
+            (source / template_directory).mkdir(parents=True)
+            for name in names:
+                (source / template_directory / name).write_bytes((ROOT / template_directory / name).read_bytes())
+            git(source, 'add', '-A'); git(source, 'commit', '-qm', 'main commit')
+            reviewed = git(source, 'rev-parse', 'HEAD')
+            git(source, 'update-ref', 'refs/remotes/origin/main', reviewed)
+            git(source, 'checkout', '-q', '-b', 'side'); (source / 'extra').write_text('x'); git(source, 'add', '-A'); git(source, 'commit', '-qm', 'side')
+            unreviewed = git(source, 'rev-parse', 'HEAD')
+            (caller / '.github/workflows').mkdir(parents=True)
+            copies = {'.github/workflows/bar-hosted-image-qualification.yml': names[0], 'README.md': names[1], '.github/actionlint.yaml': names[2]}
+            for target, name in copies.items():
+                (caller / target).write_bytes((ROOT / template_directory / name).read_bytes())
+            git(caller, 'add', '-A'); git(caller, 'commit', '-qm', 'caller')
+            head = git(caller, 'rev-parse', 'HEAD')
+            git(source, 'checkout', '-q', reviewed)
+            self.assertEqual(run(root, reviewed, head).returncode, 0, run(root, reviewed, head).stderr)
+            self.assertNotEqual(run(root, reviewed, 'a' * 40).returncode, 0, 'caller head differs from GITHUB_SHA')
+            git(source, 'checkout', '-q', unreviewed)
+            self.assertNotEqual(run(root, unreviewed, head).returncode, 0, 'a commit outside Coordination main is refused')
+            git(source, 'checkout', '-q', reviewed)
+            for target in copies:
+                original = (caller / target).read_bytes()
+                (caller / target).write_bytes(original + b'# drift\n')
+                git(caller, 'commit', '-qam', 'drift'); drifted = git(caller, 'rev-parse', 'HEAD')
+                with self.subTest(changed=target):
+                    self.assertNotEqual(run(root, reviewed, drifted).returncode, 0)
+                (caller / target).write_bytes(original); git(caller, 'commit', '-qam', 'restore')
 
     def test_template_is_a_dispatch_only_private_caller_that_public_coordination_cannot_queue(self):
         text = WORKFLOW.read_text()
@@ -703,12 +748,12 @@ exit 41
         self.assertIn('coordination_sha:', text)
         # The first step stays first and carries no dependency on either checkout.
         self.assertLess(text.index('Retain the original outer job clock'), text.index('Check out the exact public Coordination source'))
-        self.assertLess(text.index('Check out this exact private caller'), text.index('Refuse a changed caller'))
-        profile = literal_block(text.split('- name: Refuse a changed caller', 1)[1], 'PREP_PROFILE_SCRIPT')
+        self.assertLess(text.index('Check out this exact private caller'), text.index('Refuse an unreviewed Coordination commit'))
+        guard = literal_block(text.split('- name: Refuse an unreviewed Coordination commit or a changed caller', 1)[1], 'run')
         for line in ('merge-base --is-ancestor "$FSGG_SOURCE_REVISION" refs/remotes/origin/main',
                      'caller/.github/workflows/bar-hosted-image-qualification.yml',
-                     'caller/README.md'):
-            self.assertIn(line, profile)
+                     'caller/README.md', 'caller/.github/actionlint.yaml'):
+            self.assertIn(line, guard)
 
     def test_fixed_workflow_preserves_domain_profile_and_complete_generation_guards(self):
         text = WORKFLOW.read_text()
@@ -832,6 +877,53 @@ class ClockBudget(unittest.TestCase):
         self.assertEqual((accepted['sourceRevision'], accepted['callerRevision']), ('a' * 40, CALLER))
         self.assertEqual(accepted['providerJob']['runner_group_name'], 'Default')
 
+
+    def test_consumer_side_clock_validation_refuses_caller_identity_group_and_name_drift(self):
+        good = json.loads(json.dumps(install_clock(self.evidence)))
+        WRAPPER.validate_clock(good, OPERATION, 'b' * 40)
+        mutations = {
+            'callerRepository': lambda v: v.update(callerRepository='FS-GG/FS.GG.Coordination'),
+            'callerRevision-not-hex': lambda v: v.update(callerRevision='main'),
+            'callerRevision-missing': lambda v: v.pop('callerRevision'),
+            'head-differs-from-caller': lambda v: v['providerJob'].update(head_sha='b' * 40),
+            'workflowRef': lambda v: v.update(workflowRef='FS-GG/FS.GG.Coordination/.github/workflows/bar-hosted-image-qualification.yml@refs/heads/main'),
+            'runner-prefix': lambda v: v['providerJob'].update(runner_name='fsgg-qualification-x'),
+            'runner-group': lambda v: v['providerJob'].update(runner_group_name='fsgg-native-qualification'),
+            'runner-group-missing': lambda v: v['providerJob'].pop('runner_group_name'),
+        }
+        for name, mutate in mutations.items():
+            value = json.loads(json.dumps(good)); mutate(value)
+            with self.subTest(name), self.assertRaisesRegex(RuntimeError, 'original clock source differs|native job/source join differs'):
+                WRAPPER.validate_clock(value, OPERATION, 'b' * 40)
+        with self.assertRaisesRegex(RuntimeError, 'original clock source differs'):
+            WRAPPER.validate_clock(good, OPERATION, 'a' * 40)
+
+    def test_fixed_preparation_is_pinned_to_the_manifest_of_the_template(self):
+        template = ROOT / 'deployment/qualification-runner/native-qualification'
+        body, env = WRAPPER.fixed_preparation('profile')
+        self.assertIn('dedicated-profile', body)
+        with tempfile.TemporaryDirectory() as directory:
+            copy = Path(directory) / 'tree'
+            shutil.copytree(ROOT / 'eng', copy / 'eng', ignore=shutil.ignore_patterns('__pycache__'))
+            shutil.copytree(template, copy / 'deployment/qualification-runner/native-qualification')
+            module = load('bar_hosted_operation_copy', copy / 'eng/bar_hosted_operation.py')
+            self.assertEqual(module.fixed_preparation('controls')[0], WRAPPER.fixed_preparation('controls')[0])
+            workflow = copy / 'deployment/qualification-runner/native-qualification/bar-hosted-image-qualification.yml'
+            manifest = copy / 'deployment/qualification-runner/native-qualification/MANIFEST.sha256'
+            original = manifest.read_text()
+            workflow.write_text(workflow.read_text() + '# drift\n')
+            with self.assertRaisesRegex(RuntimeError, 'workflow pin differs'): module.fixed_preparation('profile')
+            workflow.write_bytes((template / 'bar-hosted-image-qualification.yml').read_bytes())
+            for damaged in ('', original + original.splitlines()[0] + '\n', original.replace('bar-hosted-image-qualification.yml', 'other.yml')):
+                manifest.write_text(damaged)
+                with self.subTest(damaged=damaged[:20]), self.assertRaisesRegex(RuntimeError, 'workflow pin differs'):
+                    module.fixed_preparation('profile')
+
+    def test_checkout_bootstrap_refuses_the_public_coordination_repository(self):
+        env = {'GITHUB_WORKSPACE': str(self.root), 'GITHUB_REPOSITORY': 'FS-GG/FS.GG.Coordination', 'GITHUB_EVENT_NAME': 'workflow_dispatch',
+               'GITHUB_REF': 'refs/heads/main', 'GITHUB_RUN_ATTEMPT': '1'}
+        with patch.dict(os.environ, env), self.assertRaisesRegex(RuntimeError, 'private-caller checkout bootstrap'):
+            WRAPPER.canonicalize_checkouts('b' * 40)
 
     def test_runner_temp_context_is_step_scoped_and_propagates_only_accepted_path(self):
         text=WORKFLOW.read_text();job_header=text.split('    steps:',1)[0]
@@ -957,6 +1049,11 @@ class PreparationDeadline(ClockBudget):
             if 'run: |' not in chunk:continue
             body=literal_block(chunk,'run')
             if 'Retain the original outer job clock' in chunk:continue
+            if 'Refuse an unreviewed Coordination commit or a changed caller' in chunk:
+                # The only plain step: it must precede every sudo/pinned-source execution.
+                self.assertNotIn('sudo',body);self.assertNotIn('python',body);self.assertNotIn('source/eng',body)
+                self.assertLess(text.index('Refuse an unreviewed Coordination commit'),text.index('Refuse unselected dedicated image'))
+                continue
             self.assertIn('prep-run',body)
         body,_=WRAPPER.fixed_preparation('userland')
         self.assertIn('sudo swapoff -a',body);self.assertIn('sudo fallocate',body);self.assertIn('sudo systemctl stop',body)
