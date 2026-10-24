@@ -199,6 +199,7 @@ jobs:
           cmp -- "$template/bar-hosted-image-qualification.yml" caller/.github/workflows/bar-hosted-image-qualification.yml
           cmp -- "$template/README.md" caller/README.md
           cmp -- "$template/actionlint.yaml" caller/.github/actionlint.yaml
+          test "$(git -C caller ls-files | LC_ALL=C sort | tr '\n' ' ')" = '.github/actionlint.yaml .github/workflows/bar-hosted-image-qualification.yml README.md '
 
       - name: Refuse unselected dedicated image before product or asset acquisition
         id: profile
@@ -479,6 +480,11 @@ jobs:
           with os.fdopen(fd,'w') as stream:stream.write(json.dumps(value)+'\n')
           PY_STARTUP
             then :; else printf '%s\n' 'startup outcome capture Unknown' >&2; fi
+          fi
+          # Pinned-source code never runs here unless the unprivileged guard passed.
+          if [ "${GUARD_OUTCOME:-}" != success ]; then
+            printf '%s\n' 'guard did not pass; pinned-source receipt not run' >&2
+            exit 1
           fi
           # Optional diagnostics share this9-minute aperture but cannot skip
           # canonical primary receipt or poison its evidence inventory.

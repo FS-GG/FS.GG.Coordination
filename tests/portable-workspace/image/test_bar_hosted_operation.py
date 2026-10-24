@@ -563,7 +563,8 @@ exit 41
                            'EVIDENCE': str(fixture.evidence), 'RUNNER_TEMP': str(runner_temp),
                            'FIXTURE_SECONDARY': secondary,
                            'FIXTURE_CURRENT_BOOT': Path('/proc/sys/kernel/random/boot_id').read_text().strip(),
-                           'OPERATION_ID': OPERATION, 'HOST_JOB_STARTED': '1700000000', 'GITHUB_OUTPUT': str(outputs)}
+                           'OPERATION_ID': OPERATION, 'HOST_JOB_STARTED': '1700000000', 'GITHUB_OUTPUT': str(outputs),
+                           'GUARD_OUTCOME': 'success'}
                     done = subprocess.run(['/bin/bash', '-c', receipt_script], env=env,
                                           capture_output=True, text=True, timeout=15)
                     self.assertEqual(done.returncode, 0, done.stderr)
@@ -723,6 +724,11 @@ exit 41
             git(source, 'checkout', '-q', unreviewed)
             self.assertNotEqual(run(root, unreviewed, head).returncode, 0, 'a commit outside Coordination main is refused')
             git(source, 'checkout', '-q', reviewed)
+            (caller / '.github/workflows/stray.yml').write_text('on: workflow_dispatch\n'); git(caller, 'add', '-A'); git(caller, 'commit', '-qm', 'stray')
+            stray = git(caller, 'rev-parse', 'HEAD')
+            self.assertNotEqual(run(root, reviewed, stray).returncode, 0, 'an extra tracked file in the caller is refused')
+            git(caller, 'rm', '-q', '.github/workflows/stray.yml'); git(caller, 'commit', '-qm', 'remove stray')
+            self.assertEqual(run(root, reviewed, git(caller, 'rev-parse', 'HEAD')).returncode, 0)
             for target in copies:
                 original = (caller / target).read_bytes()
                 (caller / target).write_bytes(original + b'# drift\n')
@@ -1016,12 +1022,32 @@ class ClockBudget(unittest.TestCase):
         self.assertLess(script.index('unit-enter'),script.index('exec /usr/bin/unshare'))
         self.assertNotIn('set-property',WORKFLOW.read_text())
 
+    def test_receipt_never_runs_pinned_source_unless_the_guard_passed(self):
+        script=literal_block(WORKFLOW.read_text().split('- name: Retain the bounded generation receipt',1)[1],'run')
+        tools=self.root/'guard-tools';tools.mkdir()
+        trace=self.root/'guard-trace'
+        # Pinned-source invocations are recorded and inert; the source-independent outcome capture is the real python.
+        (tools/'python3').write_text('#!/bin/sh\ncase "$*" in *bar_hosted*|*source/eng*) printf "%s %s\\n" "$0" "$*" >> '+shlex.quote(str(trace))+'; exit 0;; esac\nexec /usr/bin/python3 "$@"\n')
+        (tools/'sudo').write_text('#!/bin/sh\nprintf "%s %s\\n" "$0" "$*" >> '+shlex.quote(str(trace))+'\nexit 0\n')
+        for name in ('python3','sudo'):(tools/name).chmod(0o700)
+        for outcome in ('failure','skipped','cancelled',''):
+            startup=self.root/('guard-startup-'+(outcome or 'unset'));startup.mkdir(mode=0o700)
+            env={'PATH':str(tools)+':/usr/bin:/bin','STARTUP_CAPTURE_PATH':str(startup),'EVIDENCE':str(self.evidence),'RUNNER_TEMP':str(self.root),
+                 'OPERATION_ID':OPERATION,'CLOCK_OUTCOME':'success','ADMIT_OUTCOME':'skipped','QUALIFY_OUTCOME':'skipped','HOST_JOB_STARTED':'1'}
+            if outcome:env['GUARD_OUTCOME']=outcome
+            with self.subTest(outcome=outcome):
+                done=subprocess.run(['/bin/bash','-c',script],cwd=self.root,env=env,capture_output=True,text=True,timeout=10)
+                self.assertNotEqual(done.returncode,0);self.assertIn('guard did not pass',done.stderr)
+                self.assertIn('outcomes.json',[p.name for p in startup.iterdir()],'source-independent outcome is still retained')
+                recorded=trace.read_text() if trace.exists() else ''
+                self.assertNotIn('bar_hosted',recorded);self.assertNotIn('source/eng',recorded)
+
     def test_early_refusal_and_absent_helpers_retain_startup_in_existing_single_upload(self):
         startup=self.root/'no-helper-startup';startup.mkdir(mode=0o700)
         (startup/'clock.json').write_text('{"verdict":"refused","firstRefusal":"original Root queue refusal"}')
         script=literal_block(WORKFLOW.read_text().split('- name: Retain the bounded generation receipt',1)[1],'run')
         env={**os.environ,'STARTUP_EVIDENCE':str(startup),'STARTUP_CAPTURE_PATH':str(startup),'EVIDENCE':str(self.evidence),'RUNNER_TEMP':str(self.root),
-             'OPERATION_ID':OPERATION,'CLOCK_OUTCOME':'failure','ADMIT_OUTCOME':'skipped','QUALIFY_OUTCOME':'skipped'}
+             'OPERATION_ID':OPERATION,'CLOCK_OUTCOME':'failure','GUARD_OUTCOME':'success','ADMIT_OUTCOME':'skipped','QUALIFY_OUTCOME':'skipped'}
         done=subprocess.run(['/bin/bash','-c',script],cwd=self.root,env=env,capture_output=True,text=True,timeout=10)
         self.assertNotEqual(done.returncode,0)
         self.assertIn('original Root queue refusal',(startup/'clock.json').read_text())
