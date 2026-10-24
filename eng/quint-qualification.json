@@ -1,7 +1,7 @@
 {
   "schema": "fsgg.coordination.quint-qualification/1",
   "source": "src/FS.GG.Coordination.Protocol/Protocol.md",
-  "sourceSha256": "ab114cbfd7738dd1568ce2da3250b7b141b7d5759169bd9d9fb23d3165bdd354",
+  "sourceSha256": "fd8ee59710f4855883061dc8d970eb7d7a80c910af79a9bed69f8c5217fbda4c",
   "compilerReceipt": "src/FS.GG.Coordination.Protocol/Generated/receipt.json",
   "modules": [
     {
@@ -54,6 +54,14 @@
         "lifecycle",
         "relations"
       ]
+    },
+    {
+      "id": "source-directory-commit",
+      "selectionImports": []
+    },
+    {
+      "id": "original-source-composition",
+      "selectionImports": []
     }
   ],
   "state": [
@@ -594,6 +602,108 @@
         ],
         "projections": [
           "qualification-manifest",
+          "model-test-inventory"
+        ],
+        "ciImpact": "bounded-test-root",
+        "budgetEffect": "within-calibrated-envelope"
+      }
+    },
+    {
+      "id": "source-directory-commit",
+      "main": "SourceDirectoryCommitModel",
+      "module": "source-directory-commit",
+      "closure": [],
+      "mode": "test",
+      "match": "^(successfulCommit|unqualifiedBackingRemainsUnknown|blockedDoesNotRelease|oldBytesDoNotAuthorizeReplay|omittedSyncDetected|prematureResponseDetected|consumedReplayDetected)$",
+      "positive": "successfulCommit",
+      "adversarial": "omittedSyncDetected",
+      "invalid": "prematureResponseDetected",
+      "budget": {
+        "depth": 1,
+        "states": 1000,
+        "samples": 100,
+        "elapsedMs": 45000,
+        "peakMiB": 1024,
+        "artifactBytes": 8388608
+      },
+      "admission": {
+        "owner": "source-directory-commit",
+        "imports": [
+          "source-directory-commit"
+        ],
+        "invariants": [
+          "safety"
+        ],
+        "independentOracles": [
+          "ledger-tamper",
+          "post-merge-verification"
+        ],
+        "root": "SourceDirectoryCommitModel",
+        "bounds": [
+          "depth",
+          "states",
+          "samples",
+          "elapsedMs",
+          "peakMiB",
+          "artifactBytes"
+        ],
+        "witnesses": [
+          "successfulCommit",
+          "omittedSyncDetected",
+          "prematureResponseDetected"
+        ],
+        "projections": [
+          "model-test-inventory"
+        ],
+        "ciImpact": "bounded-test-root",
+        "budgetEffect": "within-calibrated-envelope"
+      }
+    },
+    {
+      "id": "original-source-composition",
+      "main": "OriginalSourceCompositionModel",
+      "module": "original-source-composition",
+      "closure": [],
+      "mode": "test",
+      "match": "^(sourceComposition|unknownDoesNotReissue|wrongKeyDetected|replacementDetected|rootMismatchDetected|authorityDetected|expiryRefuses|committedReplyLossPreservesSettlement)$",
+      "positive": "sourceComposition",
+      "adversarial": "wrongKeyDetected",
+      "invalid": "rootMismatchDetected",
+      "budget": {
+        "depth": 1,
+        "states": 1000,
+        "samples": 100,
+        "elapsedMs": 45000,
+        "peakMiB": 1024,
+        "artifactBytes": 8388608
+      },
+      "admission": {
+        "owner": "original-source-composition",
+        "imports": [
+          "original-source-composition"
+        ],
+        "invariants": [
+          "safety"
+        ],
+        "independentOracles": [
+          "ledger-tamper",
+          "post-merge-verification"
+        ],
+        "root": "OriginalSourceCompositionModel",
+        "bounds": [
+          "depth",
+          "states",
+          "samples",
+          "elapsedMs",
+          "peakMiB",
+          "artifactBytes"
+        ],
+        "witnesses": [
+          "sourceComposition",
+          "wrongKeyDetected",
+          "rootMismatchDetected"
+        ],
+        "projections": [
           "model-test-inventory"
         ],
         "ciImpact": "bounded-test-root",

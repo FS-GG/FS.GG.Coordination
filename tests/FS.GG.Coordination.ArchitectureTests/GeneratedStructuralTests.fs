@@ -164,8 +164,8 @@ let ``committed generated suite is complete deterministic and source bound`` () 
         $"unexpected category counts: %A{summary.CategoryCounts}"
     )
 
-    Assert.Equal("412307f379c460c9debdcb38c1aed3c74aa9851abbd99aaa11520f8b7215d843", summary.SelfSha256)
-    Assert.Equal("e100a87caa0a9d1ded39a20168f9c5a46af20996bfb0d63f7fbde9e3568d9694", sha256 committed)
+    Assert.Equal("8ce40992b404dec9e66bd8c84145bcd85c34e810b652ca9fbd367fc8ee5adf04", summary.SelfSha256)
+    Assert.Equal("36bd2103ae22a8c9630036792978f2fab0d8d1fb3cdaa518da16416f9285cac1", sha256 committed)
 
 [<Theory>]
 [<InlineData("missing", "GST-CASE-COUNT")>]

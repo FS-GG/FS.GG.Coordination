@@ -69,8 +69,29 @@ must authenticate these observations and independent custody; returning a caller
 
 The journal rechecks the cap's joins under its owner lock. The existing lifecycle reconciler retains
 original first failure and conflicts. Cold records retain observation bytes and lifecycle data but never
-recreate an authentication capability. Every successful source write/readback still reports directory
-durability Unknown: file flush, rename and byte-exact cold reopen do not qualify a directory crash barrier.
+recreate an authentication capability. Fully pre-encoded supplier `/4` and export-source `/1` writes
+now use the Linux descriptor-relative source primitive. Under the existing exclusive owner lock it
+pins an `O_RDONLY|O_DIRECTORY|O_CLOEXEC|O_NOFOLLOW` journal descriptor, binds the held lock identity
+to its directory entry using the documented Linux `statx` ABI, creates a private exclusive temporary
+file, writes the bounded candidate exactly, flushes the file, replaces the record with `renameat`,
+then calls `fsync` on that same directory before descriptor-relative exact and cold structural readback.
+Unsupported platforms or native operations refuse; legacy record write paths retain their behavior.
+
+Successful completion establishes this syscall ordering only. Every successful source write/readback
+still reports directory durability Unknown. Production separately requires authenticated, durably
+provisioned pre-existing `stateRoot/journal-v1` ancestry, qualified backing/filesystem assumptions and
+stable namespace custody, including ownership of each temporary entry until cleanup. Identity
+checks and exact generated cleanup names do not defend against an arbitrary same-user actor replacing
+those entries between checks. The unchanged root initializer supplies none of that provenance; this is
+not a hardware or power-loss durability claim. A blocked syscall retains its owner lock until it
+returns; managed timeout cannot release custody while fsync continues. An outer process owner must
+retain an interrupted or unconfirmed operation as Unknown.
+
+Failures before replacement preserve the exact previous record. Failures after replacement are
+potentially committed and return the existing generic journal refusal. Cleanup removes only this
+attempt's own temporary name, preserves the first failure and never deletes the record or lock.
+Cold-read the same original; a retained consumed intent refuses another preparation. Old bytes after
+storage rollback cannot prove that an earlier attempt never escaped or authorize resending it.
 No production Executor interprets this source record as a runnable or destructively recoverable host record.
 
 ## Compatibility and remaining delivery
@@ -84,9 +105,93 @@ The containing Execution project is not independently packable. Its API is proje
 packable Coordination CLI. This change does not publish or reinstall a CLI or contracts package, and
 cannot authorize a different payload under an already published version. A future coherent release
 must select a new applicable version and qualify its exact consumer bytes and versioned reader behavior.
-Installed adoption, concrete verifier/authenticated transport, descriptor-backed copy, qualified commit
+Installed adoption, concrete verifier/authenticated transport, descriptor-backed copy, independently qualified storage/ancestry commit
 barrier and any native export or retirement remain separate work.
 
 An ordinary owner copy from an old held allocation can be a separately admitted fresh non-destructive
 acquisition. It must preserve that allocation's original Unknown outcomes and holds; this API does not
 backfill a new reservation, clock or retrospective receipt for it.
+
+## Same-key supplier and export composition
+
+`OriginalSourceJournal` adds `fsgg.portable-original-source-journal/1` at the
+existing workspace/idempotency key. Its bounded outer record retains the complete
+canonical supplier `/4` payload and an optional export continuation. Explicit
+attachment checks the current supplier bytes, revision and fence under the same
+owner lock; reads do not migrate legacy records. Its separate outer cursor lets
+export updates preserve the supplier transcript revision. Existing supplier
+writers refuse a composite entry unless the explicit composite path supplies its
+expected cursor, so a supplier update cannot discard export state.
+
+Controlled attachment rechecks the retained signatures with the existing test
+selection and derives lifecycle data from that checked transcript. It joins the
+reservation, allocation identity and shared native-configuration fields to the
+export original. Original clock conversion uses checked exact integer arithmetic.
+Paths, owner numbers, configured filesystem UUIDs and clock snapshots remain data;
+these checks establish no descriptor ancestry, namespace custody or live clock
+witness. Unsupported or contradictory data joins refuse the operation. Every
+snapshot retains `NativeCustody = EvidenceUnknown`; the API exposes no launch,
+ACK, reservation, deletion or production grant operation.
+
+A reader attempt is a single inert source intent. Missing writer termination,
+already consumed intent, stale cursor and conflicting original refuse preparation.
+The complete candidate is bounded before a temporary file exists. Existing file
+flush, same-directory replacement, directory-sync and cold-read cuts apply to the
+outer record. After an ambiguous replacement, only same-original readback may
+reconcile source data; old bytes, a lost response or rollback cannot authorize a
+resend. This source record does not replace an installed owner's durable launch
+admission and process settlement.
+
+Production requires retaining the **actual original allocation/root** after writer
+termination until both authenticated commits and reader settlement permit its
+release. A copied output archive is not that root. The installed operator must
+provide this retention and the original-bound OS custody; source-only state cannot
+assert either. `prepareAck` and `reserveHost` remain refused.
+
+`PortableHostBinding.AllocationReceiptDigest` currently names adapter-supplied
+identity without a declared production digest recipe. It must not be equated to
+raw receipt SHA-256 or `SHA256("fsgg.v3.creation-receipt/1\0" || receipt)` without
+an authentic adapter contract. The composition tests use the explicit test-only
+preimage `fsgg.controlled-test-allocation-binding/1\n`; that equality is source test
+data and supplies no receiving-helper or production receipt interoperability.
+Existing signed C/R fixtures remain unchanged. The distinct-destination test
+configuration is selected before `beginIntentV4`; unchanged C/R signatures gain no
+native-policy authentication from that selection.
+
+The adjacent `OriginalSourceCompositionModel` records shared state at one key,
+per-call lock acquisition, independent cursors, intent consumption, uncertainty and
+retention. The existing directory-commit model retains the lower filesystem
+boundary. Finite sampling and causal negative controls are not formal or native
+host qualification. A raw Quint trace alone does not establish an FsQuint
+production-driver correspondence.
+
+### Checked recovery and upper replay
+
+Pending and held composite records have an inert inspection path. It checks the
+retained controlled history and preserves the complete envelope/export data,
+without producing `PortableSupplierAuthenticatedSourceReadback`. Explicit
+abandonment computes the existing challenge/epoch transition from the current
+record under its lock. Quarantine checks the held source transition against the
+same supplier and outer cursors; failure and conflict data remain sticky. Neither
+path clears a hold or supplies ACK, execution or cleanup authority.
+
+Cached export lifecycle fields cannot establish readiness. Reverification derives
+positive observations only from the freshly checked supplier transcript; cached
+negative holds may remain. Full nested export structure, including allocation
+membership in the retiring-root set for both source-root policy variants, is
+checked before a temporary write. A canonically reencoded cached termination is
+therefore data, not writer-termination evidence for attempt preparation.
+
+`OriginalSourceCompositionSourceModel` is the implemented API observation scope.
+The upper FsQuint driver captures real attachment, separate pending/accepted CAS
+writes, an accepted write interrupted after replacement, cold readback and
+consumed-challenge/missing-termination/stale-cursor refusals. It compares observed
+supplier and outer cursors, retained original/configuration bytes, challenge
+consumption, reader intent, first failure, released lock, single-key population and
+readback. Driver cleanup deletes its actual private root and must succeed.
+`OriginalSourceCompositionModel` retains the separate future invocation/settlement
+boundary; its witnesses are not implementation coverage. Committed reply loss
+preserves settled reader state, while launch uncertainty cannot erase settlement.
+The existing fixtures still lack a genuinely signed writer-termination journey,
+so this replay observes a refused reader intent rather than positive reader
+consumption or native invocation.

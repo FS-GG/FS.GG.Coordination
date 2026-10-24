@@ -196,7 +196,7 @@ let private createArtifacts root =
             let preparationDigest = String.replicate 64 "c"
 
             let sourceDigest =
-                "ab114cbfd7738dd1568ce2da3250b7b141b7d5759169bd9d9fb23d3165bdd354"
+                "fd8ee59710f4855883061dc8d970eb7d7a80c910af79a9bed69f8c5217fbda4c"
 
             let contractDigest =
                 "791c65eacbc4ef93484673ed6c40d3e8ca21fd75f34371e58c9f954f757c1a64"
@@ -253,7 +253,7 @@ let private createArtifacts root =
             let resultDigest =
                 SHA256.HashData(
                     Encoding.UTF8.GetBytes(
-                        $"passed|passed|8|174|263|232|71|0|0|0|0|%s{preparationDigest}|%s{formalIdentity}|none|none"
+                        $"passed|passed|8|187|289|254|71|0|0|0|0|%s{preparationDigest}|%s{formalIdentity}|none|none"
                     )
                 )
                 |> Convert.ToHexString
@@ -261,7 +261,7 @@ let private createArtifacts root =
 
             File.WriteAllText(
                 target,
-                $"{{\"schema\":\"fsgg.coordination.canonical-quint-qualification/1\",\"q1Outcome\":\"passed\",\"q2Outcome\":\"passed\",\"positiveInvariantCount\":8,\"negativeControlCount\":174,\"preparationDurationMs\":100,\"q2DurationMs\":200,\"totalDurationMs\":300,\"processCounts\":{{\"external\":263,\"quintCli\":232,\"apalacheVerify\":71}},\"processAccounting\":\"logical-invocations-plus-explicit-startup-retries/v1\",\"physicalProcessCounts\":{{\"external\":263,\"quintCli\":232,\"apalacheVerify\":71}},\"startupRetries\":{{\"total\":0,\"verify\":0,\"reflectionDeadline\":0,\"earlyLifecycleExit\":0}},\"formalCounterexamples\":[%s{formalJson}],\"tools\":{{\"toolchainSha256\":\"%s{toolchainDigest}\",\"quintSha256\":\"%s{quintDigest}\",\"apalacheJarSha256\":\"%s{apalacheDigest}\"}},\"inputs\":{{\"sourceSha256\":\"%s{sourceDigest}\",\"contractSha256\":\"%s{contractDigest}\"}},\"preparationSha256\":\"%s{preparationDigest}\",\"failure\":null,\"resultSha256\":\"%s{resultDigest}\"}}"
+                $"{{\"schema\":\"fsgg.coordination.canonical-quint-qualification/1\",\"q1Outcome\":\"passed\",\"q2Outcome\":\"passed\",\"positiveInvariantCount\":8,\"negativeControlCount\":187,\"preparationDurationMs\":100,\"q2DurationMs\":200,\"totalDurationMs\":300,\"processCounts\":{{\"external\":289,\"quintCli\":254,\"apalacheVerify\":71}},\"processAccounting\":\"logical-invocations-plus-explicit-startup-retries/v1\",\"physicalProcessCounts\":{{\"external\":289,\"quintCli\":254,\"apalacheVerify\":71}},\"startupRetries\":{{\"total\":0,\"verify\":0,\"reflectionDeadline\":0,\"earlyLifecycleExit\":0}},\"formalCounterexamples\":[%s{formalJson}],\"tools\":{{\"toolchainSha256\":\"%s{toolchainDigest}\",\"quintSha256\":\"%s{quintDigest}\",\"apalacheJarSha256\":\"%s{apalacheDigest}\"}},\"inputs\":{{\"sourceSha256\":\"%s{sourceDigest}\",\"contractSha256\":\"%s{contractDigest}\"}},\"preparationSha256\":\"%s{preparationDigest}\",\"failure\":null,\"resultSha256\":\"%s{resultDigest}\"}}"
             )
         else
             File.WriteAllText(target, $"artifact:%s{relative}")
@@ -1138,8 +1138,9 @@ let ``bootstrap control surface stays typed thin and bounded`` () =
         File.ReadAllText(Path.Combine(repositoryRoot, ".github/workflows/bootstrap-qualification.yml"))
 
     Assert.InRange(lineCount ".github/workflows/bootstrap-qualification.yml", 1, 620)
-    // The 29-project census adds exactly two entries to the bounded qualification plan.
-    Assert.InRange(lineCount "eng/bootstrap-qualification-plan.json", 1, 309)
+    // The 29-project census adds exactly two entries to the bounded qualification plan;
+    // the canonical accounting census adds its helper and three source-identity inputs.
+    Assert.InRange(lineCount "eng/bootstrap-qualification-plan.json", 1, 313)
     Assert.InRange(lineCount "eng/bootstrap-ci.fsx", 1, 26)
     Assert.InRange(lineCount "src/FS.GG.Coordination.Qualification.Contracts/BootstrapCi.fs", 1, 2500)
     Assert.InRange(lineCount "src/FS.GG.Coordination.Qualification.Contracts/QualificationReuse.fs", 1, 1500)
@@ -1149,7 +1150,10 @@ let ``bootstrap control surface stays typed thin and bounded`` () =
     // Callback source preparation, failure evidence retention and exact focused census add nine lines: 864 -> 873.
     // The original and forward Execution pair inert controls add one comment and two invocations: measured 873 -> 876.
     // The managed-group owner controls add one invocation, consuming the spare line: 876 -> 877.
-    Assert.InRange(gateLines, 1, 877)
+    // The canonical accounting census adds the receipt-guard invocation, the helper self-test and
+    // one derived-census line to the aggregate gate; the canonical-quint subject guard adds one so a
+    // removed subject is still named before the pure helper runs: measured 877 -> 881.
+    Assert.InRange(gateLines, 1, 881)
     // Producer invocations add eight distinct lines; the compiler subject guard adds one.
     // Focused host-allocation tests add three: start time, test invocation, and fresh TRX census.
     // Focused finite-custody tests add three more distinct lines: measured 643 -> 646.
@@ -1157,7 +1161,8 @@ let ``bootstrap control surface stays typed thin and bounded`` () =
     // Callback pairing adds nine distinct guarded lines: 649 -> 658.
     // The same three lines are distinct: 658 -> 661.
     // The managed-group owner invocation is one more distinct line: 661 -> 662.
-    Assert.InRange(uniqueGateLines, 1, 662)
+    // The same accounting census adds four distinct lines and the subject guard one more: measured 662 -> 667.
+    Assert.InRange(uniqueGateLines, 1, 667)
     // One shared source orchestrator has its own bound; retain both legacy caps.
     Assert.InRange(lineCount "eng/bootstrap-gates/source-preflight.sh", 1, 160)
     Assert.DoesNotContain("requiredRunFragments", core)
@@ -1746,12 +1751,12 @@ let private mutateCanonicalQuintReceipt mutate =
 [<Theory>]
 [<InlineData("\"q1Outcome\":\"passed\"", "\"q1Outcome\":\"failed\"", "quint-receipt-outcome")>]
 [<InlineData("\"positiveInvariantCount\":8", "\"positiveInvariantCount\":7", "quint-receipt-inventory")>]
-[<InlineData("\"negativeControlCount\":174", "\"negativeControlCount\":125", "quint-receipt-inventory")>]
+[<InlineData("\"negativeControlCount\":187", "\"negativeControlCount\":125", "quint-receipt-inventory")>]
 [<InlineData("\"totalDurationMs\":300", "\"totalDurationMs\":301", "quint-receipt-timing")>]
-[<InlineData("\"external\":263", "\"external\":185", "quint-receipt-process-count")>]
-[<InlineData("\"quintCli\":232", "\"quintCli\":160", "quint-receipt-process-count")>]
+[<InlineData("\"external\":289", "\"external\":185", "quint-receipt-process-count")>]
+[<InlineData("\"quintCli\":254", "\"quintCli\":160", "quint-receipt-process-count")>]
 [<InlineData("\"apalacheVerify\":71", "\"apalacheVerify\":46", "quint-receipt-process-count")>]
-[<InlineData("\"quintCli\":232", "\"quintCli\":0", "quint-receipt-process-count")>]
+[<InlineData("\"quintCli\":254", "\"quintCli\":0", "quint-receipt-process-count")>]
 [<InlineData("\"verify\":0", "\"verify\":1", "quint-receipt-startup-retries")>]
 [<InlineData("\"resultSha256\":\"", "\"resultSha256\":\"0", "quint-receipt-result-digest")>]
 let ``canonical Quint receipt rejects incomplete or contradictory evidence``

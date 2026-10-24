@@ -7618,6 +7618,331 @@ module PreflightArtifactReplay {
   }
 }
 
+
+// One owner key; source-only composition, not an installed launch authority.
+module OriginalSourceCompositionModel {
+  type Owner = NoOwner | OwnerA | OwnerB
+  type ReaderPhase = Unrequested | IntentConsumed | InvocationObserved | Uncertain | Settled
+  type OriginalBinding = { original: int, reservation: int, allocation: int, roots: int, clock: int, deadline: int }
+  type SupplierSnapshot = { binding: OriginalBinding, revision: int, fence: int, admitted: bool, transcript: int, firstFailure: bool }
+  type ExportSnapshot = { binding: OriginalBinding, attempt: int, phase: ReaderPhase,
+    sourceCommit: int, receivingCommit: int, retainedRoot: bool }
+  type Composition = { owner: Owner, supplier: SupplierSnapshot, exportState: ExportSnapshot,
+    attached: bool, envelopeRevision: int, candidateBounded: bool, commitVisible: bool,
+    commitReadback: bool, uncertain: bool, readerLaunchCount: int, sourceAuthority: bool,
+    ackCount: int, reserveCount: int, writerSettled: bool, copyObserved: bool, responded: bool, key: int, event: int, time: int, committedReplyLost: bool }
+  var original: Composition
+  pure val binding: OriginalBinding = { original: 1, reservation: 1, allocation: 1, roots: 1, clock: 1, deadline: 2 }
+  pure val initial: Composition = { owner: NoOwner,
+    supplier: { binding: binding, revision: 1, fence: 1, admitted: true, transcript: 1, firstFailure: false },
+    exportState: { binding: binding, attempt: 0, phase: Unrequested, sourceCommit: 0, receivingCommit: 0, retainedRoot: true },
+    attached: false, envelopeRevision: 0, candidateBounded: false, commitVisible: false,
+    commitReadback: false, uncertain: false, readerLaunchCount: 0, sourceAuthority: false,
+    ackCount: 0, reserveCount: 0, writerSettled: false, copyObserved: false, responded: false, key: 1, event: 0, time: 0, committedReplyLost: false }
+  action init = original' = initial
+  pure def canOwn(s: Composition): bool = s.owner == NoOwner and not(s.uncertain)
+  pure def owned(s: Composition, owner: Owner): Composition = { ...s, owner: owner, event: 1 }
+  action lockA = all { canOwn(original), original' = owned(original, OwnerA) }
+  action lockB = all { canOwn(original), original' = owned(original, OwnerB) }
+  pure def canAttach(s: Composition): bool = s.owner != NoOwner and not(s.attached)
+  pure def attached(s: Composition): Composition = { ...s, attached: true,
+    candidateBounded: true, envelopeRevision: 1, event: 2 }
+  action attach = all { canAttach(original), original' = attached(original) }
+  pure def committed(s: Composition): Composition = { ...s, commitVisible: true,
+    commitReadback: true, owner: NoOwner, exportState: { ...s.exportState, sourceCommit: 1 }, event: 3 }
+  action commit = all { original.attached, original.candidateBounded, not(original.commitReadback), original' = committed(original) }
+  pure def appended(s: Composition): Composition = { ...s,
+    supplier: { ...s.supplier, revision: 2, fence: 2, transcript: 2 }, owner: NoOwner, envelopeRevision: s.envelopeRevision + 1, event: 4 }
+  action appendSupplier = all { original.owner != NoOwner, original.commitReadback, original.supplier.revision == 1, original' = appended(original) }
+  pure def writerTerminated(s: Composition): Composition = { ...s, writerSettled: true, event: 5 }
+  action settleWriter = all { original.commitReadback, not(original.writerSettled), original' = writerTerminated(original) }
+  pure def canConsume(s: Composition): bool = s.owner != NoOwner and s.commitReadback and s.writerSettled
+    and s.time < s.supplier.binding.deadline and s.exportState.phase == Unrequested and s.exportState.retainedRoot and not(s.uncertain)
+  pure def consumed(s: Composition): Composition = { ...s, exportState: { ...s.exportState, attempt: 1, phase: IntentConsumed },
+    envelopeRevision: s.envelopeRevision + 1, owner: NoOwner, event: 6 }
+  action consume = all { canConsume(original), original' = consumed(original) }
+  pure def lost(s: Composition): Composition = { ...s, uncertain: true,
+    exportState: { ...s.exportState, phase: Uncertain }, event: 7 }
+  pure def canLoseLaunchResponse(s: Composition): bool = not(s.responded) and not(s.uncertain)
+    and (s.exportState.phase == IntentConsumed or s.exportState.phase == InvocationObserved)
+  action loseResponse = all { canLoseLaunchResponse(original), original' = lost(original) }
+  action loseCommittedReply = all { original.responded, original.exportState.phase == Settled,
+    original' = { ...original, committedReplyLost: true } }
+  // This records an abstract future original-bound observation, NEVER an effect from source data.
+  pure def observed(s: Composition): Composition = { ...s, readerLaunchCount: 1,
+    exportState: { ...s.exportState, phase: InvocationObserved }, event: 8 }
+  action observeInvocation = all { original.exportState.phase == IntentConsumed, not(original.uncertain),
+    original.readerLaunchCount == 0, original' = observed(original) }
+  pure def copied(s: Composition): Composition = { ...s, copyObserved: true, event: 9 }
+  action observeCopy = all { original.exportState.phase == InvocationObserved, not(original.copyObserved), original' = copied(original) }
+  pure def destinationCommitted(s: Composition): Composition = { ...s,
+    exportState: { ...s.exportState, receivingCommit: 1 }, event: 10 }
+  action receivingCommit = all { original.copyObserved, original.exportState.sourceCommit == 1,
+    original.exportState.receivingCommit == 0, original' = destinationCommitted(original) }
+  pure def readerSettled(s: Composition): Composition = { ...s,
+    exportState: { ...s.exportState, phase: Settled }, event: 11 }
+  action settleReader = all { original.exportState.phase == InvocationObserved,
+    original.exportState.receivingCommit == 1, original' = readerSettled(original) }
+  pure def answered(s: Composition): Composition = { ...s, responded: true, event: 12 }
+  action respond = all { original.exportState.phase == Settled, not(original.responded), not(original.uncertain), original' = answered(original) }
+  pure def released(s: Composition): Composition = { ...s, owner: NoOwner, event: 13 }
+  action release = all { original.responded, original.owner != NoOwner, original' = released(original) }
+  action blocked = all { original.uncertain or original.responded, original' = original }
+  pure def expired(s: Composition): Composition = { ...s, time: 2, event: 14 }
+  action expire = all { original.time == 0, original.exportState.attempt == 0, original' = expired(original) }
+  action successStep = any { lockA, lockB, attach, commit, appendSupplier, settleWriter, consume,
+    observeInvocation, observeCopy, receivingCommit, settleReader, respond, release, blocked, loseCommittedReply }
+  action step = any { lockA, lockB, attach, commit, appendSupplier, settleWriter, consume, expire,
+    loseResponse, observeInvocation, observeCopy, receivingCommit, settleReader, respond, release, blocked, loseCommittedReply }
+  val safety = and {
+    original.key == 1,
+    original.supplier.binding == binding,
+    original.exportState.binding == original.supplier.binding,
+    original.supplier.admitted,
+    original.supplier.transcript >= 1,
+    original.supplier.revision == original.supplier.fence,
+    original.commitVisible implies original.candidateBounded,
+    original.attached implies original.envelopeRevision >= 1,
+    original.readerLaunchCount <= 1,
+    original.readerLaunchCount > 0 implies original.exportState.attempt == 1,
+    original.uncertain implies original.exportState.phase == Uncertain,
+    original.writerSettled implies original.exportState.retainedRoot,
+    original.exportState.receivingCommit == 1 implies (original.exportState.sourceCommit == 1 and original.copyObserved),
+    original.responded implies (original.exportState.phase == Settled and original.exportState.receivingCommit == 1),
+    not(original.sourceAuthority), original.ackCount == 0, original.reserveCount == 0
+  }
+  val done = original.responded
+  val ownedWitness = original.event == 1
+  val attachedWitness = original.event == 2
+  val committedWitness = original.event == 3
+  val appendWitness = original.event == 4
+  val writerWitness = original.event == 5
+  val consumedWitness = original.event == 6
+  val uncertainWitness = original.event == 7
+  val invocationWitness = original.event == 8
+  val copyWitness = original.event == 9
+  val receivingWitness = original.event == 10
+  val settledWitness = original.event == 11
+  val responseWitness = original.event == 12
+  val releasedWitness = original.event == 13
+  val expiredWitness = original.event == 14
+  action replaceSupplier = all { original.attached,
+    original' = { ...original, supplier: { ...original.supplier, transcript: 0 } } }
+  action secondKey = all { original.attached, original' = { ...original, key: 2 } }
+  action mismatchedOriginal = all { original.attached,
+    original' = { ...original, exportState: { ...original.exportState, binding: { ...binding, roots: 2 } } } }
+  action reissueUncertain = all { original.uncertain, original' = { ...original, readerLaunchCount: 2 } }
+  action releaseWriterRoot = all { original.writerSettled,
+    original' = { ...original, exportState: { ...original.exportState, retainedRoot: false } } }
+  action receiverOnly = all { original.copyObserved,
+    original' = { ...original, exportState: { ...original.exportState, sourceCommit: 0, receivingCommit: 1 } } }
+  action sourceAsAuthority = all { original.commitReadback, original' = { ...original, sourceAuthority: true, ackCount: 1 } }
+  action replacedSupplierStep = any { step, replaceSupplier }
+  action secondKeyStep = any { step, secondKey }
+  action mismatchedOriginalStep = any { step, mismatchedOriginal }
+  action uncertainReissueStep = any { step, reissueUncertain }
+  action releasedRootStep = any { step, releaseWriterRoot }
+  action receiverOnlyStep = any { step, receiverOnly }
+  action sourceAuthorityStep = any { step, sourceAsAuthority }
+  run sourceComposition = init.then(lockA).then(attach).then(commit).then(lockA).then(appendSupplier)
+    .then(settleWriter).then(lockA).then(consume).expect(safety and consumedWitness)
+  run unknownDoesNotReissue = init.then(lockB).then(attach).then(commit).then(settleWriter)
+    .then(lockB).then(consume).then(loseResponse).then(blocked).expect(safety and uncertainWitness)
+  run committedReplyLossPreservesSettlement = init.then(lockA).then(attach).then(commit).then(settleWriter)
+    .then(lockA).then(consume).then(observeInvocation).then(observeCopy).then(receivingCommit)
+    .then(settleReader).then(respond).then(loseCommittedReply)
+    .expect(safety and original.responded and original.exportState.phase == Settled
+      and original.committedReplyLost and not(canLoseLaunchResponse(original)))
+  run wrongKeyDetected = init.then(lockA).then(attach).then(secondKey).expect(not(safety))
+  run replacementDetected = init.then(lockA).then(attach).then(replaceSupplier).expect(not(safety))
+  run rootMismatchDetected = init.then(lockA).then(attach).then(mismatchedOriginal).expect(not(safety))
+  run authorityDetected = init.then(lockA).then(attach).then(commit).then(sourceAsAuthority).expect(not(safety))
+  run expiryRefuses = init.then(lockA).then(attach).then(commit).then(settleWriter).then(expire)
+    .expect(safety and expiredWitness and not(canConsume(original)))
+}
+
+// Actual source API observation model. Future invocation/settlement above is not
+// implementation coverage and never supplies native Known evidence.
+module OriginalSourceCompositionSourceModel {
+  type SourceObservation = {
+    event: int, supplierRevision: int, supplierFence: int, transcript: int,
+    challengeConsumed: int, pending: bool, cursor: int, fence: int, attached: bool,
+    readerIntentConsumed: bool, firstFailure: bool, operationFailed: bool, refused: bool,
+    originalPreserved: bool, exportJoined: bool, custodyUnknown: bool,
+    lockReleased: bool, keyCount: int, readbackExact: bool
+  }
+  var source: SourceObservation
+  pure val initial: SourceObservation = {
+    event: 0, supplierRevision: 1, supplierFence: 1, transcript: 1,
+    challengeConsumed: 0, pending: false, cursor: 0, fence: 0, attached: false,
+    readerIntentConsumed: false, firstFailure: false, operationFailed: false, refused: false,
+    originalPreserved: true, exportJoined: true, custodyUnknown: true,
+    lockReleased: true, keyCount: 1, readbackExact: true
+  }
+  action init = source' = initial
+  pure def attached(s: SourceObservation): SourceObservation = { ...s, event: 1, cursor: 1, fence: 1, attached: true }
+  action sourceAttach = all { source.event == 0, source' = attached(source) }
+  pure def pending(s: SourceObservation): SourceObservation = { ...s, event: 2, cursor: 2, fence: 2,
+    supplierRevision: 2, supplierFence: 2, pending: true }
+  action sourcePending = all { source.event == 1, source' = pending(source) }
+  pure def accepted(s: SourceObservation): SourceObservation = { ...s, event: 3, cursor: 3, fence: 3,
+    supplierRevision: 3, supplierFence: 3, transcript: 2, challengeConsumed: 1,
+    pending: false, operationFailed: true, refused: true }
+  action sourceAcceptedUnknown = all { source.event == 2, source' = accepted(source) }
+  pure def read(s: SourceObservation): SourceObservation = { ...s, event: 4, refused: false }
+  action sourceColdRead = all { source.event == 3, source' = read(source) }
+  pure def refused(s: SourceObservation, event: int): SourceObservation = { ...s, event: event, refused: true }
+  action sourceConsumedRefusal = all { source.event == 4, source' = refused(source, 5) }
+  action sourceTerminationRefusal = all { source.event == 5, source' = refused(source, 6) }
+  action sourceStaleRefusal = all { source.event == 6, source' = refused(source, 7) }
+  action terminal = all { source.event == 7, source' = source }
+  action step = any { sourceAttach, sourcePending, sourceAcceptedUnknown, sourceColdRead,
+    sourceConsumedRefusal, sourceTerminationRefusal, sourceStaleRefusal, terminal }
+  val safety = and { source.originalPreserved, source.exportJoined, source.custodyUnknown,
+    source.lockReleased, source.keyCount == 1, source.readbackExact,
+    source.cursor == source.fence, source.supplierRevision == source.supplierFence,
+    not(source.readerIntentConsumed), not(source.firstFailure),
+    source.event >= 3 implies (source.challengeConsumed == 1 and source.operationFailed),
+    source.event >= 4 implies (source.cursor == 3 and source.supplierRevision == 3) }
+  val done = source.event == 7
+  val attachWitness = source.event == 1
+  val pendingWitness = source.event == 2
+  val unknownWitness = source.event == 3
+  val coldWitness = source.event == 4
+  val consumedRefusalWitness = source.event == 5
+  val terminationRefusalWitness = source.event == 6
+  val staleWitness = source.event == 7
+  action discardSupplier = all { source.attached, source' = { ...source, originalPreserved: false } }
+  action replayConsumed = all { source.event >= 3, source' = { ...source, challengeConsumed: 0 } }
+  action trustCachedTermination = all { source.event == 5, source' = { ...source, readerIntentConsumed: true } }
+  action discardSupplierStep = any { step, discardSupplier }
+  action replayConsumedStep = any { step, replayConsumed }
+  action trustCachedTerminationStep = any { step, trustCachedTermination }
+  run actualSourceCompletions = init.then(sourceAttach).then(sourcePending).then(sourceAcceptedUnknown)
+    .then(sourceColdRead).then(sourceConsumedRefusal).then(sourceTerminationRefusal).then(sourceStaleRefusal).expect(safety and done)
+}
+
+module OriginalSourceCompositionReplay {
+  import OriginalSourceCompositionSourceModel.*
+  action replayInit = init
+  action replayStep = step
+}
+
+module SourceDirectoryCommitModel {
+  type CommitState = {
+    owner: int, phase: int, original: int, bounded: bool,
+    fileFlushed: bool, renamed: bool, directorySynced: bool,
+    coldRead: bool, responded: bool, visible: int, durable: int,
+    consumed: bool, uncertain: bool, qualifiedBacking: bool,
+    issued: int, firstFailure: bool, effects: Set[str]
+  }
+  var commit: CommitState
+  pure val emptyCommit: CommitState = {
+    owner: 0, phase: 0, original: 1, bounded: false,
+    fileFlushed: false, renamed: false, directorySynced: false,
+    coldRead: false, responded: false, visible: 0, durable: 0,
+    consumed: false, uncertain: false, qualifiedBacking: true,
+    issued: 0, firstFailure: false, effects: Set()
+  }
+  action init = commit' = emptyCommit
+  action unqualifiedInit = commit' = { ...emptyCommit, qualifiedBacking: false }
+  pure def canAcquire(s: CommitState): bool = s.owner == 0 and s.phase == 0 and not(s.uncertain)
+  pure def acquired(s: CommitState, owner: int): CommitState = { ...s, owner: owner, phase: 1 }
+  action lockA = all { canAcquire(commit), commit' = acquired(commit, 1) }
+  action lockB = all { canAcquire(commit), commit' = acquired(commit, 2) }
+  action boundCandidate = all { commit.phase == 1, commit' = { ...commit, phase: 2, bounded: true } }
+  action createAndWrite = all { commit.phase == 2, commit.bounded, commit' = { ...commit, phase: 3, effects: Set("temp") } }
+  action fileFlush = all { commit.phase == 3, commit' = { ...commit, phase: 4, fileFlushed: true } }
+  action replace = all { commit.phase == 4, commit.fileFlushed,
+    commit' = { ...commit, phase: 5, renamed: true, visible: 1, consumed: true } }
+  action directorySync = all { commit.phase == 5,
+    commit' = { ...commit, phase: 6, directorySynced: true, durable: if (commit.qualifiedBacking) 1 else 0 } }
+  action coldRead = all { commit.phase == 6, commit.visible == 1,
+    commit' = { ...commit, phase: 7, coldRead: true } }
+  action respond = all { commit.phase == 7, not(commit.firstFailure), commit.issued == 0,
+    commit' = { ...commit, phase: 8, responded: true, issued: 1 } }
+  action release = all { commit.phase == 8, commit' = { ...commit, owner: 0, phase: 9 } }
+  action failBeforeReplace = all { commit.phase >= 1, commit.phase <= 4,
+    commit' = { ...commit, phase: 9, owner: 0, firstFailure: true, uncertain: true, effects: Set() } }
+  action failAfterReplace = all { commit.phase >= 5, commit.phase <= 7,
+    commit' = { ...commit, phase: 9, owner: 0, firstFailure: true, uncertain: true } }
+  action crashBeforeSync = {
+    nondet recovered = Set(0, 1).oneOf()
+    all { commit.phase == 5,
+      commit' = { ...commit, phase: 9, owner: 0, visible: recovered, uncertain: true, firstFailure: true } }
+  }
+  action crashAfterSync = {
+    nondet recovered = Set(0, 1).oneOf()
+    all { commit.phase >= 6, commit.phase <= 8,
+      commit' = { ...commit, phase: 9, owner: 0,
+        visible: if (commit.qualifiedBacking) 1 else recovered,
+        uncertain: true, firstFailure: true } }
+  }
+  action blockedSync = all { commit.phase == 5, commit' = commit }
+  action stutter = commit' = commit
+  action step = any { lockA, lockB, boundCandidate, createAndWrite, fileFlush, replace,
+    directorySync, coldRead, respond, release, failBeforeReplace, failAfterReplace,
+    crashBeforeSync, crashAfterSync, blockedSync, stutter }
+  val safety = and {
+    commit.original == 1,
+    Set(0, 1, 2).contains(commit.owner),
+    (commit.phase >= 1 and commit.phase <= 8) implies commit.owner != 0,
+    commit.effects.size() > 0 implies commit.bounded,
+    commit.renamed implies commit.fileFlushed,
+    commit.responded implies (commit.directorySynced and commit.coldRead),
+    commit.issued <= 1,
+    commit.issued > 0 implies commit.consumed,
+    commit.directorySynced and commit.qualifiedBacking implies commit.durable == 1,
+    not(commit.effects.contains("ack")),
+    not(commit.effects.contains("run")),
+    not(commit.effects.contains("export"))
+  }
+  val done = commit.responded
+  action omittedSync = all { commit.phase == 5, commit' = { ...commit, phase: 7, coldRead: true } }
+  action prematureResponse = all { commit.phase == 5, commit' = { ...commit, phase: 8, responded: true, issued: 1 } }
+  action reissueConsumed = all { commit.consumed, commit.phase == 9,
+    commit' = { ...commit, issued: 2 } }
+  action successStep = any { lockA, lockB, boundCandidate, createAndWrite, fileFlush,
+    replace, directorySync, coldRead, respond, release, stutter }
+  action omittedSyncStep = any { successStep, omittedSync }
+  action prematureResponseStep = any { successStep, prematureResponse }
+  action consumedReplayStep = any { lockA, boundCandidate, createAndWrite, fileFlush,
+    replace, crashBeforeSync, reissueConsumed, stutter }
+  run successfulCommit = init.then(lockA).then(boundCandidate).then(createAndWrite)
+    .then(fileFlush).then(replace).then(directorySync).then(coldRead).then(respond)
+    .expect(done and safety)
+  run unqualifiedBackingRemainsUnknown = unqualifiedInit.then(lockA).then(boundCandidate).then(createAndWrite)
+    .then(fileFlush).then(replace).then(directorySync).then(coldRead).then(respond)
+    .expect(commit.directorySynced and commit.durable == 0 and safety)
+  run blockedDoesNotRelease = init.then(lockB).then(boundCandidate).then(createAndWrite)
+    .then(fileFlush).then(replace).then(blockedSync).expect(commit.owner == 2 and not(commit.responded) and safety)
+  run oldBytesDoNotAuthorizeReplay = init.then(lockA).then(boundCandidate).then(createAndWrite)
+    .then(fileFlush).then(replace).then(crashBeforeSync).expect(commit.uncertain and commit.consumed and safety)
+  run omittedSyncDetected = init.then(lockA).then(boundCandidate).then(createAndWrite)
+    .then(fileFlush).then(replace).then(omittedSync).then(respond).expect(not(safety))
+  run prematureResponseDetected = init.then(lockA).then(boundCandidate).then(createAndWrite)
+    .then(fileFlush).then(replace).then(prematureResponse).expect(not(safety))
+  run consumedReplayDetected = init.then(lockA).then(boundCandidate).then(createAndWrite)
+    .then(fileFlush).then(replace).then(crashBeforeSync).then(reissueConsumed).expect(not(safety))
+}
+
+module SourceDirectoryCommitReplay {
+  import SourceDirectoryCommitModel.*
+  var phase: int
+  action replayInit = all { init, phase' = 0 }
+  action replayStep = any {
+    all { phase == 0, lockA, phase' = 1 },
+    all { phase == 1, boundCandidate, phase' = 2 },
+    all { phase == 2, createAndWrite, phase' = 3 },
+    all { phase == 3, fileFlush, phase' = 4 },
+    all { phase == 4, replace, phase' = 5 },
+    all { phase == 5, directorySync, phase' = 6 },
+    all { phase == 6, coldRead, phase' = 7 },
+    all { phase == 7, respond, phase' = 8 },
+    all { phase == 8, stutter, phase' = phase }
+  }
+}
+
 ```
 
 ## Typed prerequisite preparation
@@ -7630,3 +7955,25 @@ Custody binds the held bootstrap before ACK, observes its fixed filter, and requ
 pidfd termination and output/scratch settlement. A leader exit or checker JSON cannot establish cleanup.
 No native operation authority, kernel provenance or product supervisor is supplied by these models.
 Sampling bounds and completion witnesses are qualification evidence, never exhaustive proof.
+
+## Local source-journal directory synchronization
+
+This finite shared-directory model covers one key, two competing owners, one original and one
+fully bounded candidate. It is separate from `GS20310JournalModel`, whose commit is Git CAS.
+The local syscall order does not authenticate the directory ancestry, filesystem, hardware,
+receiver, clock or original. Conditional persistence after directory synchronization assumes
+an independently qualified, durably provisioned pre-existing directory and stable namespace
+custody. Process interruption before that point can expose old or new bytes; neither authorizes
+resending an uncertain attempt. A blocked synchronization syscall can stutter indefinitely:
+there is no unconditional progress or managed-timeout release rule.
+
+
+Implementation correspondence: `PortableSourceJournalIO.Context.Write` performs the bounded
+candidate write, successful file flush, descriptor-relative replacement and same-directory fsync.
+`DurableJournal` retains the original owner lock through exact descriptor-relative readback and the
+shared existing decoder. The finite source failure controls observe the same boundaries without
+claiming hardware failure. `BeforeSourceDirectorySync`, `AfterSourceDirectorySyncBeforeReadback`
+and `SimulatedSourceDirectorySyncError` are fixed test cuts, not alternative stores or qualifiers.
+Every source result remains Unknown and all ACK/run/export production refusals remain intact.
+The `uncertain` bit models outer-owner retained custody after a failed or interrupted operation;
+it cannot be reconstructed from old disk bytes alone. This model does not qualify arbitrary rollback.

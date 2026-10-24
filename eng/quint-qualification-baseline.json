@@ -1,54 +1,54 @@
 {
   "schema": "fsgg.coordination.quint-qualification-baseline/1",
-  "sourceSha256": "ab114cbfd7738dd1568ce2da3250b7b141b7d5759169bd9d9fb23d3165bdd354",
-  "configurationSha256": "1e7274a0005cc9a1479ebdbe44b0d004473a287a7ad63b0af5f70593b7d677a0",
-  "assembledQuintSha256": "30168c5eb307866f34dc55388955a932326c214beccf8b5eb7fe3585bff38349",
+  "sourceSha256": "fd8ee59710f4855883061dc8d970eb7d7a80c910af79a9bed69f8c5217fbda4c",
+  "configurationSha256": "4aecb3d30646c166049fe86faeea7a56cb96d6fc173fc38d1cb0ef1ebf9833d0",
+  "assembledQuintSha256": "7aef7dca57d07b701aa03c02748e4bfee354dbce7fefaec5fffe3848fcdfd154",
   "runnerClass": "linux-x64-local-exact-sdk-single-compiler-observed",
-  "measuredAt": "2026-10-03T16:10:56.2944194+00:00",
+  "measuredAt": "2026-10-24T16:24:55.7831330+00:00",
   "formalMeasurementMethod": "canonical-runner-observed-tlc-and-rust-v2",
   "measurements": [
     {
       "root": "authority",
       "stateCount": 9,
       "sampleCount": 100,
-      "elapsedMs": 4415,
-      "peakMiB": 336,
-      "artifactBytes": 1028,
+      "elapsedMs": 4465,
+      "peakMiB": 338,
+      "artifactBytes": 1067,
       "dependencyDepth": 2
     },
     {
       "root": "lifecycle",
       "stateCount": 9,
       "sampleCount": 100,
-      "elapsedMs": 4378,
-      "peakMiB": 333,
-      "artifactBytes": 1030,
+      "elapsedMs": 4533,
+      "peakMiB": 336,
+      "artifactBytes": 1069,
       "dependencyDepth": 3
     },
     {
       "root": "relations",
       "stateCount": 9,
       "sampleCount": 100,
-      "elapsedMs": 4266,
-      "peakMiB": 333,
-      "artifactBytes": 1609,
+      "elapsedMs": 4353,
+      "peakMiB": 330,
+      "artifactBytes": 1648,
       "dependencyDepth": 2
     },
     {
       "root": "protocol-streams",
       "stateCount": 9,
       "sampleCount": 100,
-      "elapsedMs": 4298,
+      "elapsedMs": 4572,
       "peakMiB": 335,
-      "artifactBytes": 8490,
+      "artifactBytes": 8529,
       "dependencyDepth": 2
     },
     {
       "root": "mutation-saga",
       "stateCount": 17,
       "sampleCount": 17,
-      "elapsedMs": 7123,
-      "peakMiB": 835,
+      "elapsedMs": 7328,
+      "peakMiB": 430,
       "artifactBytes": 12082566,
       "dependencyDepth": 3
     },
@@ -56,8 +56,8 @@
       "root": "desired-state",
       "stateCount": 5,
       "sampleCount": 5,
-      "elapsedMs": 5401,
-      "peakMiB": 406,
+      "elapsedMs": 5300,
+      "peakMiB": 417,
       "artifactBytes": 12081993,
       "dependencyDepth": 4
     },
@@ -65,10 +65,28 @@
       "root": "qualification",
       "stateCount": 9,
       "sampleCount": 9,
-      "elapsedMs": 6035,
-      "peakMiB": 438,
+      "elapsedMs": 5968,
+      "peakMiB": 763,
       "artifactBytes": 12082263,
       "dependencyDepth": 5
+    },
+    {
+      "root": "source-directory-commit",
+      "stateCount": 7,
+      "sampleCount": 7,
+      "elapsedMs": 1695,
+      "peakMiB": 331,
+      "artifactBytes": 512211,
+      "dependencyDepth": 1
+    },
+    {
+      "root": "original-source-composition",
+      "stateCount": 8,
+      "sampleCount": 8,
+      "elapsedMs": 1124,
+      "peakMiB": 193,
+      "artifactBytes": 1166665,
+      "dependencyDepth": 1
     }
   ],
   "formalMeasurements": [
@@ -76,201 +94,201 @@
       "id": "claim-election",
       "stateCount": 3,
       "sampleCount": 100,
-      "elapsedMs": 63626,
-      "peakMiB": 1075,
+      "elapsedMs": 62528,
+      "peakMiB": 1481,
       "artifactBytes": 5674,
       "transitionCount": 3,
-      "allAttemptElapsedMs": 63626
+      "allAttemptElapsedMs": 62528
     },
     {
       "id": "relation-mutation",
       "stateCount": 3,
       "sampleCount": 100,
-      "elapsedMs": 64246,
-      "peakMiB": 1132,
+      "elapsedMs": 62421,
+      "peakMiB": 1441,
       "artifactBytes": 4919,
       "transitionCount": 3,
-      "allAttemptElapsedMs": 64246
+      "allAttemptElapsedMs": 62421
     },
     {
       "id": "lifecycle",
       "stateCount": 3,
       "sampleCount": 100,
-      "elapsedMs": 63208,
-      "peakMiB": 1390,
+      "elapsedMs": 61215,
+      "peakMiB": 1461,
       "artifactBytes": 4586,
       "transitionCount": 3,
-      "allAttemptElapsedMs": 63208
+      "allAttemptElapsedMs": 61215
     },
     {
       "id": "operation-saga",
       "stateCount": 3,
       "sampleCount": 100,
-      "elapsedMs": 62309,
-      "peakMiB": 1176,
+      "elapsedMs": 61660,
+      "peakMiB": 1733,
       "artifactBytes": 4559,
       "transitionCount": 3,
-      "allAttemptElapsedMs": 62309
+      "allAttemptElapsedMs": 61660
     },
     {
       "id": "epoch",
       "stateCount": 4,
       "sampleCount": 100,
-      "elapsedMs": 64614,
-      "peakMiB": 1336,
+      "elapsedMs": 59746,
+      "peakMiB": 1263,
       "artifactBytes": 9392,
       "transitionCount": 4,
-      "allAttemptElapsedMs": 64614
+      "allAttemptElapsedMs": 59746
     },
     {
       "id": "rollback",
       "stateCount": 3,
       "sampleCount": 100,
-      "elapsedMs": 62959,
-      "peakMiB": 1429,
+      "elapsedMs": 62609,
+      "peakMiB": 1485,
       "artifactBytes": 4582,
       "transitionCount": 3,
-      "allAttemptElapsedMs": 62959
+      "allAttemptElapsedMs": 62609
     },
     {
       "id": "journal-reconciliation",
       "stateCount": 20,
       "sampleCount": 100,
-      "elapsedMs": 58928,
-      "peakMiB": 993,
+      "elapsedMs": 59767,
+      "peakMiB": 1036,
       "artifactBytes": 7536,
       "transitionCount": 48,
-      "allAttemptElapsedMs": 58928
+      "allAttemptElapsedMs": 59767
     },
     {
       "id": "journal-fencing",
       "stateCount": 20,
       "sampleCount": 100,
-      "elapsedMs": 59586,
-      "peakMiB": 1394,
+      "elapsedMs": 58591,
+      "peakMiB": 1401,
       "artifactBytes": 9097,
       "transitionCount": 48,
-      "allAttemptElapsedMs": 59586
+      "allAttemptElapsedMs": 58591
     },
     {
       "id": "authority-reconciliation",
       "stateCount": 51,
       "sampleCount": 1000,
-      "elapsedMs": 59668,
-      "peakMiB": 1386,
+      "elapsedMs": 59318,
+      "peakMiB": 1394,
       "artifactBytes": 4615,
       "transitionCount": 163,
-      "allAttemptElapsedMs": 59668
+      "allAttemptElapsedMs": 59318
     },
     {
       "id": "review-epoch",
       "stateCount": 10,
       "sampleCount": 100,
-      "elapsedMs": 59036,
-      "peakMiB": 1010,
+      "elapsedMs": 58816,
+      "peakMiB": 1175,
       "artifactBytes": 7322,
       "transitionCount": 22,
-      "allAttemptElapsedMs": 59036
+      "allAttemptElapsedMs": 58816
     },
     {
       "id": "cutover-observation",
       "stateCount": 136,
       "sampleCount": 10000,
-      "elapsedMs": 61200,
-      "peakMiB": 1363,
+      "elapsedMs": 61131,
+      "peakMiB": 1545,
       "artifactBytes": 3412,
       "transitionCount": 532,
-      "allAttemptElapsedMs": 61200
+      "allAttemptElapsedMs": 61131
     },
     {
       "id": "pilot-permit-transfer",
       "stateCount": 5,
       "sampleCount": 10000,
-      "elapsedMs": 65460,
-      "peakMiB": 1066,
+      "elapsedMs": 67916,
+      "peakMiB": 1581,
       "artifactBytes": 9669,
       "transitionCount": 5,
-      "allAttemptElapsedMs": 65460
+      "allAttemptElapsedMs": 67916
     },
     {
       "id": "pilot-permit-fault-safety",
       "stateCount": 3032,
       "sampleCount": 10000,
-      "elapsedMs": 63962,
-      "peakMiB": 1104,
+      "elapsedMs": 66836,
+      "peakMiB": 1340,
       "artifactBytes": 9678,
       "transitionCount": 8002,
-      "allAttemptElapsedMs": 63962
+      "allAttemptElapsedMs": 66836
     },
     {
       "id": "pilot-permit-major-action-coverage",
       "stateCount": 14,
       "sampleCount": 10000,
-      "elapsedMs": 66424,
-      "peakMiB": 1423,
+      "elapsedMs": 66865,
+      "peakMiB": 1471,
       "artifactBytes": 9697,
       "transitionCount": 14,
-      "allAttemptElapsedMs": 66424
+      "allAttemptElapsedMs": 66865
     },
     {
       "id": "hosted-writer-progress",
       "stateCount": 64,
       "sampleCount": 10000,
-      "elapsedMs": 181155,
-      "peakMiB": 4505,
+      "elapsedMs": 168431,
+      "peakMiB": 4834,
       "artifactBytes": 518084,
       "transitionCount": 63,
-      "allAttemptElapsedMs": 181155
+      "allAttemptElapsedMs": 168431
     },
     {
       "id": "hosted-writer-fault-safety",
       "stateCount": 1162,
       "sampleCount": 10000,
-      "elapsedMs": 157521,
-      "peakMiB": 4866,
+      "elapsedMs": 150559,
+      "peakMiB": 4327,
       "artifactBytes": 43897,
       "transitionCount": 1387,
-      "allAttemptElapsedMs": 157521
+      "allAttemptElapsedMs": 150559
     },
     {
       "id": "administrative-retirement-closure",
       "stateCount": 15,
       "sampleCount": 10000,
-      "elapsedMs": 63087,
-      "peakMiB": 1306,
+      "elapsedMs": 59158,
+      "peakMiB": 1441,
       "artifactBytes": 6539,
       "transitionCount": 29,
-      "allAttemptElapsedMs": 63087
+      "allAttemptElapsedMs": 59158
     },
     {
       "id": "administrative-retirement-race",
       "stateCount": 13,
       "sampleCount": 10000,
-      "elapsedMs": 63124,
-      "peakMiB": 1000,
+      "elapsedMs": 60930,
+      "peakMiB": 1542,
       "artifactBytes": 6532,
       "transitionCount": 25,
-      "allAttemptElapsedMs": 363174
+      "allAttemptElapsedMs": 60930
     },
     {
       "id": "administrative-retirement-old-plan-counterexample",
       "stateCount": 7,
       "sampleCount": 10000,
-      "elapsedMs": 62385,
-      "peakMiB": 1002,
+      "elapsedMs": 60108,
+      "peakMiB": 1419,
       "artifactBytes": 7620,
       "transitionCount": 13,
-      "allAttemptElapsedMs": 62385
+      "allAttemptElapsedMs": 60108
     }
   ],
   "physicalAccounting": {
-    "attemptId": "58777bdf8540480ba8ae59c9f15bb477",
-    "validatorSha256": "80fdd970af21353c803bd380e645b72e922c8b3a39b455b86574872d03c2b74e",
-    "compilerSha256": "117f5b7d13fe8505dcbe8e827fffeba2bc524159eda2e892ddc71f7a69c9ff74",
-    "inventorySha256": "96d3ee08072d369f091412877c2adbae9adfdfb5aa6ac265119542f32f48ef3c",
-    "logicalCount": 263,
-    "physicalCount": 264,
-    "allAttemptElapsedMs": 2723158,
-    "wholeDurationMs": 2443744
+    "attemptId": "11e6376814234c439217a03c6a892987",
+    "validatorSha256": "1dfbc268ca90c2e9631026bae77ed9227e0666e90788b6394479ba7459b0561a",
+    "compilerSha256": "790239216fbd602064d148de560a7d49f78b5e5227f26465611470aa0326b3c8",
+    "inventorySha256": "45d707f9089251f112df5bc1db4256d048452342aa1bed0a64c3be71d9ef9d7f",
+    "logicalCount": 289,
+    "physicalCount": 289,
+    "allAttemptElapsedMs": 2450172,
+    "wholeDurationMs": 2183669
   }
 }

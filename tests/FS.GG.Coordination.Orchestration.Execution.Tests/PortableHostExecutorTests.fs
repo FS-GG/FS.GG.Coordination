@@ -1824,7 +1824,8 @@ type PortableHostExecutorTests_ControlledAuthenticatedSource() =
                 // authenticate persisted source bytes, independently of commit/durability evidence.
                 for point in [PortableWorkspaceExecutor.BeforeSourceWrite; PortableWorkspaceExecutor.BeforeSourceFileFlush
                               PortableWorkspaceExecutor.BeforeSourceReplacement; PortableWorkspaceExecutor.AfterSourceReplacementBeforeReadback
-                              PortableWorkspaceExecutor.BeforeSourceColdReopen] do
+                              PortableWorkspaceExecutor.BeforeSourceColdReopen; PortableWorkspaceExecutor.BeforeSourceDirectorySync
+                              PortableWorkspaceExecutor.AfterSourceDirectorySyncBeforeReadback; PortableWorkspaceExecutor.SimulatedSourceDirectorySyncError] do
                     use failedFixture = new HostExecutorFixture()
                     let sourceDirectory = Path.Combine(fixture.Policy.Runtime.StateRoot,"journal-v1")
                     let failedDirectory = Path.Combine(failedFixture.Policy.Runtime.StateRoot,"journal-v1")
@@ -1835,7 +1836,9 @@ type PortableHostExecutorTests_ControlledAuthenticatedSource() =
                     File.WriteAllBytes(failedPath,before)
                     let failed = PortableWorkspaceExecutor.SupplierAdmissionJournal.CreateControlledFailureTest(failedFixture.Policy.Runtime.StateRoot,point)
                     Assert.Equal(SupplierSourceCommitUnknown,failed.StageControlledV4 transition)
-                    let replaced = point = PortableWorkspaceExecutor.AfterSourceReplacementBeforeReadback || point = PortableWorkspaceExecutor.BeforeSourceColdReopen
+                    let replaced = List.contains point [PortableWorkspaceExecutor.AfterSourceReplacementBeforeReadback; PortableWorkspaceExecutor.BeforeSourceColdReopen;
+                                                       PortableWorkspaceExecutor.BeforeSourceDirectorySync; PortableWorkspaceExecutor.AfterSourceDirectorySyncBeforeReadback;
+                                                       PortableWorkspaceExecutor.SimulatedSourceDirectorySyncError]
                     let fresh = PortableWorkspaceExecutor.SupplierAdmissionJournal failedFixture.Policy.Runtime.StateRoot
                     let retained,durability = fresh.Read pending.Original.Command |> SupplierCheckpointFixtures.ok
                     Assert.Equal((if replaced then transition.State else pending),retained)
@@ -2334,6 +2337,12 @@ type PortableHostExecutorTests_PortableHostExportSourceTests(output: Xunit.Abstr
     [<InlineData(2, true)>]
     [<InlineData(3, true)>]
     [<InlineData(4, true)>]
+    [<InlineData(5, false)>]
+    [<InlineData(6, false)>]
+    [<InlineData(7, false)>]
+    [<InlineData(5, true)>]
+    [<InlineData(6, true)>]
+    [<InlineData(7, true)>]
     member _.``source write first failure retains old bytes or consumed new intent without replay or effects``(cut: int, duringAttempt: bool) =
         use fixture = new HostExecutorFixture()
         let input = context fixture
@@ -2356,7 +2365,10 @@ type PortableHostExecutorTests_PortableHostExportSourceTests(output: Xunit.Abstr
                     | 1 -> PortableWorkspaceExecutor.BeforeSourceFileFlush
                     | 2 -> PortableWorkspaceExecutor.BeforeSourceReplacement
                     | 3 -> PortableWorkspaceExecutor.AfterSourceReplacementBeforeReadback
-                    | _ -> PortableWorkspaceExecutor.BeforeSourceColdReopen
+                    | 4 -> PortableWorkspaceExecutor.BeforeSourceColdReopen
+                    | 5 -> PortableWorkspaceExecutor.BeforeSourceDirectorySync
+                    | 6 -> PortableWorkspaceExecutor.AfterSourceDirectorySyncBeforeReadback
+                    | _ -> PortableWorkspaceExecutor.SimulatedSourceDirectorySyncError
         let failing = PortableWorkspaceExecutor.HostExportSourceJournal.CreateControlledFailureTest(fixture.Policy.Runtime.StateRoot, point)
         if duringAttempt then
             Assert.True(failing.PrepareAttempt(original, stopped, fixture.Start, input.Clock.HostBootId, 1000000001UL) |> Result.isError)
@@ -2373,6 +2385,7 @@ type PortableHostExecutorTests_PortableHostExportSourceTests(output: Xunit.Abstr
             if duringAttempt then Assert.True(normal.PrepareAttempt(original, stopped, fixture.Start, input.Clock.HostBootId, 1000000002UL) |> Result.isError)
             else Assert.True(normal.Begin(original, initial, fixture.Start, input.Clock.HostBootId, 1000000000UL) |> Result.isError)
             Assert.Equal<byte>(originalBytes, File.ReadAllBytes fixture.Journal)
+        Assert.Empty(Directory.GetFiles(Path.Combine(fixture.Policy.Runtime.StateRoot, "journal-v1"), "*.tmp"))
         Assert.Equal(0, fixture.Runner.Runs)
         Assert.Equal(0, fixture.Runner.Cleans)
 
@@ -2433,3 +2446,433 @@ type PortableHostExecutorTests_PortableHostExportSourceTests(output: Xunit.Abstr
         Assert.Equal(65536, exact.CanonicalBytes.Length)
         Assert.Equal((padded padding), (PortableWorkspaceExecutor.HostExportSource.parseOriginal exact.CanonicalBytes |> ok).Context)
         Assert.True(PortableWorkspaceExecutor.HostExportSource.createOriginal (padded (padding+1)) |> Result.isError)
+
+
+// These source controls exercise actual Linux descriptor operations when run under a
+// separately admitted native test profile. They do not simulate power loss or qualify storage.
+type PortableHostExecutorTests_SourceDirectoryDescriptorTests() =
+    let noCut () = ()
+
+    [<Fact>]
+    member _.``source file rename sync and read stay on the pinned directory after pathname substitution``() =
+        if OperatingSystem.IsLinux() then
+            let root = Path.Combine(Path.GetTempPath(), "source-directory-" + Guid.NewGuid().ToString("N"))
+            let journal = Path.Combine(root, "journal-v1")
+            let moved = Path.Combine(root, "held-journal")
+            Directory.CreateDirectory journal |> ignore
+            try
+                let path = Path.Combine(journal, "key.bin")
+                use owner = new FileStream(Path.ChangeExtension(path, ".lock"), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None)
+                use source = new PortableSourceJournalIO.Context(journal, path, owner.SafeFileHandle)
+                Directory.Move(journal, moved)
+                Directory.CreateDirectory journal |> ignore
+                let expected = [|1uy;2uy;3uy|]
+                source.Write(expected, noCut, noCut, noCut, noCut, noCut)
+                use cold = source.OpenRead() |> Option.defaultWith (fun () -> failwith "held source missing")
+                let actual = Array.zeroCreate<byte> expected.Length
+                cold.ReadExactly(actual.AsSpan())
+                Assert.Equal<byte>(expected, actual)
+                Assert.Equal(-1, cold.ReadByte())
+                Assert.Equal<byte>(expected, File.ReadAllBytes(Path.Combine(moved, "key.bin")))
+                Assert.Empty(Directory.GetFileSystemEntries journal)
+            finally Directory.Delete(root, true)
+
+    [<Fact>]
+    member _.``replaced lock entry refuses source reads and writes before a temporary file``() =
+        if OperatingSystem.IsLinux() then
+            let root = Path.Combine(Path.GetTempPath(), "source-lock-" + Guid.NewGuid().ToString("N"))
+            Directory.CreateDirectory root |> ignore
+            try
+                let path = Path.Combine(root, "key.bin")
+                let lockPath = Path.ChangeExtension(path, ".lock")
+                use owner = new FileStream(lockPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None)
+                use source = new PortableSourceJournalIO.Context(root, path, owner.SafeFileHandle)
+                File.Move(lockPath, lockPath + ".old")
+                File.WriteAllBytes(lockPath, [|9uy|])
+                Assert.Throws<IOException>(fun () -> source.OpenRead() |> ignore) |> ignore
+                Assert.Throws<IOException>(fun () -> source.Write([|1uy|], noCut, noCut, noCut, noCut, noCut)) |> ignore
+                Assert.False(File.Exists path)
+                Assert.Empty(Directory.GetFiles(root, "*.tmp"))
+                Assert.Equal<byte>([|9uy|], File.ReadAllBytes lockPath)
+            finally Directory.Delete(root, true)
+
+/// Same original C/R signatures, newly captured TEST destination policy, and real executing verifier.
+/// No signed fixture is rewritten and no native root or production authority is asserted.
+type internal OriginalSourceCapturedObservation =
+    { Action: string; Supplier: PortableSupplierAdmissionState; Cursor: PortableOriginalSourceCursor option
+      Export: PortableHostExportSourceSnapshot option; Refused: bool; FirstOperationFailure: string option
+      CustodyUnknown: bool; LockAvailable: bool; KeyCount: int; ReadbackExact: bool }
+
+type internal OriginalSourceCapturedRun =
+    { Root: string; Baseline: PortableSupplierAdmissionState; ExportOriginal: PortableHostExportSourceOriginal
+      Observations: OriginalSourceCapturedObservation array; Cleanup: unit -> unit }
+
+type PortableHostExecutorTests_OriginalSourceComposition() =
+    let ok = SupplierCheckpointFixtures.ok
+    let date (s: string) = DateTimeOffset.Parse(s, Globalization.CultureInfo.InvariantCulture)
+    let hash bytes = SHA256.HashData(bytes: byte array) |> Convert.ToHexString |> _.ToLowerInvariant()
+    let corpus () =
+        let rec find (directory: DirectoryInfo) =
+            if isNull directory then failwith "signed source corpus missing"
+            let path = Path.Combine(directory.FullName,"contracts","portable-workspace","v1","receiver-checkpoint-v2-signed-source-journeys.json")
+            if File.Exists path then System.Text.Json.JsonDocument.Parse(ReadOnlyMemory<byte>(File.ReadAllBytes path)) else find directory.Parent
+        find (DirectoryInfo(AppContext.BaseDirectory))
+    let roles = ["original-intent",OriginalIntentSignature;"create-effect-grant",EffectGrantSignature;"receiver-command",ReceiverCommandSignature
+                 "host-command-result",HostCommandResultSignature;"native-proof",NativeProofSignature;"creation",SupplierCreationSignature
+                 "genesis",SupplierGenesisSignature;"supplier-event",SupplierEventSignature;"supplier-response",SupplierResponseSignature]
+    let selection (root: System.Text.Json.JsonElement) (expected: System.Text.Json.JsonElement) (initial: PortableSupplierAdmissionState) at =
+        let at = date at
+        let policies = roles |> List.map (fun (name,role) ->
+            let pin = expected.GetProperty("policyRoles").GetProperty(name)
+            { Role = role; PublicKeyBlob = root.GetProperty("publicRolePins").GetProperty(name).GetProperty("publicKeyBlobBase64").GetString() |> Convert.FromBase64String
+              Principal = pin.GetProperty("principal").GetString(); PolicyBytes = pin.GetProperty("policyBytesBase64").GetString() |> Convert.FromBase64String
+              ExpectedPolicySha256 = pin.GetProperty("policySha256").GetString(); PolicyRevision = pin.GetProperty("policyRevision").GetString()
+              ValidFrom = date (pin.GetProperty("policyValidFrom").GetString()); ValidUntil = date (pin.GetProperty("policyValidUntil").GetString())
+              RevocationCheckedAt = at; Revocation = ControlledNotRevoked })
+        let binding = { Command = initial.Original.Command; QualifiedImage = initial.Original.QualifiedImage
+                        AllocationId = expected.GetProperty("hostBinding").GetProperty("allocationId").GetString()
+                        WorkerId = expected.GetProperty("hostBinding").GetProperty("workerId").GetString()
+                        AllocationReceiptDigest =
+                            // Explicit controlled TEST allocation-binding bytes; no recipe is
+                            // declared for the production field. In particular this is neither
+                            // raw creation-receipt SHA nor fsgg.v3.creation-receipt/1.
+                            Encoding.ASCII.GetBytes("fsgg.controlled-test-allocation-binding/1\n") |> hash }
+        let domain = Guid.Parse(expected.GetProperty("receiverClockDomain").GetString())
+        let current = { VerifiedAt = at; SelectionObservedAt = at; SelectionValidUntil = date (expected.GetProperty("selectionValidUntil").GetString())
+                        MaximumObservationAge = TimeSpan.FromTicks(Int64.Parse(expected.GetProperty("maximumObservationAgeTicks").GetString()))
+                        ReceiverMonotonic = 2L; IssuedReceiverClockDomain = domain; CurrentReceiverClockDomain = domain
+                        HostClock = PortableSupplierOriginalNativeConfiguration.clock initial.CheckpointCustody.Value.NativeConfiguration }
+        PortableSupplierAdmission.createControlledSourceSelection initial.Original (expected.GetProperty("originalIntentEnvelopeSha256").GetString())
+            (Guid.Parse(expected.GetProperty("expectedOperationId").GetString())) binding initial.CheckpointCustody.Value.NativeConfiguration policies current |> ok
+
+    let forgeCachedTermination (path: string) (original: PortableHostExportSourceOriginal) =
+        let flags = Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic ||| Reflection.BindingFlags.Static ||| Reflection.BindingFlags.Instance
+        let moduleType = typeof<PortableOriginalSourceSnapshot>.Assembly.GetType("FS.GG.Coordination.Orchestration.Execution.PortableWorkspaceExecutor",true)
+        let get name (value: obj) = value.GetType().GetProperty(name,flags).GetValue(value)
+        let replace name value (record: obj) =
+            let fields = Microsoft.FSharp.Reflection.FSharpType.GetRecordFields(record.GetType(),bindingFlags=flags)
+            let values = fields |> Array.map (fun field -> if field.Name = name then value else field.GetValue record)
+            Microsoft.FSharp.Reflection.FSharpValue.MakeRecord(record.GetType(),values,bindingFlags=flags)
+        use input = new MemoryStream(File.ReadAllBytes path,false)
+        use reader = new BinaryReader(input,Encoding.UTF8,true)
+        Assert.Equal("fsgg.portable-original-source-journal/1",reader.ReadString())
+        let entry = moduleType.GetMethod("readOriginalSource",flags).Invoke(null,[|box reader|])
+        let option = get "Export" entry
+        let case,fields = Microsoft.FSharp.Reflection.FSharpValue.GetUnionFields(option,option.GetType(),bindingFlags=flags)
+        let export = fields[0]
+        let host = get "Host" export
+        let state = get "State" host :?> PortableHostExecutionState
+        let forgedTermination: PortableHostObservation<unit> =
+            { Binding = original.Context.Reservation.Binding; CollectedAt = date "2026-01-01T00:00:07.000000Z"
+              ReceiptDigest = String.replicate 64 "a"; Value = () }
+        let forged = { state with Lifecycle = { state.Lifecycle with Termination = EvidenceKnown forgedTermination } }
+        let host = replace "State" (box forged) host
+        let export = replace "Host" host export
+        let option = Microsoft.FSharp.Reflection.FSharpValue.MakeUnion(case,[|export|],bindingFlags=flags)
+        let entry = replace "Export" option entry
+        let canonical = moduleType.GetMethod("originalSourceBytes",flags).Invoke(null,[|entry|]) :?> byte array
+        File.WriteAllBytes(path,canonical)
+
+    /// Captures actual composite API completions and exact cold observations for FsQuint.
+    /// A post-rename fault is reconciled by read only; no transition is resent after ambiguity.
+    member internal _.CaptureForReplay() : OriginalSourceCapturedRun =
+        let fixture = new HostExecutorFixture()
+        let differentDestination = true
+        let independentSource = false
+        use data = corpus ()
+        let root = data.RootElement
+        let row = root.GetProperty("outputJourneys").EnumerateArray() |> Seq.find (fun x -> x.GetProperty("name").GetString() = "selected-sixteen")
+        let expected = root.GetProperty("controlledSelections").EnumerateArray() |> Seq.find (fun x -> x.GetProperty("name").GetString() = "selected-sixteen")
+        let originalInitial = SupplierCheckpointFixtures.initialFrom row
+        // Explicit fresh TEST configuration through the maintained constructor. C/R signed bytes
+        // do not contain this independently selected native policy; they are reverified unchanged.
+        let initial =
+            if not differentDestination then originalInitial
+            else
+                let config = originalInitial.CheckpointCustody.Value.NativeConfiguration
+                let destination = Encoding.ASCII.GetBytes "{\"disposition\":\"retain-outside-original-cleanup\",\"owner_gid\":\"1000\",\"owner_uid\":\"1000\",\"profile\":\"signed-hold-v1\",\"revision\":\"1\",\"role\":\"selected-output-destination\",\"root\":{\"device\":\"2\",\"filesystem_uuid\":\"11111111-1111-1111-1111-111111111111\",\"inode\":\"99\"},\"schema\":\"fsgg.v3.native-destination-policy/1\"}\n"
+                let scope =
+                    if independentSource then
+                        Encoding.ASCII.GetBytes "{\"enumeration\":\"entire-source-root\",\"excluded_engine\":[],\"owner_gid\":\"1000\",\"owner_uid\":\"1000\",\"profile\":\"signed-hold-v1\",\"revision\":\"1\",\"role\":\"native-source\",\"schema\":\"fsgg.v3.native-scope-policy/1\",\"source_root_binding\":{\"kind\":\"pinned\",\"root\":{\"device\":\"3\",\"filesystem_uuid\":\"11111111-1111-1111-1111-111111111111\",\"inode\":\"4\"}}}\n"
+                    else PortableSupplierOriginalNativeConfiguration.scopeBytes config
+                let configured = PortableSupplierOriginalNativeConfiguration.create originalInitial.Original 1UL
+                                     scope (hash scope)
+                                     (PortableSupplierOriginalNativeConfiguration.clockBytes config) (hash (PortableSupplierOriginalNativeConfiguration.clockBytes config))
+                                     (Some(destination, hash destination)) |> ok
+                PortableSupplierAdmission.beginIntentV4 originalInitial.Original
+                    (Convert.FromBase64String originalInitial.CheckpointCustody.Value.OriginalIntentEnvelopeBase64) configured |> ok
+        let journal = PortableWorkspaceExecutor.SupplierAdmissionJournal fixture.Policy.Runtime.StateRoot
+        match journal.StageV4(initial,None,None) with SupplierSourceReadback _ -> () | x -> failwithf "%A" x
+        let mutable state = initial
+        for name in ["creation";"genesis"] do
+            let pair = SupplierCheckpointFixtures.exchangeFrom row name state
+            let pending = PortableSupplierAdmission.issueChallenge pair.Challenge state |> ok
+            match journal.StageV4(pending,Some state.Revision,Some state.CheckpointCustody.Value.StoreFence) with SupplierSourceReadback _ -> () | x -> failwithf "%A" x
+            let bytes key = row.GetProperty(name).GetProperty(key: string).GetString() |> SupplierCheckpointFixtures.urlBytes
+            let exchange = if name = "creation" then ControlledCreationExchange(bytes "request",[bytes "result";bytes "evidence"],row.GetProperty("reservation").GetString() |> SupplierCheckpointFixtures.urlBytes)
+                           else ControlledGenesisExchange(bytes "request",[bytes "result";bytes "evidence"])
+            let current = selection root expected initial (expected.GetProperty("warmVerificationTimes").GetProperty(name).GetString())
+            let accepted = PortableSupplierAdmission.verifyAndAcceptControlledV4 current pending.Original pending.Revision pending.CheckpointCustody.Value.StoreFence pending exchange |> ok
+            let transition = match accepted with AuthenticatedControlledSource x -> x | HeldControlledSource x -> failwithf "held %A" x.FirstFailure
+            match journal.StageControlledV4 transition with SupplierSourceReadback _ -> () | x -> failwithf "%A" x
+            state <- transition.State
+        let current = selection root expected initial (expected.GetProperty("warmVerificationTimes").GetProperty("genesis").GetString())
+        use receipt = System.Text.Json.JsonDocument.Parse(ReadOnlyMemory<byte>(row.GetProperty("native").GetProperty("receipt").GetString() |> SupplierCheckpointFixtures.urlBytes))
+        let manifest = receipt.RootElement.GetProperty("manifest_bytes").GetString() |> SupplierCheckpointFixtures.urlBytes
+        let reservation = state.Pinned.Value.OriginalReservation
+        let rootPin path device inode = { Path = path; Device = device; Inode = inode; OwnerUid = 1000UL; OwnerGid = 1000UL }
+        let input = { ExportOperationId = Guid.Parse "99999999-9999-9999-9999-999999999999"; Reservation = reservation; ManifestBytes = manifest
+                      Clock = { HostBootId = Guid.Parse "11111111-1111-1111-1111-111111111111"; AdmittedMonotonicNanoseconds = 2000000000UL
+                                ExportDeadlineMonotonicNanoseconds = 170000000000UL; LeaseDeadlineMonotonicNanoseconds = 180000000000UL }
+                      SourceRoot = rootPin "/controlled/original" (if independentSource then 3UL else 1UL) (if independentSource then 4UL else 1UL)
+                      RetiringRoots = [rootPin "/controlled/original" (if independentSource then 3UL else 1UL) (if independentSource then 4UL else 1UL)]
+                      DestinationRoot = rootPin "/controlled/destination" 2UL 99UL }
+        let exportOriginal = PortableWorkspaceExecutor.HostExportSource.createOriginal input |> ok
+        let owner = PortableWorkspaceExecutor.OriginalSourceJournal fixture.Policy.Runtime.StateRoot
+        let path = Directory.GetFiles(Path.Combine(fixture.Policy.Runtime.StateRoot,"journal-v1"),"*.bin") |> Array.exactlyOne
+        let before = File.ReadAllBytes path
+        let observations = ResizeArray<OriginalSourceCapturedObservation>()
+        let mutable firstFailure = None
+        let lockAvailable () =
+            try
+                use held = new FileStream(Path.ChangeExtension(path,".lock"),FileMode.Open,FileAccess.ReadWrite,FileShare.None)
+                true
+            with :? IOException -> false
+        let capture action supplier snapshot refused exact =
+            let custody = match snapshot with Some value -> value.NativeCustody | None -> EvidenceUnknown "supplier source durability unqualified"
+            observations.Add {
+                Action = action; Supplier = supplier; Cursor = snapshot |> Option.map _.Cursor
+                Export = snapshot |> Option.bind _.Export; Refused = refused; FirstOperationFailure = firstFailure
+                CustodyUnknown = (match custody with EvidenceUnknown _ -> true | _ -> false)
+                LockAvailable = lockAvailable (); KeyCount = Directory.GetFiles(Path.GetDirectoryName path,"*.bin").Length
+                ReadbackExact = exact }
+        let refused result =
+            match result with
+            | Error reason -> if firstFailure.IsNone then firstFailure <- Some reason
+            | Ok _ -> failwith "expected source refusal"
+        try
+            let verified,_ = journal.ReadControlledV4(current,state.Original,state.Revision,state.CheckpointCustody.Value.StoreFence) |> ok
+            Assert.Equal(state,verified.State)
+            capture "init" verified.State None false (before = File.ReadAllBytes path)
+            let attached = owner.AttachControlled(current,state.Original,state.Revision,state.CheckpointCustody.Value.StoreFence,exportOriginal) |> ok
+            let fresh = PortableWorkspaceExecutor.OriginalSourceJournal fixture.Policy.Runtime.StateRoot
+            let cold = fresh.ReadControlled(current,state.Original,attached.Cursor) |> ok
+            capture "sourceAttach" cold.Supplier (Some cold) false (cold.Supplier = attached.Supplier && cold.Cursor = attached.Cursor && cold.Export.Value.Original.CanonicalBytes = attached.Export.Value.Original.CanonicalBytes)
+            let pair = SupplierCheckpointFixtures.exchangeFrom row "unchanged-genesis" state
+            let pending = PortableSupplierAdmission.issueChallenge pair.Challenge state |> ok
+            let nextSelection = selection root expected initial (expected.GetProperty("warmVerificationTimes").GetProperty("unchanged-genesis").GetString())
+            let pendingCursor = owner.StageControlledPending(nextSelection,pending,state.Revision,state.CheckpointCustody.Value.StoreFence,cold.Cursor) |> ok
+            let storedPending = fresh.ReadControlled(nextSelection,state.Original,pendingCursor) |> ok
+            Assert.Equal(pending,storedPending.Supplier)
+            capture "sourcePending" storedPending.Supplier (Some storedPending) false true
+            let bytes key = row.GetProperty("unchanged-genesis").GetProperty(key: string).GetString() |> SupplierCheckpointFixtures.urlBytes
+            let accepted = PortableSupplierAdmission.verifyAndAcceptControlledV4 nextSelection pending.Original pending.Revision pending.CheckpointCustody.Value.StoreFence pending
+                               (ControlledOutputWireExchange(bytes "request",[bytes "result";bytes "evidence"])) |> ok
+            let transition = match accepted with AuthenticatedControlledSource value -> value | HeldControlledSource held -> failwithf "held %A" held.FirstFailure
+            let failing = PortableWorkspaceExecutor.OriginalSourceJournal.CreateControlledFailureTest(fixture.Policy.Runtime.StateRoot,PortableWorkspaceExecutor.AfterSourceReplacementBeforeReadback)
+            failing.StageControlledSupplier(nextSelection,transition,pendingCursor) |> refused
+            let finalCursor = { Revision = pendingCursor.Revision + 1UL; Fence = pendingCursor.Fence + 1UL }
+            let committed = fresh.ReadControlled(nextSelection,state.Original,finalCursor) |> ok
+            Assert.Equal(transition.State,committed.Supplier)
+            capture "sourceAcceptedUnknown" committed.Supplier (Some committed) true true
+            let exact = File.ReadAllBytes path
+            let readback = fresh.ReadControlled(nextSelection,state.Original,finalCursor) |> ok
+            capture "sourceColdRead" readback.Supplier (Some readback) false (exact = File.ReadAllBytes path)
+            // A consumed challenge cannot be replayed using its old outer cursor.
+            owner.StageControlledSupplier(nextSelection,transition,pendingCursor) |> refused
+            let afterConsumed = fresh.ReadControlled(nextSelection,state.Original,finalCursor) |> ok
+            capture "sourceConsumedRefusal" afterConsumed.Supplier (Some afterConsumed) true (exact = File.ReadAllBytes path)
+            owner.PrepareControlledReaderAttempt(nextSelection,state.Original,finalCursor,exportOriginal,input.Clock.HostBootId,7000000000UL) |> refused
+            let afterTermination = fresh.ReadControlled(nextSelection,state.Original,finalCursor) |> ok
+            capture "sourceTerminationRefusal" afterTermination.Supplier (Some afterTermination) true (exact = File.ReadAllBytes path)
+            owner.ReadControlled(nextSelection,state.Original,attached.Cursor) |> refused
+            let final = fresh.ReadControlled(nextSelection,state.Original,finalCursor) |> ok
+            capture "sourceStaleRefusal" final.Supplier (Some final) true (exact = File.ReadAllBytes path)
+            Assert.Empty(Directory.GetFiles(Path.GetDirectoryName path,"*.tmp"))
+            Assert.Equal(0,fixture.Runner.Runs)
+            Assert.Equal(0,fixture.Runner.Cleans)
+            { Root = fixture.Root; Baseline = state; ExportOriginal = exportOriginal
+              Observations = observations.ToArray(); Cleanup = fun () -> (fixture :> IDisposable).Dispose() }
+        with error ->
+            try (fixture :> IDisposable).Dispose()
+            with cleanup -> raise (AggregateException("source replay initialization and cleanup failed",[|error;cleanup|]))
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(error).Throw()
+            Unchecked.defaultof<OriginalSourceCapturedRun>
+
+    [<Theory>]
+    [<InlineData(false,false)>]
+    [<InlineData(true,false)>]
+    [<InlineData(true,true)>]
+    member _.``same-key composite preserves complete signed supplier and continuation with independent CAS``(differentDestination: bool, independentSource: bool) =
+        use fixture = new HostExecutorFixture()
+        use data = corpus ()
+        let root = data.RootElement
+        let row = root.GetProperty("outputJourneys").EnumerateArray() |> Seq.find (fun x -> x.GetProperty("name").GetString() = "selected-sixteen")
+        let expected = root.GetProperty("controlledSelections").EnumerateArray() |> Seq.find (fun x -> x.GetProperty("name").GetString() = "selected-sixteen")
+        let originalInitial = SupplierCheckpointFixtures.initialFrom row
+        // Explicit fresh TEST configuration through the maintained constructor. C/R signed bytes
+        // do not contain this independently selected native policy; they are reverified unchanged.
+        let initial =
+            if not differentDestination then originalInitial
+            else
+                let config = originalInitial.CheckpointCustody.Value.NativeConfiguration
+                let destination = Encoding.ASCII.GetBytes "{\"disposition\":\"retain-outside-original-cleanup\",\"owner_gid\":\"1000\",\"owner_uid\":\"1000\",\"profile\":\"signed-hold-v1\",\"revision\":\"1\",\"role\":\"selected-output-destination\",\"root\":{\"device\":\"2\",\"filesystem_uuid\":\"11111111-1111-1111-1111-111111111111\",\"inode\":\"99\"},\"schema\":\"fsgg.v3.native-destination-policy/1\"}\n"
+                let scope =
+                    if independentSource then
+                        Encoding.ASCII.GetBytes "{\"enumeration\":\"entire-source-root\",\"excluded_engine\":[],\"owner_gid\":\"1000\",\"owner_uid\":\"1000\",\"profile\":\"signed-hold-v1\",\"revision\":\"1\",\"role\":\"native-source\",\"schema\":\"fsgg.v3.native-scope-policy/1\",\"source_root_binding\":{\"kind\":\"pinned\",\"root\":{\"device\":\"3\",\"filesystem_uuid\":\"11111111-1111-1111-1111-111111111111\",\"inode\":\"4\"}}}\n"
+                    else PortableSupplierOriginalNativeConfiguration.scopeBytes config
+                let configured = PortableSupplierOriginalNativeConfiguration.create originalInitial.Original 1UL
+                                     scope (hash scope)
+                                     (PortableSupplierOriginalNativeConfiguration.clockBytes config) (hash (PortableSupplierOriginalNativeConfiguration.clockBytes config))
+                                     (Some(destination, hash destination)) |> ok
+                PortableSupplierAdmission.beginIntentV4 originalInitial.Original
+                    (Convert.FromBase64String originalInitial.CheckpointCustody.Value.OriginalIntentEnvelopeBase64) configured |> ok
+        let journal = PortableWorkspaceExecutor.SupplierAdmissionJournal fixture.Policy.Runtime.StateRoot
+        match journal.StageV4(initial,None,None) with SupplierSourceReadback _ -> () | x -> failwithf "%A" x
+        let mutable state = initial
+        for name in ["creation";"genesis"] do
+            let pair = SupplierCheckpointFixtures.exchangeFrom row name state
+            let pending = PortableSupplierAdmission.issueChallenge pair.Challenge state |> ok
+            match journal.StageV4(pending,Some state.Revision,Some state.CheckpointCustody.Value.StoreFence) with SupplierSourceReadback _ -> () | x -> failwithf "%A" x
+            let bytes key = row.GetProperty(name).GetProperty(key: string).GetString() |> SupplierCheckpointFixtures.urlBytes
+            let exchange = if name = "creation" then ControlledCreationExchange(bytes "request",[bytes "result";bytes "evidence"],row.GetProperty("reservation").GetString() |> SupplierCheckpointFixtures.urlBytes)
+                           else ControlledGenesisExchange(bytes "request",[bytes "result";bytes "evidence"])
+            let current = selection root expected initial (expected.GetProperty("warmVerificationTimes").GetProperty(name).GetString())
+            let accepted = PortableSupplierAdmission.verifyAndAcceptControlledV4 current pending.Original pending.Revision pending.CheckpointCustody.Value.StoreFence pending exchange |> ok
+            let transition = match accepted with AuthenticatedControlledSource x -> x | HeldControlledSource x -> failwithf "held %A" x.FirstFailure
+            match journal.StageControlledV4 transition with SupplierSourceReadback _ -> () | x -> failwithf "%A" x
+            state <- transition.State
+        let current = selection root expected initial (expected.GetProperty("warmVerificationTimes").GetProperty("genesis").GetString())
+        use receipt = System.Text.Json.JsonDocument.Parse(ReadOnlyMemory<byte>(row.GetProperty("native").GetProperty("receipt").GetString() |> SupplierCheckpointFixtures.urlBytes))
+        let manifest = receipt.RootElement.GetProperty("manifest_bytes").GetString() |> SupplierCheckpointFixtures.urlBytes
+        let reservation = state.Pinned.Value.OriginalReservation
+        let rootPin path device inode = { Path = path; Device = device; Inode = inode; OwnerUid = 1000UL; OwnerGid = 1000UL }
+        let input = { ExportOperationId = Guid.Parse "99999999-9999-9999-9999-999999999999"; Reservation = reservation; ManifestBytes = manifest
+                      Clock = { HostBootId = Guid.Parse "11111111-1111-1111-1111-111111111111"; AdmittedMonotonicNanoseconds = 2000000000UL
+                                ExportDeadlineMonotonicNanoseconds = 170000000000UL; LeaseDeadlineMonotonicNanoseconds = 180000000000UL }
+                      SourceRoot = rootPin "/controlled/original" (if independentSource then 3UL else 1UL) (if independentSource then 4UL else 1UL)
+                      RetiringRoots = [rootPin "/controlled/original" (if independentSource then 3UL else 1UL) (if independentSource then 4UL else 1UL)]
+                      DestinationRoot = rootPin "/controlled/destination" 2UL 99UL }
+        let exportOriginal = PortableWorkspaceExecutor.HostExportSource.createOriginal input |> ok
+        let owner = PortableWorkspaceExecutor.OriginalSourceJournal fixture.Policy.Runtime.StateRoot
+        let path = Directory.GetFiles(Path.Combine(fixture.Policy.Runtime.StateRoot,"journal-v1"),"*.bin") |> Array.exactlyOne
+        let before = File.ReadAllBytes path
+        if differentDestination && not independentSource then
+            // Each fault attempt owns a fresh private fixture. Post-rename ambiguity permits only
+            // same-original cold read, never a resend inferred from old bytes or rollback.
+            let cuts = [PortableWorkspaceExecutor.BeforeSourceWrite; PortableWorkspaceExecutor.BeforeSourceFileFlush
+                        PortableWorkspaceExecutor.BeforeSourceReplacement; PortableWorkspaceExecutor.AfterSourceReplacementBeforeReadback
+                        PortableWorkspaceExecutor.BeforeSourceDirectorySync; PortableWorkspaceExecutor.AfterSourceDirectorySyncBeforeReadback
+                        PortableWorkspaceExecutor.BeforeSourceColdReopen; PortableWorkspaceExecutor.SimulatedSourceDirectorySyncError]
+            for cut in cuts do
+                use cutFixture = new HostExecutorFixture()
+                let directory = Path.Combine(cutFixture.Policy.Runtime.StateRoot,"journal-v1")
+                Directory.CreateDirectory directory |> ignore
+                let record = Path.Combine(directory,Path.GetFileName path)
+                File.WriteAllBytes(record,before)
+                let failing = PortableWorkspaceExecutor.OriginalSourceJournal.CreateControlledFailureTest(cutFixture.Policy.Runtime.StateRoot,cut)
+                Assert.True(failing.AttachControlled(current,state.Original,state.Revision,state.CheckpointCustody.Value.StoreFence,exportOriginal) |> Result.isError)
+                let preRename = List.contains cut [PortableWorkspaceExecutor.BeforeSourceWrite; PortableWorkspaceExecutor.BeforeSourceFileFlush; PortableWorkspaceExecutor.BeforeSourceReplacement]
+                if preRename then Assert.Equal<byte>(before,File.ReadAllBytes record)
+                else
+                    let reopened = PortableWorkspaceExecutor.OriginalSourceJournal(cutFixture.Policy.Runtime.StateRoot)
+                    let partial = reopened.ReadControlled(current,state.Original,{ Revision = 1UL; Fence = 1UL }) |> ok
+                    Assert.Equal(state,partial.Supplier)
+                    match partial.NativeCustody with EvidenceUnknown _ -> () | _ -> failwith "fault readback upgraded durability/custody"
+                Assert.Empty(Directory.GetFiles(directory,"*.tmp"))
+                Assert.Equal(0,cutFixture.Runner.Runs)
+        let attached = owner.AttachControlled(current,state.Original,state.Revision,state.CheckpointCustody.Value.StoreFence,exportOriginal)
+        if not differentDestination || independentSource then
+            Assert.True(Result.isError attached)
+            Assert.Equal<byte>(before,File.ReadAllBytes path)
+            Assert.Empty(Directory.GetFiles(Path.GetDirectoryName path,"*.tmp"))
+        else
+            let snapshot = attached |> ok
+            Assert.Equal(state,snapshot.Supplier)
+            match snapshot.NativeCustody with EvidenceUnknown _ -> () | _ -> failwith "source upgraded native custody"
+            Assert.Equal<byte>(exportOriginal.CanonicalBytes,snapshot.Export.Value.Original.CanonicalBytes)
+            Assert.Equal(1UL,snapshot.Cursor.Revision)
+            let exact = File.ReadAllBytes path
+            Assert.True(owner.AttachControlled(current,state.Original,state.Revision,state.CheckpointCustody.Value.StoreFence,exportOriginal) |> Result.isError)
+            Assert.True(owner.ReadControlled(current,state.Original,{snapshot.Cursor with Fence = 2UL}) |> Result.isError)
+            Assert.Equal<byte>(exact,File.ReadAllBytes path)
+            let cold = owner.ReadControlled(current,state.Original,snapshot.Cursor) |> ok
+            Assert.Equal(state,cold.Supplier)
+            Assert.Equal<byte>(exportOriginal.CanonicalBytes,cold.Export.Value.Original.CanonicalBytes)
+            // Canonical cached lifecycle forgery must not become a checked termination gate.
+            use tamperFixture = new HostExecutorFixture()
+            let tamperDirectory = Path.Combine(tamperFixture.Policy.Runtime.StateRoot,"journal-v1")
+            Directory.CreateDirectory tamperDirectory |> ignore
+            let tamperPath = Path.Combine(tamperDirectory,Path.GetFileName path)
+            File.WriteAllBytes(tamperPath,exact)
+            forgeCachedTermination tamperPath exportOriginal
+            let tampered = File.ReadAllBytes tamperPath
+            Assert.NotEqual<byte>(exact,tampered)
+            let tamperOwner = PortableWorkspaceExecutor.OriginalSourceJournal tamperFixture.Policy.Runtime.StateRoot
+            let sanitized = tamperOwner.ReadControlled(current,state.Original,cold.Cursor) |> ok
+            Assert.Equal(state,sanitized.Supplier)
+            match sanitized.Export.Value.Lifecycle.Termination with EvidenceKnown _ -> failwith "cached data promoted termination" | _ -> ()
+            Assert.True(tamperOwner.PrepareControlledReaderAttempt(current,state.Original,cold.Cursor,exportOriginal,input.Clock.HostBootId,7000000000UL) |> Result.isError)
+            Assert.Equal<byte>(tampered,File.ReadAllBytes tamperPath)
+            // No authenticated termination exists in this original. Source cannot invent retention
+            // or consume an attempt from writer exit, copied archive or manager-empty alone.
+            Assert.True(owner.PrepareControlledReaderAttempt(current,state.Original,cold.Cursor,exportOriginal,input.Clock.HostBootId,7000000000UL) |> Result.isError)
+            Assert.Equal<byte>(exact,File.ReadAllBytes path)
+            let pair = SupplierCheckpointFixtures.exchangeFrom row "unchanged-genesis" state
+            let pending = PortableSupplierAdmission.issueChallenge pair.Challenge state |> ok
+            Assert.Equal(SupplierSourceConflict,journal.StageV4(pending,Some state.Revision,Some state.CheckpointCustody.Value.StoreFence))
+            let at = expected.GetProperty("warmVerificationTimes").GetProperty("unchanged-genesis").GetString()
+            let nextSelection = selection root expected initial at
+            let nextCursor = owner.StageControlledPending(nextSelection,pending,state.Revision,state.CheckpointCustody.Value.StoreFence,cold.Cursor) |> ok
+            let bytes key = row.GetProperty("unchanged-genesis").GetProperty(key: string).GetString() |> SupplierCheckpointFixtures.urlBytes
+            let accepted = PortableSupplierAdmission.verifyAndAcceptControlledV4 nextSelection pending.Original pending.Revision pending.CheckpointCustody.Value.StoreFence pending
+                               (ControlledOutputWireExchange(bytes "request",[bytes "result";bytes "evidence"])) |> ok
+            let transition = match accepted with AuthenticatedControlledSource x -> x | HeldControlledSource x -> failwithf "held %A" x.FirstFailure
+            let advanced = owner.StageControlledSupplier(nextSelection,transition,nextCursor) |> ok
+            Assert.Equal(3UL,advanced.Cursor.Revision)
+            Assert.Equal(transition.State,advanced.Supplier)
+            Assert.Equal<byte>(exportOriginal.CanonicalBytes,advanced.Export.Value.Original.CanonicalBytes)
+            Assert.Equal(None,advanced.Export.Value.AttemptBytes)
+            // Pending challenge abandonment uses the actual retained source under its owner lock.
+            use recoveryFixture = new HostExecutorFixture()
+            let recoveryDirectory = Path.Combine(recoveryFixture.Policy.Runtime.StateRoot,"journal-v1")
+            Directory.CreateDirectory recoveryDirectory |> ignore
+            let recoveryPath = Path.Combine(recoveryDirectory,Path.GetFileName path)
+            File.WriteAllBytes(recoveryPath,File.ReadAllBytes path)
+            let recovery = PortableWorkspaceExecutor.OriginalSourceJournal recoveryFixture.Policy.Runtime.StateRoot
+            let nextPair = SupplierCheckpointFixtures.exchangeFrom row "append" advanced.Supplier
+            let nextPending = PortableSupplierAdmission.issueChallenge nextPair.Challenge advanced.Supplier |> ok
+            let atAppend = selection root expected initial (expected.GetProperty("warmVerificationTimes").GetProperty("append").GetString())
+            let pendingCursor = recovery.StageControlledPending(atAppend,nextPending,advanced.Supplier.Revision,advanced.Supplier.CheckpointCustody.Value.StoreFence,advanced.Cursor) |> ok
+            let reopenedPending = recovery.ReadControlled(atAppend,nextPending.Original,pendingCursor) |> ok
+            Assert.Equal(nextPending,reopenedPending.Supplier)
+            let abandoned = recovery.AbandonControlled(atAppend,nextPending.Original,pendingCursor,Guid.Parse "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa") |> ok
+            Assert.True(abandoned.Supplier.Challenge.IsNone)
+            Assert.True(abandoned.Supplier.CheckpointCustody.Value.AbandonedChallenges |> List.contains nextPending.Challenge.Value)
+            Assert.Equal<byte>(exportOriginal.CanonicalBytes,abandoned.Export.Value.Original.CanonicalBytes)
+            Assert.True(abandoned.Supplier.FirstFailure.IsNone)
+            // Separate fresh original fixture: genuine paired rejection enters a sticky quarantine.
+            use heldFixture = new HostExecutorFixture()
+            let heldDirectory = Path.Combine(heldFixture.Policy.Runtime.StateRoot,"journal-v1")
+            Directory.CreateDirectory heldDirectory |> ignore
+            let heldPath = Path.Combine(heldDirectory,Path.GetFileName path)
+            File.WriteAllBytes(heldPath,File.ReadAllBytes path)
+            let heldOwner = PortableWorkspaceExecutor.OriginalSourceJournal heldFixture.Policy.Runtime.StateRoot
+            let heldCursor = heldOwner.StageControlledPending(atAppend,nextPending,advanced.Supplier.Revision,advanced.Supplier.CheckpointCustody.Value.StoreFence,advanced.Cursor) |> ok
+            let request = row.GetProperty("append").GetProperty("request").GetString() |> SupplierCheckpointFixtures.urlBytes
+            let bad = PortableSupplierAdmission.verifyAndAcceptControlledV4 atAppend nextPending.Original nextPending.Revision nextPending.CheckpointCustody.Value.StoreFence nextPending
+                          (ControlledOutputWireExchange(request,[[|0uy|];[|0uy|]])) |> ok
+            let held = match bad with HeldControlledSource value -> value | _ -> failwith "invalid pair did not quarantine"
+            let quarantined = heldOwner.QuarantineControlled(atAppend,held,nextPending.Revision,nextPending.CheckpointCustody.Value.StoreFence,heldCursor) |> ok
+            let reopenedHeld = heldOwner.ReadControlled(atAppend,held.Original,quarantined.Cursor) |> ok
+            Assert.Equal(held,reopenedHeld.Supplier)
+            Assert.True(reopenedHeld.Supplier.FirstFailure.IsSome)
+            Assert.Equal(held.FirstFailure,reopenedHeld.Supplier.FirstFailure)
+            Assert.Equal<byte>(exportOriginal.CanonicalBytes,reopenedHeld.Export.Value.Original.CanonicalBytes)
+            Assert.True(PortableSupplierAdmission.reverifyControlledSourceV4 atAppend held |> Result.isError)
+            match reopenedHeld.NativeCustody with EvidenceUnknown _ -> () | _ -> failwith "held recovery minted readiness"
+            Assert.True(PortableSupplierAdmission.prepareAck advanced.Supplier |> Result.isError)
+            Assert.True(PortableSupplierAdmission.reserveHost advanced.Supplier |> Result.isError)
+        Assert.Equal(1,Directory.GetFiles(Path.Combine(fixture.Policy.Runtime.StateRoot,"journal-v1"),"*.bin").Length)
+        Assert.Equal(0,fixture.Runner.Runs)
+        Assert.Equal(0,fixture.Runner.Cleans)

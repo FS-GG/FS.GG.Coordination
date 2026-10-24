@@ -96,7 +96,7 @@ module ChoreoTrace =
         Path.Combine(AppContext.BaseDirectory, "Fixtures", "Protocol.md")
 
     let private currentSourceSha =
-        "ab114cbfd7738dd1568ce2da3250b7b141b7d5759169bd9d9fb23d3165bdd354"
+        "fd8ee59710f4855883061dc8d970eb7d7a80c910af79a9bed69f8c5217fbda4c"
 
     let internal choreoRegionSha (protocolBytes: byte array) =
         let lines = Encoding.UTF8.GetString(protocolBytes).Replace("\r\n", "\n").Split('\n')

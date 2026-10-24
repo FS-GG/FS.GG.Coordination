@@ -6,13 +6,14 @@ set -euo pipefail
 : "${FSGG_QUINT_ACCOUNTING_RECEIPT:?FSGG_QUINT_ACCOUNTING_RECEIPT is required}"
 base="$FSGG_QUINT_SHARD_ROOT/base.json"
 test -f "$base"
-jq -e '
+accounting="$(python3 -I -S -B eng/check-canonical-quint-accounting.py)"
+jq -e --argjson expected "$(jq -c '{baseRejections,baseExternal,baseQuint,baseVerify}' <<<"$accounting")" '
   .schema == "fsgg.coordination.canonical-quint-qualification/1" and
   .q1Outcome == "passed" and .q2Outcome == "passed" and
-  .positiveInvariantCount == 8 and .negativeControlCount == 79 and
-  (.processCounts.external | type == "number") and (.processCounts.external >= 0) and
-  (.processCounts.quintCli | type == "number") and (.processCounts.quintCli >= 0) and
-  (.processCounts.apalacheVerify | type == "number") and (.processCounts.apalacheVerify >= 0) and
+  .positiveInvariantCount == 8 and .negativeControlCount == $expected.baseRejections and
+  .processCounts.external == $expected.baseExternal and
+  .processCounts.quintCli == $expected.baseQuint and
+  .processCounts.apalacheVerify == $expected.baseVerify and
   .processAccounting == "logical-invocations-plus-explicit-startup-retries/v1" and
   (.startupRetries | keys) == ["earlyLifecycleExit","reflectionDeadline","total","verify"] and
   (.startupRetries.total | type == "number") and (.startupRetries.total >= 0) and

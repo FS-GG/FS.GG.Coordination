@@ -4371,11 +4371,11 @@ module PortableSupplierAdmission =
 
     /// Reverify immutable historical source evidence against fresh controlled policy/clock observations.
     /// Historical bundle/checkpoint bytes and their verification times are never rewritten.
-    let private reverifyControlledHistory selection (state: PortableSupplierAdmissionState) =
+    let private reverifyControlledHistoryCore allowHeld selection (state: PortableSupplierAdmissionState) =
         try
             controlledSelectionCurrent selection state
             let custody = state.CheckpointCustody.Value
-            if state.FirstFailure.IsSome || not state.Conflicts.IsEmpty then PortableSupplierC1.fail ()
+            if not allowHeld && (state.FirstFailure.IsSome || not state.Conflicts.IsEmpty) then PortableSupplierC1.fail ()
             custody.OutputCheckpointBase64 |> Option.iter (fun encoded ->
                 let checkpoint = raw 16384 encoded |> Result.defaultWith invalidOp |> PortableSupplierCheckpoint.parseOutput |> Result.defaultWith invalidOp
                 if (PortableSupplierCheckpoint.outputCommon checkpoint).Provenance <> "controlled-test" then PortableSupplierC1.fail ())
@@ -4422,6 +4422,8 @@ module PortableSupplierAdmission =
                      "native-proof",NativeProofSignature,proof,"raw-sha256"] collected notAfter
             Ok ()
         with _ -> Error "supplier-controlled-cold-reverification-refused"
+
+    let private reverifyControlledHistory selection state = reverifyControlledHistoryCore false selection state
 
     let private verifyAndAcceptControlledNativeV4 selection original revision fence (state: PortableSupplierAdmissionState) (requestInput: byte array) (frameInputs: byte array list) =
         if not (expectedV4 original revision fence state) then Error "supplier-v4-original-revision-fence-refused"
@@ -4545,6 +4547,39 @@ module PortableSupplierAdmission =
     let reverifyControlledSourceV4 selection (state: PortableSupplierAdmissionState) =
         if state.Challenge.IsSome then Error "supplier-controlled-cold-pending-refused"
         else reverifyControlledHistory selection state |> Result.map (fun () -> ControlledSourceReadback state)
+
+    /// Controlled TEST history check for persisting an existing pending challenge; creates no witness.
+    let validateControlledSourceHistory selection state = reverifyControlledHistoryCore true selection state
+
+    /// Inert lifecycle projection from the SAME cold-reverified retained source transcript.
+    /// This is not authenticated native host evidence or an effect/clock/root capability.
+    let projectControlledSourceLifecycle (readback: PortableSupplierAuthenticatedSourceReadback) =
+        try
+            let state = readback.State
+            let pinned = state.Pinned |> Option.defaultWith PortableSupplierC1.fail
+            let mutable lifecycle = { PortableHostAllocation.emptyLifecycle with
+                                        FirstFailure = state.FirstFailure; ReconciliationConflicts = state.Conflicts }
+            for encoded in state.EventsBase64 do
+                let _, event = raw 26761 encoded |> Result.defaultWith invalidOp |> PortableSupplierC1.payload 26761 18000
+                let mutable kind = Unchecked.defaultof<System.Text.Json.JsonElement>
+                if event.TryGetProperty("kind", &kind) then
+                    // validate/reverify already checked event shape, original, chain and timestamps.
+                    let body = event.GetProperty("body")
+                    let observation value =
+                        { Binding = pinned.OriginalReservation.Binding
+                          CollectedAt = body.GetProperty("observed_at") |> PortableSupplierC1.utc
+                          ReceiptDigest = body.GetProperty("receipt_digest").GetString(); Value = value }
+                    let incoming =
+                        match kind.GetString() with
+                        | "workload-exit" -> { PortableHostAllocation.emptyLifecycle with WorkloadExit = EvidenceKnown(observation (body.GetProperty("exit_code").GetInt32())) }
+                        | "termination" -> { PortableHostAllocation.emptyLifecycle with Termination = EvidenceKnown(observation ()) }
+                        | "inner-cleanup-observed" -> { PortableHostAllocation.emptyLifecycle with InnerCleanup = EvidenceKnown(observation ()) }
+                        | "outer-retire-observed" -> { PortableHostAllocation.emptyLifecycle with OuterRetirement = EvidenceKnown(observation ()) }
+                        // A signed export-manifest event is NOT the destination journal commit.
+                        | _ -> PortableHostAllocation.emptyLifecycle
+                    lifecycle <- PortableHostAllocation.reconcileLifecycle lifecycle incoming
+            Ok(pinned.OriginalReservation, pinned.Identity, lifecycle)
+        with _ -> Error "supplier-source-lifecycle-projection-refused"
 
     /// Pure unsigned TEST payload construction. draftedAt is explicit draft data, not a clock/durability observation.
     /// Only retained checkpoint bytes supply receiver_journal_digest; no signer, store or live witness is invoked.

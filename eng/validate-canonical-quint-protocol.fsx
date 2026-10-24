@@ -178,7 +178,7 @@ let expectedQuint =
 let expectedLmt = "37e0b0365c2641edce40b48605471f61fa12e97c3e2376152f0e849abdc31f10"
 
 let expectedSource =
-    "ab114cbfd7738dd1568ce2da3250b7b141b7d5759169bd9d9fb23d3165bdd354"
+    "fd8ee59710f4855883061dc8d970eb7d7a80c910af79a9bed69f8c5217fbda4c"
 
 let expectedContract =
     "791c65eacbc4ef93484673ed6c40d3e8ca21fd75f34371e58c9f954f757c1a64"
@@ -258,7 +258,10 @@ let classifyInvocation isQuint arguments =
     elif
         isQuint
         && (argumentValue "--main" arguments
-            |> Option.exists (fun main -> main.StartsWith("Preflight", StringComparison.Ordinal)))
+            |> Option.exists (fun main ->
+                main.StartsWith("Preflight", StringComparison.Ordinal)
+                || ((main.StartsWith("SourceDirectoryCommit", StringComparison.Ordinal) || main.StartsWith("OriginalSourceComposition", StringComparison.Ordinal))
+                    && (argumentValue "--out" arguments |> Option.isNone))))
     then
         "quint/preflight-sampling"
     elif not isQuint then
@@ -1298,12 +1301,12 @@ let requireCompletedProcessInventory () =
 let exerciseFormalShardProcessInventory mutation =
     let expected =
         [
-            "external/base", 31
-            "quint/preflight-sampling", 13
-            "quint/preflight-interaction", 2
+            "external/base", 35
+            "quint/preflight-sampling", 31
+            "quint/preflight-interaction", 4
             "quint/base-nonverify", 5
             "quint/base-verify", 0
-            "quint/selected-root", 7
+            "quint/selected-root", 9
             "quint/formal-simulation", 1
             "quint/formal-temporal", 1
             "quint/formal-safety-mutant", 1
@@ -2572,7 +2575,10 @@ try
                     |> List.tryFind (fun i -> i > first)
                     |> Option.defaultValue fenceEnd
 
-                while last > first && String.IsNullOrWhiteSpace markdownLines[last - 1] do
+                // Standalone line comments preceding the next module are outside this module.
+                // Keep every native declaration; trim only blanks and line-comment trivia.
+                while last > first && (String.IsNullOrWhiteSpace markdownLines[last - 1]
+                                       || markdownLines[last - 1].TrimStart().StartsWith("//", StringComparison.Ordinal)) do
                     last <- last - 1
 
                 if markdownLines[last - 1] <> "}" then
@@ -2796,6 +2802,8 @@ try
     writeProjected "artifact" [ "PreflightArtifactModel"; "PreflightArtifactReplay" ]
     writeProjected "admission" [ "PreflightAdmissionModel" ]
     writeProjected "observation" [ "PreflightObservationModel"; "PreflightObservationReplay" ]
+    writeProjected "source-directory" [ "SourceDirectoryCommitModel"; "SourceDirectoryCommitReplay" ]
+    writeProjected "original-source" [ "OriginalSourceCompositionModel"; "OriginalSourceCompositionSourceModel"; "OriginalSourceCompositionReplay" ]
 
     let projectionRefusal directory path digest qntDigest =
         try
@@ -2866,7 +2874,8 @@ try
                                         |> List.tryFind (fun i -> i > start)
                                         |> Option.defaultValue fenceEnd
 
-                                    while finish > start && String.IsNullOrWhiteSpace markdownLines[finish - 1] do
+                                    while finish > start && (String.IsNullOrWhiteSpace markdownLines[finish - 1]
+                                                              || markdownLines[finish - 1].TrimStart().StartsWith("//", StringComparison.Ordinal)) do
                                         finish <- finish - 1
 
                                     finish)
@@ -2990,6 +2999,9 @@ try
             "PreflightArtifactModel"
             "PreflightAdmissionModel"
             "PreflightObservationModel"
+            "SourceDirectoryCommitModel"
+            "OriginalSourceCompositionModel"
+            "OriginalSourceCompositionSourceModel"
         ] do
         let code, output, error =
             runPreflight
@@ -3004,6 +3016,7 @@ try
                     "--witnesses"
                     "done"
                  ]
+                 @ (if main = "SourceDirectoryCommitModel" || main = "OriginalSourceCompositionModel" then [ "--step"; "successStep" ] else [])
                  @ preflightBound)
 
         if code <> 0 then
@@ -3012,7 +3025,7 @@ try
         if not (Regex.IsMatch(output, @"done was witnessed in [1-9][0-9]* trace")) then
             fail "PREFLIGHT-REACHABILITY" main
 
-    for main, step, invariant in
+    let preflightMutants =
         [
             "PreflightArtifactModel", "mutantStep", "safety"
             "PreflightArtifactModel", "invalidationMutantStep", "safety"
@@ -3022,7 +3035,27 @@ try
             "PreflightObservationModel", "jsonMutantStep", "custodySafety"
             "PreflightObservationModel", "leaderMutantStep", "custodySafety"
             "PreflightObservationModel", "timeoutMutantStep", "custodySafety"
-        ] do
+            "SourceDirectoryCommitModel", "omittedSyncStep", "safety"
+            "SourceDirectoryCommitModel", "prematureResponseStep", "safety"
+            "SourceDirectoryCommitModel", "consumedReplayStep", "safety"
+            "OriginalSourceCompositionModel", "replacedSupplierStep", "safety"
+            "OriginalSourceCompositionModel", "secondKeyStep", "safety"
+            "OriginalSourceCompositionModel", "mismatchedOriginalStep", "safety"
+            "OriginalSourceCompositionModel", "uncertainReissueStep", "safety"
+            "OriginalSourceCompositionModel", "releasedRootStep", "safety"
+            "OriginalSourceCompositionModel", "receiverOnlyStep", "safety"
+            "OriginalSourceCompositionModel", "sourceAuthorityStep", "safety"
+            "OriginalSourceCompositionSourceModel", "discardSupplierStep", "safety"
+            "OriginalSourceCompositionSourceModel", "replayConsumedStep", "safety"
+            "OriginalSourceCompositionSourceModel", "trustCachedTerminationStep", "safety"
+        ]
+
+    if List.isEmpty preflightMutants || (Set.ofList preflightMutants).Count <> preflightMutants.Length then
+        fail "PREFLIGHT-MUTANT-INVENTORY" "empty or duplicate declared mutant"
+
+    let preflightRejectedProcessBaseline = quintRejectedProcessCount
+
+    for main, step, invariant in preflightMutants do
         let code, output, error =
             runPreflight
                 (main + ":" + step)
@@ -3044,7 +3077,11 @@ try
         then
             fail "PREFLIGHT-CAUSAL-MUTANT" (main + ":" + step)
 
-    for main, steps in [ "PreflightArtifactReplay", "8"; "PreflightObservationReplay", "18" ] do
+    if quintRejectedProcessCount - preflightRejectedProcessBaseline <> List.length preflightMutants then
+        fail "PREFLIGHT-NEGATIVE-COVERAGE" "declared mutants differ from observed rejections"
+
+    for main, steps in
+        [ "PreflightArtifactReplay", "8"; "PreflightObservationReplay", "18"; "SourceDirectoryCommitReplay", "8"; "OriginalSourceCompositionReplay", "7" ] do
         let actualTrace = Path.Combine(scratch, main + ".itf.json")
 
         let code, output, error =
@@ -3160,7 +3197,7 @@ try
                 fail "PREFLIGHT-REPLAY-DRIFT" (main + ":" + key)
 
     if preflightOnly then
-        if samplingMeasurements.Count <> 13 || interactionMeasurements.Count <> 2 then
+        if samplingMeasurements.Count <> 31 || interactionMeasurements.Count <> 4 then
             fail "PREFLIGHT-FOCUSED-COVERAGE" "missing observation"
 
         verifyMeasurementDirectory ()
@@ -3320,9 +3357,9 @@ try
 
     for label, count in
         [
-            "external/base", 31
-            "quint/preflight-sampling", 13
-            "quint/preflight-interaction", 2
+            "external/base", 35
+            "quint/preflight-sampling", 31
+            "quint/preflight-interaction", 4
             "quint/base-nonverify", expectedBaseNonverifyCount
             "quint/base-verify", expectedBaseVerifyCount
             "quint/selected-root", selectedRootIds.Count
@@ -3335,9 +3372,9 @@ try
         expectedInvocationInventory[label] <- count
         actualInvocationInventory.TryAdd(label, 0) |> ignore
 
-    // The base qualification suite has 71 established red outcomes plus eight preflight mutants. Every formal scenario
+    // The unchanged base qualification suite has 71 established red outcomes plus the declared preflight mutants. Every formal scenario
     // contributes one safety mutant, two TLC reproductions, and two Rust projections.
-    let expectedRejectedProcessCount = 79 + 5 * declaredFormalTestCount
+    let expectedRejectedProcessCount = 71 + List.length preflightMutants + 5 * declaredFormalTestCount
     let rootArtifactDirectory = Path.Combine(scratch, "root-artifacts")
     Directory.CreateDirectory rootArtifactDirectory |> ignore
     let rootArtifactDigests = ResizeArray<string * string>()
@@ -3531,14 +3568,18 @@ try
 
     let testRoots =
         [
-            "mutation-saga", "^test(Mutation|DurablePlan)"
-            "desired-state", "^testDesiredState"
-            "qualification", "^test(QualificationManifest|CompiledOutputs|DeterministicIdentity)"
+            "mutation-saga", "CoordinationProtocolTests", "^test(Mutation|DurablePlan)"
+            "desired-state", "CoordinationProtocolTests", "^testDesiredState"
+            "qualification", "CoordinationProtocolTests", "^test(QualificationManifest|CompiledOutputs|DeterministicIdentity)"
+            "original-source-composition", "OriginalSourceCompositionModel",
+                "^(sourceComposition|unknownDoesNotReissue|wrongKeyDetected|replacementDetected|rootMismatchDetected|authorityDetected|expiryRefuses|committedReplyLossPreservesSettlement)$"
+            "source-directory-commit", "SourceDirectoryCommitModel",
+                "^(successfulCommit|unqualifiedBackingRemainsUnknown|blockedDoesNotRelease|oldBytesDoNotAuthorizeReplay|omittedSyncDetected|prematureResponseDetected|consumedReplayDetected)$"
         ]
 
-    for rootId, rootPattern in
+    for rootId, rootModule, rootPattern in
         testRoots
-        |> List.filter (fun (rootId, _) -> Set.contains rootId selectedRootIds) do
+        |> List.filter (fun (rootId, _, _) -> Set.contains rootId selectedRootIds) do
         let artifactPath = Path.Combine(rootArtifactDirectory, $"%s{rootId}.json")
 
         runRoot
@@ -3546,9 +3587,9 @@ try
             artifactPath
             [
                 "test"
-                qualificationQnt
+                (if rootModule = "SourceDirectoryCommitModel" || rootModule = "OriginalSourceCompositionModel" then validateProjectionUse rootModule else qualificationQnt)
                 "--main"
-                "CoordinationProtocolTests"
+                rootModule
                 "--backend"
                 "rust"
                 "--match"
@@ -5352,12 +5393,12 @@ try
         if
             Set.ofSeq rootMeasurements.Keys <> expectedRoots
             || Set.ofSeq formalMeasurements.Keys <> expectedFormal
-            || samplingMeasurements.Count <> 13
+            || samplingMeasurements.Count <> 31
             || (samplingMeasurements
                 |> Seq.map (fun (id, _, _, _) -> id)
                 |> Set.ofSeq
                 |> Set.count)
-               <> 13
+               <> 31
         then
             fail "MEASUREMENT-COVERAGE" "missing-or-duplicate-observations"
 
@@ -5445,8 +5486,8 @@ try
                 invocations = invocationMetrics
             |}
 
-        if interactionMeasurements.Count <> 2 then
-            fail "PREFLIGHT-INTERACTION-COVERAGE" "expected-two"
+        if interactionMeasurements.Count <> 4 then
+            fail "PREFLIGHT-INTERACTION-COVERAGE" "expected-four"
 
         writeJson
             "preflight-interaction.json"

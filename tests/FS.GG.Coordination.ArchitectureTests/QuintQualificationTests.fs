@@ -50,7 +50,7 @@ let ``bounded roots classifications selection and admission are complete`` () =
     Assert.True((exitCode = 0), $"%s{output}\n%s{error}")
 
     Assert.Contains(
-        "roots=7 selected=authority,desired-state,lifecycle,mutation-saga,protocol-streams,qualification,relations formalTests=19 oracles=11 negativeControls=0",
+        "roots=9 selected=authority,desired-state,lifecycle,mutation-saga,original-source-composition,protocol-streams,qualification,relations,source-directory-commit formalTests=19 oracles=11 negativeControls=0",
         output
     )
 
@@ -60,7 +60,7 @@ let ``independent oracles and qualification contracts reject every focused mutat
     Assert.True((exitCode = 0), $"%s{output}\n%s{error}")
 
     Assert.Contains(
-        "roots=7 selected=authority,desired-state,lifecycle,mutation-saga,protocol-streams,qualification,relations formalTests=19 oracles=11 negativeControls=30",
+        "roots=9 selected=authority,desired-state,lifecycle,mutation-saga,original-source-composition,protocol-streams,qualification,relations,source-directory-commit formalTests=19 oracles=11 negativeControls=30",
         output
     )
 
@@ -360,7 +360,7 @@ let ``changed paths surfaces reuse and future proposals bind selection inputs`` 
 
         Assert.True((pullExit = 0), $"%s{pullOutput}\n%s{pullError}")
         let pullPlan = JsonNode.Parse(File.ReadAllText plan).AsObject()
-        Assert.Equal(7, pullPlan["roots"].AsArray().Count)
+        Assert.Equal(9, pullPlan["roots"].AsArray().Count)
 
         let oracleExit, oracleOutput, oracleError =
             executeWith
@@ -612,7 +612,7 @@ let ``physical accounting preserves failed attempts and rejects incomplete or ov
     let digest (value: string) =
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes value)).ToLowerInvariant()
 
-    Assert.Equal("80fdd970af21353c803bd380e645b72e922c8b3a39b455b86574872d03c2b74e", digest source)
+    Assert.Equal("1dfbc268ca90c2e9631026bae77ed9227e0666e90788b6394479ba7459b0561a", digest source)
     let marker = "// Controlled subprocess fixtures exercise the production wrappers, not native proof."
     let ending = "let requireGreen code workingDirectory executable arguments environment ="
     let start = source.IndexOf(marker, StringComparison.Ordinal)
@@ -621,7 +621,7 @@ let ``physical accounting preserves failed attempts and rejects incomplete or ov
     Assert.Equal(start, source.LastIndexOf(marker, StringComparison.Ordinal))
     Assert.Equal(finish, source.LastIndexOf(ending, StringComparison.Ordinal))
     let prefix = source.Substring(0, start)
-    Assert.Equal("6e7c4dab87d0db93c5ab205249f0936290b3e0a7a931b36b5f631c8313d8ea7f", digest prefix)
+    Assert.Equal("32c4a3d228cbd916f44974991645dfafd04ba4943f7c59454a98414efbb45266", digest prefix)
     let fragment = File.ReadAllText(Path.Combine(root, "tests/FS.GG.Coordination.ArchitectureTests/Fixtures/quint-accounting-controls.fsx.fragment"))
     Assert.True(Encoding.UTF8.GetByteCount(fragment) <= 32768)
     Assert.Equal("0cb026147d6cee22119d640b75a8939723dd8894fbd10a23ea693bb49958f376", digest fragment)
