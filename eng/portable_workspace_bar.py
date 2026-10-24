@@ -106,6 +106,8 @@ SHARED_HOST_RELATION = 'shared-host-reservations-outside-enclosing-cgroup'
 # FS-GG/.github#4778 route (b): one fresh GitHub-hosted VM per operation. Its
 # root-produced domain evidence is correspondence only, never authority.
 HOSTED_RELATION = 'dedicated-ephemeral-hosted-vm'
+DEDICATED_RELATION = shared.DEDICATED_RELATION
+DOMAIN_RELATIONS = (HOSTED_RELATION, DEDICATED_RELATION)
 HOSTED_DOMAIN_SCHEMA = 'fsgg.bar-hosted-domain/1'
 HOSTED_RUNNER_IMAGE = 'ubuntu24'
 # An explicitly selected hosted image version; image drift refuses until selected.
@@ -128,9 +130,9 @@ def selected_input(args):
     require(selection['network']['purpose'] in ('full-image', 'network-prerequisite'), 'fixed network purpose required')
     require(selection['schema'] == 'fsgg.bar-headless-operation/1', 'BAR operation schema required')
     require(type(selection['resourceDomain']) is dict, 'resource-domain relation required')
-    hosted = selection['resourceDomain'].get('relation') == HOSTED_RELATION
+    hosted = selection['resourceDomain'].get('relation') in DOMAIN_RELATIONS
     fields(selection['resourceDomain'], 'relation topologySha256' + (' domainEvidenceSha256' if hosted else ''))
-    require(selection['resourceDomain']['relation'] in (SHARED_HOST_RELATION, HOSTED_RELATION),
+    require(selection['resourceDomain']['relation'] in (SHARED_HOST_RELATION,) + DOMAIN_RELATIONS,
             'unsupported resource-domain relation')
     text(selection['operationId'], r'[a-z0-9][a-z0-9-]{0,63}')
     require(selection['licenseAccepted'] is True, 'explicit licensed private build selection required')
@@ -173,20 +175,25 @@ def hosted_domain(selection, allocation, load_root):
 
     Evidence is bounded correspondence only; the shared resource admission still
     observes memory, CPU and disk afresh at the operation boundary."""
-    if selection['resourceDomain']['relation'] != HOSTED_RELATION:
+    if selection['resourceDomain']['relation'] not in DOMAIN_RELATIONS:
         return None
     reference = selection['admission']['domain']
     evidence = strict_json(regular_bytes(path(reference['path']), MAX_JSON_BYTES, reference['sha256'])[0])
     fields(evidence, 'schema relation verdict refusals bootId runner services userns volume builder resources')
-    require(evidence['schema'] == HOSTED_DOMAIN_SCHEMA and evidence['relation'] == HOSTED_RELATION,
+    require(evidence['schema'] == HOSTED_DOMAIN_SCHEMA and evidence['relation'] == selection['resourceDomain']['relation'],
             'hosted domain evidence schema differs')
     require(evidence['verdict'] == 'admitted' and evidence['refusals'] == [], 'hosted domain evidence refused')
     # Evidence belongs to this operation's own fresh VM boot; replay elsewhere refuses.
     require(text(evidence['bootId'], r'[0-9a-f-]{36}') == selection['clock']['bootId'],
             'hosted domain evidence is from another boot')
-    runner = evidence['runner']; fields(runner, 'imageOS imageVersion githubHosted')
-    require(runner['imageOS'] == HOSTED_RUNNER_IMAGE and runner['githubHosted'] is True
-            and runner['imageVersion'] == HOSTED_RUNNER_IMAGE_VERSION, 'hosted runner image differs')
+    runner = evidence['runner']
+    if evidence['relation'] == DEDICATED_RELATION:
+        require(shared.dedicated_runner_refusals(runner) == [], 'dedicated runner image/binding differs')
+        require(runner['dedicated']['bootId'] == evidence['bootId'], 'dedicated binding boot differs')
+    else:
+        fields(runner, 'imageOS imageVersion githubHosted')
+        require(runner['imageOS'] == HOSTED_RUNNER_IMAGE and runner['githubHosted'] is True
+                and runner['imageVersion'] == HOSTED_RUNNER_IMAGE_VERSION, 'hosted runner image differs')
     services = evidence['services']; fields(services, 'stopped active daemonProcesses')
     require(services['stopped'] == list(HOSTED_STOPPED_SERVICES) and services['active'] == []
             and integer(services['daemonProcesses']) == 0, 'hosted container daemons not stopped')
@@ -216,7 +223,7 @@ def hosted_domain(selection, allocation, load_root):
     require(disposition == {'sharedHostReservedMemoryBytes': 0, 'sharedHostReservedCpu': 0,
                             'sharedHostReservedDiskBytes': 0, 'unquantifiedResourceConflicts': []},
             'hosted domain cannot carry shared-host reservations')
-    return {'relation': HOSTED_RELATION, 'evidenceSha256': reference['sha256'], 'volumeDevice': device,
+    return {'relation': evidence['relation'], 'evidenceSha256': reference['sha256'], 'volumeDevice': device,
             'runnerImageVersion': runner['imageVersion']}
 
 

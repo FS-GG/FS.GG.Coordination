@@ -152,6 +152,70 @@ class HostedDomain(unittest.TestCase):
         self.assertFalse(DOMAIN.uid_map_covers('garbage', 10001))
 
 
+class DedicatedDomain(unittest.TestCase):
+    """Authored profile DATA, actual producer/reader functions; no native operation."""
+    def dedicated(self, device='7:0'):
+        value = observed(device, '8:2' if device == '8:1' else '8:1')
+        value['relation'] = BAR.DEDICATED_RELATION
+        value['runner'] = {'imageOS': 'ubuntu26.10', 'imageVersion': 'a' * 64, 'githubHosted': False,
+            'dedicated': {'baselineId': BAR.shared.DEDICATED_BASELINE, 'providerInstanceId': 'authored-vm',
+                'providerImageId': 'authored-image', 'systemUuid': 'authored-uuid', 'bootId': value['bootId'],
+                'bindingSha256': 'b' * 64, 'oneJobOnly': True, 'runnerGroup': 'fsgg-native-qualification',
+                'runnerLabel': 'fsgg-native-linux-x64-v1'}}
+        return value
+
+    def pins(self):
+        return patch.multiple(BAR.shared, DEDICATED_IMAGE_SHA256='a' * 64, DEDICATED_PROVIDER_IMAGE_ID='authored-image')
+
+    def test_unselected_image_refuses_despite_authored_matching_facts(self):
+        with patch.object(DOMAIN, 'shared_controller', return_value=BAR.shared):
+            self.assertIn('dedicated-image-unselected', DOMAIN.evaluate(self.dedicated()))
+
+    def test_same_common_capacity_and_namespace_controls_apply(self):
+        with self.pins(), patch.object(DOMAIN, 'shared_controller', return_value=BAR.shared):
+            self.assertEqual(DOMAIN.evaluate(self.dedicated()), [])
+            for field, value in [('apparmorRestrictUnprivileged', None), ('apparmorRestrictUnprivileged', False),
+                                  ('apparmorRestrictUnprivileged', 1), ('maxUserNamespaces', 0)]:
+                selected = self.dedicated(); selected['userns'][field] = value
+                self.assertIn('rootless-userns', DOMAIN.evaluate(selected))
+            selected = self.dedicated(); selected['resources']['memAvailableBytes'] = 14 * GIB - 1
+            self.assertIn('memory', DOMAIN.evaluate(selected))
+            selected = self.dedicated(); selected['volume']['loopBacked'] = False
+            self.assertIn('volume-preallocation', DOMAIN.evaluate(selected))
+
+    def test_wrong_host_image_binding_or_extra_fields_refuse(self):
+        with self.pins(), patch.object(DOMAIN, 'shared_controller', return_value=BAR.shared):
+            for field, value in [('providerImageId', 'other-image'), ('bootId', 'another-boot'),
+                                  ('runnerGroup', 'other-group'), ('oneJobOnly', False)]:
+                selected = self.dedicated(); selected['runner']['dedicated'][field] = value
+                self.assertTrue(DOMAIN.evaluate(selected))
+            selected = self.dedicated(); selected['runner']['githubHosted'] = True
+            self.assertIn('dedicated-image', DOMAIN.evaluate(selected))
+            selected = self.dedicated(); selected['runner']['extra'] = 'ignored authority'
+            self.assertIn('dedicated-runner-shape', DOMAIN.evaluate(selected))
+
+    def test_actual_domain_reader_joins_dedicated_evidence_and_refuses_boot_replay(self):
+        with tempfile.TemporaryDirectory() as directory, self.pins(), patch.object(DOMAIN, 'shared_controller', return_value=BAR.shared):
+            root = Path(directory); allocation = root / 'allocation'; load_root = root / 'load'
+            allocation.mkdir(); load_root.mkdir()
+            value = self.dedicated(DOMAIN.device_text(allocation))
+            value['bootId'] = Path('/proc/sys/kernel/random/boot_id').read_text().strip()
+            value['runner']['dedicated']['bootId'] = value['bootId']
+            evidence = DOMAIN.finish(value)
+            target = root / 'domain.json'; disposition = root / 'disposition.json'
+            target.write_bytes(DOMAIN.canonical(evidence)); target.chmod(0o600)
+            disposition.write_bytes(DOMAIN.canonical({'sharedHostReservedMemoryBytes': 0, 'sharedHostReservedCpu': 0,
+                'sharedHostReservedDiskBytes': 0, 'unquantifiedResourceConflicts': []})); disposition.chmod(0o600)
+            digest = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()
+            selection = {'resourceDomain': {'relation': BAR.DEDICATED_RELATION}, 'clock': {'bootId': value['bootId']},
+                'admission': {'domain': {'path': str(target), 'sha256': digest(target)},
+                              'resourceDisposition': {'path': str(disposition), 'sha256': digest(disposition)}}}
+            self.assertEqual(BAR.hosted_domain(selection, allocation, load_root)['relation'], BAR.DEDICATED_RELATION)
+            selection['clock']['bootId'] = 'another-boot'
+            with self.assertRaisesRegex(RuntimeError, 'another boot'):
+                BAR.hosted_domain(selection, allocation, load_root)
+
+
 class UserlandEntry(unittest.TestCase):
     """Execute the maintained shell plan with privileged commands replaced.
 

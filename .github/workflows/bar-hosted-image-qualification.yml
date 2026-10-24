@@ -58,7 +58,9 @@ env:
 jobs:
   full-image:
     if: ${{ (inputs.purpose == 'full-image' && inputs.full_image) || (inputs.purpose == 'network-prerequisite' && !inputs.full_image) }}
-    runs-on: ubuntu-24.04
+    runs-on:
+      group: fsgg-native-qualification
+      labels: fsgg-native-linux-x64-v1
     # Includes provisioning and bounded transport; controller retains3600+120s.
     timeout-minutes: 90
     env:
@@ -124,8 +126,9 @@ jobs:
               need(job.get('status')=='in_progress','native job is not active')
               need(type(job.get('id')) is int and job['id']>0 and type(job.get('run_id')) is int,'native job IDs required')
               need(job['run_id']==int(env['GITHUB_RUN_ID']) and job['head_sha']==env['GITHUB_SHA'] and job['name']=='full-image' and job['runner_name']==env['RUNNER_NAME'],'native source/job/runner differs')
+              need(job.get('runner_group_name')=='fsgg-native-qualification','native runner group differs')
               native=parse(job['started_at']);need(selected-1<=native<=utc.timestamp(),'native job birth/Root selection differs')
-              record['providerJob']={k:job[k] for k in ('id','run_id','head_sha','name','runner_name','started_at','status')}
+              record['providerJob']={k:job[k] for k in ('id','run_id','head_sha','name','runner_name','started_at','status','runner_group_name')}
               record['overallDeadlineMonotonic']=mono+min(native+5400,selected+5400)-utc.timestamp()
               need(record['overallDeadlineMonotonic']-time.monotonic()>=600+1200+30,'original checkout/transport aperture unavailable')
               record['verdict']='accepted'
@@ -150,6 +153,30 @@ jobs:
           path: source
           fetch-depth: 0
           persist-credentials: false
+
+      - name: Refuse unselected dedicated image before product or asset acquisition
+        id: profile
+        shell: bash
+        timeout-minutes: 2
+        env:
+          PREP_PROFILE_SCRIPT: |
+            set -euo pipefail
+            test "$RUNNER_ENVIRONMENT" = self-hosted
+            test "$GITHUB_EVENT_NAME" = workflow_dispatch
+            test "$GITHUB_REF" = refs/heads/main
+            test "$GITHUB_RUN_ATTEMPT" = 1
+            sudo -n env RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" python3 -I -B source/eng/bar_hosted_domain.py dedicated-profile
+        run: |
+          set -euo pipefail
+          install -d -m 0700 "$EVIDENCE"
+          cp -- "$STARTUP_EVIDENCE/clock.json" "$EVIDENCE/original-clock.json"
+          prep_env=()
+          for name in GITHUB_SHA GITHUB_EVENT_NAME GITHUB_REF GITHUB_RUN_ATTEMPT GITHUB_REPOSITORY GITHUB_WORKSPACE \
+              GITHUB_RUN_ID GITHUB_WORKFLOW_REF OPERATION_ID HOST_JOB_STARTED HOST_JOB_MONOTONIC EVIDENCE STARTUP_EVIDENCE RUNNER_TEMP ImageOS ImageVersion RUNNER_ENVIRONMENT; do
+            if [[ -v "$name" ]]; then prep_env+=("$name=${!name}"); fi
+          done
+          sudo -n env "${prep_env[@]}" /usr/bin/python3 -I -B source/eng/bar_hosted_operation.py prep-run \
+            --phase profile --operation-id "$OPERATION_ID"
 
       - name: Check out the fixed complete product context
         timeout-minutes: 5
@@ -181,6 +208,7 @@ jobs:
             test "$(du -sb source product | awk '{sum += $1} END {print sum}')" -le 2147483648
             python3 -I -B source/tests/portable-workspace/image/test_bar_hosted_operation.py
             python3 -I -B source/tests/portable-workspace/image/test_bar_hosted_domain.py
+            python3 -I -B source/tests/qualification-runner/test_dedicated_runner.py
             python3 -I -B source/eng/bar_hosted_operation.py seal-transport --operation-id "$OPERATION_ID" \
               > "$EVIDENCE/crypto-seal-result.json"
         run: |
@@ -298,8 +326,8 @@ jobs:
         env:
           PREP_ADMIT_SCRIPT: |
             set -euo pipefail
-            sudo env ImageOS="$ImageOS" ImageVersion="$ImageVersion" RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" \
-              python3 -I source/eng/bar_hosted_domain.py admit \
+            sudo env ImageOS="${ImageOS-}" ImageVersion="${ImageVersion-}" RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" \
+              python3 -I source/eng/bar_hosted_domain.py admit --profile dedicated-preconfigured \
               --allocation "$VOLUME/allocation" --load-store "$VOLUME/load-store" \
               --backing-image "$VOLUME_IMAGE" --userland "$USERLAND" \
               --evidence "$EVIDENCE/domain.json" --owner-uid "$(id -u)" --owner-gid "$(id -g)" \
@@ -387,6 +415,7 @@ jobs:
           CONTROLS_OUTCOME: ${{ steps.prep_controls.outcome }}
           USERLAND_OUTCOME: ${{ steps.prep_userland.outcome }}
           CLOCK_OUTCOME: ${{ steps.clock.outcome }}
+          PROFILE_OUTCOME: ${{ steps.profile.outcome }}
           ADMIT_OUTCOME: ${{ steps.admit.outcome }}
           QUALIFY_OUTCOME: ${{ steps.qualify.outcome }}
         run: |
@@ -397,7 +426,7 @@ jobs:
             if python3 -I -B - <<'PY_STARTUP'
           import json,os
           from pathlib import Path
-          value={k:os.environ.get(k,'Unknown') for k in ('CLOCK_OUTCOME','CONTROLS_OUTCOME','USERLAND_OUTCOME','ADMIT_OUTCOME','QUALIFY_OUTCOME')}
+          value={k:os.environ.get(k,'Unknown') for k in ('CLOCK_OUTCOME','PROFILE_OUTCOME','CONTROLS_OUTCOME','USERLAND_OUTCOME','ADMIT_OUTCOME','QUALIFY_OUTCOME')}
           path=Path(os.environ['STARTUP_CAPTURE_PATH'])/'outcomes.json'
           fd=os.open(path,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)
           with os.fdopen(fd,'w') as stream:stream.write(json.dumps(value)+'\n')

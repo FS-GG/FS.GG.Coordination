@@ -1,0 +1,5 @@
+# IMAGE ONLY: trusted protected-main jobs on one dedicated disposable VM.
+# BAR's existing fixed orchestration needs root env/bash/systemd/mount operations;
+# this is an explicit privileged orchestration role, not a command sandbox.
+# Group restrictions and one-job VM destruction are prerequisites to registration.
+runner ALL=(root) NOPASSWD: ALL
