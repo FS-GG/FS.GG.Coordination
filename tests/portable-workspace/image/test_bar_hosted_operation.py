@@ -31,8 +31,10 @@ def load(name, path):
 WRAPPER = load('bar_hosted_operation_controls', ROOT / 'eng/bar_hosted_operation.py')
 BAR = WRAPPER.load_bar(ROOT)
 ENTRY = load('bar_hosted_entry_controls', ROOT / 'tests/portable-workspace/image/test_bar_hosted_domain.py')
-WORKFLOW = ROOT / '.github/workflows/bar-hosted-image-qualification.yml'
+WORKFLOW = ROOT / 'deployment/qualification-runner/native-qualification/bar-hosted-image-qualification.yml'
 OPERATION = 'bar-image-123-1'
+CALLER = 'c' * 40
+RUNNER = 'fsgg-q-20261024t0100z-0123abcd'
 GIB = 1024**3
 
 
@@ -42,11 +44,11 @@ def install_clock(evidence,purpose='full-image',revision='b'*40):
     utc=datetime.datetime.now(datetime.timezone.utc)-datetime.timedelta(seconds=1)
     text=lambda date:date.isoformat(timespec='microseconds').replace('+00:00','Z')
     clock={'schema':'fsgg.bar-hosted-clock/1','verdict':'accepted','firstRefusal':None,'operationId':OPERATION,
-           'sourceRevision':revision,'workflowRef':WRAPPER.WORKFLOW_REF,'purpose':purpose,
+           'sourceRevision':revision,'callerRevision':CALLER,'callerRepository':WRAPPER.CALLER_REPOSITORY,'workflowRef':WRAPPER.WORKFLOW_REF,'purpose':purpose,
            'bootId':Path('/proc/sys/kernel/random/boot_id').read_text().strip(),'firstUTC':text(utc),'firstMonotonic':first,
            'rootSelection':{'selected_utc':text(utc),'latest_start_utc':text(utc+datetime.timedelta(seconds=300)),
                             'observer_deadline_utc':text(utc+datetime.timedelta(seconds=5700))},
-           'providerJob':{'id':7,'run_id':123,'head_sha':revision,'name':'full-image','runner_name':'fixture','runner_group_name':'fsgg-native-qualification','status':'in_progress','started_at':text(utc)},
+           'providerJob':{'id':7,'run_id':123,'head_sha':CALLER,'name':'full-image','runner_name':RUNNER,'runner_group_name':'Default','status':'in_progress','started_at':text(utc)},
            'overallDeadlineMonotonic':first+5400}
     def write(name,value):
         path=evidence/name;path.write_bytes(WRAPPER.canonical(value));path.chmod(0o600)
@@ -169,7 +171,7 @@ class CheckoutBootstrap(unittest.TestCase):
         product, product_revision, product_tree = self.fixture('product', 'https://github.com/FS-GG/FSBarV2')
         (self.root / 'evidence').mkdir(mode=0o700)
         for path in (source, product): self.git(path, 'config', '--local', 'gc.auto', '0')
-        env = {'GITHUB_WORKSPACE': str(self.root), 'GITHUB_REPOSITORY': 'FS-GG/FS.GG.Coordination',
+        env = {'GITHUB_WORKSPACE': str(self.root), 'GITHUB_REPOSITORY': 'FS-GG/FS.GG.Native.Qualification',
                'GITHUB_EVENT_NAME': 'workflow_dispatch', 'GITHUB_REF': 'refs/heads/main', 'GITHUB_RUN_ATTEMPT': '1', 'QUALIFICATION_MODE': 'qualify'}
         with patch.dict(os.environ, env), patch.object(WRAPPER, 'load_bar', return_value=BAR), \
              patch.object(WRAPPER, 'PRODUCT_REVISION', product_revision), patch.object(WRAPPER, 'PRODUCT_TREE', product_tree):
@@ -217,7 +219,7 @@ class Preparation(unittest.TestCase):
             change = patch.object(target, name, value)
             change.start(); self.addCleanup(change.stop)
         change = patch.dict(os.environ, {'HELPER_TREE': 'a' * 40, 'HOST_JOB_STARTED': str(int(time.time())),
-                                        'HOST_JOB_MONOTONIC': str(time.monotonic()),'GITHUB_SHA':'b'*40})
+                                        'HOST_JOB_MONOTONIC': str(time.monotonic()),'FSGG_SOURCE_REVISION':'b'*40})
         change.start(); self.addCleanup(change.stop)
         device = BAR.shared.device_text(self.allocation) if hasattr(BAR.shared, 'device_text') else None
         dev = self.allocation.stat().st_dev
@@ -579,7 +581,7 @@ exit 41
                     self.assertIn('candidate-permitted=false', outputs.read_text())
                     # This is exactly the maintained metadata uploader's path.
                     self.assertIn("format('/fsgg-bar/transport-metadata/{0}'", text)
-                    summary_env = {**env, 'GITHUB_SHA': 'b' * 40, 'GITHUB_STEP_SUMMARY': str(fixture.root / 'summary'),
+                    summary_env = {**env, 'FSGG_SOURCE_REVISION': 'b' * 40, 'GITHUB_SHA': 'c' * 40, 'GITHUB_STEP_SUMMARY': str(fixture.root / 'summary'),
                         'QUALIFICATION_MODE': 'network-prerequisite', 'ADMIT_OUTCOME': 'success',
                         'QUALIFY_OUTCOME': 'failure' if primary == 'failed' else 'success',
                         'RECEIPT_OUTCOME': 'success', 'METADATA_OUTCOME': 'success', 'CANDIDATE_OUTCOME': 'skipped',
@@ -606,7 +608,7 @@ exit 41
                 env = {**os.environ, 'PATH': str(tools) + ':/usr/bin:/bin', 'EVIDENCE': str(evidence),
                        'ENTER_SCRIPT': 'authored inert entry fixture', 'UNIT_ENTRY_SCRIPT':'authored inert unit fixture', 'OPERATION_ID': OPERATION, 'QUALIFICATION_MODE': 'qualify',
                        'USERLAND': '/fixture-userland', 'VOLUME': '/fixture-volume', 'GITHUB_WORKSPACE': str(root),
-                       'GITHUB_SHA': 'b' * 40, 'HOST_JOB_STARTED': str(int(time.time())),
+                       'GITHUB_SHA': 'c' * 40, 'FSGG_SOURCE_REVISION': 'b' * 40, 'HOST_JOB_STARTED': str(int(time.time())),
                        'HOST_JOB_MONOTONIC': str(time.monotonic()), 'FIXTURE_EXIT': str(code)}
                 result = subprocess.run(['/bin/bash', '-c', script], env=env, capture_output=True, text=True, timeout=10)
                 self.assertEqual(result.returncode, code, result.stderr)
@@ -670,13 +672,43 @@ exit 41
         WRAPPER.load_bar(ROOT)
         self.assertEqual(hashlib.sha256(WRAPPER.RECIPIENT.read_bytes()).hexdigest(), WRAPPER.RECIPIENT_PEM_SHA256)
         self.assertNotIn(b'PRIVATE KEY', WRAPPER.RECIPIENT.read_bytes())
-        inventory = json.loads((ROOT / 'evidence/github-substrate-v2/gs2-06-7/execution-pins-extension.json').read_text())
-        entries = [entry for entry in inventory['documents'] if entry['path'] == str(WORKFLOW.relative_to(ROOT))]
-        self.assertEqual(len(entries), 1)
-        self.assertEqual(entries[0]['sha256'], hashlib.sha256(WORKFLOW.read_bytes()).hexdigest())
+        # The template is outside .github/workflows by design: Coordination can never queue it.
+        # Its bytes and the private-repository README are pinned by one manifest, and every
+        # external action it uses is an immutable full-length commit.
+        template = WORKFLOW.parent
+        pins = {line.split('  ', 1)[1]: line.split('  ', 1)[0] for line in (template / 'MANIFEST.sha256').read_text().splitlines()}
+        self.assertEqual(sorted(pins), ['README.md', 'bar-hosted-image-qualification.yml'])
+        for name, digest in pins.items():
+            self.assertEqual(hashlib.sha256((template / name).read_bytes()).hexdigest(), digest, name)
         uses = set(re.findall(r'^\s*(?:-\s*)?uses:\s*([^\s#]+)', WORKFLOW.read_text(), re.MULTILINE))
-        self.assertEqual(set(entries[0]['externalReferences']), uses)
-        self.assertEqual(entries[0]['localReferences'], [])
+        self.assertEqual(uses, {'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1', 'actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a'})
+        self.assertFalse((ROOT / '.github/workflows/bar-hosted-image-qualification.yml').exists())
+        registry = (ROOT / 'evidence/github-substrate-v2/gs2-06-7/execution-pins-extension.json').read_text()
+        self.assertNotIn('bar-hosted-image-qualification', registry)
+
+    def test_template_is_a_dispatch_only_private_caller_that_public_coordination_cannot_queue(self):
+        text = WORKFLOW.read_text()
+        self.assertEqual(re.findall(r'^on:\n((?:  .*\n|\n)+)', text, re.MULTILINE)[0].split(':', 1)[0].strip(), 'workflow_dispatch')
+        for trigger in ('pull_request', 'pull_request_target', 'push:', 'schedule', 'workflow_run', 'workflow_call', 'issue_comment'):
+            self.assertNotIn('\n  ' + trigger, text, trigger)
+        self.assertIn('runs-on: [self-hosted, linux, x64, fsgg-native-linux-x64-v1]', text)
+        self.assertIn("github.ref == 'refs/heads/main' && github.run_attempt == 1", text)
+        self.assertIn('permissions:\n  contents: read\n  actions: read\n', text)
+        self.assertNotIn('secrets.', text)
+        self.assertNotIn('fsgg-native-qualification', text)
+        self.assertIn("job.get('runner_group_name')=='Default' and job['runner_name'].startswith('fsgg-q-')", text)
+        self.assertIn("FS-GG/FS.GG.Native.Qualification/.github/workflows/bar-hosted-image-qualification.yml@refs/heads/main", text)
+        self.assertEqual(WRAPPER.WORKFLOW_REF, 'FS-GG/FS.GG.Native.Qualification/.github/workflows/bar-hosted-image-qualification.yml@refs/heads/main')
+        self.assertIn('repository: FS-GG/FS.GG.Coordination\n          ref: ${{ inputs.coordination_sha }}', text)
+        self.assertIn('coordination_sha:', text)
+        # The first step stays first and carries no dependency on either checkout.
+        self.assertLess(text.index('Retain the original outer job clock'), text.index('Check out the exact public Coordination source'))
+        self.assertLess(text.index('Check out this exact private caller'), text.index('Refuse a changed caller'))
+        profile = literal_block(text.split('- name: Refuse a changed caller', 1)[1], 'PREP_PROFILE_SCRIPT')
+        for line in ('merge-base --is-ancestor "$FSGG_SOURCE_REVISION" refs/remotes/origin/main',
+                     'caller/.github/workflows/bar-hosted-image-qualification.yml',
+                     'caller/README.md'):
+            self.assertIn(line, profile)
 
     def test_fixed_workflow_preserves_domain_profile_and_complete_generation_guards(self):
         text = WORKFLOW.read_text()
@@ -736,17 +768,17 @@ class ClockBudget(unittest.TestCase):
         self.temp=tempfile.TemporaryDirectory(prefix='bar-clock-pure-');self.addCleanup(self.temp.cleanup)
         self.root=Path(self.temp.name);self.evidence=self.root/'evidence';self.evidence.mkdir(mode=0o700)
         self.clock=install_clock(self.evidence)
-        change=patch.dict(os.environ,{'GITHUB_SHA':'b'*40,'SOURCE_REVISION':'b'*40})
+        change=patch.dict(os.environ,{'FSGG_SOURCE_REVISION':'b'*40,'GITHUB_SHA':'c'*40,'SOURCE_REVISION':'b'*40})
         change.start();self.addCleanup(change.stop)
         workflow=WORKFLOW.read_text();script=literal_block(workflow.split('- name: Retain the original outer job clock',1)[1],'run')
         self.producer=textwrap.dedent(script.split("<<'PY_CLOCK'\n",1)[1].split('\nPY_CLOCK',1)[0])
         self.utc=datetime.datetime(2026,10,24,2,0,0,tzinfo=datetime.timezone.utc)
         self.env={'STARTUP_EVIDENCE':str(self.root/'startup'),'OPERATION_ID':OPERATION,'QUALIFICATION_MODE':'network-prerequisite',
-          'GITHUB_SHA':'b'*40,'GITHUB_WORKFLOW_REF':WRAPPER.WORKFLOW_REF,'GITHUB_EVENT_NAME':'workflow_dispatch','GITHUB_REF':'refs/heads/main',
-          'GITHUB_RUN_ATTEMPT':'1','GITHUB_REPOSITORY':'FS-GG/FS.GG.Coordination','GITHUB_RUN_ID':'123','RUNNER_NAME':'fixture',
+          'GITHUB_SHA':CALLER,'FSGG_SOURCE_REVISION':'b'*40,'GITHUB_WORKFLOW_REF':WRAPPER.WORKFLOW_REF,'GITHUB_EVENT_NAME':'workflow_dispatch','GITHUB_REF':'refs/heads/main',
+          'GITHUB_RUN_ATTEMPT':'1','GITHUB_REPOSITORY':'FS-GG/FS.GG.Native.Qualification','GITHUB_RUN_ID':'123','RUNNER_NAME':RUNNER,
           'GH_TOKEN':'inert fixture not a credential','GITHUB_ENV':str(self.root/'github-env'),'GITHUB_OUTPUT':str(self.root/'github-output'),
           'SELECTED_UTC':'2026-10-24T02:00:00Z','LATEST_START_UTC':'2026-10-24T02:05:00Z','OBSERVER_DEADLINE_UTC':'2026-10-24T03:35:00Z'}
-        self.job={'id':7,'run_id':123,'head_sha':'b'*40,'name':'full-image','runner_name':'fixture','runner_group_name':'fsgg-native-qualification','status':'in_progress','started_at':'2026-10-24T01:59:59.500000Z'}
+        self.job={'id':7,'run_id':123,'head_sha':CALLER,'name':'full-image','runner_name':RUNNER,'runner_group_name':'Default','status':'in_progress','started_at':'2026-10-24T01:59:59.500000Z'}
 
     def produce(self,updates=None,job=None,error=None,elapsed=0):
         import datetime,urllib.request,io
@@ -772,15 +804,34 @@ class ClockBudget(unittest.TestCase):
 
     def test_actual_first_producer_refusal_retained_before_checkout_no_retry(self):
         cases=[({'SELECTED_UTC':'1e999'},None,None),({'LATEST_START_UTC':'2026-10-24T01:59:59Z'},None,None),
-          ({'OBSERVER_DEADLINE_UTC':'2026-10-24T03:35:01Z'},None,None),({}, {**self.job,'head_sha':'c'*40},None),
+          ({'OBSERVER_DEADLINE_UTC':'2026-10-24T03:35:01Z'},None,None),({}, {**self.job,'head_sha':'d'*40},None),
           ({}, {**self.job,'runner_group_name':'other-group'},None),({'GITHUB_RUN_ATTEMPT':'2'},None,None),({},None,OSError('native API Unknown')),({}, {**self.job,'started_at':'2026-10-24T01:59:58Z'},None)]
         for n,(updates,job,error) in enumerate(cases):
             self.env['STARTUP_EVIDENCE']=str(self.root/('startup-'+str(n)))
             with self.subTest(case=n),self.assertRaises(Exception):self.produce(updates,job,error)
             value=json.loads((Path(self.env['STARTUP_EVIDENCE'])/'clock.json').read_text())
             self.assertEqual(value['verdict'],'refused');self.assertTrue(value['firstRefusal'])
-        text=WORKFLOW.read_text();self.assertLess(text.index('Retain the original outer job clock'),text.index('Check out the exact candidate'))
+        text=WORKFLOW.read_text();self.assertLess(text.index('Retain the original outer job clock'),text.index('Check out the exact public Coordination source'))
         self.assertNotIn('retry',self.producer)
+
+    def test_ephemeral_runner_name_group_and_main_attempt_are_refused_in_the_first_step(self):
+        cases = (({'RUNNER_NAME': 'fsgg-qualification-x'}, {**self.job, 'runner_name': 'fsgg-qualification-x'}),
+                              ({'RUNNER_NAME': 'ubuntu-latest'}, {**self.job, 'runner_name': 'ubuntu-latest'}),
+                              ({'GITHUB_REPOSITORY': 'FS-GG/FS.GG.Coordination'}, None),
+                              ({'FSGG_SOURCE_REVISION': 'main'}, None),
+                              ({'GITHUB_REF': 'refs/heads/other'}, None),
+                              ({'GITHUB_RUN_ATTEMPT': '2'}, None),
+                              ({'GITHUB_WORKFLOW_REF': 'FS-GG/FS.GG.Native.Qualification/.github/workflows/other.yml@refs/heads/main'}, None),
+                              ({}, {**self.job, 'runner_group_name': 'fsgg-native-qualification'}))
+        for number, (updates, job) in enumerate(cases):
+            self.env['STARTUP_EVIDENCE'] = str(self.root / ('refusal-' + str(number)))
+            with self.subTest(updates=updates, group=(job or {}).get('runner_group_name')), self.assertRaises(Exception):
+                self.produce(updates, job)
+        self.env['STARTUP_EVIDENCE'] = str(self.root / 'accepted')
+        accepted = self.produce({'FSGG_SOURCE_REVISION': 'a' * 40})
+        self.assertEqual((accepted['sourceRevision'], accepted['callerRevision']), ('a' * 40, CALLER))
+        self.assertEqual(accepted['providerJob']['runner_group_name'], 'Default')
+
 
     def test_runner_temp_context_is_step_scoped_and_propagates_only_accepted_path(self):
         text=WORKFLOW.read_text();job_header=text.split('    steps:',1)[0]
@@ -1014,7 +1065,7 @@ class SyntheticCrypto(unittest.TestCase):
         for name, value in [('RECIPIENT', certificate), ('RECIPIENT_PEM_SHA256', hashlib.sha256(certificate.read_bytes()).hexdigest()),
                             ('RECIPIENT_DER_SHA256', hashlib.sha256(der).hexdigest())]:
             change = patch.object(WRAPPER, name, value); change.start(); self.addCleanup(change.stop)
-        change = patch.dict(os.environ, {'HOST_JOB_MONOTONIC': str(time.monotonic()),'GITHUB_SHA':'b'*40})
+        change = patch.dict(os.environ, {'HOST_JOB_MONOTONIC': str(time.monotonic()),'FSGG_SOURCE_REVISION':'b'*40})
         change.start(); self.addCleanup(change.stop)
         install_clock(self.evidence)
         self.plain = self.root / 'candidate.oci.tar'

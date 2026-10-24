@@ -1,7 +1,16 @@
 name: BAR hosted full-image qualification
 
+# SOURCE OF TRUTH for the private caller repository FS-GG/FS.GG.Native.Qualification.
+# This file is NOT a workflow of the public FS-GG/FS.GG.Coordination repository: it lives
+# under deployment/ so Coordination can never queue it, and never targets the
+# self-hosted label. The private repository carries a byte-identical copy at
+# .github/workflows/bar-hosted-image-qualification.yml (MANIFEST.sha256 next to this
+# file pins both bytes) and the caller refuses a run whose copy differs from this file
+# at the pinned Coordination commit. Only a trusted dispatch on main of that private
+# repository reaches the ephemeral guest; fork pull requests are impossible there.
+#
 # One separately selected full1032 generation or fixed network prerequisite on
-# a fresh hosted VM. Prerequisite-only purpose never produces a BAR candidate. This fixed
+# a fresh disposable VM. Prerequisite-only purpose never produces a BAR candidate. This fixed
 # route acquires/builds the complete pinned BAR image, verifies its exported OCI
 # bytes/static ELF correspondence, and loads/readbacks only that archive. It does
 # not start spring-headless, invoke gameplay, publish plaintext image bytes,
@@ -24,6 +33,10 @@ on:
         required: true
         default: false
 
+      coordination_sha:
+        description: Exact 40-hex FS-GG/FS.GG.Coordination main commit whose source and helpers run
+        type: string
+        required: true
       selected_utc:
         description: Root original selection UTC (strict Z timestamp)
         type: string
@@ -37,6 +50,8 @@ on:
         type: string
         required: true
 
+# contents: read checks out the private caller; actions: read is required by the
+# first step's native job-record read. No other permission, no secret.
 permissions:
   contents: read
   actions: read
@@ -57,14 +72,14 @@ env:
 
 jobs:
   full-image:
-    if: ${{ (inputs.purpose == 'full-image' && inputs.full_image) || (inputs.purpose == 'network-prerequisite' && !inputs.full_image) }}
-    runs-on:
-      group: fsgg-native-qualification
-      labels: fsgg-native-linux-x64-v1
+    # A dispatch of any other ref or a re-run is skipped here and never takes the runner.
+    if: ${{ github.ref == 'refs/heads/main' && github.run_attempt == 1 && ((inputs.purpose == 'full-image' && inputs.full_image) || (inputs.purpose == 'network-prerequisite' && !inputs.full_image)) }}
+    runs-on: [self-hosted, linux, x64, fsgg-native-linux-x64-v1]
     # Includes provisioning and bounded transport; controller retains3600+120s.
     timeout-minutes: 90
     env:
       EVIDENCE: ${{ github.workspace }}/evidence
+      FSGG_SOURCE_REVISION: ${{ inputs.coordination_sha }}
       SELECTED_UTC: ${{ inputs.selected_utc }}
       LATEST_START_UTC: ${{ inputs.latest_start_utc }}
       OBSERVER_DEADLINE_UTC: ${{ inputs.observer_deadline_utc }}
@@ -87,7 +102,8 @@ jobs:
           if env.get('GITHUB_OUTPUT'):
               with open(env['GITHUB_OUTPUT'],'a') as stream:stream.write('startup-path='+str(stage)+'\n')
           record={'schema':'fsgg.bar-hosted-clock/1','operationId':env['OPERATION_ID'],
-                  'sourceRevision':env['GITHUB_SHA'],'workflowRef':env['GITHUB_WORKFLOW_REF'],
+                  'sourceRevision':env['FSGG_SOURCE_REVISION'],'callerRevision':env['GITHUB_SHA'],'callerRepository':env['GITHUB_REPOSITORY'],
+                  'workflowRef':env['GITHUB_WORKFLOW_REF'],
                   'purpose':'network-prerequisite' if env['QUALIFICATION_MODE']=='network-prerequisite' else 'full-image',
                   'bootId':None,
                   'firstUTC':utc.isoformat(timespec='microseconds').replace('+00:00','Z'),'firstMonotonic':mono,
@@ -106,13 +122,15 @@ jobs:
                   result=datetime.datetime.fromisoformat(value.replace('Z','+00:00')).timestamp()
                   need(math.isfinite(result),'finite UTC required');return result
               need(env['GITHUB_EVENT_NAME']=='workflow_dispatch' and env['GITHUB_REF']=='refs/heads/main' and env['GITHUB_RUN_ATTEMPT']=='1','fixed first dispatch required')
-              need(env['GITHUB_REPOSITORY']=='FS-GG/FS.GG.Coordination' and re.fullmatch(r'[0-9]+',env['GITHUB_RUN_ID']) is not None,'native repository/run differs')
-              need(env['GITHUB_WORKFLOW_REF']=='FS-GG/FS.GG.Coordination/.github/workflows/bar-hosted-image-qualification.yml@refs/heads/main','workflow source differs')
-              need(re.fullmatch(r'[0-9a-f]{40}',env['GITHUB_SHA']) is not None,'exact source SHA required')
+              need(env['GITHUB_REPOSITORY']=='FS-GG/FS.GG.Native.Qualification' and re.fullmatch(r'[0-9]+',env['GITHUB_RUN_ID']) is not None,'native repository/run differs')
+              need(env['GITHUB_WORKFLOW_REF']=='FS-GG/FS.GG.Native.Qualification/.github/workflows/bar-hosted-image-qualification.yml@refs/heads/main','workflow source differs')
+              need(re.fullmatch(r'[0-9a-f]{40}',env['GITHUB_SHA']) is not None,'exact caller SHA required')
+              need(re.fullmatch(r'[0-9a-f]{40}',env['FSGG_SOURCE_REVISION']) is not None,'exact Coordination source SHA required')
+              need(re.fullmatch(r'fsgg-q-[A-Za-z0-9][A-Za-z0-9-]{0,63}',env['RUNNER_NAME']) is not None,'ephemeral qualification runner name required')
               need(env['QUALIFICATION_MODE'] in ('qualify','network-prerequisite'),'fixed purpose required')
               selected,latest,observer=[parse(record['rootSelection'][k]) for k in ('selected_utc','latest_start_utc','observer_deadline_utc')]
               need(0<latest-selected<=300 and observer-selected==5700 and selected<=utc.timestamp()<=latest,'Root queue/observer window refused')
-              url='https://api.github.com/repos/FS-GG/FS.GG.Coordination/actions/runs/'+env['GITHUB_RUN_ID']+'/attempts/1/jobs?per_page=100'
+              url='https://api.github.com/repos/FS-GG/FS.GG.Native.Qualification/actions/runs/'+env['GITHUB_RUN_ID']+'/attempts/1/jobs?per_page=100'
               request=urllib.request.Request(url,headers={'Authorization':'Bearer '+env['GH_TOKEN'],'Accept':'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'})
               with urllib.request.urlopen(request,timeout=10) as response:payload=response.read(65537)
               need(len(payload)<=65536,'native jobs response exceeded bound')
@@ -126,7 +144,7 @@ jobs:
               need(job.get('status')=='in_progress','native job is not active')
               need(type(job.get('id')) is int and job['id']>0 and type(job.get('run_id')) is int,'native job IDs required')
               need(job['run_id']==int(env['GITHUB_RUN_ID']) and job['head_sha']==env['GITHUB_SHA'] and job['name']=='full-image' and job['runner_name']==env['RUNNER_NAME'],'native source/job/runner differs')
-              need(job.get('runner_group_name')=='fsgg-native-qualification','native runner group differs')
+              need(job.get('runner_group_name')=='Default' and job['runner_name'].startswith('fsgg-q-'),'native runner group/name differs')
               native=parse(job['started_at']);need(selected-1<=native<=utc.timestamp(),'native job birth/Root selection differs')
               record['providerJob']={k:job[k] for k in ('id','run_id','head_sha','name','runner_name','started_at','status','runner_group_name')}
               record['overallDeadlineMonotonic']=mono+min(native+5400,selected+5400)-utc.timestamp()
@@ -145,22 +163,39 @@ jobs:
               stream.write('HOST_JOB_STARTED='+str(int(utc.timestamp()))+'\nHOST_JOB_MONOTONIC='+str(mono)+'\nSTARTUP_EVIDENCE='+str(stage)+'\n')
           PY_CLOCK
 
-      - name: Check out the exact candidate without persisted credentials
+      - name: Check out the exact public Coordination source without persisted credentials
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         timeout-minutes: 5
         with:
-          ref: ${{ github.sha }}
+          repository: FS-GG/FS.GG.Coordination
+          ref: ${{ inputs.coordination_sha }}
           path: source
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Refuse unselected dedicated image before product or asset acquisition
+      - name: Check out this exact private caller without persisted credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        timeout-minutes: 2
+        with:
+          ref: ${{ github.sha }}
+          path: caller
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Refuse a changed caller or unselected dedicated image before product or asset acquisition
         id: profile
         shell: bash
         timeout-minutes: 2
         env:
           PREP_PROFILE_SCRIPT: |
             set -euo pipefail
+            # This caller must be the reviewed template at the pinned Coordination main commit.
+            test "$(git -C caller rev-parse HEAD)" = "$GITHUB_SHA"
+            test "$(git -C source rev-parse HEAD)" = "$FSGG_SOURCE_REVISION"
+            git -C source merge-base --is-ancestor "$FSGG_SOURCE_REVISION" refs/remotes/origin/main
+            template=source/deployment/qualification-runner/native-qualification
+            cmp -- "$template/bar-hosted-image-qualification.yml" caller/.github/workflows/bar-hosted-image-qualification.yml
+            cmp -- "$template/README.md" caller/README.md
             test "$RUNNER_ENVIRONMENT" = self-hosted
             test "$GITHUB_EVENT_NAME" = workflow_dispatch
             test "$GITHUB_REF" = refs/heads/main
@@ -171,7 +206,7 @@ jobs:
           install -d -m 0700 "$EVIDENCE"
           cp -- "$STARTUP_EVIDENCE/clock.json" "$EVIDENCE/original-clock.json"
           prep_env=()
-          for name in GITHUB_SHA GITHUB_EVENT_NAME GITHUB_REF GITHUB_RUN_ATTEMPT GITHUB_REPOSITORY GITHUB_WORKSPACE \
+          for name in FSGG_SOURCE_REVISION GITHUB_SHA GITHUB_EVENT_NAME GITHUB_REF GITHUB_RUN_ATTEMPT GITHUB_REPOSITORY GITHUB_WORKSPACE \
               GITHUB_RUN_ID GITHUB_WORKFLOW_REF OPERATION_ID HOST_JOB_STARTED HOST_JOB_MONOTONIC EVIDENCE STARTUP_EVIDENCE RUNNER_TEMP ImageOS ImageVersion RUNNER_ENVIRONMENT; do
             if [[ -v "$name" ]]; then prep_env+=("$name=${!name}"); fi
           done
@@ -196,9 +231,9 @@ jobs:
           PREP_CONTROLS_SCRIPT: |
             set -euo pipefail
             test "$GITHUB_REF" = refs/heads/main
-            python3 -I -B source/eng/bar_hosted_operation.py canonicalize-checkouts --operation-id "$OPERATION_ID" --source-revision "$GITHUB_SHA" \
+            python3 -I -B source/eng/bar_hosted_operation.py canonicalize-checkouts --operation-id "$OPERATION_ID" --source-revision "$FSGG_SOURCE_REVISION" \
               > "$EVIDENCE/checkout-config-receipt.json"
-            test "$(git -C source rev-parse HEAD)" = "$GITHUB_SHA"
+            test "$(git -C source rev-parse HEAD)" = "$FSGG_SOURCE_REVISION"
             test "$(git -C product rev-parse HEAD)" = 4ddd070650e3131916a13bb2c5e75f99376e1c3a
             test "$(git -C product rev-parse 'HEAD^{tree}')" = f6e4dc108bf065cd2fd44d48e0faf8807e1b8e3c
             test ! -e source/.git/shallow && test ! -e product/.git/shallow
@@ -216,7 +251,7 @@ jobs:
           mkdir -m 0700 "$EVIDENCE"
           cp -- "$STARTUP_EVIDENCE/clock.json" "$EVIDENCE/original-clock.json"
           prep_env=()
-          for name in GITHUB_SHA GITHUB_EVENT_NAME GITHUB_REF GITHUB_RUN_ATTEMPT GITHUB_REPOSITORY GITHUB_WORKSPACE \
+          for name in FSGG_SOURCE_REVISION GITHUB_SHA GITHUB_EVENT_NAME GITHUB_REF GITHUB_RUN_ATTEMPT GITHUB_REPOSITORY GITHUB_WORKSPACE \
               GITHUB_RUN_ID GITHUB_WORKFLOW_REF OPERATION_ID HOST_JOB_STARTED HOST_JOB_MONOTONIC EVIDENCE STARTUP_EVIDENCE RUNNER_TEMP ImageOS ImageVersion RUNNER_ENVIRONMENT; do
             if [[ -v "$name" ]]; then prep_env+=("$name=${!name}"); fi
           done
@@ -306,13 +341,13 @@ jobs:
             cp -a product/. "$VOLUME/allocation/context/"
             chmod 0700 "$VOLUME/allocation/context"
             test "$(git -C "$VOLUME/allocation/context" rev-parse HEAD)" = 4ddd070650e3131916a13bb2c5e75f99376e1c3a
-            echo "source.helperRevision=$GITHUB_SHA" | tee -a "$EVIDENCE/facts.env"
+            echo "source.helperRevision=$FSGG_SOURCE_REVISION" | tee -a "$EVIDENCE/facts.env"
             echo "source.helperTree=$(git -C source rev-parse 'HEAD^{tree}')" | tee -a "$EVIDENCE/facts.env"
 
         run: |
           set -euo pipefail
           prep_env=()
-          for name in GITHUB_SHA GITHUB_EVENT_NAME GITHUB_REF GITHUB_RUN_ATTEMPT GITHUB_REPOSITORY GITHUB_WORKSPACE \
+          for name in FSGG_SOURCE_REVISION GITHUB_SHA GITHUB_EVENT_NAME GITHUB_REF GITHUB_RUN_ATTEMPT GITHUB_REPOSITORY GITHUB_WORKSPACE \
               GITHUB_RUN_ID GITHUB_WORKFLOW_REF OPERATION_ID HOST_JOB_STARTED HOST_JOB_MONOTONIC EVIDENCE STARTUP_EVIDENCE RUNNER_TEMP ImageOS ImageVersion RUNNER_ENVIRONMENT; do
             if [[ -v "$name" ]]; then prep_env+=("$name=${!name}"); fi
           done
@@ -335,7 +370,7 @@ jobs:
         run: |
           set -euo pipefail
           prep_env=()
-          for name in GITHUB_SHA GITHUB_EVENT_NAME GITHUB_REF GITHUB_RUN_ATTEMPT GITHUB_REPOSITORY GITHUB_WORKSPACE \
+          for name in FSGG_SOURCE_REVISION GITHUB_SHA GITHUB_EVENT_NAME GITHUB_REF GITHUB_RUN_ATTEMPT GITHUB_REPOSITORY GITHUB_WORKSPACE \
               GITHUB_RUN_ID GITHUB_WORKFLOW_REF OPERATION_ID HOST_JOB_STARTED HOST_JOB_MONOTONIC EVIDENCE STARTUP_EVIDENCE RUNNER_TEMP ImageOS ImageVersion RUNNER_ENVIRONMENT; do
             if [[ -v "$name" ]]; then prep_env+=("$name=${!name}"); fi
           done
@@ -393,7 +428,7 @@ jobs:
             sudo -n systemd-run --quiet --wait --pipe --collect --unit="fsgg-$OPERATION_ID" \
             -p Type=exec -p Delegate=yes -p TasksMax=4096 -p RuntimeMaxSec="$runtime" -p TimeoutStopSec=120 -p KillMode=control-group \
             --setenv=USERLAND="$USERLAND" --setenv=VOLUME="$VOLUME" --setenv=SOURCE="$GITHUB_WORKSPACE/source" \
-            --setenv=EVIDENCE="$EVIDENCE" --setenv=OPERATION_ID="$OPERATION_ID" --setenv=SOURCE_REVISION="$GITHUB_SHA" \
+            --setenv=EVIDENCE="$EVIDENCE" --setenv=OPERATION_ID="$OPERATION_ID" --setenv=SOURCE_REVISION="$FSGG_SOURCE_REVISION" \
             --setenv=QUALIFICATION_MODE="$QUALIFICATION_MODE" --setenv=HELPER_TREE="$(git -C source rev-parse 'HEAD^{tree}')" --setenv=HOST_JOB_STARTED="$HOST_JOB_STARTED" --setenv=HOST_JOB_MONOTONIC="$HOST_JOB_MONOTONIC" \
             /bin/bash "$EVIDENCE/unit-entry.sh" \
             > "$EVIDENCE/qualification-result.json" 2> "$EVIDENCE/qualification.stderr.log"
@@ -508,7 +543,7 @@ jobs:
           timeout --signal=TERM --kill-after=1 29 /bin/bash <<'BAR_SUMMARY'
           set -euo pipefail
           {
-            echo "operation=$OPERATION_ID source=$GITHUB_SHA"
+            echo "operation=$OPERATION_ID source=$FSGG_SOURCE_REVISION caller=$GITHUB_SHA"
             echo "admit=$ADMIT_OUTCOME qualify=$QUALIFY_OUTCOME receipt=$RECEIPT_OUTCOME"
             echo "candidateTransportPermitted=$CANDIDATE_PERMITTED"
             if [ "$QUALIFICATION_MODE" = network-prerequisite ]; then

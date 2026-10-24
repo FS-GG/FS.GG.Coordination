@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 # Source recipe only. Execute ONLY in the separately admitted disposable VM image build.
+# This is the BAKE step of the qualified-image layer: everything slow or network-dependent
+# (APT closure, runner dependencies, SDK, Go, runner archive) happens here, once, so that a
+# booted guest only needs `guest-boot.sh` and `run-jit-runner.sh` before the 300 s first-step
+# deadline. Nothing here is per-instance: no binding, UUID, runner name, token or JIT config.
 set -euo pipefail
 if [[ $# != 4 || "$1" != --apply ]]; then
   echo 'HELD: require --apply TARGET.json ACQUIRED-LOCK.json INPUT-DIRECTORY and separate Root image-build admission' >&2
@@ -19,6 +23,7 @@ python3 -I -B "$runner_source/eng/dedicated_qualification_runner.py" verify-imag
   --target "$runner_target" --approval /run/fsgg-image-build-selection.json --system-uuid "$runner_uuid"
 python3 -I -B "$runner_source/eng/dedicated_qualification_runner.py" validate-inputs \
   --target "$runner_target" --lock "$runner_lock" --inputs "$runner_inputs"
+# shellcheck source=/dev/null
 . /etc/os-release
 [[ $ID == ubuntu && $VERSION_ID == 26.10 ]]
 # Offline complete signed transaction. No moving repository, remote resolver or signature bypass.
@@ -27,7 +32,8 @@ runner_apt=(-o Dir::Etc::sourcelist="$runner_source/deployment/qualification-run
 apt-get "${runner_apt[@]}" update
 apt-get "${runner_apt[@]}" --assume-yes --no-install-recommends install \
   build-essential binutils libc6-dev pkg-config git curl ca-certificates python3 sudo \
-  uidmap libcap2-bin util-linux e2fsprogs jq docker.io apparmor apparmor-utils
+  uidmap libcap2-bin util-linux e2fsprogs jq docker.io apparmor apparmor-utils \
+  libicu78 libkrb5-3 zlib1g
 runner_inventory=$(mktemp)
 trap 'rm -f -- "$runner_inventory"' EXIT
 dpkg-query -W -f='${binary:Package}\t${Version}\n' | LC_ALL=C sort > "$runner_inventory"
@@ -48,10 +54,29 @@ getent group runner >/dev/null || groupadd --gid 1001 runner
 getent passwd runner >/dev/null || useradd --uid 1001 --gid runner --create-home --shell /bin/bash runner
 [[ $(id -u runner) == 1001 && $(id -g runner) == 1001 && $(getent passwd runner | cut -d: -f6) == /home/runner ]]
 chown -R runner:runner /opt/fsgg/actions-runner
+# The GitHub runner dependencies above replace installdependencies.sh (a live network step).
+# Install the reviewed layer scripts root-owned and read-only; the guest runs them at every boot.
+runner_layer=/opt/fsgg/qualification-layer
+install -d -m 0755 "$runner_layer/eng" "$runner_layer/deployment/qualification-runner"
+install -m 0755 "$runner_source/eng/dedicated_qualification_runner.py" "$runner_layer/eng/dedicated_qualification_runner.py"
+for runner_file in 90-fsgg-qualification.conf runner.sudoers; do
+  install -m 0644 "$runner_source/deployment/qualification-runner/$runner_file" "$runner_layer/deployment/qualification-runner/$runner_file"
+done
+for runner_file in guest-boot.sh run-jit-runner.sh; do
+  install -m 0755 "$runner_source/deployment/qualification-runner/$runner_file" "$runner_layer/deployment/qualification-runner/$runner_file"
+done
+(cd "$runner_layer" && find . -type f ! -name MANIFEST.sha256 -print0 | LC_ALL=C sort -z | xargs -0 sha256sum) > "$runner_layer/MANIFEST.sha256"
 visudo -cf "$runner_source/deployment/qualification-runner/runner.sudoers"
 install -m 0440 "$runner_source/deployment/qualification-runner/runner.sudoers" /etc/sudoers.d/fsgg-qualification-runner
 install -d -m 0755 /etc/fsgg-qualification-runner
 install -m 0644 "$runner_lock" /etc/fsgg-qualification-runner/acquired-input-lock.json
 # Image publication/native gates and provider instance bindings are separate operator effects.
 # Do NOT execute dotnet/go/catalog/browser/registration or weaken NoNewPrivileges here.
+# Read the baked layer back (nothing is executed from it). A refusal means the image must not be published.
+runner_status=0
+python3 -I -B "$runner_layer/eng/dedicated_qualification_runner.py" verify-guest --phase image || runner_status=$?
+if [[ $runner_status != 0 ]]; then
+  echo 'Image recipe applied but the baked layer readback REFUSED; do not publish this image.' >&2
+  exit "$runner_status"
+fi
 echo 'Image recipe applied; NOT qualified/published/registered. Retain new image/package/native ELF manifests and perform separate exact gates.'
