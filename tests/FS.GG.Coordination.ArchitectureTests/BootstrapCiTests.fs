@@ -1138,8 +1138,9 @@ let ``bootstrap control surface stays typed thin and bounded`` () =
         File.ReadAllText(Path.Combine(repositoryRoot, ".github/workflows/bootstrap-qualification.yml"))
 
     Assert.InRange(lineCount ".github/workflows/bootstrap-qualification.yml", 1, 620)
-    // The 29-project census adds exactly two entries to the bounded qualification plan.
-    Assert.InRange(lineCount "eng/bootstrap-qualification-plan.json", 1, 309)
+    // The 29-project census adds exactly two entries to the bounded qualification plan;
+    // the canonical accounting census adds its helper and three source-identity inputs.
+    Assert.InRange(lineCount "eng/bootstrap-qualification-plan.json", 1, 313)
     Assert.InRange(lineCount "eng/bootstrap-ci.fsx", 1, 26)
     Assert.InRange(lineCount "src/FS.GG.Coordination.Qualification.Contracts/BootstrapCi.fs", 1, 2500)
     Assert.InRange(lineCount "src/FS.GG.Coordination.Qualification.Contracts/QualificationReuse.fs", 1, 1500)
@@ -1149,7 +1150,9 @@ let ``bootstrap control surface stays typed thin and bounded`` () =
     // Callback source preparation, failure evidence retention and exact focused census add nine lines: 864 -> 873.
     // The original and forward Execution pair inert controls add one comment and two invocations: measured 873 -> 876.
     // The managed-group owner controls add one invocation, consuming the spare line: 876 -> 877.
-    Assert.InRange(gateLines, 1, 877)
+    // The canonical accounting census adds the receipt-guard invocation, the helper self-test and
+    // one derived-census line to the aggregate gate: measured 877 -> 880.
+    Assert.InRange(gateLines, 1, 880)
     // Producer invocations add eight distinct lines; the compiler subject guard adds one.
     // Focused host-allocation tests add three: start time, test invocation, and fresh TRX census.
     // Focused finite-custody tests add three more distinct lines: measured 643 -> 646.
@@ -1157,7 +1160,8 @@ let ``bootstrap control surface stays typed thin and bounded`` () =
     // Callback pairing adds nine distinct guarded lines: 649 -> 658.
     // The same three lines are distinct: 658 -> 661.
     // The managed-group owner invocation is one more distinct line: 661 -> 662.
-    Assert.InRange(uniqueGateLines, 1, 662)
+    // The same accounting census adds four distinct lines: measured 662 -> 666.
+    Assert.InRange(uniqueGateLines, 1, 666)
     // One shared source orchestrator has its own bound; retain both legacy caps.
     Assert.InRange(lineCount "eng/bootstrap-gates/source-preflight.sh", 1, 160)
     Assert.DoesNotContain("requiredRunFragments", core)

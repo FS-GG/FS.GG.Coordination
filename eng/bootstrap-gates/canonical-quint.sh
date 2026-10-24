@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
-python3 -I -S -B eng/check-canonical-quint-accounting.py --self-test
 dotnet restore src/FS.GG.Coordination.Qualification.Contracts/FS.GG.Coordination.Qualification.Contracts.fsproj --locked-mode
+python3 -I -S -B eng/check-canonical-quint-accounting.py --self-test
 if [[ -r /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]]; then
   sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
 fi
