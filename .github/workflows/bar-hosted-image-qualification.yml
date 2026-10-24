@@ -24,8 +24,22 @@ on:
         required: true
         default: false
 
+      selected_utc:
+        description: Root original selection UTC (strict Z timestamp)
+        type: string
+        required: true
+      latest_start_utc:
+        description: Root latest first-step UTC within300s of selection
+        type: string
+        required: true
+      observer_deadline_utc:
+        description: Root observer-only deadline exactly5700s after selection
+        type: string
+        required: true
+
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: bar-hosted-full-image-qualification
@@ -49,19 +63,84 @@ jobs:
     timeout-minutes: 90
     env:
       EVIDENCE: ${{ github.workspace }}/evidence
+      SELECTED_UTC: ${{ inputs.selected_utc }}
+      LATEST_START_UTC: ${{ inputs.latest_start_utc }}
+      OBSERVER_DEADLINE_UTC: ${{ inputs.observer_deadline_utc }}
       QUALIFICATION_MODE: ${{ inputs.purpose == 'network-prerequisite' && 'network-prerequisite' || 'qualify' }}
       OPERATION_ID: bar-image-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - name: Retain the original outer job clock
+        id: clock
         shell: bash
+        env:
+          STARTUP_EVIDENCE: ${{ runner.temp }}/bar-image-${{ github.run_id }}-${{ github.run_attempt }}-startup
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          test "$GITHUB_EVENT_NAME" = workflow_dispatch
-          test "$GITHUB_REF" = refs/heads/main
-          test "$GITHUB_RUN_ATTEMPT" = 1
-          case "$QUALIFICATION_MODE" in qualify|network-prerequisite) ;; *) exit 2 ;; esac
-          echo "HOST_JOB_STARTED=$(date +%s)" >> "$GITHUB_ENV"
-          echo "HOST_JOB_MONOTONIC=$(python3 -I -B -c 'import time; print(time.monotonic())')" >> "$GITHUB_ENV"
+          python3 -I -B <<'PY_CLOCK'
+          import datetime, json, math, os, re, signal, time, urllib.request
+          from pathlib import Path
+          mono=time.monotonic();utc=datetime.datetime.now(datetime.timezone.utc)
+          env=os.environ;stage=Path(env['STARTUP_EVIDENCE']);stage.mkdir(mode=0o700)
+          if env.get('GITHUB_OUTPUT'):
+              with open(env['GITHUB_OUTPUT'],'a') as stream:stream.write('startup-path='+str(stage)+'\n')
+          record={'schema':'fsgg.bar-hosted-clock/1','operationId':env['OPERATION_ID'],
+                  'sourceRevision':env['GITHUB_SHA'],'workflowRef':env['GITHUB_WORKFLOW_REF'],
+                  'purpose':'network-prerequisite' if env['QUALIFICATION_MODE']=='network-prerequisite' else 'full-image',
+                  'bootId':None,
+                  'firstUTC':utc.isoformat(timespec='microseconds').replace('+00:00','Z'),'firstMonotonic':mono,
+                  'rootSelection':{k:env.get(k.upper(),'')[:64] for k in ('selected_utc','latest_start_utc','observer_deadline_utc')},
+                  'verdict':'refused','firstRefusal':None,'utcTrust':'Root/provider/runner UTC; skew not independently authenticated'}
+          failure=None
+          def alarm_timeout(signum,frame):raise TimeoutError('original first-step/API whole15s deadline exhausted')
+          old_alarm=signal.signal(signal.SIGALRM,alarm_timeout)
+          signal.setitimer(signal.ITIMER_REAL,15)
+          try:
+              record['bootId']=Path('/proc/sys/kernel/random/boot_id').read_text().strip()
+              def need(value,message):
+                  if not value:raise ValueError(message)
+              def parse(value):
+                  need(bool(re.fullmatch(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?Z',value)),'strict Root UTC required')
+                  result=datetime.datetime.fromisoformat(value.replace('Z','+00:00')).timestamp()
+                  need(math.isfinite(result),'finite UTC required');return result
+              need(env['GITHUB_EVENT_NAME']=='workflow_dispatch' and env['GITHUB_REF']=='refs/heads/main' and env['GITHUB_RUN_ATTEMPT']=='1','fixed first dispatch required')
+              need(env['GITHUB_REPOSITORY']=='FS-GG/FS.GG.Coordination' and re.fullmatch(r'[0-9]+',env['GITHUB_RUN_ID']) is not None,'native repository/run differs')
+              need(env['GITHUB_WORKFLOW_REF']=='FS-GG/FS.GG.Coordination/.github/workflows/bar-hosted-image-qualification.yml@refs/heads/main','workflow source differs')
+              need(re.fullmatch(r'[0-9a-f]{40}',env['GITHUB_SHA']) is not None,'exact source SHA required')
+              need(env['QUALIFICATION_MODE'] in ('qualify','network-prerequisite'),'fixed purpose required')
+              selected,latest,observer=[parse(record['rootSelection'][k]) for k in ('selected_utc','latest_start_utc','observer_deadline_utc')]
+              need(0<latest-selected<=300 and observer-selected==5700 and selected<=utc.timestamp()<=latest,'Root queue/observer window refused')
+              url='https://api.github.com/repos/FS-GG/FS.GG.Coordination/actions/runs/'+env['GITHUB_RUN_ID']+'/attempts/1/jobs?per_page=100'
+              request=urllib.request.Request(url,headers={'Authorization':'Bearer '+env['GH_TOKEN'],'Accept':'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'})
+              with urllib.request.urlopen(request,timeout=10) as response:payload=response.read(65537)
+              need(len(payload)<=65536,'native jobs response exceeded bound')
+              def unique(pairs):
+                  result={}
+                  for key,value in pairs:
+                      need(key not in result,'duplicate native response property');result[key]=value
+                  return result
+              jobs=json.loads(payload,object_pairs_hook=unique)['jobs'];need(isinstance(jobs,list) and len(jobs)==1,'one native job required')
+              job=jobs[0]
+              need(job.get('status')=='in_progress','native job is not active')
+              need(type(job.get('id')) is int and job['id']>0 and type(job.get('run_id')) is int,'native job IDs required')
+              need(job['run_id']==int(env['GITHUB_RUN_ID']) and job['head_sha']==env['GITHUB_SHA'] and job['name']=='full-image' and job['runner_name']==env['RUNNER_NAME'],'native source/job/runner differs')
+              native=parse(job['started_at']);need(selected-1<=native<=utc.timestamp(),'native job birth/Root selection differs')
+              record['providerJob']={k:job[k] for k in ('id','run_id','head_sha','name','runner_name','started_at','status')}
+              record['overallDeadlineMonotonic']=mono+min(native+5400,selected+5400)-utc.timestamp()
+              need(record['overallDeadlineMonotonic']-time.monotonic()>=600+1200+30,'original checkout/transport aperture unavailable')
+              record['verdict']='accepted'
+          except Exception as error:
+              failure=error;record['firstRefusal']=type(error).__name__+': '+str(error)[:1024]
+          finally:
+              signal.setitimer(signal.ITIMER_REAL,0);signal.signal(signal.SIGALRM,old_alarm)
+          data=(json.dumps(record,allow_nan=False)+'\n').encode()
+          if len(data)>16384:raise ValueError('startup clock bound exceeded')
+          fd=os.open(stage/'clock.json',os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)
+          with os.fdopen(fd,'wb') as stream:stream.write(data)
+          if failure is not None:raise failure
+          with open(env['GITHUB_ENV'],'a') as stream:
+              stream.write('HOST_JOB_STARTED='+str(int(utc.timestamp()))+'\nHOST_JOB_MONOTONIC='+str(mono)+'\nSTARTUP_EVIDENCE='+str(stage)+'\n')
+          PY_CLOCK
 
       - name: Check out the exact candidate without persisted credentials
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -83,27 +162,41 @@ jobs:
           persist-credentials: false
 
       - name: Run the synthetic domain controls on the exact source
+        id: prep_controls
         shell: bash
+        timeout-minutes: 5
+        env:
+          PREP_CONTROLS_SCRIPT: |
+            set -euo pipefail
+            test "$GITHUB_REF" = refs/heads/main
+            python3 -I -B source/eng/bar_hosted_operation.py canonicalize-checkouts --operation-id "$OPERATION_ID" --source-revision "$GITHUB_SHA" \
+              > "$EVIDENCE/checkout-config-receipt.json"
+            test "$(git -C source rev-parse HEAD)" = "$GITHUB_SHA"
+            test "$(git -C product rev-parse HEAD)" = 4ddd070650e3131916a13bb2c5e75f99376e1c3a
+            test "$(git -C product rev-parse 'HEAD^{tree}')" = f6e4dc108bf065cd2fd44d48e0faf8807e1b8e3c
+            test ! -e source/.git/shallow && test ! -e product/.git/shallow
+            test -z "$(git -C source status --porcelain --untracked-files=all --ignored)"
+            test -z "$(git -C product status --porcelain --untracked-files=all --ignored)"
+            # Source copies are provisioned before loop sizing, with a2GiB cap.
+            test "$(du -sb source product | awk '{sum += $1} END {print sum}')" -le 2147483648
+            python3 -I -B source/tests/portable-workspace/image/test_bar_hosted_operation.py
+            python3 -I -B source/tests/portable-workspace/image/test_bar_hosted_domain.py
+            python3 -I -B source/eng/bar_hosted_operation.py seal-transport --operation-id "$OPERATION_ID" \
+              > "$EVIDENCE/crypto-seal-result.json"
         run: |
           set -euo pipefail
-          test "$GITHUB_REF" = refs/heads/main
           mkdir -m 0700 "$EVIDENCE"
-          python3 -I -B source/eng/bar_hosted_operation.py canonicalize-checkouts --operation-id "$OPERATION_ID" --source-revision "$GITHUB_SHA" \
-            > "$EVIDENCE/checkout-config-receipt.json"
-          test "$(git -C source rev-parse HEAD)" = "$GITHUB_SHA"
-          test "$(git -C product rev-parse HEAD)" = 4ddd070650e3131916a13bb2c5e75f99376e1c3a
-          test "$(git -C product rev-parse 'HEAD^{tree}')" = f6e4dc108bf065cd2fd44d48e0faf8807e1b8e3c
-          test ! -e source/.git/shallow && test ! -e product/.git/shallow
-          test -z "$(git -C source status --porcelain --untracked-files=all --ignored)"
-          test -z "$(git -C product status --porcelain --untracked-files=all --ignored)"
-          # Source copies are provisioned before loop sizing, with a2GiB cap.
-          test "$(du -sb source product | awk '{sum += $1} END {print sum}')" -le 2147483648
-          python3 -I -B source/tests/portable-workspace/image/test_bar_hosted_operation.py
-          python3 -I -B source/tests/portable-workspace/image/test_bar_hosted_domain.py
-          python3 -I -B source/eng/bar_hosted_operation.py seal-transport --operation-id "$OPERATION_ID" \
-            > "$EVIDENCE/crypto-seal-result.json"
+          cp -- "$STARTUP_EVIDENCE/clock.json" "$EVIDENCE/original-clock.json"
+          prep_env=()
+          for name in GITHUB_SHA GITHUB_EVENT_NAME GITHUB_REF GITHUB_RUN_ATTEMPT GITHUB_REPOSITORY GITHUB_WORKSPACE \
+              GITHUB_RUN_ID GITHUB_WORKFLOW_REF OPERATION_ID HOST_JOB_STARTED HOST_JOB_MONOTONIC EVIDENCE STARTUP_EVIDENCE RUNNER_TEMP ImageOS ImageVersion RUNNER_ENVIRONMENT; do
+            if [[ -v "$name" ]]; then prep_env+=("$name=${!name}"); fi
+          done
+          sudo -n env "${prep_env[@]}" /usr/bin/python3 -I -B source/eng/bar_hosted_operation.py prep-run \
+            --phase controls --operation-id "$OPERATION_ID"
 
       - name: Build the pinned daemonless Arch userland
+        id: prep_userland
         timeout-minutes: 8
         shell: bash
         env:
@@ -136,80 +229,98 @@ jobs:
             echo "userland.buildah=$(buildah --version)"
             echo "userland.podman=$(podman --version)"
             echo "userland.packages=$(pacman -Q buildah podman crun conmon python shadow | tr '\n' ' ')"
-        run: |
-          set -euo pipefail
-          sudo docker pull --quiet "$ARCH_IMAGE"
-          container=$(sudo docker create "$ARCH_IMAGE" /bin/true)
-          sudo mkdir -m 0755 "$USERLAND"
-          sudo docker export "$container" | sudo tar -x -C "$USERLAND" --numeric-owner
-          sudo docker rm "$container" >/dev/null
-          sudo rm -f "$USERLAND/etc/resolv.conf"
-          sudo cp -L /etc/resolv.conf "$USERLAND/etc/resolv.conf"
-          # Package installation runs in a private mount namespace that ends with it.
-          sudo -E unshare --mount --pid --fork /bin/bash -c '
+          PREP_USERLAND_SCRIPT: |
             set -euo pipefail
-            mount --make-rprivate /
-            mount -t proc proc "$USERLAND/proc"
-            mount --rbind /dev "$USERLAND/dev"
-            mount -t sysfs sysfs "$USERLAND/sys"
-            exec chroot "$USERLAND" /usr/bin/env -i PATH=/usr/bin ARCH_ARCHIVE_DATE="$ARCH_ARCHIVE_DATE" \
-              BUILDAH_PACKAGE="$BUILDAH_PACKAGE" BUILDAH_SHA256="$BUILDAH_SHA256" /bin/bash -c "$PACMAN_SCRIPT"' | tee "$EVIDENCE/facts.env"
-          echo "userland.image=$ARCH_IMAGE" | tee -a "$EVIDENCE/facts.env"
+            sudo docker pull --quiet "$ARCH_IMAGE"
+            container=$(sudo docker create "$ARCH_IMAGE" /bin/true)
+            sudo mkdir -m 0755 "$USERLAND"
+            sudo docker export "$container" | sudo tar -x -C "$USERLAND" --numeric-owner
+            sudo docker rm "$container" >/dev/null
+            sudo rm -f "$USERLAND/etc/resolv.conf"
+            sudo cp -L /etc/resolv.conf "$USERLAND/etc/resolv.conf"
+            # Package installation runs in a private mount namespace that ends with it.
+            sudo -E unshare --mount --pid --fork /bin/bash -c '
+              set -euo pipefail
+              mount --make-rprivate /
+              mount -t proc proc "$USERLAND/proc"
+              mount --rbind /dev "$USERLAND/dev"
+              mount -t sysfs sysfs "$USERLAND/sys"
+              exec chroot "$USERLAND" /usr/bin/env -i PATH=/usr/bin ARCH_ARCHIVE_DATE="$ARCH_ARCHIVE_DATE" \
+                BUILDAH_PACKAGE="$BUILDAH_PACKAGE" BUILDAH_SHA256="$BUILDAH_SHA256" /bin/bash -c "$PACMAN_SCRIPT"' | tee "$EVIDENCE/facts.env"
+            echo "userland.image=$ARCH_IMAGE" | tee -a "$EVIDENCE/facts.env"
+            set -euo pipefail
+            sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache \
+              /usr/local/share/boost /usr/local/share/powershell /usr/share/swift /usr/local/julia* \
+              /usr/local/share/chromium /opt/microsoft /opt/google /opt/az /usr/lib/jvm \
+              /usr/local/lib/node_modules /usr/share/miniconda /opt/pipx /usr/local/aws-cli
+            sudo docker system prune --all --force >/dev/null
+            sudo systemctl stop docker.socket docker.service containerd.service fstrim.timer fstrim.service
+            sudo swapoff -a
+            sudo rm -f /swapfile /mnt/swapfile
+            sudo sysctl -q -w kernel.apparmor_restrict_unprivileged_userns=0
+            echo "provision.rootAvailBytes=$(df -B1 --output=avail / | tail -n 1 | tr -d ' ')" | tee -a "$EVIDENCE/facts.env"
 
-      - name: Free preinstalled toolchains, stop container daemons and swap
-        shell: bash
+            set -euo pipefail
+            gib=$((1024 ** 3)); mib=$((1024 ** 2))
+            size=$(( ( $(df -B1 --output=avail / | tail -n 1 | tr -d ' ') - 6 * gib ) / mib * mib ))
+            sudo fallocate -l "$size" "$VOLUME_IMAGE"
+            loop=$(sudo losetup --find --show "$VOLUME_IMAGE")
+            sudo mkfs.ext4 -q -m 0 -E nodiscard,lazy_itable_init=0,lazy_journal_init=0 "$loop"
+            sudo mkdir -m 0755 "$VOLUME"
+            sudo mount -o nodiscard "$loop" "$VOLUME"
+            sudo install -d -m 0700 -o 1001 -g 1001 "$VOLUME/allocation" "$VOLUME/load-store" "$VOLUME/transport-candidate" "$VOLUME/transport-metadata"
+            echo "provision.volumeImageBytes=$size" | tee -a "$EVIDENCE/facts.env"
+            echo "provision.volumeAllocatedAfterMkfs=$(( $(stat -c %b "$VOLUME_IMAGE") * $(stat -c %B "$VOLUME_IMAGE") ))" \
+              | tee -a "$EVIDENCE/facts.env"
+            echo "provision.loop=$loop" | tee -a "$EVIDENCE/facts.env"
+            install -d -m 0700 "$VOLUME/allocation/context"
+            cp -a product/. "$VOLUME/allocation/context/"
+            chmod 0700 "$VOLUME/allocation/context"
+            test "$(git -C "$VOLUME/allocation/context" rev-parse HEAD)" = 4ddd070650e3131916a13bb2c5e75f99376e1c3a
+            echo "source.helperRevision=$GITHUB_SHA" | tee -a "$EVIDENCE/facts.env"
+            echo "source.helperTree=$(git -C source rev-parse 'HEAD^{tree}')" | tee -a "$EVIDENCE/facts.env"
+
         run: |
           set -euo pipefail
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache \
-            /usr/local/share/boost /usr/local/share/powershell /usr/share/swift /usr/local/julia* \
-            /usr/local/share/chromium /opt/microsoft /opt/google /opt/az /usr/lib/jvm \
-            /usr/local/lib/node_modules /usr/share/miniconda /opt/pipx /usr/local/aws-cli
-          sudo docker system prune --all --force >/dev/null
-          sudo systemctl stop docker.socket docker.service containerd.service fstrim.timer fstrim.service
-          sudo swapoff -a
-          sudo rm -f /swapfile /mnt/swapfile
-          sudo sysctl -q -w kernel.apparmor_restrict_unprivileged_userns=0
-          echo "provision.rootAvailBytes=$(df -B1 --output=avail / | tail -n 1 | tr -d ' ')" | tee -a "$EVIDENCE/facts.env"
-
-      - name: Provision the preallocated nodiscard operation volume
-        shell: bash
-        run: |
-          set -euo pipefail
-          gib=$((1024 ** 3)); mib=$((1024 ** 2))
-          size=$(( ( $(df -B1 --output=avail / | tail -n 1 | tr -d ' ') - 6 * gib ) / mib * mib ))
-          sudo fallocate -l "$size" "$VOLUME_IMAGE"
-          loop=$(sudo losetup --find --show "$VOLUME_IMAGE")
-          sudo mkfs.ext4 -q -m 0 -E nodiscard,lazy_itable_init=0,lazy_journal_init=0 "$loop"
-          sudo mkdir -m 0755 "$VOLUME"
-          sudo mount -o nodiscard "$loop" "$VOLUME"
-          sudo install -d -m 0700 -o 1001 -g 1001 "$VOLUME/allocation" "$VOLUME/load-store" "$VOLUME/transport-candidate" "$VOLUME/transport-metadata"
-          echo "provision.volumeImageBytes=$size" | tee -a "$EVIDENCE/facts.env"
-          echo "provision.volumeAllocatedAfterMkfs=$(( $(stat -c %b "$VOLUME_IMAGE") * $(stat -c %B "$VOLUME_IMAGE") ))" \
-            | tee -a "$EVIDENCE/facts.env"
-          echo "provision.loop=$loop" | tee -a "$EVIDENCE/facts.env"
-          install -d -m 0700 "$VOLUME/allocation/context"
-          cp -a product/. "$VOLUME/allocation/context/"
-          chmod 0700 "$VOLUME/allocation/context"
-          test "$(git -C "$VOLUME/allocation/context" rev-parse HEAD)" = 4ddd070650e3131916a13bb2c5e75f99376e1c3a
-          echo "source.helperRevision=$GITHUB_SHA" | tee -a "$EVIDENCE/facts.env"
-          echo "source.helperTree=$(git -C source rev-parse 'HEAD^{tree}')" | tee -a "$EVIDENCE/facts.env"
+          prep_env=()
+          for name in GITHUB_SHA GITHUB_EVENT_NAME GITHUB_REF GITHUB_RUN_ATTEMPT GITHUB_REPOSITORY GITHUB_WORKSPACE \
+              GITHUB_RUN_ID GITHUB_WORKFLOW_REF OPERATION_ID HOST_JOB_STARTED HOST_JOB_MONOTONIC EVIDENCE STARTUP_EVIDENCE RUNNER_TEMP ImageOS ImageVersion RUNNER_ENVIRONMENT; do
+            if [[ -v "$name" ]]; then prep_env+=("$name=${!name}"); fi
+          done
+          sudo -n env "${prep_env[@]}" /usr/bin/python3 -I -B source/eng/bar_hosted_operation.py prep-run \
+            --phase userland --operation-id "$OPERATION_ID"
 
       - name: Admit the hosted domain as root-produced evidence
         id: admit
         shell: bash
+        timeout-minutes: 5
+        env:
+          PREP_ADMIT_SCRIPT: |
+            set -euo pipefail
+            sudo env ImageOS="$ImageOS" ImageVersion="$ImageVersion" RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" \
+              python3 -I source/eng/bar_hosted_domain.py admit \
+              --allocation "$VOLUME/allocation" --load-store "$VOLUME/load-store" \
+              --backing-image "$VOLUME_IMAGE" --userland "$USERLAND" \
+              --evidence "$EVIDENCE/domain.json" --owner-uid "$(id -u)" --owner-gid "$(id -g)" \
+              | tee "$EVIDENCE/admit-result.json"
         run: |
           set -euo pipefail
-          sudo env ImageOS="$ImageOS" ImageVersion="$ImageVersion" RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" \
-            python3 -I source/eng/bar_hosted_domain.py admit \
-            --allocation "$VOLUME/allocation" --load-store "$VOLUME/load-store" \
-            --backing-image "$VOLUME_IMAGE" --userland "$USERLAND" \
-            --evidence "$EVIDENCE/domain.json" --owner-uid "$(id -u)" --owner-gid "$(id -g)" \
-            | tee "$EVIDENCE/admit-result.json"
+          prep_env=()
+          for name in GITHUB_SHA GITHUB_EVENT_NAME GITHUB_REF GITHUB_RUN_ATTEMPT GITHUB_REPOSITORY GITHUB_WORKSPACE \
+              GITHUB_RUN_ID GITHUB_WORKFLOW_REF OPERATION_ID HOST_JOB_STARTED HOST_JOB_MONOTONIC EVIDENCE STARTUP_EVIDENCE RUNNER_TEMP ImageOS ImageVersion RUNNER_ENVIRONMENT; do
+            if [[ -v "$name" ]]; then prep_env+=("$name=${!name}"); fi
+          done
+          sudo -n env "${prep_env[@]}" /usr/bin/python3 -I -B source/eng/bar_hosted_operation.py prep-run \
+            --phase admit --operation-id "$OPERATION_ID"
 
       - name: Qualify one complete BAR image in the delegated Arch userland
         id: qualify
         shell: bash
         env:
+          UNIT_ENTRY_SCRIPT: |
+            set -euo pipefail
+            python3 -I -B "$SOURCE/eng/bar_hosted_operation.py" unit-enter --operation-id "$OPERATION_ID" > "$EVIDENCE/unit-clock-result.json"
+            exec /usr/bin/unshare --mount --cgroup --pid --fork /bin/bash "$EVIDENCE/enter-userland.sh"
           ENTER_SCRIPT: |
             set -euo pipefail
             mount --make-rprivate /
@@ -244,15 +355,18 @@ jobs:
         run: |
           set -euo pipefail
           printf '%s\n' "$ENTER_SCRIPT" > "$EVIDENCE/enter-userland.sh"
+          printf '%s\n' "$UNIT_ENTRY_SCRIPT" > "$EVIDENCE/unit-entry.sh"
+          runtime=$(python3 -I -B source/eng/bar_hosted_operation.py unit-budget --operation-id "$OPERATION_ID")
+          case "$runtime" in ''|*[!0-9]*) exit 2 ;; esac
           if
             # The runner owns/opens these evidence files; only the unit is elevated.
             # shellcheck disable=SC2024
             sudo -n systemd-run --quiet --wait --pipe --collect --unit="fsgg-$OPERATION_ID" \
-            -p Delegate=yes -p TasksMax=4096 -p RuntimeMaxSec=3900 -p TimeoutStopSec=120 -p KillMode=control-group \
+            -p Type=exec -p Delegate=yes -p TasksMax=4096 -p RuntimeMaxSec="$runtime" -p TimeoutStopSec=120 -p KillMode=control-group \
             --setenv=USERLAND="$USERLAND" --setenv=VOLUME="$VOLUME" --setenv=SOURCE="$GITHUB_WORKSPACE/source" \
             --setenv=EVIDENCE="$EVIDENCE" --setenv=OPERATION_ID="$OPERATION_ID" --setenv=SOURCE_REVISION="$GITHUB_SHA" \
             --setenv=QUALIFICATION_MODE="$QUALIFICATION_MODE" --setenv=HELPER_TREE="$(git -C source rev-parse 'HEAD^{tree}')" --setenv=HOST_JOB_STARTED="$HOST_JOB_STARTED" --setenv=HOST_JOB_MONOTONIC="$HOST_JOB_MONOTONIC" \
-            /usr/bin/unshare --mount --cgroup --pid --fork /bin/bash "$EVIDENCE/enter-userland.sh" \
+            /bin/bash "$EVIDENCE/unit-entry.sh" \
             > "$EVIDENCE/qualification-result.json" 2> "$EVIDENCE/qualification.stderr.log"
           then
             :
@@ -267,9 +381,28 @@ jobs:
         if: always()
         timeout-minutes: 9
         shell: bash
+        env:
+          STARTUP_CAPTURE_PATH: ${{ steps.clock.outputs.startup-path }}
+          CONTROLS_OUTCOME: ${{ steps.prep_controls.outcome }}
+          USERLAND_OUTCOME: ${{ steps.prep_userland.outcome }}
+          CLOCK_OUTCOME: ${{ steps.clock.outcome }}
+          ADMIT_OUTCOME: ${{ steps.admit.outcome }}
+          QUALIFY_OUTCOME: ${{ steps.qualify.outcome }}
         run: |
           set -euo pipefail
           mkdir -p "$EVIDENCE"
+          # Always retain a bounded source-independent outcome, even before checkout.
+          if [ -n "${STARTUP_CAPTURE_PATH:-}" ] && [ -d "$STARTUP_CAPTURE_PATH" ]; then
+            if python3 -I -B - <<'PY_STARTUP'
+          import json,os
+          from pathlib import Path
+          value={k:os.environ.get(k,'Unknown') for k in ('CLOCK_OUTCOME','CONTROLS_OUTCOME','USERLAND_OUTCOME','ADMIT_OUTCOME','QUALIFY_OUTCOME')}
+          path=Path(os.environ['STARTUP_CAPTURE_PATH'])/'outcomes.json'
+          fd=os.open(path,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)
+          with os.fdopen(fd,'w') as stream:stream.write(json.dumps(value)+'\n')
+          PY_STARTUP
+            then :; else printf '%s\n' 'startup outcome capture Unknown' >&2; fi
+          fi
           # Optional diagnostics share this9-minute aperture but cannot skip
           # canonical primary receipt or poison its evidence inventory.
           security_stage=()
@@ -307,12 +440,12 @@ jobs:
 
       - name: Retain metadata and original command streams
         id: metadata
-        if: ${{ always() && steps.receipt.outcome == 'success' }}
+        if: always()
         timeout-minutes: 1
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: bar-image-metadata-${{ github.run_id }}-${{ github.run_attempt }}
-          path: /fsgg-bar/transport-metadata/${{ env.OPERATION_ID }}
+          path: ${{ steps.receipt.outcome == 'success' && format('/fsgg-bar/transport-metadata/{0}', env.OPERATION_ID) || steps.clock.outputs.startup-path || '/nonexistent/fsgg-bar-startup-refused' }}
           include-hidden-files: true
           if-no-files-found: warn
           retention-days: 30
@@ -342,6 +475,7 @@ jobs:
           METADATA_OUTCOME: ${{ steps.metadata.outcome }}
           CANDIDATE_OUTCOME: ${{ steps.candidate.outcome }}
         run: |
+          timeout --signal=TERM --kill-after=1 29 /bin/bash <<'BAR_SUMMARY'
           set -euo pipefail
           {
             echo "operation=$OPERATION_ID source=$GITHUB_SHA"
@@ -362,3 +496,4 @@ jobs:
           else
             test "$CANDIDATE_PERMITTED" = true && test "$CANDIDATE_OUTCOME" = success
           fi
+          BAR_SUMMARY

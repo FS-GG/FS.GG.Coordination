@@ -37,6 +37,12 @@ HELPER_FILES = frozenset(('eng/portable-workspace-image.py', 'eng/portable_works
                           'eng/portable_workspace_sc2.py'))
 BASE_IMAGE = 'docker.io/library/ubuntu@sha256:f610ab94648195aa356059f5b41d6085c9d4d903c072430cdd1af7bdb646106b'
 WORK_SECONDS, RETIRE_SECONDS = shared.WORK_SECONDS, shared.RETIRE_SECONDS
+PREREQUISITE_WORK_SECONDS = 300
+
+def work_seconds(purpose):
+    require(purpose in ('full-image','network-prerequisite'),'closed purpose required')
+    return WORK_SECONDS if purpose=='full-image' else PREREQUISITE_WORK_SECONDS
+
 MAX_JSON_BYTES, LOG_BYTES = shared.MAX_JSON_BYTES, shared.LOG_BYTES
 SUPPORT_LIBRARIES, SUPPORT_EXECUTABLES = shared.SUPPORT_LIBRARIES, shared.SUPPORT_EXECUTABLES
 fields, text, number = shared.fields, shared.text, shared.number
@@ -147,7 +153,7 @@ def selected_input(args):
     fields(selection['clock'], 'bootId start workEnd totalEnd')
     text(selection['clock']['bootId'], r'[0-9a-f-]{36}')
     start, work, total = [number(selection['clock'][key]) for key in ('start', 'workEnd', 'totalEnd')]
-    require(work == start + WORK_SECONDS and total == work + RETIRE_SECONDS, 'original lifetime mismatch')
+    require(work == start + work_seconds(selection['network']['purpose']) and total == work + RETIRE_SECONDS, 'original purpose lifetime mismatch')
     # These references bind the root-selected determining evidence. They cannot
     # assert authority or replace fresh adjacent native admission observations.
     fields(selection['admission'], 'topology resourceDisposition security' + (' domain' if hosted else ''))

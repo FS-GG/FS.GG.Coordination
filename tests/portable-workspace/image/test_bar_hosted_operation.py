@@ -36,6 +36,33 @@ OPERATION = 'bar-image-123-1'
 GIB = 1024**3
 
 
+def install_clock(evidence,purpose='full-image',revision='b'*40):
+    import datetime
+    now=time.monotonic();first=now-1
+    utc=datetime.datetime.now(datetime.timezone.utc)-datetime.timedelta(seconds=1)
+    text=lambda date:date.isoformat(timespec='microseconds').replace('+00:00','Z')
+    clock={'schema':'fsgg.bar-hosted-clock/1','verdict':'accepted','firstRefusal':None,'operationId':OPERATION,
+           'sourceRevision':revision,'workflowRef':WRAPPER.WORKFLOW_REF,'purpose':purpose,
+           'bootId':Path('/proc/sys/kernel/random/boot_id').read_text().strip(),'firstUTC':text(utc),'firstMonotonic':first,
+           'rootSelection':{'selected_utc':text(utc),'latest_start_utc':text(utc+datetime.timedelta(seconds=300)),
+                            'observer_deadline_utc':text(utc+datetime.timedelta(seconds=5700))},
+           'providerJob':{'id':7,'run_id':123,'head_sha':revision,'name':'full-image','runner_name':'fixture','status':'in_progress','started_at':text(utc)},
+           'overallDeadlineMonotonic':first+5400}
+    def write(name,value):
+        path=evidence/name;path.write_bytes(WRAPPER.canonical(value));path.chmod(0o600)
+    write('original-clock.json',clock);pin=WRAPPER.digest_file(evidence/'original-clock.json',16384)
+    request={'operationId':OPERATION,'clockSha256':pin['sha256'],'bootId':clock['bootId'],'purpose':purpose,
+             'requestedMonotonic':now-0.2,'runtimeMaxSeconds':3900,'runtimeLimitMonotonic':first+5400-1350}
+    write('unit-request.json',request)
+    write('unit-admission.json',{'operationId':OPERATION,'clockSha256':pin['sha256'],
+          'requestSha256':WRAPPER.digest_file(evidence/'unit-request.json',1048576)['sha256'],'bootId':clock['bootId'],
+          'purpose':purpose,'activeMonotonic':now-0.1,'runtimeDeadlineMonotonic':now-0.1+3900,'properties':{}})
+    seal=evidence/'transport-seal.json'
+    if seal.exists():
+        value=json.loads(seal.read_text());value.update(outerStartMonotonic=first,outerDeadlineMonotonic=first+5400,clockSha256=pin['sha256']);write('transport-seal.json',value)
+    return clock
+
+
 def literal_block(text, key):
     rows = text.splitlines(keepends=True)
     start = next(i for i, row in enumerate(rows) if row.strip() == key + ': |')
@@ -190,7 +217,7 @@ class Preparation(unittest.TestCase):
             change = patch.object(target, name, value)
             change.start(); self.addCleanup(change.stop)
         change = patch.dict(os.environ, {'HELPER_TREE': 'a' * 40, 'HOST_JOB_STARTED': str(int(time.time())),
-                                        'HOST_JOB_MONOTONIC': str(time.monotonic())})
+                                        'HOST_JOB_MONOTONIC': str(time.monotonic()),'GITHUB_SHA':'b'*40})
         change.start(); self.addCleanup(change.stop)
         device = BAR.shared.device_text(self.allocation) if hasattr(BAR.shared, 'device_text') else None
         dev = self.allocation.stat().st_dev
@@ -214,6 +241,7 @@ class Preparation(unittest.TestCase):
             'operationId': OPERATION, 'bootId': self.domain['bootId'], 'outerStartMonotonic': start,
             'outerDeadlineMonotonic': start + WRAPPER.OUTER_SECONDS,
             'recipientDerSha256': WRAPPER.RECIPIENT_DER_SHA256})
+        install_clock(self.evidence)
 
     def write_domain(self):
         path = self.evidence / 'domain.json'
@@ -240,13 +268,14 @@ class Preparation(unittest.TestCase):
             self.prepare()
 
     def test_fixed_prerequisite_purpose_uses_the_same_managed_preflight(self):
+        install_clock(self.evidence,'network-prerequisite')
         selection, target, digest = WRAPPER.prepare(OPERATION, 'b' * 40, source=ROOT,
             allocation=self.allocation, evidence=self.evidence, home=self.home, bar=BAR,
             purpose='network-prerequisite')
         argv = WRAPPER.controller_argv(selection, target, digest, source=ROOT, allocation=self.allocation)
         self.assertEqual(argv[4], 'preflight')
         self.assertEqual(selection['network']['purpose'], 'network-prerequisite')
-        self.assertEqual(selection['clock']['totalEnd'] - selection['clock']['start'], 3720)
+        self.assertEqual(selection['clock']['totalEnd'] - selection['clock']['start'], 420)
         self.assertNotIn('qualify', argv)
 
     def test_bad_source_domain_stores_and_original_clock_refuse_before_exec(self):
@@ -266,7 +295,7 @@ class Preparation(unittest.TestCase):
                         path.mkdir(parents=True, mode=0o700); (path / 'occupied').write_text('probe metadata')
                     elif case == 'consumed':
                         (fixture.allocation / 'state' / OPERATION).mkdir(parents=True, mode=0o700)
-                    elif case == 'expired-outer': os.environ['HOST_JOB_MONOTONIC'] = str(time.monotonic() - 500)
+                    elif case == 'expired-outer': (fixture.evidence/'original-clock.json').unlink()
                     elif case == 'bad-tree': os.environ['HELPER_TREE'] = 'missing'
                     elif case == 'missing-support': Path(fixture.native['builder']).unlink()
                     fixture.write_domain()
@@ -324,6 +353,7 @@ class Transport(unittest.TestCase):
         self.candidate.write_bytes(b'authored inert archive bytes; no OCI image or product')
         self.selection = {'network': {'purpose': 'full-image'}, 'helper': {'revision': 'a' * 40}, 'product': {'revision': WRAPPER.PRODUCT_REVISION}, 'clock': {'start': 1}}
         WRAPPER.write_new(self.evidence / 'transport-seal.json', {'synthetic': True, 'outerDeadlineMonotonic': time.monotonic() + 3600})
+        install_clock(self.evidence)
         WRAPPER.write_new(self.evidence / 'topology.json', {
             'transportSealSha256': WRAPPER.digest_file(self.evidence / 'transport-seal.json', 1024**2)['sha256']})
         self.selection['admission'] = {'topology': {'sha256': WRAPPER.digest_file(self.evidence / 'topology.json', 1024**2)['sha256']}}
@@ -374,6 +404,7 @@ class Transport(unittest.TestCase):
     def test_prerequisite_success_is_metadata_only_and_never_encrypts(self):
         self.candidate.unlink()
         self.selection['network']['purpose'] = 'network-prerequisite'
+        install_clock(self.evidence,'network-prerequisite')
         selected = self.evidence / 'operation-input.json'; selected.write_bytes(WRAPPER.canonical(self.selection))
         result = {'profile': 'bar-headless', 'preflight': 'passed', 'candidateQualified': False,
                   'networkPrerequisite': {'imageId': 'sha256:' + 'e' * 64, 'scope': 'authored prerequisite control'}}
@@ -480,6 +511,7 @@ class Workflow(unittest.TestCase):
                         (fixture.evidence / 'qualification-result.json').write_bytes(b'')
                     else:
                         fixture.selection['network']['purpose'] = 'network-prerequisite'
+                        install_clock(fixture.evidence,'network-prerequisite')
                         selected = fixture.evidence / 'operation-input.json'
                         selected.write_bytes(WRAPPER.canonical(fixture.selection))
                         result = {'profile': 'bar-headless', 'preflight': 'passed', 'candidateQualified': False,
@@ -545,7 +577,7 @@ exit 41
                     self.assertFalse((stage / 'evidence/host-security-readback.json').exists())
                     self.assertIn('candidate-permitted=false', outputs.read_text())
                     # This is exactly the maintained metadata uploader's path.
-                    self.assertIn('path: /fsgg-bar/transport-metadata/', text)
+                    self.assertIn("format('/fsgg-bar/transport-metadata/{0}'", text)
                     summary_env = {**env, 'GITHUB_SHA': 'b' * 40, 'GITHUB_STEP_SUMMARY': str(fixture.root / 'summary'),
                         'QUALIFICATION_MODE': 'network-prerequisite', 'ADMIT_OUTCOME': 'success',
                         'QUALIFY_OUTCOME': 'failure' if primary == 'failed' else 'success',
@@ -563,6 +595,7 @@ exit 41
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             tools = root / 'tools'; tools.mkdir()
+            (tools / 'python3').write_text('#!/bin/sh\nprintf \"3900\\n\"\n')
             (tools / 'git').write_text('#!/bin/sh\nprintf "%s\\n" aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n')
             (tools / 'sudo').write_text('#!/bin/sh\nprintf \'{"fixture":"result"}\\n\'\nprintf \'fixture diagnostic\\n\' >&2\nexit "$FIXTURE_EXIT"\n')
             for path in tools.iterdir():
@@ -570,7 +603,7 @@ exit 41
             for code in (0, 41):
                 evidence = root / str(code); evidence.mkdir(mode=0o700)
                 env = {**os.environ, 'PATH': str(tools) + ':/usr/bin:/bin', 'EVIDENCE': str(evidence),
-                       'ENTER_SCRIPT': 'authored inert entry fixture', 'OPERATION_ID': OPERATION, 'QUALIFICATION_MODE': 'qualify',
+                       'ENTER_SCRIPT': 'authored inert entry fixture', 'UNIT_ENTRY_SCRIPT':'authored inert unit fixture', 'OPERATION_ID': OPERATION, 'QUALIFICATION_MODE': 'qualify',
                        'USERLAND': '/fixture-userland', 'VOLUME': '/fixture-volume', 'GITHUB_WORKSPACE': str(root),
                        'GITHUB_SHA': 'b' * 40, 'HOST_JOB_STARTED': str(int(time.time())),
                        'HOST_JOB_MONOTONIC': str(time.monotonic()), 'FIXTURE_EXIT': str(code)}
@@ -600,19 +633,13 @@ exit 41
                 validate(broken)
 
     def test_first_actual_shell_guard_blocks_rerun_wrong_event_or_ref_before_checkout(self):
-        guard = literal_block(WORKFLOW.read_text(), 'run')
-        with tempfile.TemporaryDirectory() as temporary:
-            output = Path(temporary) / 'environment'
-            normal = {'GITHUB_ENV': str(output), 'GITHUB_EVENT_NAME': 'workflow_dispatch',
-                      'GITHUB_REF': 'refs/heads/main', 'GITHUB_RUN_ATTEMPT': '1', 'QUALIFICATION_MODE': 'qualify'}
-            result = subprocess.run(['/bin/bash', '-c', guard], env={**os.environ, **normal}, capture_output=True, timeout=10)
-            self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertIn('HOST_JOB_STARTED=', output.read_text())
-            output.unlink()
-            for key, value in [('GITHUB_EVENT_NAME', 'push'), ('GITHUB_REF', 'refs/heads/other'), ('GITHUB_RUN_ATTEMPT', '2')]:
-                result = subprocess.run(['/bin/bash', '-c', guard], env={**os.environ, **normal, key: value}, capture_output=True, timeout=10)
-                self.assertNotEqual(result.returncode, 0)
-                self.assertFalse(output.exists())
+        fixture=ClockBudget();fixture.setUp()
+        try:
+            for index,update in enumerate(({'GITHUB_RUN_ATTEMPT':'2'},{'GITHUB_EVENT_NAME':'push'},{'GITHUB_REF':'refs/heads/topic'})):
+                fixture.env['STARTUP_EVIDENCE']=str(fixture.root/('guard-'+str(index)))
+                with self.assertRaisesRegex(ValueError,'first dispatch'):fixture.produce(update)
+                self.assertEqual(json.loads((Path(fixture.env['STARTUP_EVIDENCE'])/'clock.json').read_text())['verdict'],'refused')
+        finally:fixture.doCleanups()
 
     def test_source_pins_and_registration_match_actual_workflow(self):
         WRAPPER.load_bar(ROOT)
@@ -640,17 +667,17 @@ exit 41
         self.assertIn(WRAPPER.PRODUCT_REVISION, text)
         self.assertIn(WRAPPER.PRODUCT_TREE, text)
         self.assertIn('--mount --cgroup --pid --fork', text)
-        self.assertIn('RuntimeMaxSec=3900', text)
+        self.assertIn('RuntimeMaxSec="$runtime"', text)
         self.assertIn('KillMode=control-group', text)
         self.assertIn("steps.qualify.outcome == 'success' && steps.receipt.outcome == 'success'", text)
         self.assertIn("steps.receipt.outputs.candidate-permitted == 'true'", text)
-        self.assertIn('path: /fsgg-bar/transport-metadata/', text)
+        self.assertIn("format('/fsgg-bar/transport-metadata/{0}'", text)
         self.assertIn('path: /fsgg-bar/transport-candidate/', text)
         self.assertNotIn('path: /fsgg-bar/allocation/state/', text)
         self.assertNotIn('continue-on-error', text)
         self.assertIn('pacman -Qkk passt', literal_block(text, 'PACMAN_SCRIPT'))
         rows = text.splitlines(keepends=True)
-        scripts = [literal_block(text, 'PACMAN_SCRIPT'), literal_block(text, 'ENTER_SCRIPT')]
+        scripts = [literal_block(text, key) for key in ('PACMAN_SCRIPT','ENTER_SCRIPT','UNIT_ENTRY_SCRIPT','PREP_CONTROLS_SCRIPT','PREP_USERLAND_SCRIPT','PREP_ADMIT_SCRIPT')]
         scripts.extend(literal_block(''.join(rows[index:]), 'run') for index, row in enumerate(rows) if row.strip() == 'run: |')
         for script in scripts:
             result = subprocess.run(['/bin/bash', '-n'], input=script, capture_output=True, text=True, timeout=10)
@@ -677,6 +704,269 @@ exit 41
                 self.assertFalse(any(row.startswith('setpriv ') for row in trace.splitlines()))
 
 
+class ClockBudget(unittest.TestCase):
+    """Actual producer/helper with inert HTTP/systemd ports; no native operations."""
+    def setUp(self):
+        import datetime
+        self.temp=tempfile.TemporaryDirectory(prefix='bar-clock-pure-');self.addCleanup(self.temp.cleanup)
+        self.root=Path(self.temp.name);self.evidence=self.root/'evidence';self.evidence.mkdir(mode=0o700)
+        self.clock=install_clock(self.evidence)
+        change=patch.dict(os.environ,{'GITHUB_SHA':'b'*40,'SOURCE_REVISION':'b'*40})
+        change.start();self.addCleanup(change.stop)
+        workflow=WORKFLOW.read_text();script=literal_block(workflow.split('- name: Retain the original outer job clock',1)[1],'run')
+        self.producer=textwrap.dedent(script.split("<<'PY_CLOCK'\n",1)[1].split('\nPY_CLOCK',1)[0])
+        self.utc=datetime.datetime(2026,10,24,2,0,0,tzinfo=datetime.timezone.utc)
+        self.env={'STARTUP_EVIDENCE':str(self.root/'startup'),'OPERATION_ID':OPERATION,'QUALIFICATION_MODE':'network-prerequisite',
+          'GITHUB_SHA':'b'*40,'GITHUB_WORKFLOW_REF':WRAPPER.WORKFLOW_REF,'GITHUB_EVENT_NAME':'workflow_dispatch','GITHUB_REF':'refs/heads/main',
+          'GITHUB_RUN_ATTEMPT':'1','GITHUB_REPOSITORY':'FS-GG/FS.GG.Coordination','GITHUB_RUN_ID':'123','RUNNER_NAME':'fixture',
+          'GH_TOKEN':'inert fixture not a credential','GITHUB_ENV':str(self.root/'github-env'),'GITHUB_OUTPUT':str(self.root/'github-output'),
+          'SELECTED_UTC':'2026-10-24T02:00:00Z','LATEST_START_UTC':'2026-10-24T02:05:00Z','OBSERVER_DEADLINE_UTC':'2026-10-24T03:35:00Z'}
+        self.job={'id':7,'run_id':123,'head_sha':'b'*40,'name':'full-image','runner_name':'fixture','status':'in_progress','started_at':'2026-10-24T01:59:59.500000Z'}
+
+    def produce(self,updates=None,job=None,error=None,elapsed=0):
+        import datetime,urllib.request,io
+        actual=self.utc
+        class NativeUTC(datetime.datetime):
+            @classmethod
+            def now(cls,tz=None):return actual
+        data=json.dumps({'jobs':[self.job if job is None else job]}).encode()
+        port=patch.object(urllib.request,'urlopen',side_effect=error) if error else patch.object(urllib.request,'urlopen',return_value=io.BytesIO(data))
+        with patch.dict(os.environ,{**self.env,**(updates or {})},clear=True),patch.object(datetime,'datetime',NativeUTC),patch.object(time,'monotonic',side_effect=[100,100+elapsed]),port:
+            exec(compile(self.producer,'actual-first-clock','exec'),{})
+        return json.loads((Path(self.env['STARTUP_EVIDENCE'])/'clock.json').read_text())
+
+    def test_actual_first_producer_minimum_provider_root_deadline_and_both_purposes(self):
+        value=self.produce();WRAPPER.validate_clock(value,OPERATION,'b'*40)
+        self.assertEqual(value['overallDeadlineMonotonic'],5499.5)
+        self.assertEqual(value['purpose'],'network-prerequisite')
+        (Path(self.env['STARTUP_EVIDENCE'])/'clock.json').unlink();Path(self.env['STARTUP_EVIDENCE']).rmdir()
+        value=self.produce({'QUALIFICATION_MODE':'qualify'},job={**self.job,'started_at':'2026-10-24T02:00:00Z'})
+        WRAPPER.validate_clock(value,OPERATION,'b'*40);self.assertEqual(value['overallDeadlineMonotonic'],5500)
+        bad={**value,'overallDeadlineMonotonic':5501}
+        with self.assertRaisesRegex(RuntimeError,'deadline differs'):WRAPPER.validate_clock(bad,OPERATION)
+
+    def test_actual_first_producer_refusal_retained_before_checkout_no_retry(self):
+        cases=[({'SELECTED_UTC':'1e999'},None,None),({'LATEST_START_UTC':'2026-10-24T01:59:59Z'},None,None),
+          ({'OBSERVER_DEADLINE_UTC':'2026-10-24T03:35:01Z'},None,None),({}, {**self.job,'head_sha':'c'*40},None),
+          ({'GITHUB_RUN_ATTEMPT':'2'},None,None),({},None,OSError('native API Unknown')),({}, {**self.job,'started_at':'2026-10-24T01:59:58Z'},None)]
+        for n,(updates,job,error) in enumerate(cases):
+            self.env['STARTUP_EVIDENCE']=str(self.root/('startup-'+str(n)))
+            with self.subTest(case=n),self.assertRaises(Exception):self.produce(updates,job,error)
+            value=json.loads((Path(self.env['STARTUP_EVIDENCE'])/'clock.json').read_text())
+            self.assertEqual(value['verdict'],'refused');self.assertTrue(value['firstRefusal'])
+        text=WORKFLOW.read_text();self.assertLess(text.index('Retain the original outer job clock'),text.index('Check out the exact candidate'))
+        self.assertNotIn('retry',self.producer)
+
+    def test_runner_temp_context_is_step_scoped_and_propagates_only_accepted_path(self):
+        text=WORKFLOW.read_text();job_header=text.split('    steps:',1)[0]
+        self.assertNotIn('${{ runner.temp }}',job_header)
+        clock_step=text.split('      - name: Retain the original outer job clock',1)[1].split('      - name: Check out the exact candidate',1)[0]
+        self.assertIn('          STARTUP_EVIDENCE: ${{ runner.temp }}',clock_step)
+        value=self.produce()
+        self.assertEqual(value['verdict'],'accepted')
+        self.assertIn('STARTUP_EVIDENCE='+self.env['STARTUP_EVIDENCE']+'\n',Path(self.env['GITHUB_ENV']).read_text())
+        self.assertIn('startup-path='+self.env['STARTUP_EVIDENCE'],Path(self.env['GITHUB_OUTPUT']).read_text())
+
+    def test_refused_clock_retains_safe_output_without_success_environment_export(self):
+        with self.assertRaises(OSError):self.produce(error=OSError('original API refusal'))
+        self.assertFalse(Path(self.env['GITHUB_ENV']).exists())
+        self.assertIn('startup-path='+self.env['STARTUP_EVIDENCE'],Path(self.env['GITHUB_OUTPUT']).read_text())
+        self.assertIn('original API refusal',(Path(self.env['STARTUP_EVIDENCE'])/'clock.json').read_text())
+
+    def test_whole_api_timeout_and_remaining_checkout_budget_refuse_before_effects(self):
+        import signal
+        def timer_port(*args,**kwargs):signal.getsignal(signal.SIGALRM)(signal.SIGALRM,None)
+        with self.assertRaisesRegex(TimeoutError,'whole15s'):self.produce(error=timer_port)
+        value=json.loads((Path(self.env['STARTUP_EVIDENCE'])/'clock.json').read_text())
+        self.assertEqual(value['verdict'],'refused');self.assertIn('whole15s',value['firstRefusal'])
+        self.env['STARTUP_EVIDENCE']=str(self.root/'late-api')
+        with self.assertRaisesRegex(ValueError,'checkout/transport aperture'):self.produce(elapsed=3700)
+        self.assertEqual(json.loads((Path(self.env['STARTUP_EVIDENCE'])/'clock.json').read_text())['verdict'],'refused')
+
+    def reset(self,purpose='full-image'):
+        self.clock=install_clock(self.evidence,purpose)
+        for name in ('unit-request.json','unit-admission.json'):(self.evidence/name).unlink()
+
+    def test_dynamic_creation_budget_old_fallback_red_and_prerequisite_late_preparation_green(self):
+        self.assertEqual(480+3900+120+1200,5700)
+        self.reset('full-image')
+        with patch.object(time,'monotonic',return_value=self.clock['firstMonotonic']+313),self.assertRaisesRegex(RuntimeError,'remaining original budget'):
+            WRAPPER.unit_budget(OPERATION,evidence=self.evidence)
+        self.reset('network-prerequisite');end=self.clock['overallDeadlineMonotonic']
+        with patch.object(time,'monotonic',return_value=end-1000),self.assertRaisesRegex(RuntimeError,'remaining original budget'):
+            WRAPPER.unit_budget(OPERATION,evidence=self.evidence)
+        with patch.object(time,'monotonic',return_value=self.clock['firstMonotonic']+313):
+            request=WRAPPER.unit_budget(OPERATION,evidence=self.evidence)
+        self.assertGreaterEqual(request['runtimeMaxSeconds'],450)
+        self.assertEqual(request['purpose'],'network-prerequisite')
+
+    def test_purpose_work_both_clocks_and_stale_final_gate(self):
+        for purpose,work in [('full-image',3600),('network-prerequisite',300)]:
+            self.clock=install_clock(self.evidence,purpose)
+            self.assertEqual(WRAPPER.work_seconds(purpose),work);self.assertEqual(BAR.work_seconds(purpose),work)
+            with patch.object(time,'monotonic',return_value=self.clock['firstMonotonic']+313):
+                if purpose=='full-image':
+                    with self.assertRaisesRegex(RuntimeError,'remaining original unit budget'):WRAPPER.controller_start(OPERATION,purpose,evidence=self.evidence,revision='b'*40)
+                else:WRAPPER.controller_start(OPERATION,purpose,evidence=self.evidence,revision='b'*40)
+        with self.assertRaises(RuntimeError):WRAPPER.work_seconds('custom-duration')
+
+    def test_systemctl_duration_protocol_is_not_raw_microsecond_assumption(self):
+        self.assertEqual(WRAPPER.unit_microseconds('1h 5min'),3900000000)
+        self.assertEqual(WRAPPER.unit_microseconds('2min'),120000000)
+        self.assertEqual(WRAPPER.unit_microseconds('0'),0)
+        for value in ('infinity','NaN','1e999s','2min garbage'):
+            with self.assertRaises(RuntimeError):WRAPPER.unit_microseconds(value)
+
+    def test_actual_unit_entry_birth_properties_and_cgroup_guard_before_namespace(self):
+        import types
+        self.reset('network-prerequisite')
+        request=WRAPPER.unit_budget(OPERATION,evidence=self.evidence)
+        active=request['requestedMonotonic']+0.1
+        props={'ActiveEnterTimestampMonotonic':str(round(active*1000000)),'RuntimeMaxUSec':str(request['runtimeMaxSeconds']*1000000),
+            'TimeoutStopUSec':'2min','InvocationID':'a'*32,'MainPID':str(os.getppid()),'ControlGroup':'/fixture.service',
+            'Type':'exec','ActiveState':'active','RuntimeRandomizedExtraUSec':'0'}
+        actual_read=Path.read_text
+        def read(path,*args,**kwargs):
+            return '0::/fixture.service' if str(path)=='/proc/self/cgroup' else actual_read(path,*args,**kwargs)
+        for case in ('wrong-runtime','late-activation','wrong-main','wrong-cgroup','duplicate','normal'):
+            changed=dict(props)
+            if case=='wrong-runtime':changed['RuntimeMaxUSec']='1'
+            if case=='late-activation':changed['ActiveEnterTimestampMonotonic']=str(round((active+31)*1000000))
+            if case=='wrong-main':changed['MainPID']='1'
+            if case=='wrong-cgroup':changed['ControlGroup']='/foreign.service'
+            output='\n'.join(k+'='+v for k,v in changed.items()).encode()
+            if case=='duplicate':output+=b'\nMainPID=1'
+            with patch.object(WRAPPER.subprocess,'run',return_value=types.SimpleNamespace(stdout=output)) as port,patch.object(Path,'read_text',read),patch.object(WRAPPER.os,'chown') as chown:
+                if case=='normal':
+                    value=WRAPPER.unit_enter(OPERATION,evidence=self.evidence)
+                    self.assertLessEqual(value['runtimeDeadlineMonotonic'],request['runtimeLimitMonotonic']);chown.assert_called_once()
+                else:
+                    with self.assertRaises(RuntimeError):WRAPPER.unit_enter(OPERATION,evidence=self.evidence)
+                    self.assertFalse((self.evidence/'unit-admission.json').exists())
+            self.assertEqual(port.call_args.args[0][:3],['/usr/bin/systemctl','show','fsgg-'+OPERATION+'.service'])
+        script=literal_block(WORKFLOW.read_text(),'UNIT_ENTRY_SCRIPT')
+        self.assertLess(script.index('unit-enter'),script.index('exec /usr/bin/unshare'))
+        self.assertNotIn('set-property',WORKFLOW.read_text())
+
+    def test_early_refusal_and_absent_helpers_retain_startup_in_existing_single_upload(self):
+        startup=self.root/'no-helper-startup';startup.mkdir(mode=0o700)
+        (startup/'clock.json').write_text('{"verdict":"refused","firstRefusal":"original Root queue refusal"}')
+        script=literal_block(WORKFLOW.read_text().split('- name: Retain the bounded generation receipt',1)[1],'run')
+        env={**os.environ,'STARTUP_EVIDENCE':str(startup),'STARTUP_CAPTURE_PATH':str(startup),'EVIDENCE':str(self.evidence),'RUNNER_TEMP':str(self.root),
+             'OPERATION_ID':OPERATION,'CLOCK_OUTCOME':'failure','ADMIT_OUTCOME':'skipped','QUALIFY_OUTCOME':'skipped'}
+        done=subprocess.run(['/bin/bash','-c',script],cwd=self.root,env=env,capture_output=True,text=True,timeout=10)
+        self.assertNotEqual(done.returncode,0)
+        self.assertIn('original Root queue refusal',(startup/'clock.json').read_text())
+        self.assertEqual(json.loads((startup/'outcomes.json').read_text())['CLOCK_OUTCOME'],'failure')
+        text=WORKFLOW.read_text();metadata=text.split('- name: Retain metadata and original command streams',1)[1].split('- name: Retain only the encrypted',1)[0]
+        self.assertIn('if: always()',metadata);self.assertIn('|| steps.clock.outputs.startup-path',metadata)
+        self.assertEqual(metadata.count('uses:'),1);self.assertIn('timeout-minutes: 1',metadata)
+
+
+class PreparationDeadline(ClockBudget):
+    def test_fixed_phase_closure_and_no_command_or_duration_port(self):
+        for phase in ('controls','userland','admit'):
+            body,env=WRAPPER.fixed_preparation(phase)
+            self.assertIn('set -euo pipefail',body);self.assertIn('ARCH_IMAGE',env);self.assertIn('BUILDAH_SHA256',env)
+        with self.assertRaises(RuntimeError):WRAPPER.fixed_preparation('arbitrary')
+        text=WORKFLOW.read_text()
+        for phase in ('controls','userland','admit'):
+            self.assertIn('--phase '+phase+' --operation-id',text)
+        self.assertNotIn('--command',text)
+
+    def test_all_preunit_run_blocks_are_fixed_owned_phases(self):
+        text=WORKFLOW.read_text();prefix=text.split('      - name: Qualify one complete BAR image',1)[0]
+        chunks=prefix.split('      - name:')[1:]
+        for chunk in chunks:
+            if 'run: |' not in chunk:continue
+            body=literal_block(chunk,'run')
+            if 'Retain the original outer job clock' in chunk:continue
+            self.assertIn('prep-run',body)
+        body,_=WRAPPER.fixed_preparation('userland')
+        self.assertIn('sudo swapoff -a',body);self.assertIn('sudo fallocate',body);self.assertIn('sudo systemctl stop',body)
+        self.assertLess(body.index('sudo docker'),body.index('sudo swapoff'));self.assertLess(body.index('sudo swapoff'),body.index('sudo fallocate'))
+
+    def test_actual_late_phase_cannot_start480s_past_original_transport_reserve(self):
+        end=self.clock['overallDeadlineMonotonic']
+        with patch.object(time,'monotonic',return_value=end-20),self.assertRaisesRegex(RuntimeError,'aperture exhausted'):
+            WRAPPER.preparation_intent(OPERATION,'userland',evidence=self.evidence)
+        with patch.object(time,'monotonic',return_value=end-1230-20):
+            intent=WRAPPER.preparation_intent(OPERATION,'userland',evidence=self.evidence)
+        self.assertEqual(intent['hardEnd'],end-1230);self.assertEqual(intent['termAt']-(end-1230-20),19)
+        self.assertEqual(end-intent['hardEnd'],1200+30)
+
+    def test_actual_child_rechecks_before_fixed_body_and_gnu_timeout(self):
+        import sys
+        intent=WRAPPER.preparation_intent(OPERATION,'controls',evidence=self.evidence)
+        slot=self.evidence/'prep-controls';slot.mkdir();WRAPPER.write_new(slot/'intent.json',intent)
+        with patch.object(WRAPPER.os,'getppid',return_value=os.getpid()),patch.object(WRAPPER.os,'getpgrp',return_value=os.getpid()),patch.object(WRAPPER.os,'execve') as execute:
+            with patch.object(time,'monotonic',return_value=intent['termAt']+.1),self.assertRaisesRegex(RuntimeError,'actual preparation start expired'):
+                WRAPPER.preparation_child(OPERATION,'controls',evidence=self.evidence)
+            execute.assert_not_called()
+            with patch.object(time,'monotonic',return_value=intent['startedMonotonic']+.1):WRAPPER.preparation_child(OPERATION,'controls',evidence=self.evidence)
+            argv=execute.call_args.args[1];self.assertEqual(argv[:4],['/usr/bin/timeout','--foreground','--signal=TERM','--kill-after=1'])
+            self.assertLessEqual(float(argv[4][:-1]),intent['termAt']-intent['startedMonotonic'])
+            self.assertIn('canonicalize-checkouts',argv[-1])
+
+    def test_group_birth_liveness_distinguishes_zombies_reuse_and_escape(self):
+        for state,start,pgrp,expected in [('S',44,4321,[123]),('Z',44,4321,[]),('S',45,4321,[]),('S',44,999,[123])]:
+            fields=['0']*20;fields[0]=state;fields[2]=str(pgrp);fields[3]='4321';fields[19]=str(start)
+            with patch.object(Path,'read_text',return_value='123 (fixture) '+' '.join(fields)):
+                self.assertEqual(WRAPPER.live_group_births(4321,{123:44}),expected)
+
+    def test_unknown_and_moved_known_birth_never_count_as_retired(self):
+        for error in (PermissionError('fixture proc denied'),ValueError('fixture malformed proc')):
+            with patch.object(Path,'read_text',side_effect=error):
+                self.assertEqual(WRAPPER.live_group_births(4321,{123:44}),[123])
+                self.assertEqual(WRAPPER.group_birth_observations(4321,{123:44})[0]['status'],'Unknown')
+        with patch.object(Path,'read_text',side_effect=FileNotFoundError('confirmed absent')):
+            self.assertEqual(WRAPPER.live_group_births(4321,{123:44}),[])
+            self.assertEqual(WRAPPER.group_birth_observations(4321,{123:44})[0]['status'],'gone')
+        with patch.object(Path,'read_text',return_value='malformed proc row'):
+            self.assertEqual(WRAPPER.live_group_births(4321,{123:44}),[123])
+
+    def test_final_unknown_observation_cannot_diverge_from_parent_acceptance(self):
+        real_popen=subprocess.Popen
+        def launch(argv,**kwargs):return real_popen(['/bin/bash','-c','printf original; exit 0'],**kwargs)
+        with patch.object(WRAPPER.os,'geteuid',return_value=0),patch.object(WRAPPER.os,'chown'),patch.dict(os.environ,{'GITHUB_WORKSPACE':str(self.root)}),patch.object(WRAPPER,'live_group_births',return_value=[]),patch.object(WRAPPER,'group_birth_observations',return_value=[{'pid':123,'expectedStartTicks':44,'status':'Unknown','reason':'fixture denied final readback'}]):
+            with self.assertRaisesRegex(RuntimeError,'custody Unknown'):WRAPPER.run_preparation(OPERATION,'controls',evidence=self.evidence,launch=launch)
+        value=json.loads((self.evidence/'prep-controls/receipt.json').read_text())
+        self.assertTrue(value['leaderReaped']);self.assertTrue(value['bothStreamsEof']);self.assertEqual(value['finalGroupObservations'][0]['status'],'Unknown')
+
+    def test_known_live_group_birth_blocks_success_after_leader_and_eof(self):
+        real_popen=subprocess.Popen;state={'calls':0}
+        def launch(argv,**kwargs):return real_popen(['/bin/bash','-c','printf original; exit 0'],**kwargs)
+        def live(group,members):
+            state['calls']+=1
+            return [group] if state['calls']<4 else []
+        with patch.object(WRAPPER.os,'geteuid',return_value=0),patch.object(WRAPPER.os,'chown'),patch.dict(os.environ,{'GITHUB_WORKSPACE':str(self.root)}),patch.object(WRAPPER,'live_group_births',side_effect=live),patch.object(WRAPPER.os,'killpg'):
+            with self.assertRaisesRegex(RuntimeError,'known original'):WRAPPER.run_preparation(OPERATION,'controls',evidence=self.evidence,launch=launch)
+        value=json.loads((self.evidence/'prep-controls/receipt.json').read_text())
+        self.assertTrue(value['leaderReaped']);self.assertTrue(value['bothStreamsEof']);self.assertIn('known original',value['firstCause'])
+
+    def test_actual_owned_parent_timeout_wait_eof_and_failure_streams(self):
+        import sys
+        real_popen=subprocess.Popen
+        for name,command in [('normal',['/bin/bash','-c','printf owned-stdout; printf original-error >&2; exit 0']),
+              ('gnu-timeout',['/usr/bin/timeout','--foreground','--kill-after=1','.1s',sys.executable,'-I','-B','-c','import time;time.sleep(5)']),
+              ('parent-timeout',[sys.executable,'-I','-B','-c','import signal,time;signal.signal(signal.SIGTERM,signal.SIG_IGN);print("owned-before-timeout",flush=True);time.sleep(5)'])]:
+            with self.subTest(case=name):
+                evidence=self.root/name;evidence.mkdir();install_clock(evidence)
+                def launch(argv,**kwargs):
+                    self.assertIn('prep-child',argv);self.assertTrue(kwargs['start_new_session'])
+                    return real_popen(command,**kwargs)
+                with patch.object(WRAPPER.os,'geteuid',return_value=0),patch.object(WRAPPER.os,'chown'),patch.dict(os.environ,{'GITHUB_WORKSPACE':str(self.root)}),patch.dict(WRAPPER.PREPARATION_PHASES,{'controls':2}):
+                    if name=='normal':value=WRAPPER.run_preparation(OPERATION,'controls',evidence=evidence,launch=launch)
+                    else:
+                        with self.assertRaises(RuntimeError):WRAPPER.run_preparation(OPERATION,'controls',evidence=evidence,launch=launch)
+                        value=json.loads((evidence/'prep-controls/receipt.json').read_text())
+                self.assertTrue(value['leaderReaped']);self.assertTrue(value['bothStreamsEof']);self.assertEqual(value['descendantSettlement'],'unproved')
+                self.assertTrue((evidence/'prep-controls/stdout.log').exists())
+                if name=='parent-timeout':self.assertEqual([v['signal'] for v in value['signals']][:2],[15,9])
+                if name=='normal':self.assertEqual((evidence/'prep-controls/stderr.log').read_bytes(),b'original-error')
+                with self.assertRaises(RuntimeError),patch.object(WRAPPER.os,'geteuid',return_value=0):WRAPPER.run_preparation(OPERATION,'controls',evidence=evidence,launch=launch)
+
+
 class SyntheticCrypto(unittest.TestCase):
     """Only tiny authored bytes and temporary fixture keys; never root's key."""
     def setUp(self):
@@ -699,8 +989,9 @@ class SyntheticCrypto(unittest.TestCase):
         for name, value in [('RECIPIENT', certificate), ('RECIPIENT_PEM_SHA256', hashlib.sha256(certificate.read_bytes()).hexdigest()),
                             ('RECIPIENT_DER_SHA256', hashlib.sha256(der).hexdigest())]:
             change = patch.object(WRAPPER, name, value); change.start(); self.addCleanup(change.stop)
-        change = patch.dict(os.environ, {'HOST_JOB_MONOTONIC': str(time.monotonic())})
+        change = patch.dict(os.environ, {'HOST_JOB_MONOTONIC': str(time.monotonic()),'GITHUB_SHA':'b'*40})
         change.start(); self.addCleanup(change.stop)
+        install_clock(self.evidence)
         self.plain = self.root / 'candidate.oci.tar'
         self.plain.write_bytes(b'authored tiny synthetic transport bytes\x00\xff' * 32)
         self.archive = WRAPPER.digest_file(self.plain, 1024**2)

@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import base64
 import configparser
+import datetime
 import hashlib
 import importlib.util
 import json
@@ -20,6 +21,8 @@ import math
 import resource
 import stat
 import subprocess
+import selectors
+import signal
 import sys
 import time
 
@@ -27,7 +30,7 @@ PRODUCT_REVISION = '4ddd070650e3131916a13bb2c5e75f99376e1c3a'
 PRODUCT_TREE = 'f6e4dc108bf065cd2fd44d48e0faf8807e1b8e3c'
 HELPER_FILES = {
     'eng/portable-workspace-image.py': '14f519038fd24684b458d917ddb33ab6bada86a084b39c35ce5ae7e8e9fa7aa5',
-    'eng/portable_workspace_bar.py': '8cccac4562371b8aa04cf68708769a9fdb89d59ebb35558e707e64dd3b4d24bf',
+    'eng/portable_workspace_bar.py': '63f96478d41a57fc786f31f25ae6f9a43102a042e6ce6b81b65f88a3c5a54815',
     'eng/portable_workspace_sc2.py': '19f4b126ace622349e5bff9ae9462e079e13ebf41d5706bb8cc1551a33ee262e',
 }
 PRODUCT_FILES = {
@@ -51,6 +54,11 @@ TRANSPORT_FREE_BYTES = ARCHIVE_BYTES + 4 * METADATA_BYTES
 MAX_FILES = 4096
 OUTER_SECONDS = 90 * 60
 TRANSPORT_SECONDS = 20 * 60
+UNIT_STOP_SECONDS = 120
+FINAL_SECONDS = 30
+BOOKKEEPING_SECONDS = 30
+ACTIVATION_SECONDS = 30
+WORKFLOW_REF = "FS-GG/FS.GG.Coordination/.github/workflows/bar-hosted-image-qualification.yml@refs/heads/main"
 RECIPIENT_PEM_SHA256 = '1be09fdd361e7a531e170eb0a8585bcd3e473937aa260080bce2ad04035d7124'
 RECIPIENT_DER_SHA256 = '664cec5127f485ec28c19877cbe260010df99f1f2917068fc2f39dd47eb2184e'
 RECIPIENT = Path(__file__).with_name('bar-hosted-recipient.pem')
@@ -166,11 +174,299 @@ def crypto_identity(deadline):
     return {'files': files, 'version': version, 'environment': CRYPTO_ENV}
 
 
+def utc_seconds(value):
+    require(isinstance(value,str) and re.fullmatch(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?Z',value), 'strict original UTC required')
+    result=datetime.datetime.fromisoformat(value.replace('Z','+00:00')).timestamp()
+    require(math.isfinite(result),'finite UTC required')
+    return result
+
+
+def validate_clock(value, operation_id, revision=None):
+    require(value.get('schema')=='fsgg.bar-hosted-clock/1' and value.get('verdict')=='accepted' and value.get('firstRefusal') is None, 'original startup clock refused')
+    match=re.fullmatch(r'bar-image-([0-9]{1,20})-1',operation_id)
+    require(match is not None and value.get('operationId')==operation_id,'original first run/attempt differs')
+    require(re.fullmatch(r'[0-9a-f]{40}',value.get('sourceRevision','')) and
+            (revision is None or value['sourceRevision']==revision) and value.get('workflowRef')==WORKFLOW_REF,'original clock source differs')
+    require(value.get('purpose') in ('full-image','network-prerequisite'),'original clock purpose differs')
+    first=utc_seconds(value['firstUTC']);root=value['rootSelection'];job=value['providerJob']
+    selected,latest,observer=[utc_seconds(root[k]) for k in ('selected_utc','latest_start_utc','observer_deadline_utc')]
+    require(0<latest-selected<=300 and observer-selected==5700 and selected<=first<=latest,'Root queue/observer interval refused')
+    require(job.get('run_id')==int(match[1]) and job.get('head_sha')==value['sourceRevision'] and job.get('name')=='full-image' and job.get('status')=='in_progress'
+            and type(job.get('id')) is int and job['id']>0 and isinstance(job.get('runner_name'),str) and job['runner_name'], 'native job/source join differs')
+    native=utc_seconds(job['started_at']);require(selected-1<=native<=first,'native job birth/Root selection differs')
+    mono=value['firstMonotonic'];end=value['overallDeadlineMonotonic']
+    require(type(mono) in (int,float) and type(end) in (int,float) and math.isfinite(mono) and math.isfinite(end) and mono>=0,'finite original monotonic clock required')
+    require(abs(end-(mono+min(native+OUTER_SECONDS,selected+OUTER_SECONDS)-first))<0.000001 and end>mono,'original overall deadline differs')
+    return value
+
+
+def original_clock(operation_id, *, evidence=EVIDENCE, revision=None):
+    value,pin=read_json(evidence/'original-clock.json',16384)
+    validate_clock(value,operation_id,revision)
+    require(value['bootId']==Path('/proc/sys/kernel/random/boot_id').read_text().strip(),'original clock boot changed')
+    require(value['firstMonotonic']<=time.monotonic()<value['overallDeadlineMonotonic'],'original overall deadline expired')
+    return value,pin
+
+
+def work_seconds(purpose):
+    require(purpose in ('full-image','network-prerequisite'),'closed purpose required')
+    return 3600 if purpose=='full-image' else 300
+
+
+def unit_budget(operation_id, *, evidence=EVIDENCE):
+    clock,pin=original_clock(operation_id,evidence=evidence,revision=os.environ.get('GITHUB_SHA'))
+    now=time.monotonic();limit=clock['overallDeadlineMonotonic']-TRANSPORT_SECONDS-UNIT_STOP_SECONDS-FINAL_SECONDS
+    runtime=min(3900,math.floor(limit-now-ACTIVATION_SECONDS))
+    require(runtime>=work_seconds(clock['purpose'])+120+BOOKKEEPING_SECONDS,'remaining original budget cannot contain purpose and transport')
+    value={'operationId':operation_id,'clockSha256':pin['sha256'],'bootId':clock['bootId'],'purpose':clock['purpose'],
+           'requestedMonotonic':now,'runtimeMaxSeconds':runtime,'runtimeLimitMonotonic':limit}
+    write_new(evidence/'unit-request.json',value)
+    return value
+
+
+PREPARATION_PHASES={'controls':300,'userland':480,'admit':300}
+
+
+def fixed_preparation(phase):
+    require(phase in PREPARATION_PHASES,'closed preparation phase required')
+    root=Path(__file__).resolve().parents[1];workflow=root/'.github/workflows/bar-hosted-image-qualification.yml'
+    raw=workflow.read_bytes();require(len(raw)<=131072,'bounded fixed workflow required')
+    registry=read_json(root/'evidence/github-substrate-v2/gs2-06-7/execution-pins-extension.json')[0]
+    pins=[v['sha256'] for v in registry['documents'] if v['path']==str(workflow.relative_to(root))]
+    require(pins==[hashlib.sha256(raw).hexdigest()],'fixed preparation workflow pin differs')
+    rows=raw.decode().splitlines(keepends=True)
+    def block(key):
+        matches=[i for i,row in enumerate(rows) if row.strip()==key+': |'];require(len(matches)==1,'one fixed phase body required')
+        index=matches[0];indent=len(rows[index])-len(rows[index].lstrip());body=[]
+        for row in rows[index+1:]:
+            if row.strip() and len(row)-len(row.lstrip())<=indent:break
+            body.append(row)
+        import textwrap
+        return textwrap.dedent(''.join(body))
+    globals_section=raw.decode().split('\nenv:\n',1)[1].split('\njobs:\n',1)[0]
+    env=dict(re.findall(r'^  ([A-Z][A-Z0-9_]*): ([^\n]+)$',globals_section,re.MULTILINE))
+    env['PACMAN_SCRIPT']=block('PACMAN_SCRIPT')
+    return block('PREP_'+phase.upper()+'_SCRIPT'),env
+
+
+def preparation_intent(operation_id,phase,*,evidence=EVIDENCE):
+    require(phase in PREPARATION_PHASES,'closed preparation phase required')
+    clock,pin=original_clock(operation_id,evidence=evidence,revision=os.environ.get('GITHUB_SHA'))
+    now=time.monotonic();end=min(now+PREPARATION_PHASES[phase],clock['overallDeadlineMonotonic']-TRANSPORT_SECONDS-FINAL_SECONDS)
+    require(end-now>1,'original preparation/transport aperture exhausted')
+    return {'operationId':operation_id,'phase':phase,'clockSha256':pin['sha256'],'bootId':clock['bootId'],
+            'parentPid':os.getpid(),'parentStartTicks':process_start(os.getpid()),
+            'startedMonotonic':now,'hardEnd':end,'termAt':end-1,'descendantSettlement':'unproved'}
+
+
+def process_start(pid):
+    return int(Path('/proc/'+str(pid)+'/stat').read_text().rsplit(') ',1)[1].split()[19])
+
+
+def preparation_child(operation_id,phase,*,evidence=EVIDENCE):
+    intent,_=read_json(evidence/('prep-'+phase)/'intent.json')
+    clock,pin=original_clock(operation_id,evidence=evidence,revision=os.environ.get('GITHUB_SHA'))
+    require(intent['operationId']==operation_id and intent['phase']==phase and intent['clockSha256']==pin['sha256'] and intent['bootId']==clock['bootId'],'preparation original join differs')
+    require(os.getppid()==intent['parentPid'] and process_start(os.getppid())==intent['parentStartTicks'] and os.getpgrp()==os.getpid(),'preparation parent/group birth differs')
+    body,_=fixed_preparation(phase)
+    now=time.monotonic()
+    require(intent['startedMonotonic']<=now<intent['termAt'] and intent['hardEnd']<=clock['overallDeadlineMonotonic']-TRANSPORT_SECONDS-FINAL_SECONDS,'actual preparation start expired')
+    argv=['/usr/bin/timeout','--foreground','--signal=TERM','--kill-after=1',format(intent['termAt']-now,'.6f')+'s',
+          '/bin/bash','-euo','pipefail','-c',body]
+    os.execve(argv[0],argv,dict(os.environ))
+
+
+def group_birth_observations(group,members):
+    observations=[]
+    for pid,start in members.items():
+        value={'pid':pid,'expectedStartTicks':start,'status':'Unknown'}
+        try:
+            fields=Path('/proc/'+str(pid)+'/stat').read_text().rsplit(') ',1)[1].split()
+            value.update(status='observed',state=fields[0],startTicks=int(fields[19]),pgrp=int(fields[2]),session=int(fields[3]))
+        except FileNotFoundError:value['status']='gone'
+        except (OSError,ValueError,IndexError) as error:value['reason']=type(error).__name__+': '+str(error)[:256]
+        observations.append(value)
+    return observations
+
+
+def unsettled_group_observation(value):
+    return value['status']=='Unknown' or (value['status']=='observed' and value['state']!='Z'
+            and value['startTicks']==value['expectedStartTicks'])
+
+
+def live_group_births(group,members):
+    # Unknown custody and same-birth escape block success; signalling below
+    # still requires a fresh original PGID/SID/birth join.
+    return [v['pid'] for v in group_birth_observations(group,members) if unsettled_group_observation(v)]
+
+
+def run_preparation(operation_id,phase,*,evidence=EVIDENCE,launch=None):
+    """Own only one source-fixed prep group. No argv, duration or script CLI port."""
+    require(os.geteuid()==0,'root preparation capture owner required')
+    body,fixed_env=fixed_preparation(phase)
+    intent=preparation_intent(operation_id,phase,evidence=evidence)
+    slot=evidence/('prep-'+phase);require(not slot.exists(),'preparation phase already consumed')
+    private_dir(slot);os.chown(slot,RUNNER_UID,RUNNER_UID,follow_symlinks=False)
+    write_new(slot/'intent.json',intent);os.chown(slot/'intent.json',RUNNER_UID,RUNNER_UID,follow_symlinks=False)
+    names=('GITHUB_SHA','GITHUB_EVENT_NAME','GITHUB_REF','GITHUB_RUN_ATTEMPT','GITHUB_REPOSITORY','GITHUB_WORKSPACE',
+           'GITHUB_RUN_ID','GITHUB_WORKFLOW_REF','OPERATION_ID','HOST_JOB_STARTED','HOST_JOB_MONOTONIC','ImageOS','ImageVersion','RUNNER_ENVIRONMENT')
+    env={name:os.environ[name] for name in names if name in os.environ}
+    env.update(fixed_env,PATH='/usr/bin:/bin',HOME='/home/runner',LANG='C.UTF-8',LC_ALL='C.UTF-8',EVIDENCE=str(evidence))
+    argv=['/usr/bin/setpriv','--reuid=1001','--regid=1001','--init-groups',sys.executable,'-I','-B',str(Path(__file__).resolve()),
+          'prep-child','--operation-id',operation_id,'--phase',phase]
+    streams={};result={**intent,'argv':argv,'exit':None,'bothStreamsEof':False,'leaderReaped':False,'signals':[],'firstCause':None}
+    child=None;selector=selectors.DefaultSelector();birth=None;stop_at=None;members={};sent_signals=set()
+    def observe_group():
+        for entry in Path('/proc').iterdir():
+            if not entry.name.isdecimal():continue
+            try:
+                values=(entry/'stat').read_text().rsplit(') ',1)[1].split()
+                if int(values[2])==child.pid and int(values[3])==child.pid:
+                    members[int(entry.name)]=int(values[19])
+            except (OSError,ValueError,IndexError):continue
+    def signal_owned(number):
+        if number in sent_signals:return
+        # A still-born member pins the original session/group even after its
+        # leader exits; never signal a numeric group with no live birth join.
+        for pid,start in tuple(members.items()):
+            try:
+                values=Path('/proc/'+str(pid)+'/stat').read_text().rsplit(') ',1)[1].split()
+                if int(values[19])==start and int(values[2])==child.pid and int(values[3])==child.pid:
+                    os.killpg(child.pid,number);sent_signals.add(number);result['signals'].append({'signal':number,'monotonic':time.monotonic()});return
+            except (OSError,ValueError,IndexError):continue
+    try:
+        require(time.monotonic()<intent['termAt'],'preparation expired before launch')
+        child=(launch or subprocess.Popen)(argv,cwd=env['GITHUB_WORKSPACE'],env=env,stdin=subprocess.DEVNULL,
+                    stdout=subprocess.PIPE,stderr=subprocess.PIPE,start_new_session=True)
+        birth=process_start(child.pid);result['pid']=child.pid;result['startTicks']=birth;members[child.pid]=birth
+        require(os.getpgid(child.pid)==child.pid,'new preparation group identity differs')
+        for name,pipe in (('stdout',child.stdout),('stderr',child.stderr)):
+            target=slot/(name+'.log');fd=os.open(target,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)
+            os.chown(target,RUNNER_UID,RUNNER_UID,follow_symlinks=False)
+            streams[pipe.fileno()]={'name':name,'pipe':pipe,'sink':os.fdopen(fd,'wb'),'bytes':0,'eof':False}
+            os.set_blocking(pipe.fileno(),False);selector.register(pipe,selectors.EVENT_READ)
+        total=0
+        while True:
+            observe_group();now=time.monotonic();live=live_group_births(child.pid,members)
+            if not selector.get_map() and child.poll() is not None and not live:break
+            if child.poll() is not None and live and stop_at is None:
+                result['firstCause']=result['firstCause'] or 'known original preparation group members remain'
+                signal_owned(signal.SIGTERM);stop_at=min(intent['hardEnd']-.1,now+.9)
+            if now>=intent['termAt'] and stop_at is None:
+                result['firstCause']=result['firstCause'] or 'original preparation deadline exhausted';signal_owned(signal.SIGTERM);stop_at=min(intent['hardEnd']-.1,now+.9)
+            if stop_at is not None and now>=stop_at:
+                signal_owned(signal.SIGKILL)
+                if child.poll() is not None and not selector.get_map():break
+            if now>=intent['hardEnd']:break
+            for key,_ in selector.select(min(.05,max(0,intent['hardEnd']-now))):
+                data=os.read(key.fd,65536);stream=streams[key.fd]
+                if not data:selector.unregister(key.fileobj);stream['eof']=True;continue
+                if total+len(data)>8*1024**2:
+                    result['firstCause']=result['firstCause'] or 'preparation stream cap exceeded'
+                    if stop_at is None:
+                        signal_owned(signal.SIGTERM);stop_at=min(intent['hardEnd']-.1,time.monotonic()+.9)
+                    continue
+                stream['sink'].write(data);stream['bytes']+=len(data);total+=len(data)
+        if child.poll() is None:signal_owned(signal.SIGKILL)
+        try:result['exit']=child.wait(timeout=max(.01,intent['hardEnd']-time.monotonic()));result['leaderReaped']=True
+        except subprocess.TimeoutExpired:result['firstCause']=result['firstCause'] or 'preparation wait unconfirmed'
+        result['bothStreamsEof']=all(v['eof'] for v in streams.values())
+        if result['exit']!=0:result['firstCause']=result['firstCause'] or 'preparation command failed with exit '+str(result['exit'])
+        if not result['bothStreamsEof']:result['firstCause']=result['firstCause'] or 'preparation EOF unconfirmed'
+    except BaseException as error:
+        result['firstCause']=result['firstCause'] or type(error).__name__+': '+str(error)[:512]
+        if child is not None and birth is not None:
+            try:signal_owned(signal.SIGKILL);result['exit']=child.wait(timeout=max(.01,intent['hardEnd']-time.monotonic()));result['leaderReaped']=True
+            except Exception:pass
+    finally:
+        selector.close()
+        for stream in streams.values():
+            for handle in (stream['sink'],stream['pipe']):
+                try:handle.close()
+                except OSError as error:result['firstCause']=result['firstCause'] or 'preparation stream close Unknown: '+str(error)[:256]
+        result['finalGroupObservations']=group_birth_observations(child.pid,members) if child is not None else []
+        if any(unsettled_group_observation(v) for v in result['finalGroupObservations']):
+            result['firstCause']=result['firstCause'] or 'known original preparation custody Unknown at final readback'
+        result['observedGroupMembers']=[{'pid':pid,'startTicks':start} for pid,start in sorted(members.items())]
+        result['completedMonotonic']=time.monotonic()
+        try:
+            write_new(slot/'receipt.json',result);os.chown(slot/'receipt.json',RUNNER_UID,RUNNER_UID,follow_symlinks=False)
+        except Exception as error:
+            result['firstCause']=result['firstCause'] or 'preparation receipt Unknown: '+str(error)[:256]
+        if result['firstCause'] is not None:
+            try:sys.stderr.buffer.write((slot/'stderr.log').read_bytes()[:65536])
+            except OSError:pass
+        try:
+            if os.environ.get('STARTUP_EVIDENCE'):
+                startup=Path(os.environ['STARTUP_EVIDENCE'])
+                require(startup==Path(os.environ['RUNNER_TEMP'])/(operation_id+'-startup') and not startup.is_symlink() and
+                        digest_file(startup/'clock.json',16384)['sha256']==intent['clockSha256'],'startup fallback provenance differs')
+                write_new(startup/('prep-'+phase+'-receipt.json'),result)
+                os.chown(startup/('prep-'+phase+'-receipt.json'),RUNNER_UID,RUNNER_UID,follow_symlinks=False)
+                if (slot/'stderr.log').is_file():
+                    target=startup/('prep-'+phase+'-stderr.log');write_new(target,(slot/'stderr.log').read_bytes()[:65536])
+                    os.chown(target,RUNNER_UID,RUNNER_UID,follow_symlinks=False)
+        except Exception as error:
+            result['firstCause']=result['firstCause'] or 'preparation fallback Unknown: '+str(error)[:256]
+    require(result['firstCause'] is None and result['leaderReaped'] and result['bothStreamsEof'],result['firstCause'] or 'preparation settlement Unknown')
+    return result
+
+
+def unit_microseconds(value):
+    # systemctl show formats USec durations (unlike monotonic timestamps).
+    if re.fullmatch(r'[0-9]+',value):return int(value)
+    scales={'us':1,'ms':1000,'s':1000000,'min':60000000,'h':3600000000,'d':86400000000}
+    tokens=re.findall(r'([0-9]+(?:\.[0-9]+)?)\s*(us|ms|min|s|h|d)',value)
+    require(tokens and re.sub(r'([0-9]+(?:\.[0-9]+)?)\s*(us|ms|min|s|h|d)','',value).strip()=='','unsupported unit duration')
+    from decimal import Decimal
+    total=sum(Decimal(number)*scales[unit] for number,unit in tokens)
+    require(total.is_finite() and total==int(total),'nonintegral unit duration')
+    return int(total)
+
+
+def unit_enter(operation_id, *, evidence=EVIDENCE):
+    clock,pin=original_clock(operation_id,evidence=evidence,revision=os.environ.get('SOURCE_REVISION'))
+    request,request_pin=read_json(evidence/'unit-request.json')
+    require(request['operationId']==operation_id and request['clockSha256']==pin['sha256'] and request['bootId']==clock['bootId'] and request['purpose']==clock['purpose'],'unit request original join differs')
+    unit='fsgg-'+operation_id+'.service'
+    names=('ActiveEnterTimestampMonotonic','RuntimeMaxUSec','TimeoutStopUSec','InvocationID','MainPID','ControlGroup','Type','ActiveState','RuntimeRandomizedExtraUSec')
+    done=subprocess.run(['/usr/bin/systemctl','show',unit,'--no-pager',*[arg for name in names for arg in ('-p',name)]],
+                        check=True,capture_output=True,timeout=10)
+    require(len(done.stdout)<=16384,'unit readback bound exceeded')
+    lines=done.stdout.decode().splitlines()
+    props=dict(line.split('=',1) for line in lines)
+    require(len(lines)==len(props),'duplicate unit property refused')
+    require(set(props)==set(names) and props['Type']=='exec' and props['ActiveState']=='active' and
+            re.fullmatch(r'[0-9a-f]{32}',props['InvocationID']) and int(props['MainPID'])==os.getppid(), 'unit identity/type differs')
+    require(Path('/proc/self/cgroup').read_text().strip()=='0::'+props['ControlGroup'],'unit cgroup differs')
+    active=int(props['ActiveEnterTimestampMonotonic'])/1000000
+    runtime=unit_microseconds(props['RuntimeMaxUSec'])/1000000
+    require(runtime==request['runtimeMaxSeconds'] and unit_microseconds(props['TimeoutStopUSec'])==UNIT_STOP_SECONDS*1000000 and unit_microseconds(props['RuntimeRandomizedExtraUSec'])==0,'unit fallback properties differ')
+    require(request['requestedMonotonic']<=active<=request['requestedMonotonic']+ACTIVATION_SECONDS and active+runtime<=request['runtimeLimitMonotonic'],'unit activation/absolute fallback deadline refused')
+    value={'operationId':operation_id,'clockSha256':pin['sha256'],'requestSha256':request_pin['sha256'],'bootId':clock['bootId'],
+           'purpose':clock['purpose'],'activeMonotonic':active,'runtimeDeadlineMonotonic':active+runtime,'properties':props}
+    write_new(evidence/'unit-admission.json',value)
+    os.chown(evidence/'unit-admission.json',RUNNER_UID,RUNNER_UID,follow_symlinks=False)
+    return value
+
+
+def controller_start(operation_id,purpose,*,evidence=EVIDENCE,revision=None):
+    clock,pin=original_clock(operation_id,evidence=evidence,revision=revision)
+    request,request_pin=read_json(evidence/'unit-request.json');unit,_=read_json(evidence/'unit-admission.json')
+    require(clock['purpose']==purpose and unit['purpose']==purpose and unit['operationId']==operation_id and unit['clockSha256']==pin['sha256'] and unit['requestSha256']==request_pin['sha256'] and unit['bootId']==clock['bootId'],'controller original unit/clock join differs')
+    limit=clock['overallDeadlineMonotonic']-TRANSPORT_SECONDS-UNIT_STOP_SECONDS-FINAL_SECONDS
+    require(request['clockSha256']==pin['sha256'] and request['runtimeLimitMonotonic']==limit and
+            unit['runtimeDeadlineMonotonic']==unit['activeMonotonic']+request['runtimeMaxSeconds'] and
+            request['requestedMonotonic']<=unit['activeMonotonic']<=request['requestedMonotonic']+ACTIVATION_SECONDS,'controller unit deadline changed')
+    now=time.monotonic()
+    require(unit['activeMonotonic']<=now and now+work_seconds(purpose)+120+BOOKKEEPING_SECONDS<=unit['runtimeDeadlineMonotonic']<=limit,'remaining original unit budget cannot contain purpose clock')
+    return now
+
+
 def seal_crypto(operation_id, *, evidence=EVIDENCE):
     require(re.fullmatch(r'bar-image-[0-9]{1,20}-[0-9]{1,5}', operation_id) is not None, 'fixed run/attempt identity required')
-    started = float(os.environ.get('HOST_JOB_MONOTONIC', 'nan'))
-    require(math.isfinite(started) and 0 <= started <= time.monotonic(), 'original monotonic job clock required')
-    deadline = started + OUTER_SECONDS
+    clock,clock_pin=original_clock(operation_id,evidence=evidence,revision=os.environ.get('GITHUB_SHA'))
+    started=clock['firstMonotonic'];deadline=clock['overallDeadlineMonotonic']
     identity = crypto_identity(deadline)
     require(digest_file(RECIPIENT, 8192)['sha256'] == RECIPIENT_PEM_SHA256, 'public recipient PEM differs')
     der = native([str(OPENSSL), 'x509', '-in', str(RECIPIENT), '-outform', 'DER'], deadline)
@@ -179,7 +475,7 @@ def seal_crypto(operation_id, *, evidence=EVIDENCE):
     require('Public Key Algorithm: rsaEncryption' in description and 'Public-Key: (3072 bit)' in description,
             'selected RSA3072 recipient required')
     value = {'operationId': operation_id, 'bootId': Path('/proc/sys/kernel/random/boot_id').read_text().strip(),
-             'outerStartMonotonic': started, 'outerDeadlineMonotonic': deadline,
+             'outerStartMonotonic': started, 'outerDeadlineMonotonic': deadline, 'clockSha256':clock_pin['sha256'],
              'recipientPemSha256': RECIPIENT_PEM_SHA256, 'recipientDerSha256': RECIPIENT_DER_SHA256,
              'identity': identity, 'scheme': 'CMS AuthEnvelopedData AES-256-GCM; RSA-OAEP SHA256/MGF1-SHA256',
              'encoding': 'binary BER streaming, OpenSSL outform DER CLI', 'privateKeyOnRunner': False,
@@ -198,7 +494,8 @@ def encrypt_candidate(operation_id, candidate, archive, *, evidence=EVIDENCE, tr
     seal, pin = read_json(evidence / 'transport-seal.json')
     require(seal['operationId'] == operation_id and seal['bootId'] == Path('/proc/sys/kernel/random/boot_id').read_text().strip(),
             'crypto seal operation/boot differs')
-    require(seal['outerDeadlineMonotonic'] == seal['outerStartMonotonic'] + OUTER_SECONDS, 'original crypto deadline differs')
+    clock,clock_pin=original_clock(operation_id,evidence=evidence)
+    require(seal['clockSha256']==clock_pin['sha256'] and seal['outerDeadlineMonotonic']==clock['overallDeadlineMonotonic'] and seal['outerStartMonotonic']==clock['firstMonotonic'],'original crypto deadline expired or differs')
     deadline = seal['outerDeadlineMonotonic']
     require(crypto_identity(deadline) == seal['identity'], 'OpenSSL executable/library identity changed')
     require(digest_file(RECIPIENT, 8192)['sha256'] == seal['recipientPemSha256'] == RECIPIENT_PEM_SHA256
@@ -385,11 +682,9 @@ def prepare(operation_id, revision, *, source=SOURCE, allocation=ALLOCATION, evi
     security, security_pin = read_json(evidence / 'root-security.json')
     require(security.get('bootId') == Path('/proc/sys/kernel/random/boot_id').read_text().strip(),
             'fresh root security observation required')
-    started = float(os.environ.get('HOST_JOB_MONOTONIC', 'nan'))
-    require(math.isfinite(started), 'original outer job clock required')
-    elapsed = time.monotonic() - started
-    require(0 <= elapsed and elapsed + bar.WORK_SECONDS + bar.RETIRE_SECONDS + TRANSPORT_SECONDS <= OUTER_SECONDS,
-            'remaining outer job budget cannot contain full controller and transport apertures')
+    clock,clock_pin=original_clock(operation_id,evidence=evidence,revision=revision)
+    started=clock['firstMonotonic']
+    require(clock['purpose']==purpose,'original purpose differs')
     product = allocation / 'context'
     for name, expected in PRODUCT_FILES.items():
         require(digest_file(product / name, 1024**2)['sha256'] == expected, 'product source pin differs: ' + name)
@@ -403,7 +698,8 @@ def prepare(operation_id, revision, *, source=SOURCE, allocation=ALLOCATION, evi
     crypto_seal, crypto_pin = read_json(evidence / 'transport-seal.json')
     require(crypto_seal.get('operationId') == operation_id and crypto_seal.get('bootId') == boot
             and crypto_seal.get('outerStartMonotonic') == started
-            and crypto_seal.get('outerDeadlineMonotonic') == started + OUTER_SECONDS
+            and crypto_seal.get('outerDeadlineMonotonic') == clock['overallDeadlineMonotonic']
+            and crypto_seal.get('clockSha256') == clock_pin['sha256']
             and crypto_seal.get('recipientDerSha256') == RECIPIENT_DER_SHA256,
             'original recipient/crypto deadline seal required')
     require(not (allocation / 'state' / operation_id).exists(), 'consumed operation cannot be prepared again')
@@ -434,16 +730,17 @@ def prepare(operation_id, revision, *, source=SOURCE, allocation=ALLOCATION, evi
                             'sharedHostReservedDiskBytes': 0, 'unquantifiedResourceConflicts': []})
     reference = lambda path: {'path': str(path), 'sha256': digest_file(path, 1024**2)['sha256']}
     topology_ref, disposition_ref = reference(topology), reference(disposition)
-    start = time.monotonic()
+    network=bar.network_seed()
+    start=controller_start(operation_id,purpose,evidence=evidence,revision=revision)
     selection = {'schema': 'fsgg.bar-headless-operation/1', 'operationId': operation_id,
         'helper': {'revision': revision, 'tree': os.environ['HELPER_TREE'], 'files': HELPER_FILES},
         'product': {'revision': PRODUCT_REVISION, 'tree': PRODUCT_TREE, 'files': PRODUCT_FILES,
                     'baseImage': bar.BASE_IMAGE, 'localTag': 'localhost/fsgg/bar:' + operation_id, 'exportName': operation_id},
         'allocation': {'path': str(allocation), 'identity': bar.directory_pin(allocation)},
         'build': {'root': str(build_root), 'runroot': str(build_run)}, 'load': {'root': str(load_root), 'runroot': str(load_run)},
-        'network': {'purpose': purpose, 'seed': bar.network_seed()},
-        'support': support, 'clock': {'bootId': boot, 'start': start, 'workEnd': start + bar.WORK_SECONDS,
-                                    'totalEnd': start + bar.WORK_SECONDS + bar.RETIRE_SECONDS},
+        'network': {'purpose': purpose, 'seed': network},
+        'support': support, 'clock': {'bootId': boot, 'start': start, 'workEnd': start + work_seconds(purpose),
+                                    'totalEnd': start + work_seconds(purpose) + bar.RETIRE_SECONDS},
         'admission': {'topology': topology_ref, 'resourceDisposition': disposition_ref,
                       'security': {'path': str(evidence / 'root-security.json'), 'sha256': security_pin['sha256']},
                       'domain': {'path': str(domain_path), 'sha256': domain_pin['sha256']}},
@@ -607,6 +904,9 @@ def receipt(operation_id, *, allocation=ALLOCATION, evidence=EVIDENCE, transport
             require(not candidate.exists(), 'prerequisite produced a candidate')
             require(not success and not encrypted, 'prerequisite candidate permission refused')
             if isinstance(result, dict) and result.get('preflight') == 'passed':
+                original,original_pin=original_clock(operation_id,evidence=evidence)
+                seal,_=read_json(evidence/'transport-seal.json')
+                require(original['purpose']==purpose and seal['clockSha256']==original_pin['sha256'] and seal['outerDeadlineMonotonic']==original['overallDeadlineMonotonic'],'prerequisite original clock differs')
                 manifest_path = Path(result.get('manifest', ''))
                 require(manifest_path.parent == state / 'manifests', 'prerequisite manifest outside original')
                 manifest, manifest_pin = read_json(manifest_path)
@@ -663,7 +963,10 @@ def receipt(operation_id, *, allocation=ALLOCATION, evidence=EVIDENCE, transport
             parent /= part
             private_dir(parent)
         copy_pinned(original, target, pin)
-    require(not success or time.monotonic() < seal['outerDeadlineMonotonic'], 'original outer deadline expired during metadata staging')
+    if (success or prerequisite_passed) and time.monotonic()>=seal['outerDeadlineMonotonic']:
+        value['candidateTransportPermitted']=False;value['networkPrerequisitePassed']=False
+        value['transportRefusals'].append('original outer deadline expired during metadata staging')
+        success=False;prerequisite_passed=False
     write_new(evidence / 'transport-receipt.json', value)
     write_new(stage / 'transport-receipt.json', value)
     if os.environ.get('GITHUB_OUTPUT'):
@@ -675,13 +978,23 @@ def receipt(operation_id, *, allocation=ALLOCATION, evidence=EVIDENCE, transport
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.split('\n', 1)[0])
-    parser.add_argument('mode', choices=['canonicalize-checkouts', 'seal-transport', 'qualify', 'network-prerequisite', 'receipt'])
+    parser.add_argument('mode', choices=['canonicalize-checkouts', 'seal-transport', 'unit-budget', 'unit-enter', 'prep-run', 'prep-child', 'qualify', 'network-prerequisite', 'receipt'])
     parser.add_argument('--operation-id', required=True)
     parser.add_argument('--source-revision')
     parser.add_argument('--security-stage')
+    parser.add_argument('--phase',choices=tuple(PREPARATION_PHASES))
     args = parser.parse_args(argv)
     require(args.security_stage is None or args.mode == 'receipt', 'security stage is receipt-only')
-    if args.mode == 'canonicalize-checkouts':
+    require((args.phase is not None)==(args.mode in ('prep-run','prep-child')),'closed preparation phase join required')
+    if args.mode in ('prep-run','prep-child'):
+        host_evidence=Path(os.environ['EVIDENCE'])
+        value=(run_preparation if args.mode=='prep-run' else preparation_child)(args.operation_id,args.phase,evidence=host_evidence)
+        print(json.dumps(value,sort_keys=True))
+    elif args.mode in ('unit-budget','unit-enter'):
+        host_evidence=Path(os.environ['EVIDENCE'])
+        value=(unit_budget if args.mode=='unit-budget' else unit_enter)(args.operation_id,evidence=host_evidence)
+        print(value['runtimeMaxSeconds'] if args.mode=='unit-budget' else json.dumps(value,sort_keys=True))
+    elif args.mode == 'canonicalize-checkouts':
         print(json.dumps(canonicalize_checkouts(args.source_revision or ''), sort_keys=True))
     elif args.mode == 'seal-transport':
         print(json.dumps(seal_crypto(args.operation_id, evidence=Path(os.environ['GITHUB_WORKSPACE']) / 'evidence'), sort_keys=True))
