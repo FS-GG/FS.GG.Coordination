@@ -31,7 +31,7 @@ PRODUCT_TREE = 'f6e4dc108bf065cd2fd44d48e0faf8807e1b8e3c'
 HELPER_FILES = {
     'eng/portable-workspace-image.py': '14f519038fd24684b458d917ddb33ab6bada86a084b39c35ce5ae7e8e9fa7aa5',
     'eng/portable_workspace_bar.py': 'eee52c851cd77a15d7818f4ac5a7cefc04a12e8bbbad2ed65752fc048b6e2bf9',
-    'eng/portable_workspace_sc2.py': '3b99dbeed9400268954a3cb6dc875cc1809a33e936b094bfb41ffa3a59f7e494',
+    'eng/portable_workspace_sc2.py': '03ed3c92521cd414d001d343c86c8c0903bcfd1dee9fe8d38cdc6365618a3f83',
 }
 PRODUCT_FILES = {
     'containers/barc-stock-headless/Containerfile': '72ab4ae75d040a2a4f94fdf6a57d910a0a51a07024238cb09d831c8f94c89392',

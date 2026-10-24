@@ -63,7 +63,7 @@ jobs:
           PYTHONDONTWRITEBYTECODE=1 python3 tests/portable-workspace/image/test_bar_hosted_domain.py
           PYTHONDONTWRITEBYTECODE=1 python3 -I -B tests/qualification-runner/test_dedicated_runner.py
           PYTHONDONTWRITEBYTECODE=1 python3 -I -B tests/portable-workspace/image/test_bar_hosted_operation.py
-          shellcheck -s bash deployment/qualification-runner/*.sh
+          shellcheck -x -P SCRIPTDIR -s bash deployment/qualification-runner/*.sh
           command -v podman
           install -d -m 0700 "$QUALIFICATION_STATE"
           python3 eng/portable-workspace-image.py preflight \

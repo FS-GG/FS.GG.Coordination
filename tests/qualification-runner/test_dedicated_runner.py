@@ -19,14 +19,14 @@ def target():
     return {'schema': 'fsgg.dedicated-qualification-target/1', 'baselineId': owner.BASELINE_ID,
         'provider': 'authored-test-provider', 'providerInstanceId': 'test-vm-only', 'providerImageId': 'test-image',
         'systemUuid': 'test-uuid', 'operatorAcceptanceSha256': 'a' * 64, 'dedicated': True, 'disposable': True,
-        'sharedCodexHost': False, 'architecture': 'x86_64', 'os': {'id': 'ubuntu', 'version': '26.10'},
+        'sharedCodexHost': False, 'architecture': 'x86_64', 'os': {'id': 'ubuntu', 'version': '24.04'},
         'resources': {'vcpu': 4, 'memoryBytes': 16 * 1024**3, 'diskBytes': 256 * 1024**3}}
 
 
 def lock():
     return {'schema': 'fsgg.dedicated-qualification-acquired-inputs/1', 'baselineId': owner.BASELINE_ID,
-        'image': {'url': 'https://cloud-images.ubuntu.com/authored-test.img', 'sha256': 'a' * 64,
-            'signedChecksumSha256': 'b' * 64, 'qualifiedAcquisitionReceiptSha256': 'c' * 64, 'release': 'test-only'},
+        'image': {'url': 'https://cloud-images.ubuntu.com/releases/noble/release-20261017/ubuntu-24.04-server-cloudimg-amd64.img', 'sha256': 'a' * 64,
+            'signedChecksumSha256': 'b' * 64, 'qualifiedAcquisitionReceiptSha256': 'c' * 64, 'release': 'release-20261017'},
         'sdk': {'version': '10.0.401', 'runtime': '10.0.12', 'archiveSha512': owner.SDK_SHA512},
         'runner': {'version': '1.2.3', 'sha256': 'd' * 64, 'releaseMetadataSha256': 'e' * 64,
             'url': 'https://github.com/actions/runner/releases/download/v1.2.3/actions-runner-linux-x64-1.2.3.tar.gz'},
@@ -46,7 +46,7 @@ class DedicatedRunnerDataControls(unittest.TestCase):
         with self.assertRaises(ValueError): owner.validate_target_data(value)
 
     def test_prerelease_or_old_libc_carrier_not_relabelled(self):
-        for os_value in [{'id': 'ubuntu', 'version': '24.04'}, {'id': 'fedora', 'version': '45'}]:
+        for os_value in [{'id': 'ubuntu', 'version': '26.10'}, {'id': 'ubuntu', 'version': '22.04'}, {'id': 'fedora', 'version': '45'}]:
             value = target(); value['os'] = os_value
             with self.assertRaises(ValueError): owner.validate_target_data(value)
 
@@ -143,13 +143,13 @@ class DedicatedRunnerDataControls(unittest.TestCase):
             (path).unlink()
             with self.assertRaises(ValueError): owner.write_binding(self.instance(), root, owner_uid=os.getuid())
 
-    def guest(self, root, *, openssl='4.0.3-1ubuntu1', binding=True):
+    def guest(self, root, *, openssl='3.0.13-0ubuntu3.16', binding=True):
         """A complete passing fake guest root; the real recipe's file names and bytes."""
         deployment = ROOT / 'deployment/qualification-runner'
         def put(name, data, mode):
             path = root / name.lstrip('/'); path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(data); path.chmod(mode); return path
-        put('/etc/os-release', b'ID=ubuntu\nVERSION_ID="26.10"\n', 0o644)
+        put('/etc/os-release', b'ID=ubuntu\nVERSION_ID="24.04"\n', 0o644)
         put('/etc/passwd', b'root:x:0:0::/root:/bin/bash\nrunner:x:1001:1001::/home/runner:/bin/bash\n', 0o644)
         put('/etc/group', b'root:x:0:\nrunner:x:1001:\n', 0o644)
         put(owner.SYSCTL_DROPIN, (deployment / '90-fsgg-qualification.conf').read_bytes(), 0o644)
@@ -158,7 +158,7 @@ class DedicatedRunnerDataControls(unittest.TestCase):
         put(owner.STATE_DIRECTORY + '/acquired-input-lock.json', json.dumps(lock()).encode(), 0o644)
         for name in ('run.sh', 'config.sh', 'bin/Runner.Listener'):
             put(owner.RUNNER_ROOT + '/' + name, b'#!/bin/sh\n', 0o755)
-        put(owner.RUNNER_ROOT + '/bin/runnerversion', b'1.2.3\n', 0o644)
+        put(owner.RUNNER_ROOT + '/bin/Runner.Listener.deps.json', b'{"libraries":{"Runner.Listener/1.2.3":{},"Runner.Common/1.0.0":{}}}', 0o644)
         put(owner.DOTNET_ROOT + '/dotnet', b'x', 0o755)
         (root / owner.DOTNET_ROOT.lstrip('/') / 'sdk/10.0.401').mkdir(parents=True)
         (root / owner.DOTNET_ROOT.lstrip('/') / 'shared/Microsoft.NETCore.App/10.0.12').mkdir(parents=True)
@@ -184,30 +184,45 @@ class DedicatedRunnerDataControls(unittest.TestCase):
 
     def test_guest_readback_accepts_only_the_complete_baked_layer_on_the_openssl3_family(self):
         with tempfile.TemporaryDirectory() as directory:
-            root = self.guest(Path(directory), openssl='3.5.4-1ubuntu1')
+            root = self.guest(Path(directory), openssl='3.0.13-0ubuntu3.16')
             self.assertEqual(self.verify(root), [])
             result = owner.verify_guest(root, ROOT, 'boot', system_uuid='authored-uuid', runner_name=self.instance()['runnerName'], owner_uid=os.getuid(), runner_uid=os.getuid(), machine='x86_64')
             self.assertEqual(result['facts']['goVersion'], 'go1.27.1')
             self.assertEqual(result['facts']['runnerVersion'], '1.2.3')
             self.assertIn('Arch userland', result['facts']['buildah'])
 
-    def test_guest_readback_names_the_openssl4_blocker_of_ubuntu_26_10(self):
-        # Ubuntu 26.10 ships OpenSSL 4.0.x; bar_hosted_operation.crypto_identity accepts only the 3.x family.
+    def test_guest_readback_keeps_refusing_the_openssl4_family_without_relaxing_the_gate(self):
+        # Root chose Ubuntu 24.04 (OpenSSL 3.0.x) instead of relaxing bar_hosted_operation.crypto_identity,
+        # which accepts only the 3.x family. A newer carrier with OpenSSL 4 must still be refused.
         source = (ROOT / 'eng/bar_hosted_operation.py').read_text()
         self.assertIn("version.startswith('" + owner.OPENSSL_FAMILY_PREFIX + "')", source)
         with tempfile.TemporaryDirectory() as directory:
-            self.assertEqual(self.verify(self.guest(Path(directory))), ['openssl-family-not-3'])
+            self.assertEqual(self.verify(self.guest(Path(directory), openssl='4.0.3-1ubuntu1')), ['openssl-family-not-3'])
+
+    def test_lock_pins_only_an_official_immutable_noble_release_image(self):
+        good = lock()
+        self.assertEqual(owner.BASELINE_ID, 'ubuntu2404-linux-x64-v1')
+        for url in ('https://cloud-images.ubuntu.com/stonking/current/stonking-server-cloudimg-amd64.img',
+                    'https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img',
+                    'https://cloud-images.ubuntu.com/releases/noble/release-20261017/ubuntu-24.04-server-cloudimg-amd64-root.tar.xz',
+                    'https://example.invalid/releases/noble/release-20261017/ubuntu-24.04-server-cloudimg-amd64.img'):
+            selected = lock(); selected['image']['url'] = url
+            with self.subTest(url=url), self.assertRaises(ValueError): owner.validate_lock_data(selected)
+        for release in ('release-20260926', 'current', 'release-1'):
+            selected = lock(); selected['image']['release'] = release
+            with self.subTest(release=release), self.assertRaises(ValueError): owner.validate_lock_data(selected)
+        self.assertEqual(owner.validate_lock_data(good), good)
 
     def test_guest_readback_refuses_each_missing_or_altered_requirement(self):
         cases = {
-            'os-not-ubuntu-26.10': lambda r: (r / 'etc/os-release').write_bytes(b'ID=ubuntu\nVERSION_ID="24.04"\n'),
+            'os-not-ubuntu-24.04': lambda r: (r / 'etc/os-release').write_bytes(b'ID=ubuntu\nVERSION_ID="26.10"\n'),
             'apparmor-userns-not-zero': lambda r: (r / owner.USERNS_KNOB.lstrip('/')).write_bytes(b'1\n'),
             'sysctl-dropin-bytes': lambda r: (r / owner.SYSCTL_DROPIN.lstrip('/')).write_bytes(b'kernel.apparmor_restrict_unprivileged_userns = 1\n'),
             'sudoers-bytes': lambda r: ((r / owner.SUDOERS_FILE.lstrip('/')).chmod(0o640), (r / owner.SUDOERS_FILE.lstrip('/')).write_bytes(b'runner ALL=(ALL) NOPASSWD: ALL\n'), (r / owner.SUDOERS_FILE.lstrip('/')).chmod(0o440)),
             'runner-uid-1001-account': lambda r: (r / 'etc/passwd').write_bytes(b'runner:x:1002:1002::/home/runner:/bin/bash\n'),
             'runner-gid-1001-group': lambda r: (r / 'etc/group').write_bytes(b'runner:x:1002:\n'),
             'runner-already-configured:.runner': lambda r: (r / owner.RUNNER_ROOT.lstrip('/') / '.runner').write_bytes(b'{}'),
-            'runner-version-differs-from-lock': lambda r: (r / owner.RUNNER_ROOT.lstrip('/') / 'bin/runnerversion').write_bytes(b'9.9.9\n'),
+            'runner-version-differs-from-lock': lambda r: (r / owner.RUNNER_ROOT.lstrip('/') / 'bin/Runner.Listener.deps.json').write_bytes(b'{"libraries":{"Runner.Listener/9.9.9":{}}}'),
             'runner-file-missing:run.sh': lambda r: (r / owner.RUNNER_ROOT.lstrip('/') / 'run.sh').unlink(),
             'dotnet-sdk-10.0.401': lambda r: (r / owner.DOTNET_ROOT.lstrip('/') / 'sdk/10.0.100').mkdir(),
             'dotnet-runtime-10.0.12': lambda r: (r / owner.DOTNET_ROOT.lstrip('/') / 'shared/Microsoft.NETCore.App/10.0.12').rmdir(),
@@ -221,12 +236,12 @@ class DedicatedRunnerDataControls(unittest.TestCase):
         }
         for expected, damage in cases.items():
             with self.subTest(expected), tempfile.TemporaryDirectory() as directory:
-                root = self.guest(Path(directory), openssl='3.5.4-1ubuntu1')
+                root = self.guest(Path(directory), openssl='3.0.13-0ubuntu3.16')
                 damage(root)
                 refusals = self.verify(root)
                 self.assertIn(expected, refusals)
         with tempfile.TemporaryDirectory() as directory:
-            root = self.guest(Path(directory), openssl='3.5.4-1ubuntu1')
+            root = self.guest(Path(directory), openssl='3.0.13-0ubuntu3.16')
             self.assertEqual(self.verify(root, machine='aarch64'), ['architecture-not-x86_64'])
             self.assertIn('binding-uuid-differs', self.verify(root, system_uuid='another-vm'))
             self.assertIn('instance-binding-data: ' + 'dedicated-runner: exact ephemeral fsgg-q- runner name required',
@@ -235,7 +250,7 @@ class DedicatedRunnerDataControls(unittest.TestCase):
 
     def test_image_phase_refuses_a_baked_per_boot_binding(self):
         with tempfile.TemporaryDirectory() as directory:
-            root = self.guest(Path(directory), openssl='3.5.4-1ubuntu1')
+            root = self.guest(Path(directory), openssl='3.0.13-0ubuntu3.16')
             self.assertEqual(owner.verify_guest(root, ROOT, 'image', owner_uid=os.getuid(), runner_uid=os.getuid(), machine='x86_64')['refusals'], ['image-contains-instance-binding'])
             (root / owner.STATE_DIRECTORY.lstrip('/') / 'instance-binding.json').unlink()
             self.assertEqual(owner.verify_guest(root, ROOT, 'image', owner_uid=os.getuid(), runner_uid=os.getuid(), machine='x86_64')['refusals'], [])
@@ -269,7 +284,8 @@ class DedicatedRunnerDataControls(unittest.TestCase):
         for constant in (owner.RUNNER_ROOT, owner.DOTNET_ROOT, owner.GO_ROOT):
             self.assertIn(constant, recipe)
         self.assertIn('verify-guest --phase image', recipe)
-        self.assertIn('libicu78', recipe)
+        self.assertIn('noble-apt.sh', recipe)
+        self.assertIn('libicu74', (ROOT / 'deployment/qualification-runner/noble-apt.sh').read_text())
 
     def test_public_coordination_never_targets_the_private_runner_label(self):
         for path in sorted((ROOT / '.github').rglob('*')):
@@ -302,9 +318,180 @@ class DedicatedRunnerDataControls(unittest.TestCase):
             selected['files'][0]['path'] = '../a'
             with self.assertRaises(ValueError): owner.validate_population(selected, root)
 
-    def test_baseline_is_not_ready_without_actual_inputs(self):
+    def test_baseline_is_not_ready_without_actual_target_or_admission(self):
         value = json.loads((ROOT / 'deployment/qualification-runner/baseline.json').read_text())
-        self.assertIsNone(value['target']); self.assertIsNone(value['acquiredInputLock']); self.assertIsNone(value['nativeAdmission'])
+        self.assertIsNone(value['target']); self.assertIsNone(value['nativeAdmission'])
+        self.assertEqual(value['id'], owner.BASELINE_ID)
+        self.assertEqual(value['acquiredInputLock'], 'noble/acquired-input-lock.json')  # source record, not admission
+        self.assertEqual((value['carrier']['version'], value['carrier']['codename']), ('24.04', 'noble'))
+
+
+NOBLE = ROOT / 'deployment/qualification-runner/noble'
+spec_inputs = importlib.util.spec_from_file_location('noble_inputs_source', ROOT / 'deployment/qualification-runner/noble-inputs.py')
+inputs = importlib.util.module_from_spec(spec_inputs); spec_inputs.loader.exec_module(inputs)
+
+
+def digest(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+class NobleInputRecords(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.lock = json.loads((NOBLE / 'acquired-input-lock.json').read_text())
+        cls.transaction = json.loads((NOBLE / 'apt-transaction.json').read_text())
+        cls.inventory = [row.split('\t') for row in (NOBLE / 'package-inventory.expected').read_text().splitlines()]
+
+    def test_lock_is_valid_and_binds_every_committed_record(self):
+        lock = self.lock
+        self.assertEqual(owner.validate_lock_data(lock), lock)
+        self.assertEqual(lock['baselineId'], owner.BASELINE_ID)
+        self.assertEqual(lock['image']['signedChecksumSha256'], digest(NOBLE / 'image/SHA256SUMS'))
+        self.assertEqual(lock['image']['qualifiedAcquisitionReceiptSha256'], digest(NOBLE / 'image-acquisition-receipt.json'))
+        self.assertEqual(lock['runner']['releaseMetadataSha256'], digest(NOBLE / 'runner-release.json'))
+        self.assertEqual(lock['aptTransaction']['expectedFinalInventorySha256'], digest(NOBLE / 'package-inventory.expected'))
+        self.assertEqual(lock['aptTransaction']['qualifiedSignedTransactionSha256'], digest(NOBLE / 'apt-transaction.json'))
+        runner = json.loads((NOBLE / 'runner-release.json').read_text())
+        self.assertEqual(runner['digest'], 'sha256:' + lock['runner']['sha256'])
+        self.assertEqual(runner['tag'], 'v' + lock['runner']['version'])
+        self.assertEqual(lock['goRace']['version'], '1.27.1')
+
+    def test_population_rows_are_complete_ordered_and_origin_pinned(self):
+        rows = self.lock['files']
+        paths = [row['path'] for row in rows]
+        self.assertEqual(paths, sorted(set(paths)))
+        derived = {'apt/package-inventory.expected': NOBLE / 'package-inventory.expected', 'apt/apt-transaction.json': NOBLE / 'apt-transaction.json'}
+        for row in rows:
+            self.assertEqual(sorted(row), ['bytes', 'path', 'sha256'] + ([] if row['path'] in derived else ['url']), row['path'])
+            if row['path'] in derived:
+                self.assertEqual((row['sha256'], row['bytes']), (digest(derived[row['path']]), derived[row['path']].stat().st_size))
+            else:
+                self.assertTrue(row['url'].startswith('https://'), row['path'])
+        for required in ('sdk/dotnet-sdk-10.0.401-linux-x64.tar.gz', 'go/go1.27.1.linux-amd64.tar.gz', 'runner/actions-runner-linux-x64-2.338.1.tar.gz'):
+            self.assertIn(required, paths)
+        pool = sorted(row['path'][len('apt/'):] for row in rows if row['path'].startswith('apt/pool/'))
+        self.assertEqual(pool, sorted(row['filename'] for row in self.transaction['debs']))
+        for row in rows:
+            if row['path'].startswith(('apt/pool/', 'apt/dists/')):
+                self.assertEqual(row['url'], inputs.SNAPSHOT + '/' + row['path'][len('apt/'):])
+        self.assertEqual({'apt/dists/%s/InRelease' % suite for suite in inputs.SUITES}, {p for p in paths if p.endswith('InRelease')})
+        by_path = {row['path']: row for row in rows}
+        for suite in inputs.SUITES:
+            self.assertEqual(self.transaction['suites'][suite]['inReleaseSha256'], by_path['apt/dists/%s/InRelease' % suite]['sha256'])
+
+    def test_inventory_is_the_signed_image_set_plus_the_noble_transaction(self):
+        names = [row[0] for row in self.inventory]
+        self.assertEqual(names, sorted(names, key=lambda n: n.encode()))
+        self.assertEqual(self.transaction['finalInventory'], {'packages': len(names), 'sha256': digest(NOBLE / 'package-inventory.expected')})
+        packages = dict(self.inventory)
+        self.assertTrue(packages['openssl'].startswith(owner.OPENSSL_PACKAGE_PREFIX), 'noble keeps the OpenSSL-3 gate satisfied')
+        self.assertIn('libicu74:amd64', packages)
+        self.assertIn('docker.io', packages)
+        self.assertEqual(packages['libc6:amd64'].split('-')[0], '2.39')
+        for forbidden in ('libicu78:amd64', 'libssl4:amd64'):
+            self.assertNotIn(forbidden, packages)
+        requested = set(self.transaction['installRequest'])
+        recipe = (ROOT / 'deployment/qualification-runner/noble-apt.sh').read_text()
+        self.assertEqual(requested, set(recipe.split('runner_packages=(', 1)[1].split(')', 1)[0].split()))
+        for deb in self.transaction['debs']:
+            installed = packages.get(deb['package']) or packages.get(deb['package'] + ':amd64')
+            self.assertEqual(installed, deb['version'], deb['package'])
+
+    def test_signed_checksums_verify_and_pin_the_image_when_gpg_is_available(self):
+        keyring = Path(os.environ.get('UBUNTU_KEYRING_DIR', '/usr/share/keyrings')) / 'ubuntu-cloudimage-keyring.gpg'
+        if shutil.which('gpgv') is None or not keyring.exists():
+            self.skipTest('gpgv or the Ubuntu cloud image keyring is unavailable')
+        fingerprint, _ = inputs.verify_image_checksums(NOBLE / 'image/SHA256SUMS', NOBLE / 'image/SHA256SUMS.gpg', keyring, self.lock)
+        self.assertEqual(fingerprint, inputs.CLOUDIMAGE_FINGERPRINT)
+        tampered = dict(self.lock, image=dict(self.lock['image'], sha256='0' * 64))
+        with self.assertRaises(SystemExit): inputs.verify_image_checksums(NOBLE / 'image/SHA256SUMS', NOBLE / 'image/SHA256SUMS.gpg', keyring, tampered)
+
+    def test_archive_signature_check_refuses_an_altered_inrelease_when_gpg_is_available(self):
+        keyring = Path(os.environ.get('UBUNTU_KEYRING_DIR', '/usr/share/keyrings')) / 'ubuntu-archive-keyring.gpg'
+        if shutil.which('gpgv') is None or not keyring.exists():
+            self.skipTest('gpgv or the Ubuntu archive keyring is unavailable')
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'InRelease'
+            path.write_text('Origin: Ubuntu\nNot signed\n')
+            with self.assertRaises(SystemExit): inputs.gpgv(keyring, path)
+
+    def test_compiler_identities_recompute_from_the_recorded_roles(self):
+        for key, rows in self.transaction['compilerIdentity']['roles'].items():
+            self.assertEqual(rows, sorted(rows), key)
+            self.assertEqual(hashlib.sha256(('\n'.join(rows) + '\n').encode()).hexdigest(), self.lock['compiler'][key], key)
+        for key, roles in inputs.COMPILER_ROLES.items():
+            self.assertEqual(len(self.transaction['compilerIdentity']['roles'][key]), len(roles), key)
+
+    def test_wrong_signer_is_refused_even_when_the_signature_is_valid(self):
+        keyring = Path(os.environ.get('UBUNTU_KEYRING_DIR', '/usr/share/keyrings')) / 'ubuntu-archive-keyring.gpg'
+        if shutil.which('gpgv') is None or not keyring.exists():
+            self.skipTest('gpgv or the Ubuntu archive keyring is unavailable')
+        # The image checksums are signed by the cloud-image key; the archive keyring cannot vouch for them.
+        with self.assertRaises(SystemExit):
+            inputs.verify_image_checksums(NOBLE / 'image/SHA256SUMS', NOBLE / 'image/SHA256SUMS.gpg', keyring, self.lock)
+
+    def test_only_the_signed_text_of_an_inrelease_is_trusted(self):
+        if shutil.which('gpg') is None or shutil.which('gpgv') is None:
+            self.skipTest('gpg is unavailable')
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory); home = root / 'gnupg'; home.mkdir(mode=0o700)
+            env = {**os.environ, 'GNUPGHOME': str(home)}
+            def gpg(*arguments, **kw):
+                return subprocess.run(['gpg', '--batch', '--no-tty', *arguments], env=env, capture_output=True, check=True, **kw)
+            self.addCleanup(lambda: subprocess.run(['gpgconf', '--kill', 'all'], env=env, capture_output=True))
+            gpg('--pinentry-mode', 'loopback', '--passphrase', '', '--quick-generate-key', 'test <test@example.invalid>', 'rsa2048', 'sign', '1d')
+            ring = root / 'ring.gpg'
+            ring.write_bytes(gpg('--export').stdout)
+            body = root / 'body'
+            body.write_text('Origin: Ubuntu\nSuite: noble\nSHA256:\n ' + 'a' * 64 + ' 10 main/binary-amd64/Packages.xz\n')
+            signed = root / 'InRelease'
+            gpg('--pinentry-mode', 'loopback', '--passphrase', '', '--clearsign', '--output', str(signed), str(body))
+            fingerprint, _, rows = inputs.verified_release(ring, signed, 'noble')
+            self.assertEqual(rows, {'main/binary-amd64/Packages.xz': ('a' * 64, 10)})
+            # Unsigned bytes in front of the signed block still pass gpgv but must never be parsed as hashes.
+            forged = root / 'Forged'
+            forged.write_text('SHA256:\n ' + '0' * 64 + ' 10 main/binary-amd64/Packages.xz\n' + signed.read_text())
+            _, _, rows = inputs.verified_release(ring, forged, 'noble')
+            self.assertEqual(rows, {'main/binary-amd64/Packages.xz': ('a' * 64, 10)})
+            with self.assertRaises(SystemExit): inputs.verified_release(ring, signed, 'noble-updates')
+            tampered = root / 'Tampered'
+            tampered.write_text(signed.read_text().replace('a' * 64, 'b' * 64))
+            with self.assertRaises(SystemExit): inputs.verified_release(ring, tampered, 'noble')
+
+    def test_acquire_validates_the_whole_lock_before_writing_anything(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for bad in ('../apt-transaction.json', '/etc/x', 'a/../../b', 'a\\b', ''):
+                lock = json.loads(json.dumps(self.lock)); lock['files'][0] = {'path': bad, 'sha256': 'a' * 64, 'bytes': 1}
+                (root / 'lock.json').write_text(json.dumps(lock))
+                out = root / 'inner'
+                with self.subTest(path=bad), self.assertRaises(SystemExit):
+                    inputs.cmd_acquire(type('Args', (), {'lock': str(root / 'lock.json'), 'out': str(out), 'archive_keyring': None,
+                                                         'cloudimage_keyring': None, 'image_out': None})())
+                self.assertFalse(out.exists(), 'nothing is created before the lock validates')
+                self.assertEqual(sorted(p.name for p in root.iterdir()), ['lock.json'])
+
+    def test_simulation_refuses_outside_its_disposable_container(self):
+        done = subprocess.run(['/bin/bash', str(ROOT / 'deployment/qualification-runner/simulate-noble-bake.sh')],
+                              env={'PATH': '/usr/bin:/bin'}, capture_output=True, text=True, timeout=20)
+        self.assertEqual(done.returncode, 2, done.stderr)
+        self.assertIn('HELD', done.stderr)
+
+    def test_bake_and_simulation_share_one_apt_definition_and_stay_offline_and_signed(self):
+        recipe = (ROOT / 'deployment/qualification-runner/provision-image.sh').read_text()
+        simulation = (ROOT / 'deployment/qualification-runner/simulate-noble-bake.sh').read_text()
+        for text in (recipe, simulation):
+            self.assertIn('noble-apt.sh', text)
+            self.assertIn('${runner_packages[@]}', text)
+        sources = (ROOT / 'deployment/qualification-runner/runner.sources.list').read_text()
+        lines = [row for row in sources.splitlines() if row.startswith('deb ')]
+        self.assertEqual([row.split()[3] for row in lines], list(inputs.SUITES))
+        for row in lines:
+            self.assertIn('signed-by=/usr/share/keyrings/ubuntu-archive-keyring.gpg', row)
+            self.assertIn('file:/mnt/fsgg-qualification-inputs/apt', row)
+        self.assertNotIn('http', ''.join(lines).replace('file:', ''))
+        self.assertIn('VERSION_ID == 24.04', recipe)
+        self.assertNotIn('stonking', sources + recipe)
 
 
 if __name__ == '__main__': unittest.main()

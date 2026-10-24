@@ -1,0 +1,10 @@
+{
+  "digest": "sha256:08e9ccb3604d2462c24b5e33604dc30810296ca15cc65f23cffd4317eb144c37",
+  "name": "actions-runner-linux-x64-2.338.1.tar.gz",
+  "publishedAt": "2026-10-22T14:14:46Z",
+  "schema": "fsgg.runner-release-metadata/1",
+  "size": 227944224,
+  "source": "GitHub Releases API repos/actions/runner/releases/tags/v2.338.1",
+  "tag": "v2.338.1",
+  "url": "https://github.com/actions/runner/releases/download/v2.338.1/actions-runner-linux-x64-2.338.1.tar.gz"
+}

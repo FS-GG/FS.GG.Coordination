@@ -1,7 +1,7 @@
 {
   "schema": "fsgg.dedicated-qualification-baseline/1",
   "classification": "source-recipe-not-provisioned-or-qualified",
-  "id": "ubuntu2610-linux-x64-v1",
+  "id": "ubuntu2404-linux-x64-v1",
   "ownership": {
     "programme": "FS-GG/.github#4778",
     "consumer": "FS-GG/FS.GG.Coordination#1032",
@@ -9,17 +9,16 @@
   },
   "carrier": {
     "os": "ubuntu",
-    "version": "26.10",
+    "version": "24.04",
+    "codename": "noble",
     "architecture": "x86_64",
-    "releaseDate": "2026-10-15",
-    "candidateImageIndex": "https://cloud-images.ubuntu.com/stonking/current/",
-    "imagePayload": null,
-    "imageSha256": null,
-    "signedChecksumIdentity": null,
-    "metadataOnlyManifest": "https://cloud-images.ubuntu.com/stonking/current/stonking-server-cloudimg-amd64.manifest",
-    "metadataObservedImageDate": "20261019",
-    "metadataLibcPackage": "2.44-1ubuntu2",
-    "currentUrlIsNotAnInputLock": true
+    "image": "https://cloud-images.ubuntu.com/releases/noble/release-20261017/ubuntu-24.04-server-cloudimg-amd64.img",
+    "imageSha256": "04e8f2461a16a44e78a370284471f29616cdd9baf1893df25807b71f985b6c94",
+    "signedChecksumIdentity": "UEC Image Automatic Signing Key D2EB44626FDDC30B513D5BB71A5D6C4C7DB87C81 over release-20261017/SHA256SUMS",
+    "acquiredInputLock": "noble/acquired-input-lock.json",
+    "glibcVersion": "2.39",
+    "opensslFamily": "3.0.13 (satisfies the unchanged crypto_identity OpenSSL-3 gate)",
+    "replacedCandidate": "Ubuntu 26.10 (OpenSSL 4.0.3 refused by the gate; Root decision on FS-GG/.github#4778)"
   },
   "github": {
     "organization": "FS-GG",
@@ -111,7 +110,8 @@
       "StatxBytes": 256
     },
     "determiningGate": "actual published SDK catalog on actual selected execution carrier; observation checks do not replace it",
-    "governanceSeparate": "version>=2.40 and separate four-export guard unchanged"
+    "governanceSeparate": "version>=2.40 and separate four-export guard unchanged",
+    "carrierGlibcNote": "noble glibc 2.39 cannot satisfy the exact-2.44 SDD catalog scaffold check; this carrier does not serve catalog-dependent callers"
   },
   "dotnet": {
     "sdk": "10.0.401",
@@ -148,7 +148,7 @@
     ],
     "qualification": "actual cgo/race under separately selected budget; unsupported/skip is not success"
   },
-  "acquiredInputLock": null,
+  "acquiredInputLock": "noble/acquired-input-lock.json",
   "target": null,
   "nativeAdmission": null,
   "homeCandidate": {

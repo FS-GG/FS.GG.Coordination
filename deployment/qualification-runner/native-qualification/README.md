@@ -1,7 +1,7 @@
 # FS.GG.Native.Qualification
 
 Private caller repository for the BAR hosted full-image qualification on the
-dedicated, ephemeral Ubuntu 26.10 guest. It exists only because the FS-GG
+dedicated, ephemeral Ubuntu 24.04 LTS (noble) guest. It exists only because the FS-GG
 organization is on the GitHub Free plan: a self-hosted runner may be bound to
 this private repository and to no public one.
 

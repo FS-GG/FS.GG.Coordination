@@ -15,7 +15,8 @@ from pathlib import Path, PurePosixPath
 import re
 import stat
 
-BASELINE_ID = 'ubuntu2610-linux-x64-v1'
+BASELINE_ID = 'ubuntu2404-linux-x64-v1'
+IMAGE_URL_PATTERN = r'https://cloud-images\.ubuntu\.com/releases/noble/release-[0-9]{8}/ubuntu-24\.04-server-cloudimg-amd64\.img'
 # Free plan: a repository-level JIT runner in the Default group of the private caller repository only.
 GROUP = 'Default'
 LABEL = 'fsgg-native-linux-x64-v1'
@@ -73,7 +74,7 @@ def validate_target_data(target):
     require(target.get('dedicated') is True and target.get('disposable') is True, 'dedicated disposable target required')
     require(target.get('sharedCodexHost') is False, 'shared Codex host forbidden')
     require(target.get('architecture') == 'x86_64', 'x64 VM required')
-    require(target.get('os') == {'id': 'ubuntu', 'version': '26.10'}, 'actual Ubuntu26.10 carrier required')
+    require(target.get('os') == {'id': 'ubuntu', 'version': '24.04'}, 'actual Ubuntu24.04 noble carrier required')
     resources = target.get('resources', {})
     require(type(resources.get('vcpu')) is int and resources['vcpu'] >= 4, 'four CPU target floor')
     require(type(resources.get('memoryBytes')) is int and resources['memoryBytes'] >= 16 * 1024**3, '16GiB candidate sizing floor; native available-memory gate remains separate')
@@ -85,10 +86,11 @@ def validate_lock_data(lock):
     require(lock.get('schema') == 'fsgg.dedicated-qualification-acquired-inputs/1', 'acquired input lock required')
     require(lock.get('baselineId') == BASELINE_ID, 'input baseline differs')
     image = lock.get('image', {})
-    require(isinstance(image.get('url'), str) and image['url'].startswith('https://cloud-images.ubuntu.com/'), 'official Ubuntu image origin')
+    require(isinstance(image.get('url'), str) and re.fullmatch(IMAGE_URL_PATTERN, image['url']) is not None, 'official immutable Ubuntu 24.04 release image origin')
     require(sha(image.get('sha256')) and sha(image.get('signedChecksumSha256')), 'exact image/checksum pins required')
     require(sha(image.get('qualifiedAcquisitionReceiptSha256')), 'qualified signed image acquisition receipt required')
-    require(isinstance(image.get('release'), str) and image['release'], 'immutable image release identity required')
+    require(isinstance(image.get('release'), str) and re.fullmatch(r'release-[0-9]{8}', image['release']) is not None
+            and '/' + image['release'] + '/' in image['url'], 'immutable image release identity required')
     require(lock.get('sdk', {}).get('archiveSha512') == SDK_SHA512, 'SDK401 input bytes differ')
     require(lock.get('sdk', {}).get('version') == '10.0.401' and lock['sdk'].get('runtime') == '10.0.12', 'SDK/runtime tuple differs')
     runner = lock.get('runner', {})
@@ -277,8 +279,8 @@ def verify_guest(root, source, phase, *, system_uuid=None, runner_name=None, own
                 release[key] = value.strip('"')
     except OSError:
         pass
-    if (release.get('ID'), release.get('VERSION_ID')) != ('ubuntu', '26.10'):
-        refusals.append('os-not-ubuntu-26.10')
+    if (release.get('ID'), release.get('VERSION_ID')) != ('ubuntu', '24.04'):
+        refusals.append('os-not-ubuntu-24.04')
     if (machine or os.uname().machine) != 'x86_64':
         refusals.append('architecture-not-x86_64')
     # AppArmor userns policy: the image drop-in is the only writer, the live value must read zero.
@@ -322,9 +324,12 @@ def verify_guest(root, source, phase, *, system_uuid=None, runner_name=None, own
     for name in ('.runner', '.credentials', '.credentials_rsaparams'):
         if _lstat(runner / name) is not None:
             refusals.append('runner-already-configured:' + name)
+    # The release tarball has no version file; the listener's deps manifest names its own assembly version.
     try:
-        facts['runnerVersion'] = (runner / 'bin/runnerversion').read_text().strip()
-    except OSError:
+        libraries = json.loads((runner / 'bin/Runner.Listener.deps.json').read_text()).get('libraries', {})
+        versions = sorted(name.split('/', 1)[1] for name in libraries if name.startswith('Runner.Listener/'))
+        facts['runnerVersion'] = versions[0] if len(versions) == 1 else None
+    except (OSError, ValueError, AttributeError):
         facts['runnerVersion'] = None
     if lock is not None and facts['runnerVersion'] != lock['runner']['version']:
         refusals.append('runner-version-differs-from-lock')
