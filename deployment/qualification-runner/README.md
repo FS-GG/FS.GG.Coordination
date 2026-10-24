@@ -131,9 +131,9 @@ register or delete blindly. Provider disposal is separate from local process abs
 
 ## Source validation and primary references
 
-The existing portable-workspace source preflight calls the13input/refusal and62operation
+The existing portable-workspace source preflight calls the14input/refusal and62operation
 controls before Podman/acquisition; its watchers include the new recipe/helper/tests.
-The manual owned preparation also calls the13controls. This is source wiring, not
+The manual owned preparation also calls the14controls. This is source wiring, not
 an observed CI result. The focused unittest module exercises authored DATA/refusal
 and tiny file-population checks only. It does not run SDKs, compilers, userns probes, provisioning or registration.
 
