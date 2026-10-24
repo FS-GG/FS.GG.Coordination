@@ -78,7 +78,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 -I -B <<'PY_CLOCK'
-          import datetime, json, math, os, re, time, urllib.request
+          import datetime, json, math, os, re, signal, time, urllib.request
           from pathlib import Path
           mono=time.monotonic();utc=datetime.datetime.now(datetime.timezone.utc)
           env=os.environ;stage=Path(env['STARTUP_EVIDENCE']);stage.mkdir(mode=0o700)
@@ -92,6 +92,9 @@ jobs:
                   'rootSelection':{k:env.get(k.upper(),'')[:64] for k in ('selected_utc','latest_start_utc','observer_deadline_utc')},
                   'verdict':'refused','firstRefusal':None,'utcTrust':'Root/provider/runner UTC; skew not independently authenticated'}
           failure=None
+          def alarm_timeout(signum,frame):raise TimeoutError('original first-step/API whole15s deadline exhausted')
+          old_alarm=signal.signal(signal.SIGALRM,alarm_timeout)
+          signal.setitimer(signal.ITIMER_REAL,15)
           try:
               record['bootId']=Path('/proc/sys/kernel/random/boot_id').read_text().strip()
               def need(value,message):
@@ -124,10 +127,12 @@ jobs:
               native=parse(job['started_at']);need(selected-1<=native<=utc.timestamp(),'native job birth/Root selection differs')
               record['providerJob']={k:job[k] for k in ('id','run_id','head_sha','name','runner_name','started_at','status')}
               record['overallDeadlineMonotonic']=mono+min(native+5400,selected+5400)-utc.timestamp()
-              need(record['overallDeadlineMonotonic']>time.monotonic(),'original overall deadline expired')
+              need(record['overallDeadlineMonotonic']-time.monotonic()>=600+1200+30,'original checkout/transport aperture unavailable')
               record['verdict']='accepted'
           except Exception as error:
               failure=error;record['firstRefusal']=type(error).__name__+': '+str(error)[:1024]
+          finally:
+              signal.setitimer(signal.ITIMER_REAL,0);signal.signal(signal.SIGALRM,old_alarm)
           data=(json.dumps(record,allow_nan=False)+'\n').encode()
           if len(data)>16384:raise ValueError('startup clock bound exceeded')
           fd=os.open(stage/'clock.json',os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)

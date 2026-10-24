@@ -723,7 +723,7 @@ class ClockBudget(unittest.TestCase):
           'SELECTED_UTC':'2026-10-24T02:00:00Z','LATEST_START_UTC':'2026-10-24T02:05:00Z','OBSERVER_DEADLINE_UTC':'2026-10-24T03:35:00Z'}
         self.job={'id':7,'run_id':123,'head_sha':'b'*40,'name':'full-image','runner_name':'fixture','status':'in_progress','started_at':'2026-10-24T01:59:59.500000Z'}
 
-    def produce(self,updates=None,job=None,error=None):
+    def produce(self,updates=None,job=None,error=None,elapsed=0):
         import datetime,urllib.request,io
         actual=self.utc
         class NativeUTC(datetime.datetime):
@@ -731,7 +731,7 @@ class ClockBudget(unittest.TestCase):
             def now(cls,tz=None):return actual
         data=json.dumps({'jobs':[self.job if job is None else job]}).encode()
         port=patch.object(urllib.request,'urlopen',side_effect=error) if error else patch.object(urllib.request,'urlopen',return_value=io.BytesIO(data))
-        with patch.dict(os.environ,{**self.env,**(updates or {})},clear=True),patch.object(datetime,'datetime',NativeUTC),patch.object(time,'monotonic',return_value=100),port:
+        with patch.dict(os.environ,{**self.env,**(updates or {})},clear=True),patch.object(datetime,'datetime',NativeUTC),patch.object(time,'monotonic',side_effect=[100,100+elapsed]),port:
             exec(compile(self.producer,'actual-first-clock','exec'),{})
         return json.loads((Path(self.env['STARTUP_EVIDENCE'])/'clock.json').read_text())
 
@@ -756,6 +756,16 @@ class ClockBudget(unittest.TestCase):
             self.assertEqual(value['verdict'],'refused');self.assertTrue(value['firstRefusal'])
         text=WORKFLOW.read_text();self.assertLess(text.index('Retain the original outer job clock'),text.index('Check out the exact candidate'))
         self.assertNotIn('retry',self.producer)
+
+    def test_whole_api_timeout_and_remaining_checkout_budget_refuse_before_effects(self):
+        import signal
+        def timer_port(*args,**kwargs):signal.getsignal(signal.SIGALRM)(signal.SIGALRM,None)
+        with self.assertRaisesRegex(TimeoutError,'whole15s'):self.produce(error=timer_port)
+        value=json.loads((Path(self.env['STARTUP_EVIDENCE'])/'clock.json').read_text())
+        self.assertEqual(value['verdict'],'refused');self.assertIn('whole15s',value['firstRefusal'])
+        self.env['STARTUP_EVIDENCE']=str(self.root/'late-api')
+        with self.assertRaisesRegex(ValueError,'checkout/transport aperture'):self.produce(elapsed=3700)
+        self.assertEqual(json.loads((Path(self.env['STARTUP_EVIDENCE'])/'clock.json').read_text())['verdict'],'refused')
 
     def reset(self,purpose='full-image'):
         self.clock=install_clock(self.evidence,purpose)
