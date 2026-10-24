@@ -4,15 +4,15 @@
   "configurationSha256": "4aecb3d30646c166049fe86faeea7a56cb96d6fc173fc38d1cb0ef1ebf9833d0",
   "assembledQuintSha256": "7aef7dca57d07b701aa03c02748e4bfee354dbce7fefaec5fffe3848fcdfd154",
   "runnerClass": "linux-x64-local-exact-sdk-single-compiler-observed",
-  "measuredAt": "2026-10-24T16:24:55.7831330+00:00",
+  "measuredAt": "2026-10-24T19:32:07.4247725+00:00",
   "formalMeasurementMethod": "canonical-runner-observed-tlc-and-rust-v2",
   "measurements": [
     {
       "root": "authority",
       "stateCount": 9,
       "sampleCount": 100,
-      "elapsedMs": 4465,
-      "peakMiB": 338,
+      "elapsedMs": 3634,
+      "peakMiB": 335,
       "artifactBytes": 1067,
       "dependencyDepth": 2
     },
@@ -20,8 +20,8 @@
       "root": "lifecycle",
       "stateCount": 9,
       "sampleCount": 100,
-      "elapsedMs": 4533,
-      "peakMiB": 336,
+      "elapsedMs": 3649,
+      "peakMiB": 352,
       "artifactBytes": 1069,
       "dependencyDepth": 3
     },
@@ -29,8 +29,8 @@
       "root": "relations",
       "stateCount": 9,
       "sampleCount": 100,
-      "elapsedMs": 4353,
-      "peakMiB": 330,
+      "elapsedMs": 3611,
+      "peakMiB": 337,
       "artifactBytes": 1648,
       "dependencyDepth": 2
     },
@@ -38,8 +38,8 @@
       "root": "protocol-streams",
       "stateCount": 9,
       "sampleCount": 100,
-      "elapsedMs": 4572,
-      "peakMiB": 335,
+      "elapsedMs": 3686,
+      "peakMiB": 348,
       "artifactBytes": 8529,
       "dependencyDepth": 2
     },
@@ -47,8 +47,8 @@
       "root": "mutation-saga",
       "stateCount": 17,
       "sampleCount": 17,
-      "elapsedMs": 7328,
-      "peakMiB": 430,
+      "elapsedMs": 6593,
+      "peakMiB": 882,
       "artifactBytes": 12082566,
       "dependencyDepth": 3
     },
@@ -56,8 +56,8 @@
       "root": "desired-state",
       "stateCount": 5,
       "sampleCount": 5,
-      "elapsedMs": 5300,
-      "peakMiB": 417,
+      "elapsedMs": 4559,
+      "peakMiB": 411,
       "artifactBytes": 12081993,
       "dependencyDepth": 4
     },
@@ -65,8 +65,8 @@
       "root": "qualification",
       "stateCount": 9,
       "sampleCount": 9,
-      "elapsedMs": 5968,
-      "peakMiB": 763,
+      "elapsedMs": 5134,
+      "peakMiB": 454,
       "artifactBytes": 12082263,
       "dependencyDepth": 5
     },
@@ -74,8 +74,8 @@
       "root": "source-directory-commit",
       "stateCount": 7,
       "sampleCount": 7,
-      "elapsedMs": 1695,
-      "peakMiB": 331,
+      "elapsedMs": 984,
+      "peakMiB": 184,
       "artifactBytes": 512211,
       "dependencyDepth": 1
     },
@@ -83,8 +83,8 @@
       "root": "original-source-composition",
       "stateCount": 8,
       "sampleCount": 8,
-      "elapsedMs": 1124,
-      "peakMiB": 193,
+      "elapsedMs": 691,
+      "peakMiB": 188,
       "artifactBytes": 1166665,
       "dependencyDepth": 1
     }
@@ -94,201 +94,201 @@
       "id": "claim-election",
       "stateCount": 3,
       "sampleCount": 100,
-      "elapsedMs": 62528,
-      "peakMiB": 1481,
+      "elapsedMs": 47169,
+      "peakMiB": 1310,
       "artifactBytes": 5674,
       "transitionCount": 3,
-      "allAttemptElapsedMs": 62528
+      "allAttemptElapsedMs": 47169
     },
     {
       "id": "relation-mutation",
       "stateCount": 3,
       "sampleCount": 100,
-      "elapsedMs": 62421,
-      "peakMiB": 1441,
+      "elapsedMs": 47724,
+      "peakMiB": 1305,
       "artifactBytes": 4919,
       "transitionCount": 3,
-      "allAttemptElapsedMs": 62421
+      "allAttemptElapsedMs": 47724
     },
     {
       "id": "lifecycle",
       "stateCount": 3,
       "sampleCount": 100,
-      "elapsedMs": 61215,
-      "peakMiB": 1461,
+      "elapsedMs": 48647,
+      "peakMiB": 1317,
       "artifactBytes": 4586,
       "transitionCount": 3,
-      "allAttemptElapsedMs": 61215
+      "allAttemptElapsedMs": 48647
     },
     {
       "id": "operation-saga",
       "stateCount": 3,
       "sampleCount": 100,
-      "elapsedMs": 61660,
-      "peakMiB": 1733,
+      "elapsedMs": 50923,
+      "peakMiB": 1304,
       "artifactBytes": 4559,
       "transitionCount": 3,
-      "allAttemptElapsedMs": 61660
+      "allAttemptElapsedMs": 50923
     },
     {
       "id": "epoch",
       "stateCount": 4,
       "sampleCount": 100,
-      "elapsedMs": 59746,
-      "peakMiB": 1263,
+      "elapsedMs": 50214,
+      "peakMiB": 1314,
       "artifactBytes": 9392,
       "transitionCount": 4,
-      "allAttemptElapsedMs": 59746
+      "allAttemptElapsedMs": 50214
     },
     {
       "id": "rollback",
       "stateCount": 3,
       "sampleCount": 100,
-      "elapsedMs": 62609,
-      "peakMiB": 1485,
+      "elapsedMs": 47081,
+      "peakMiB": 1307,
       "artifactBytes": 4582,
       "transitionCount": 3,
-      "allAttemptElapsedMs": 62609
+      "allAttemptElapsedMs": 47081
     },
     {
       "id": "journal-reconciliation",
       "stateCount": 20,
       "sampleCount": 100,
-      "elapsedMs": 59767,
-      "peakMiB": 1036,
+      "elapsedMs": 46742,
+      "peakMiB": 1433,
       "artifactBytes": 7536,
       "transitionCount": 48,
-      "allAttemptElapsedMs": 59767
+      "allAttemptElapsedMs": 46742
     },
     {
       "id": "journal-fencing",
       "stateCount": 20,
       "sampleCount": 100,
-      "elapsedMs": 58591,
-      "peakMiB": 1401,
+      "elapsedMs": 45966,
+      "peakMiB": 1354,
       "artifactBytes": 9097,
       "transitionCount": 48,
-      "allAttemptElapsedMs": 58591
+      "allAttemptElapsedMs": 45966
     },
     {
       "id": "authority-reconciliation",
       "stateCount": 51,
       "sampleCount": 1000,
-      "elapsedMs": 59318,
-      "peakMiB": 1394,
+      "elapsedMs": 46912,
+      "peakMiB": 1039,
       "artifactBytes": 4615,
       "transitionCount": 163,
-      "allAttemptElapsedMs": 59318
+      "allAttemptElapsedMs": 46912
     },
     {
       "id": "review-epoch",
       "stateCount": 10,
       "sampleCount": 100,
-      "elapsedMs": 58816,
-      "peakMiB": 1175,
+      "elapsedMs": 47862,
+      "peakMiB": 1102,
       "artifactBytes": 7322,
       "transitionCount": 22,
-      "allAttemptElapsedMs": 58816
+      "allAttemptElapsedMs": 47862
     },
     {
       "id": "cutover-observation",
       "stateCount": 136,
       "sampleCount": 10000,
-      "elapsedMs": 61131,
-      "peakMiB": 1545,
+      "elapsedMs": 48458,
+      "peakMiB": 1120,
       "artifactBytes": 3412,
       "transitionCount": 532,
-      "allAttemptElapsedMs": 61131
+      "allAttemptElapsedMs": 48458
     },
     {
       "id": "pilot-permit-transfer",
       "stateCount": 5,
       "sampleCount": 10000,
-      "elapsedMs": 67916,
-      "peakMiB": 1581,
+      "elapsedMs": 52381,
+      "peakMiB": 1378,
       "artifactBytes": 9669,
       "transitionCount": 5,
-      "allAttemptElapsedMs": 67916
+      "allAttemptElapsedMs": 52381
     },
     {
       "id": "pilot-permit-fault-safety",
       "stateCount": 3032,
       "sampleCount": 10000,
-      "elapsedMs": 66836,
-      "peakMiB": 1340,
+      "elapsedMs": 48868,
+      "peakMiB": 1200,
       "artifactBytes": 9678,
       "transitionCount": 8002,
-      "allAttemptElapsedMs": 66836
+      "allAttemptElapsedMs": 48868
     },
     {
       "id": "pilot-permit-major-action-coverage",
       "stateCount": 14,
       "sampleCount": 10000,
-      "elapsedMs": 66865,
-      "peakMiB": 1471,
+      "elapsedMs": 50087,
+      "peakMiB": 1211,
       "artifactBytes": 9697,
       "transitionCount": 14,
-      "allAttemptElapsedMs": 66865
+      "allAttemptElapsedMs": 50087
     },
     {
       "id": "hosted-writer-progress",
       "stateCount": 64,
       "sampleCount": 10000,
-      "elapsedMs": 168431,
-      "peakMiB": 4834,
+      "elapsedMs": 154042,
+      "peakMiB": 3719,
       "artifactBytes": 518084,
       "transitionCount": 63,
-      "allAttemptElapsedMs": 168431
+      "allAttemptElapsedMs": 154042
     },
     {
       "id": "hosted-writer-fault-safety",
       "stateCount": 1162,
       "sampleCount": 10000,
-      "elapsedMs": 150559,
-      "peakMiB": 4327,
+      "elapsedMs": 123390,
+      "peakMiB": 3356,
       "artifactBytes": 43897,
       "transitionCount": 1387,
-      "allAttemptElapsedMs": 150559
+      "allAttemptElapsedMs": 123390
     },
     {
       "id": "administrative-retirement-closure",
       "stateCount": 15,
       "sampleCount": 10000,
-      "elapsedMs": 59158,
-      "peakMiB": 1441,
+      "elapsedMs": 43886,
+      "peakMiB": 1115,
       "artifactBytes": 6539,
       "transitionCount": 29,
-      "allAttemptElapsedMs": 59158
+      "allAttemptElapsedMs": 43886
     },
     {
       "id": "administrative-retirement-race",
       "stateCount": 13,
       "sampleCount": 10000,
-      "elapsedMs": 60930,
-      "peakMiB": 1542,
+      "elapsedMs": 43412,
+      "peakMiB": 1142,
       "artifactBytes": 6532,
       "transitionCount": 25,
-      "allAttemptElapsedMs": 60930
+      "allAttemptElapsedMs": 43412
     },
     {
       "id": "administrative-retirement-old-plan-counterexample",
       "stateCount": 7,
       "sampleCount": 10000,
-      "elapsedMs": 60108,
-      "peakMiB": 1419,
+      "elapsedMs": 43101,
+      "peakMiB": 1352,
       "artifactBytes": 7620,
       "transitionCount": 13,
-      "allAttemptElapsedMs": 60108
+      "allAttemptElapsedMs": 43101
     }
   ],
   "physicalAccounting": {
-    "attemptId": "11e6376814234c439217a03c6a892987",
-    "validatorSha256": "1dfbc268ca90c2e9631026bae77ed9227e0666e90788b6394479ba7459b0561a",
+    "attemptId": "0b608d1964764b2084cba8b3f1aa5b9f",
+    "validatorSha256": "676fc0bafe311258629dae90d97e9d2efc693364ebc36d4d5fef28a9f76e0261",
     "compilerSha256": "790239216fbd602064d148de560a7d49f78b5e5227f26465611470aa0326b3c8",
-    "inventorySha256": "45d707f9089251f112df5bc1db4256d048452342aa1bed0a64c3be71d9ef9d7f",
+    "inventorySha256": "fc96bdcfeed4a0d64450e054f8cfce2a51992726eac95b24348c2a7a39a9edc4",
     "logicalCount": 289,
     "physicalCount": 289,
-    "allAttemptElapsedMs": 2450172,
-    "wholeDurationMs": 2183669
+    "allAttemptElapsedMs": 1640134,
+    "wholeDurationMs": 1554670
   }
 }

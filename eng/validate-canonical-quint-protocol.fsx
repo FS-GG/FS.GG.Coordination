@@ -537,7 +537,24 @@ type private PhysicalAttemptObservation =
 
 let mutable private physicalScope: string option = None
 let mutable private logicalSequence = 0
-let private physicalAttempts = ResizeArray<PhysicalAttemptObservation>()
+/// Physical attempts are recorded from concurrent checks (the Rust mutation controls run under
+/// Parallel.ForEach). Every access goes through one gate and enumeration is over a snapshot, so no
+/// appended row is lost and a reader never observes a torn or modified list.
+type private SynchronisedAttempts() =
+    let gate = obj ()
+    let rows = ResizeArray<PhysicalAttemptObservation>()
+    member _.Add(row: PhysicalAttemptObservation) = lock gate (fun () -> rows.Add row)
+    member _.Count = lock gate (fun () -> rows.Count)
+
+    interface Collections.Generic.IEnumerable<PhysicalAttemptObservation> with
+        member _.GetEnumerator() =
+            ((lock gate (fun () -> rows.ToArray())) :> seq<PhysicalAttemptObservation>).GetEnumerator()
+
+    interface Collections.IEnumerable with
+        member this.GetEnumerator() =
+            ((this :> seq<PhysicalAttemptObservation>).GetEnumerator()) :> Collections.IEnumerator
+
+let private physicalAttempts = SynchronisedAttempts()
 
 let mutable private physicalObserver: (PhysicalAttemptObservation -> unit) option =
     None
@@ -1021,7 +1038,39 @@ time.sleep(.06)
             (terminalSemantics "quint/formal-safety-mutant" (Some "fixture") 1 false None "Invariant violated" "" =
                 Some "invariant-counterexample")
 
-        printfn "ACCOUNTING_CONTROLS_OK controls=15 disposition=controlled-subprocess-not-native-qualification"
+        // The Rust mutation controls record attempts from parallel workers. Every appended row must be
+        // counted exactly once while a reader enumerates concurrently; an unsynchronised list loses rows
+        // or throws here.
+        let parallelBase = physicalAttempts.Count
+        let parallelWorkers = 6
+        let parallelRows = 20000
+        let parallelSample = exact[0]
+
+        let parallelRecorded =
+            try
+                let reader =
+                    Task.Run(fun () ->
+                        for _ in 1..200 do
+                            physicalAttempts |> Seq.length |> ignore)
+
+                Parallel.For(
+                    0,
+                    parallelWorkers,
+                    ParallelOptions(MaxDegreeOfParallelism = parallelWorkers),
+                    fun _ ->
+                        for _ in 1..parallelRows do
+                            physicalAttempts.Add parallelSample
+                )
+                |> ignore
+
+                reader.Wait()
+                physicalAttempts.Count = parallelBase + parallelWorkers * parallelRows
+            with _ ->
+                false
+
+        check "parallel-attempt-recording" parallelRecorded
+
+        printfn "ACCOUNTING_CONTROLS_OK controls=16 disposition=controlled-subprocess-not-native-qualification"
     finally
         scratch.Delete true
 
