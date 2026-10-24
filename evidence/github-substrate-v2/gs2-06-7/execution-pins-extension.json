@@ -211,7 +211,7 @@
     {
       "kind": "workflow",
       "path": ".github/workflows/portable-workspace-image-qualification.yml",
-      "sha256": "b8a8f88a1270eb07f786df397000ed12b3341e7d8f104bc75753b766e6f3465f",
+      "sha256": "43a43f39e3b1e152c4c2a7722f4c1ae435e11348fc2b42fd2a25caa31c32b4e7",
       "externalReferences": [
         "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
         "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
@@ -292,7 +292,7 @@
 {
   "kind": "workflow",
   "path": ".github/workflows/bar-hosted-image-qualification.yml",
-  "sha256": "fd3c74afb3c3aab05d670ad99978e336c77dea8a87bc444ddffd6d1188f0d541",
+  "sha256": "cb7781a1ec54fc301c7a30b660b97e8202c26b32e12e32189f974b51bfa228cd",
   "externalReferences": [
     "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
     "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"

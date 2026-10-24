@@ -208,6 +208,7 @@ jobs:
             test "$(du -sb source product | awk '{sum += $1} END {print sum}')" -le 2147483648
             python3 -I -B source/tests/portable-workspace/image/test_bar_hosted_operation.py
             python3 -I -B source/tests/portable-workspace/image/test_bar_hosted_domain.py
+            python3 -I -B source/tests/qualification-runner/test_dedicated_runner.py
             python3 -I -B source/eng/bar_hosted_operation.py seal-transport --operation-id "$OPERATION_ID" \
               > "$EVIDENCE/crypto-seal-result.json"
         run: |
