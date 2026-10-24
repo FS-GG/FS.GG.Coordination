@@ -5,7 +5,7 @@
   "ownership": {
     "programme": "FS-GG/.github#4778",
     "consumer": "FS-GG/FS.GG.Coordination#1032",
-    "operator": "Root selected dedicated VM operator; provider target not yet supplied"
+    "operator": "Home provisioning owner via4516(primary)/4517(secondary); Root selects actual effects"
   },
   "carrier": {
     "os": "ubuntu",
@@ -38,10 +38,13 @@
   },
   "resources": {
     "minimumVcpu": 4,
-    "memoryBytes": 34359738368,
+    "memoryBytes": 17179869184,
     "diskBytes": 274877906944,
     "oneJobPerVm": true,
-    "persistentReuse": false
+    "persistentReuse": false,
+    "classification": "Home proposed candidate sizing; not observed guest capacity or native admission",
+    "availableMemoryGateBytes": 15032385536,
+    "freeBackingGateBytes": 85899345920
   },
   "policy": {
     "preconfiguredAppArmorRestrictUnprivilegedUserns": 0,
@@ -142,5 +145,13 @@
   },
   "acquiredInputLock": null,
   "target": null,
-  "nativeAdmission": null
+  "nativeAdmission": null,
+  "homeCandidate": {
+    "reference": "home-kvm-qualification-v1",
+    "source": "https://github.com/FS-GG/.github/issues/4516#issuecomment-6380878293",
+    "provisioner": "Home-owned new dedicated rootless Podman/QEMU KVM launcher; source/closure unqualified",
+    "hostAdmission": "Adjacent Home reservation must preserve8GiB host available plus2GiB VMM/metadata margin beyond16GiB guest; observed free capacity is not reservation",
+    "backing": "256GiB physically preallocated raw candidate; actual creation/identity unselected",
+    "nativeFit": "16GiB allocation does not prove14GiB available or workload/observer fit; actual gates remain determining"
+  }
 }

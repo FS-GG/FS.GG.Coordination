@@ -24,7 +24,20 @@ identity, not an installed image or host qualification. Optional tracing's unres
 
 1. The operator supplies the actual provider, disposable instance/image IDs, UUID,
    region, isolated network and teardown API. The shared Codex machine is forbidden.
-   Reserve at least four vCPUs, 32 GiB RAM and 256 GiB disk, one job per VM.
+   Home proposes `home-kvm-qualification-v1`: four vCPUs, 16 GiB guest RAM and
+   256 GiB physically preallocated raw backing, one job per VM. This supersedes
+   the conservative32GiB reference sizing; it is not an observed machine or fit.
+   [Home owns the candidate](https://github.com/FS-GG/.github/issues/4516#issuecomment-6380878293)
+   through4516(primary)/4517(secondary), using a new dedicated rootless Podman/QEMU
+   KVM launcher whose source, executable/image/firmware closure and finite custody
+   remain unqualified. Root selects actual effects. Home must reserve the16GiB
+   guest plus2GiB VMM/metadata margin while preserving8GiB host available before
+   creation; a free-memory observation alone is not a reservation. The unchanged
+   BAR gate requires14GiB **actually available** guest memory and80GiB free backing.
+   A16GiB allocation cannot prove those gates or workload/observer headroom; actual
+   post-boot, adjacent, enclosing-resource and operation fit checks must pass.
+   Otherwise activation refuses; no smaller workload, observer omission or false
+   capacity fact is substituted.
 2. Separately admit acquisition of the immutable Ubuntu image, signed checksum and
    signer identity; the moving `current` index is discovery metadata only. Acquire
    a complete signed offline APT transaction and expected final package inventory,
@@ -106,8 +119,9 @@ ordinary PR jobs stay hosted. No source lock here may replace a published catalo
 
 ## Teardown and retirement
 
-The provider is still unknown, so no guessed cloud CLI or generic command executor
-is emitted. The target-specific operator must select a fixed delete-instance action
+Home owns the `home-kvm-qualification-v1` provider candidate; its actual
+instance and qualified launcher/custodian are not supplied yet. No guessed cloud
+CLI, copied VMM controller or generic command executor is emitted. The target-specific operator must select a fixed delete-instance action
 and independently read back instance absence, ephemeral disks/network attachments
 and runner deregistration. Export original logs, hashes, command EOF/reap, unit and
 cgroup birth/absence before destruction under the original retirement budget.

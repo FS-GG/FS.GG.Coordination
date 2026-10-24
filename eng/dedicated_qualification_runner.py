@@ -56,7 +56,7 @@ def validate_target_data(target):
     require(target.get('os') == {'id': 'ubuntu', 'version': '26.10'}, 'actual Ubuntu26.10 carrier required')
     resources = target.get('resources', {})
     require(type(resources.get('vcpu')) is int and resources['vcpu'] >= 4, 'four CPU target floor')
-    require(type(resources.get('memoryBytes')) is int and resources['memoryBytes'] >= 32 * 1024**3, '32GiB target floor')
+    require(type(resources.get('memoryBytes')) is int and resources['memoryBytes'] >= 16 * 1024**3, '16GiB candidate sizing floor; native available-memory gate remains separate')
     require(type(resources.get('diskBytes')) is int and resources['diskBytes'] >= 256 * 1024**3, '256GiB target floor')
     return target
 

@@ -17,7 +17,7 @@ def target():
         'provider': 'authored-test-provider', 'providerInstanceId': 'test-vm-only', 'providerImageId': 'test-image',
         'systemUuid': 'test-uuid', 'operatorAcceptanceSha256': 'a' * 64, 'dedicated': True, 'disposable': True,
         'sharedCodexHost': False, 'architecture': 'x86_64', 'os': {'id': 'ubuntu', 'version': '26.10'},
-        'resources': {'vcpu': 4, 'memoryBytes': 32 * 1024**3, 'diskBytes': 256 * 1024**3}}
+        'resources': {'vcpu': 4, 'memoryBytes': 16 * 1024**3, 'diskBytes': 256 * 1024**3}}
 
 
 def lock():
@@ -46,6 +46,13 @@ class DedicatedRunnerDataControls(unittest.TestCase):
         for os_value in [{'id': 'ubuntu', 'version': '24.04'}, {'id': 'fedora', 'version': '45'}]:
             value = target(); value['os'] = os_value
             with self.assertRaises(ValueError): owner.validate_target_data(value)
+
+    def test_home16_candidate_is_data_and_smaller_guest_refuses(self):
+        self.assertEqual(owner.validate_target_data(target())['resources']['memoryBytes'], 16 * 1024**3)
+        selected = target(); selected['resources']['memoryBytes'] = 16 * 1024**3 - 1
+        with self.assertRaises(ValueError): owner.validate_target_data(selected)
+        baseline = json.loads((ROOT / 'deployment/qualification-runner/baseline.json').read_text())
+        self.assertIsNone(baseline['target']); self.assertIsNone(baseline['nativeAdmission'])
 
     def test_target_identity_does_not_accept_another_vm(self):
         value = target()
