@@ -7,7 +7,11 @@
 #     -v REPO/deployment/qualification-runner:/layer:ro -v APT:/mnt/fsgg-qualification-inputs/apt:ro -v OUT:/out \
 #     bash /layer/simulate-noble-bake.sh
 set -euo pipefail
-[[ $# == 0 && -d /layer && -d /mnt/fsgg-qualification-inputs/apt && -d /out ]] || { echo 'HELD: run only as documented in a disposable container' >&2; exit 2; }
+[[ $# == 0 && -d /layer && -d /mnt/fsgg-qualification-inputs/apt && -d /out && -f /run/.containerenv && $(id -u) == 0 ]] \
+  || { echo 'HELD: run only as documented in a disposable podman container' >&2; exit 2; }
+# shellcheck source=/dev/null
+. /etc/os-release
+[[ $ID == ubuntu && $VERSION_ID == 24.04 ]]
 runner_apt_sources=/layer/runner.sources.list
 # shellcheck source=noble-apt.sh
 . /layer/noble-apt.sh

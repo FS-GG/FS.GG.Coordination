@@ -20,6 +20,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import urllib.request
 from pathlib import Path
 
@@ -74,9 +75,16 @@ def canonical(value):
     return (json.dumps(value, indent=2, sort_keys=True) + '\n').encode()
 
 
-def gpgv(keyring, signed, signature=None):
-    """Return the VALIDSIG primary fingerprint; any other outcome refuses."""
-    command = ['gpgv', '--keyring', str(keyring), '--status-fd', '1'] + ([str(signature)] if signature else []) + [str(signed)]
+def gpgv(keyring, signed, signature=None, plain_output=None):
+    """Return the VALIDSIG primary fingerprint and signature time; any other outcome refuses.
+
+    For a clearsigned file pass `plain_output`: only the text gpg itself verified is written there, so callers
+    never parse unsigned bytes that precede or follow the signed block.
+    """
+    command = ['gpgv', '--keyring', str(keyring), '--status-fd', '1']
+    if plain_output:
+        command += ['--output', str(plain_output)]
+    command += ([str(signature)] if signature else []) + [str(signed)]
     done = subprocess.run(command, capture_output=True, text=True)
     status = done.stdout.splitlines()
     need(done.returncode == 0 and any(row.startswith('[GNUPG:] GOODSIG ') for row in status), 'signature refused: %s' % signed)
@@ -85,8 +93,18 @@ def gpgv(keyring, signed, signature=None):
     return valid[0][-1], int(valid[0][4])
 
 
-def release_hashes(path):
-    text = Path(path).read_text()
+def verified_release(keyring, path, suite=None):
+    """Verify a clearsigned InRelease and return (fingerprint, signature time, {name: (sha256, bytes)}) from the signed text only."""
+    with tempfile.TemporaryDirectory(prefix='noble-release-') as scratch:
+        plain = Path(scratch) / 'plain'
+        fingerprint, created = gpgv(keyring, path, plain_output=plain)
+        text = plain.read_text()
+    if suite is not None:
+        need(re.search(r'^Suite: %s$' % re.escape(suite), text, re.M) is not None, 'signed release is not suite ' + suite)
+    return fingerprint, created, release_hashes_text(text)
+
+
+def release_hashes_text(text):
     need('\nSHA256:\n' in text, 'InRelease without SHA256 section')
     section = text.split('\nSHA256:\n', 1)[1].split('\n-----BEGIN PGP SIGNATURE', 1)[0]
     rows = {}
@@ -111,19 +129,23 @@ def package_index(root):
     return index
 
 
-def verify_population(root, lock, archive_keyring):
-    """Hashes (rows), archive signatures, signed-index chain, .deb membership, and the recorded transaction."""
-    root = Path(root)
+def load_runner():
     spec = importlib.util.spec_from_file_location('dedicated_runner', HERE.parents[1] / 'eng/dedicated_qualification_runner.py')
     runner = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(runner)
+    return runner
+
+
+def verify_population(root, lock, archive_keyring):
+    """Hashes (rows), archive signatures, signed-index chain, .deb membership, and the recorded transaction."""
+    root = Path(root)
+    runner = load_runner()
     runner.validate_lock_data(lock)
     runner.validate_population(lock, str(root))
     runner.validate_tool_archives(lock, str(root))
     for suite in SUITES:
-        fingerprint, _ = gpgv(archive_keyring, root / 'apt/dists' / suite / 'InRelease')
+        fingerprint, _, rows = verified_release(archive_keyring, root / 'apt/dists' / suite / 'InRelease', suite)
         need(fingerprint == ARCHIVE_FINGERPRINT, 'unexpected archive signer for %s: %s' % (suite, fingerprint))
-        rows = release_hashes(root / 'apt/dists' / suite / 'InRelease')
         for component in COMPONENTS:
             name = component + '/binary-amd64/Packages.xz'
             path = root / 'apt/dists' / suite / name
@@ -164,15 +186,25 @@ def download(url, destination):
 
 def cmd_acquire(args):
     lock = json.loads(Path(args.lock).read_text())
-    out = Path(args.out)
+    out = Path(args.out).resolve()
     need(not out.exists() or not any(out.iterdir()), 'acquire into a fresh empty directory only')
-    for row in lock['files']:
+    # Everything about the lock is validated before the first byte is written or downloaded.
+    load_runner().validate_lock_data(lock)
+    rows = lock['files']
+    need(isinstance(rows, list) and 1 <= len(rows) <= 20000, 'complete bounded input file inventory required')
+    for row in rows:
+        name = row.get('path')
+        need(isinstance(name, str) and name and '\\' not in name and not name.startswith('/')
+             and all(part not in ('', '.', '..') for part in name.split('/')), 'unsafe input path in the lock')
+        need(('url' not in row) or (isinstance(row['url'], str) and row['url'].startswith('https://')), 'https origin required')
+    for row in rows:
         destination = out / row['path']
+        need(out in destination.resolve().parents, 'path escapes the destination')
         destination.parent.mkdir(parents=True, exist_ok=True)
         if 'url' in row:
-            need(row['url'].startswith('https://'), 'https origin required')
             download(row['url'], destination)
-        else:  # derived records that travel with the lock
+        else:  # derived records that travel with the lock; only the two fixed names exist
+            need(row['path'] in ('apt/package-inventory.expected', 'apt/apt-transaction.json'), 'unknown derived record: ' + row['path'])
             shutil.copyfile(NOBLE / Path(row['path']).name, destination)
         need(sha256(destination) == row['sha256'] and destination.stat().st_size == row['bytes'], 'acquired bytes differ: ' + row['path'])
     cmd_verify(argparse.Namespace(lock=args.lock, inputs=str(out), archive_keyring=args.archive_keyring, cloudimage_keyring=args.cloudimage_keyring))
@@ -210,7 +242,7 @@ def cmd_lock(args):
     release = {}
     for suite in SUITES:
         path = pop / 'apt/dists' / suite / 'InRelease'
-        fingerprint, created = gpgv(args.archive_keyring, path)
+        fingerprint, created, _ = verified_release(args.archive_keyring, path, suite)
         need(fingerprint == ARCHIVE_FINGERPRINT, 'unexpected archive signer')
         release[suite] = {'inReleasePath': 'apt/dists/%s/InRelease' % suite, 'inReleaseSha256': sha256(path), 'signedAtEpoch': created}
     manifest = work / 'img' / (IMAGE_NAME.replace('.img', '.manifest'))
@@ -221,7 +253,7 @@ def cmd_lock(args):
         'baseImage': {'release': RELEASE, 'packageManifestSha256': sha256(manifest), 'packages': len(manifest.read_text().splitlines())},
         'finalInventory': {'packages': len(inventory), 'sha256': sha256(inventory_path)},
         'debs': debs,
-        'compilerIdentity': {'derivation': 'sha256 of the sorted "package<TAB>installed version<TAB>locked .deb sha256 or image" rows',
+        'compilerIdentity': {'derivation': 'sha256 of the sorted "package<TAB>installed version<TAB>sha256 of the locked .deb of that package name if the pool holds one, else image" rows',
                              'roles': {key: evidence[key] for key in evidence},
                              'scope': 'package-level identities of the signed transaction; actual cgo/race stays a separate qualification'},
     }

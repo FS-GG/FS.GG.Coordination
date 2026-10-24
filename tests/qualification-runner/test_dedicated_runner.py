@@ -415,6 +415,68 @@ class NobleInputRecords(unittest.TestCase):
             path.write_text('Origin: Ubuntu\nNot signed\n')
             with self.assertRaises(SystemExit): inputs.gpgv(keyring, path)
 
+    def test_compiler_identities_recompute_from_the_recorded_roles(self):
+        for key, rows in self.transaction['compilerIdentity']['roles'].items():
+            self.assertEqual(rows, sorted(rows), key)
+            self.assertEqual(hashlib.sha256(('\n'.join(rows) + '\n').encode()).hexdigest(), self.lock['compiler'][key], key)
+        for key, roles in inputs.COMPILER_ROLES.items():
+            self.assertEqual(len(self.transaction['compilerIdentity']['roles'][key]), len(roles), key)
+
+    def test_wrong_signer_is_refused_even_when_the_signature_is_valid(self):
+        keyring = Path(os.environ.get('UBUNTU_KEYRING_DIR', '/usr/share/keyrings')) / 'ubuntu-archive-keyring.gpg'
+        if shutil.which('gpgv') is None or not keyring.exists():
+            self.skipTest('gpgv or the Ubuntu archive keyring is unavailable')
+        # The image checksums are signed by the cloud-image key; the archive keyring cannot vouch for them.
+        with self.assertRaises(SystemExit):
+            inputs.verify_image_checksums(NOBLE / 'image/SHA256SUMS', NOBLE / 'image/SHA256SUMS.gpg', keyring, self.lock)
+
+    def test_only_the_signed_text_of_an_inrelease_is_trusted(self):
+        if shutil.which('gpg') is None or shutil.which('gpgv') is None:
+            self.skipTest('gpg is unavailable')
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory); home = root / 'gnupg'; home.mkdir(mode=0o700)
+            env = {**os.environ, 'GNUPGHOME': str(home)}
+            def gpg(*arguments, **kw):
+                return subprocess.run(['gpg', '--batch', '--no-tty', *arguments], env=env, capture_output=True, check=True, **kw)
+            self.addCleanup(lambda: subprocess.run(['gpgconf', '--kill', 'all'], env=env, capture_output=True))
+            gpg('--pinentry-mode', 'loopback', '--passphrase', '', '--quick-generate-key', 'test <test@example.invalid>', 'rsa2048', 'sign', '1d')
+            ring = root / 'ring.gpg'
+            ring.write_bytes(gpg('--export').stdout)
+            body = root / 'body'
+            body.write_text('Origin: Ubuntu\nSuite: noble\nSHA256:\n ' + 'a' * 64 + ' 10 main/binary-amd64/Packages.xz\n')
+            signed = root / 'InRelease'
+            gpg('--pinentry-mode', 'loopback', '--passphrase', '', '--clearsign', '--output', str(signed), str(body))
+            fingerprint, _, rows = inputs.verified_release(ring, signed, 'noble')
+            self.assertEqual(rows, {'main/binary-amd64/Packages.xz': ('a' * 64, 10)})
+            # Unsigned bytes in front of the signed block still pass gpgv but must never be parsed as hashes.
+            forged = root / 'Forged'
+            forged.write_text('SHA256:\n ' + '0' * 64 + ' 10 main/binary-amd64/Packages.xz\n' + signed.read_text())
+            _, _, rows = inputs.verified_release(ring, forged, 'noble')
+            self.assertEqual(rows, {'main/binary-amd64/Packages.xz': ('a' * 64, 10)})
+            with self.assertRaises(SystemExit): inputs.verified_release(ring, signed, 'noble-updates')
+            tampered = root / 'Tampered'
+            tampered.write_text(signed.read_text().replace('a' * 64, 'b' * 64))
+            with self.assertRaises(SystemExit): inputs.verified_release(ring, tampered, 'noble')
+
+    def test_acquire_validates_the_whole_lock_before_writing_anything(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for bad in ('../apt-transaction.json', '/etc/x', 'a/../../b', 'a\\b', ''):
+                lock = json.loads(json.dumps(self.lock)); lock['files'][0] = {'path': bad, 'sha256': 'a' * 64, 'bytes': 1}
+                (root / 'lock.json').write_text(json.dumps(lock))
+                out = root / 'inner'
+                with self.subTest(path=bad), self.assertRaises(SystemExit):
+                    inputs.cmd_acquire(type('Args', (), {'lock': str(root / 'lock.json'), 'out': str(out), 'archive_keyring': None,
+                                                         'cloudimage_keyring': None, 'image_out': None})())
+                self.assertFalse(out.exists(), 'nothing is created before the lock validates')
+                self.assertEqual(sorted(p.name for p in root.iterdir()), ['lock.json'])
+
+    def test_simulation_refuses_outside_its_disposable_container(self):
+        done = subprocess.run(['/bin/bash', str(ROOT / 'deployment/qualification-runner/simulate-noble-bake.sh')],
+                              env={'PATH': '/usr/bin:/bin'}, capture_output=True, text=True, timeout=20)
+        self.assertEqual(done.returncode, 2, done.stderr)
+        self.assertIn('HELD', done.stderr)
+
     def test_bake_and_simulation_share_one_apt_definition_and_stay_offline_and_signed(self):
         recipe = (ROOT / 'deployment/qualification-runner/provision-image.sh').read_text()
         simulation = (ROOT / 'deployment/qualification-runner/simulate-noble-bake.sh').read_text()

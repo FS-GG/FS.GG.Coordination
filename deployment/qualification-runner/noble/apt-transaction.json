@@ -7,7 +7,7 @@
   },
   "baselineId": "ubuntu2404-linux-x64-v1",
   "compilerIdentity": {
-    "derivation": "sha256 of the sorted \"package<TAB>installed version<TAB>locked .deb sha256 or image\" rows",
+    "derivation": "sha256 of the sorted \"package<TAB>installed version<TAB>sha256 of the locked .deb of that package name if the pool holds one, else image\" rows",
     "roles": {
       "compilerSha256": [
         "cpp-13\t13.3.0-6ubuntu2~24.04.1\tc7535331fbb183c802c3bf4b6b210872dcc12d0421b3212b3c4b940f2c59ed3a",
