@@ -257,7 +257,8 @@ jobs:
             sudo systemctl stop docker.socket docker.service containerd.service fstrim.timer fstrim.service
             sudo swapoff -a
             sudo rm -f /swapfile /mnt/swapfile
-            sudo sysctl -q -w kernel.apparmor_restrict_unprivileged_userns=0
+            # Host namespace policy is a pre-provisioned supplier capability.
+            # The read-only domain gate refuses restricted or Unknown state.
             echo "provision.rootAvailBytes=$(df -B1 --output=avail / | tail -n 1 | tr -d ' ')" | tee -a "$EVIDENCE/facts.env"
 
             set -euo pipefail
