@@ -1567,15 +1567,11 @@ module PortableWorkspaceExecutor =
               let temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp"
 
               try
-                  if prepared.IsSome then failSourceAt BeforeSourceWrite
                   use stream =
                       new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None)
 
                   use writer = new BinaryWriter(stream, Encoding.UTF8, true)
                   match entry with
-                  | PortableHostExportSource _ -> writer.Write(prepared.Value: byte array)
-                  | PortableSupplierAdmissionDraft state when state.JournalVersion = SupplierJournalV4 ->
-                      writer.Write(prepared.Value: byte array)
                   | PortableSupplierAdmissionDraft state ->
                       writer.Write(match state.JournalVersion with SupplierJournalV2 -> "fsgg.portable-execution-supplier-journal/2" | SupplierJournalV3 -> "fsgg.portable-execution-supplier-journal/3" | SupplierJournalV4 -> "fsgg.portable-execution-supplier-journal/4")
                       writeSupplier writer state
@@ -1596,7 +1592,6 @@ module PortableWorkspaceExecutor =
                         writeReceipt writer receipt
                     | PortableHost _ | PortableSupplierAdmissionDraft _ | PortableHostExportSource _ | PortableOriginalSource _ -> invalidOp "portable-journal-state-refused"
 
-                  if prepared.IsSome then failSourceAt BeforeSourceFileFlush
                   writer.Flush()
                   stream.Flush true
                   if stream.Length > int64 PortableWorkspaceContract.maximumDocumentBytes * 4L then
@@ -1605,7 +1600,6 @@ module PortableWorkspaceExecutor =
                   | PortableSupplierAdmissionDraft _ when stream.Length > int64 PortableSupplierAdmission.MaximumSupplierBytes ->
                       invalidOp "supplier-journal-size"
                   | _ -> ()
-                  if prepared.IsSome then failSourceAt BeforeSourceReplacement
                   File.Move(temporary, path, true)
               finally
                   if File.Exists temporary then
