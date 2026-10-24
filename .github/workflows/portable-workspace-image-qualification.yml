@@ -9,6 +9,10 @@ on:
       - eng/portable_workspace_sc2.py
       - eng/portable_workspace_bar.py
       - eng/bar_hosted_domain.py
+      - eng/bar_hosted_operation.py
+      - eng/dedicated_qualification_runner.py
+      - deployment/qualification-runner/**
+      - tests/qualification-runner/**
       - tests/portable-workspace/image/**
   push:
     branches: [main]
@@ -18,6 +22,10 @@ on:
       - eng/portable_workspace_sc2.py
       - eng/portable_workspace_bar.py
       - eng/bar_hosted_domain.py
+      - eng/bar_hosted_operation.py
+      - eng/dedicated_qualification_runner.py
+      - deployment/qualification-runner/**
+      - tests/qualification-runner/**
       - tests/portable-workspace/image/**
 
 permissions:
@@ -53,6 +61,8 @@ jobs:
           PYTHONDONTWRITEBYTECODE=1 python3 tests/portable-workspace/image/test_image_archive.py
           PYTHONDONTWRITEBYTECODE=1 python3 tests/portable-workspace/image/test_bar_profile.py
           PYTHONDONTWRITEBYTECODE=1 python3 tests/portable-workspace/image/test_bar_hosted_domain.py
+          PYTHONDONTWRITEBYTECODE=1 python3 -I -B tests/qualification-runner/test_dedicated_runner.py
+          PYTHONDONTWRITEBYTECODE=1 python3 -I -B tests/portable-workspace/image/test_bar_hosted_operation.py
           command -v podman
           install -d -m 0700 "$QUALIFICATION_STATE"
           python3 eng/portable-workspace-image.py preflight \

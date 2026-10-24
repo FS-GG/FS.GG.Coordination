@@ -29,12 +29,14 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import stat
 import sys
 
 SCHEMA = 'fsgg.bar-hosted-domain/1'
 CHECK_SCHEMA = 'fsgg.bar-hosted-userland-check/1'
 RELATION = 'dedicated-ephemeral-hosted-vm'
 RUNNER_IMAGE = 'ubuntu24'
+DEDICATED_RELATION = 'dedicated-preconfigured-ephemeral-vm'
 # Explicitly selected image version (Atlas learn/hosted-image-candidate-
 # qualification-boundary): image drift refuses until source selects it.
 RUNNER_IMAGE_VERSION = '20261012.334.1'
@@ -112,14 +114,20 @@ def evaluate(evidence) -> list[str]:
     refusals = []
     runner, services, userns = evidence['runner'], evidence['services'], evidence['userns']
     volume, resources = evidence['volume'], evidence['resources']
-    if runner['imageOS'] != RUNNER_IMAGE or runner['githubHosted'] is not True \
+    if evidence['relation'] == DEDICATED_RELATION:
+        shared = shared_controller()
+        refusals.extend(shared.dedicated_runner_refusals(runner))
+        if runner.get('dedicated', {}).get('bootId') != evidence['bootId']:
+            refusals.append('dedicated-boot')
+    elif evidence['relation'] != RELATION or runner['imageOS'] != RUNNER_IMAGE or runner['githubHosted'] is not True \
             or runner['imageVersion'] != RUNNER_IMAGE_VERSION:
         refusals.append('runner-image')
     if re.fullmatch(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', evidence['bootId'] or '') is None:
         refusals.append('boot-identity')
     if services['stopped'] != list(STOPPED_SERVICES) or services['active'] or services['daemonProcesses']:
         refusals.append('service-stop')
-    if userns['apparmorRestrictUnprivileged'] != 0 or not userns['maxUserNamespaces']:
+    if type(userns['apparmorRestrictUnprivileged']) is not int or userns['apparmorRestrictUnprivileged'] != 0 \
+            or type(userns['maxUserNamespaces']) is not int or userns['maxUserNamespaces'] <= 0:
         refusals.append('rootless-userns')
     if volume['filesystem'] != 'ext4' or volume['discard'] != 'nodiscard':
         refusals.append('volume-format')
@@ -201,9 +209,60 @@ def security_readback(args):
     return 0
 
 
+
+def shared_controller():
+    spec = importlib.util.spec_from_file_location('bar_domain_shared_profile', Path(__file__).with_name('portable_workspace_sc2.py'))
+    value = importlib.util.module_from_spec(spec)
+    source = Path(__file__).with_name('portable_workspace_sc2.py')
+    raw = source.read_bytes()
+    if len(raw) > 1048576:
+        raise RuntimeError('bounded shared profile source required')
+    exec(compile(raw, str(source), 'exec'), value.__dict__)
+    return value
+
+
+def dedicated_runner_observation(binding_path=Path('/etc/fsgg-qualification-runner/instance-binding.json')):
+    """Observe a root-sealed binding, real OS/UUID/boot; never synthesize hosted facts."""
+    fd = os.open(binding_path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    with os.fdopen(fd, 'rb') as stream:
+        info = os.fstat(stream.fileno())
+        if not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or stat.S_IMODE(info.st_mode) != 0o644 or not 0 < info.st_size <= 65536:
+            raise RuntimeError('dedicated root-sealed instance binding unavailable')
+        raw = stream.read(65537)
+    if len(raw) != info.st_size:
+        raise RuntimeError('dedicated binding changed while reading')
+    def unique(pairs):
+        value = {}
+        for key, item in pairs:
+            if key in value:
+                raise RuntimeError('duplicate dedicated binding field')
+            value[key] = item
+        return value
+    value = json.loads(raw, object_pairs_hook=unique)
+    if value.get('schema') != 'fsgg.dedicated-qualification-instance/1':
+        raise RuntimeError('dedicated binding schema differs')
+    os_data = {}
+    for line in Path('/etc/os-release').read_text().splitlines():
+        if '=' in line:
+            key, item = line.split('=', 1); os_data[key] = item.strip('"')
+    uuid = Path('/sys/class/dmi/id/product_uuid').read_text().strip()
+    if value.get('systemUuid') != uuid or os.environ.get('RUNNER_ENVIRONMENT') != 'self-hosted' or os.uname().machine != 'x86_64':
+        raise RuntimeError('dedicated binding actual machine/environment differs')
+    return {'imageOS': os_data.get('ID', '') + os_data.get('VERSION_ID', ''),
+            'imageVersion': value.get('qualifiedImageSha256'), 'githubHosted': False,
+            'dedicated': {key: value.get(key) for key in ('baselineId', 'providerInstanceId', 'providerImageId',
+                'systemUuid', 'oneJobOnly', 'runnerGroup', 'runnerLabel')} | {
+                'bootId': Path('/proc/sys/kernel/random/boot_id').read_text().strip(),
+                'bindingSha256': hashlib.sha256(raw).hexdigest()}}
+
+
 def admit(args) -> int:
     if os.geteuid() != 0:
         raise RuntimeError('admit observes root-owned domain state and must run as root')
+    dedicated = getattr(args, 'profile', 'github-hosted') == 'dedicated-preconfigured'
+    runner = dedicated_runner_observation() if dedicated else None
+    if dedicated and shared_controller().dedicated_runner_refusals(runner):
+        raise RuntimeError('dedicated image/binding source selection unavailable or differs')
     allocation, load_store = Path(args.allocation).resolve(strict=True), Path(args.load_store).resolve(strict=True)
     backing = Path(args.backing_image).resolve(strict=True)
     userland = Path(args.userland).resolve(strict=True)
@@ -236,9 +295,9 @@ def admit(args) -> int:
                                    'mount --make-rprivate / && mount -t proc proc "$1/proc" && '
                                    'exec chroot "$1" /usr/bin/buildah --version', 'sh', str(userland)])
     evidence = {
-        'schema': SCHEMA, 'relation': RELATION, 'verdict': None, 'refusals': None,
+        'schema': SCHEMA, 'relation': DEDICATED_RELATION if dedicated else RELATION, 'verdict': None, 'refusals': None,
         'bootId': Path('/proc/sys/kernel/random/boot_id').read_text().strip(),
-        'runner': {'imageOS': os.environ.get('ImageOS', ''), 'imageVersion': os.environ.get('ImageVersion', ''),
+        'runner': runner if dedicated else {'imageOS': os.environ.get('ImageOS', ''), 'imageVersion': os.environ.get('ImageVersion', ''),
                    'githubHosted': os.environ.get('RUNNER_ENVIRONMENT') == 'github-hosted'},
         'services': {'stopped': list(STOPPED_SERVICES), 'active': active, 'daemonProcesses': daemons},
         'userns': {'apparmorRestrictUnprivileged': read_int(Path('/proc/sys/kernel/apparmor_restrict_unprivileged_userns')),
@@ -350,9 +409,11 @@ def userland_check(args) -> int:
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split('\n', 1)[0])
     modes = parser.add_subparsers(dest='mode', required=True)
+    modes.add_parser('dedicated-profile')
     admit_parser = modes.add_parser('admit')
     for name in ('--allocation', '--load-store', '--backing-image', '--userland', '--evidence'):
         admit_parser.add_argument(name, required=True)
+    admit_parser.add_argument('--profile', choices=('github-hosted', 'dedicated-preconfigured'), default='github-hosted')
     admit_parser.add_argument('--owner-uid', type=int, required=True)
     admit_parser.add_argument('--owner-gid', type=int, required=True)
     check_parser = modes.add_parser('userland-check')
@@ -364,6 +425,14 @@ def main(argv=None) -> int:
     security_parser.add_argument('--owner-uid', type=int, required=True)
     security_parser.add_argument('--owner-gid', type=int, required=True)
     args = parser.parse_args(argv)
+    if args.mode == 'dedicated-profile':
+        if os.geteuid() != 0:
+            raise RuntimeError('root-sealed dedicated profile must be checked as root')
+        runner = dedicated_runner_observation()
+        refusals = shared_controller().dedicated_runner_refusals(runner)
+        print(json.dumps({'profile': DEDICATED_RELATION, 'refusals': refusals,
+                          'scope': 'image/binding correspondence only; actual catalog and resource gates still required'}))
+        return 2 if refusals else 0
     if args.mode == 'security-readback':
         return security_readback(args)
     return admit(args) if args.mode == 'admit' else userland_check(args)

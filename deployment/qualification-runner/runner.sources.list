@@ -1,0 +1,4 @@
+# Image-build input only. This local repository must carry the complete locked,
+# signed Ubuntu26.10 package transaction, InRelease and trusted archive keyring.
+# No job or shared Codex-host package installation is selected by this file.
+deb [signed-by=/usr/share/keyrings/ubuntu-archive-keyring.gpg] file:/mnt/fsgg-qualification-inputs/apt stonking main universe

@@ -30,8 +30,8 @@ PRODUCT_REVISION = '4ddd070650e3131916a13bb2c5e75f99376e1c3a'
 PRODUCT_TREE = 'f6e4dc108bf065cd2fd44d48e0faf8807e1b8e3c'
 HELPER_FILES = {
     'eng/portable-workspace-image.py': '14f519038fd24684b458d917ddb33ab6bada86a084b39c35ce5ae7e8e9fa7aa5',
-    'eng/portable_workspace_bar.py': '63f96478d41a57fc786f31f25ae6f9a43102a042e6ce6b81b65f88a3c5a54815',
-    'eng/portable_workspace_sc2.py': '19f4b126ace622349e5bff9ae9462e079e13ebf41d5706bb8cc1551a33ee262e',
+    'eng/portable_workspace_bar.py': 'eee52c851cd77a15d7818f4ac5a7cefc04a12e8bbbad2ed65752fc048b6e2bf9',
+    'eng/portable_workspace_sc2.py': '3027989b37c2c9d71fb6c6fe07681f7251e8aa78f0e91bd34b706962ece93f5b',
 }
 PRODUCT_FILES = {
     'containers/barc-stock-headless/Containerfile': '72ab4ae75d040a2a4f94fdf6a57d910a0a51a07024238cb09d831c8f94c89392',
@@ -224,7 +224,7 @@ def unit_budget(operation_id, *, evidence=EVIDENCE):
     return value
 
 
-PREPARATION_PHASES={'controls':300,'userland':480,'admit':300}
+PREPARATION_PHASES={'profile':60,'controls':300,'userland':480,'admit':300}
 
 
 def fixed_preparation(phase):
@@ -694,7 +694,10 @@ def prepare(operation_id, revision, *, source=SOURCE, allocation=ALLOCATION, evi
     boot = Path('/proc/sys/kernel/random/boot_id').read_text().strip()
     require(domain.get('verdict') == 'admitted' and domain.get('refusals') == [] and domain.get('bootId') == boot,
             'fresh root domain admission required')
-    require(domain.get('runner', {}).get('imageVersion') == bar.HOSTED_RUNNER_IMAGE_VERSION, 'runner image drift')
+    if domain.get('relation') == bar.DEDICATED_RELATION:
+        require(bar.shared.dedicated_runner_refusals(domain.get('runner')) == [], 'dedicated runner image drift')
+    else:
+        require(domain.get('relation') == bar.HOSTED_RELATION and domain.get('runner', {}).get('imageVersion') == bar.HOSTED_RUNNER_IMAGE_VERSION, 'runner image drift')
     crypto_seal, crypto_pin = read_json(evidence / 'transport-seal.json')
     require(crypto_seal.get('operationId') == operation_id and crypto_seal.get('bootId') == boot
             and crypto_seal.get('outerStartMonotonic') == started
@@ -723,7 +726,7 @@ def prepare(operation_id, revision, *, source=SOURCE, allocation=ALLOCATION, evi
         support[role] = {'path': str(actual), 'sha256': digest_file(actual, 256 * 1024**2)['sha256']}
     topology = evidence / 'topology.json'
     disposition = evidence / 'resource-disposition.json'
-    write_new(topology, {'relation': bar.HOSTED_RELATION, 'bootId': boot, 'volumeDevice': domain['volume']['device'],
+    write_new(topology, {'relation': domain['relation'], 'bootId': boot, 'volumeDevice': domain['volume']['device'],
                          'allocation': str(allocation), 'loadRoot': str(load_root), 'operationId': operation_id,
                          'transportSealSha256': crypto_pin['sha256']})
     write_new(disposition, {'sharedHostReservedMemoryBytes': 0, 'sharedHostReservedCpu': 0,
@@ -744,7 +747,7 @@ def prepare(operation_id, revision, *, source=SOURCE, allocation=ALLOCATION, evi
         'admission': {'topology': topology_ref, 'resourceDisposition': disposition_ref,
                       'security': {'path': str(evidence / 'root-security.json'), 'sha256': security_pin['sha256']},
                       'domain': {'path': str(domain_path), 'sha256': domain_pin['sha256']}},
-        'resourceDomain': {'relation': bar.HOSTED_RELATION, 'topologySha256': topology_ref['sha256'],
+        'resourceDomain': {'relation': domain['relation'], 'topologySha256': topology_ref['sha256'],
                            'domainEvidenceSha256': domain_pin['sha256']}, 'licenseAccepted': True}
     target = evidence / 'operation-input.json'
     write_new(target, selection)

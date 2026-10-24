@@ -887,3 +887,20 @@ bytes on failure. The original archive digest and16GiB bound must match before
 the existing bounded OCI reader independently checks the candidate. Ciphertext
 retention alone does not establish that readback. Encryption failures retain
 bounded original controller metadata/streams and forbid candidate transport.
+
+
+The hosted image workflow does not change host AppArmor/user-namespace policy.
+Both closed purposes require that capability to be supplied before the operation;
+the existing read-only domain gate refuses restricted or unavailable observations.
+A zero restriction value is necessary for this fixed contract, not proof of pasta
+proc access, child LSM policy or complete host suitability. The bounded kernel
+readback preserves unavailable/absent audit evidence as Unknown. No NNP, backend,
+rootless or namespace fallback is introduced. An ordinary restricted hosted image
+may refuse, leaving a supplier gap rather than authorizing a host policy change.
+
+The package bootstrap still restores required `newuidmap`/`newgidmap` file
+capabilities only inside the newly owned Arch userland when neither file
+capabilities nor setuid packaging is present. These package helpers use the fixed
+uid1001/subuid/subgid mapping for rootless operation; they are distinct from
+changing the live host kernel policy. This preserves the existing package/helper
+contract and does not select native execution or broader capability/NNP changes.
