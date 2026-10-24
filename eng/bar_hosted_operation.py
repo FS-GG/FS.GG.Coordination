@@ -21,6 +21,8 @@ import math
 import resource
 import stat
 import subprocess
+import selectors
+import signal
 import sys
 import time
 
@@ -191,7 +193,7 @@ def validate_clock(value, operation_id, revision=None):
     require(0<latest-selected<=300 and observer-selected==5700 and selected<=first<=latest,'Root queue/observer interval refused')
     require(job.get('run_id')==int(match[1]) and job.get('head_sha')==value['sourceRevision'] and job.get('name')=='full-image' and job.get('status')=='in_progress'
             and type(job.get('id')) is int and job['id']>0 and isinstance(job.get('runner_name'),str) and job['runner_name'], 'native job/source join differs')
-    native=utc_seconds(job['started_at']);require(native<=first,'native job starts after first step')
+    native=utc_seconds(job['started_at']);require(selected-1<=native<=first,'native job birth/Root selection differs')
     mono=value['firstMonotonic'];end=value['overallDeadlineMonotonic']
     require(type(mono) in (int,float) and type(end) in (int,float) and math.isfinite(mono) and math.isfinite(end) and mono>=0,'finite original monotonic clock required')
     require(abs(end-(mono+min(native+OUTER_SECONDS,selected+OUTER_SECONDS)-first))<0.000001 and end>mono,'original overall deadline differs')
@@ -220,6 +222,161 @@ def unit_budget(operation_id, *, evidence=EVIDENCE):
            'requestedMonotonic':now,'runtimeMaxSeconds':runtime,'runtimeLimitMonotonic':limit}
     write_new(evidence/'unit-request.json',value)
     return value
+
+
+PREPARATION_PHASES={'controls':300,'userland':480,'admit':300}
+
+
+def fixed_preparation(phase):
+    require(phase in PREPARATION_PHASES,'closed preparation phase required')
+    root=Path(__file__).resolve().parents[1];workflow=root/'.github/workflows/bar-hosted-image-qualification.yml'
+    raw=workflow.read_bytes();require(len(raw)<=131072,'bounded fixed workflow required')
+    registry=read_json(root/'evidence/github-substrate-v2/gs2-06-7/execution-pins-extension.json')[0]
+    pins=[v['sha256'] for v in registry['documents'] if v['path']==str(workflow.relative_to(root))]
+    require(pins==[hashlib.sha256(raw).hexdigest()],'fixed preparation workflow pin differs')
+    rows=raw.decode().splitlines(keepends=True)
+    def block(key):
+        matches=[i for i,row in enumerate(rows) if row.strip()==key+': |'];require(len(matches)==1,'one fixed phase body required')
+        index=matches[0];indent=len(rows[index])-len(rows[index].lstrip());body=[]
+        for row in rows[index+1:]:
+            if row.strip() and len(row)-len(row.lstrip())<=indent:break
+            body.append(row)
+        import textwrap
+        return textwrap.dedent(''.join(body))
+    globals_section=raw.decode().split('\nenv:\n',1)[1].split('\njobs:\n',1)[0]
+    env=dict(re.findall(r'^  ([A-Z][A-Z0-9_]*): ([^\n]+)$',globals_section,re.MULTILINE))
+    env['PACMAN_SCRIPT']=block('PACMAN_SCRIPT')
+    return block('PREP_'+phase.upper()+'_SCRIPT'),env
+
+
+def preparation_intent(operation_id,phase,*,evidence=EVIDENCE):
+    require(phase in PREPARATION_PHASES,'closed preparation phase required')
+    clock,pin=original_clock(operation_id,evidence=evidence,revision=os.environ.get('GITHUB_SHA'))
+    now=time.monotonic();end=min(now+PREPARATION_PHASES[phase],clock['overallDeadlineMonotonic']-TRANSPORT_SECONDS-FINAL_SECONDS)
+    require(end-now>1,'original preparation/transport aperture exhausted')
+    return {'operationId':operation_id,'phase':phase,'clockSha256':pin['sha256'],'bootId':clock['bootId'],
+            'parentPid':os.getpid(),'parentStartTicks':process_start(os.getpid()),
+            'startedMonotonic':now,'hardEnd':end,'termAt':end-1,'descendantSettlement':'unproved'}
+
+
+def process_start(pid):
+    return int(Path('/proc/'+str(pid)+'/stat').read_text().rsplit(') ',1)[1].split()[19])
+
+
+def preparation_child(operation_id,phase,*,evidence=EVIDENCE):
+    intent,_=read_json(evidence/('prep-'+phase)/'intent.json')
+    clock,pin=original_clock(operation_id,evidence=evidence,revision=os.environ.get('GITHUB_SHA'))
+    require(intent['operationId']==operation_id and intent['phase']==phase and intent['clockSha256']==pin['sha256'] and intent['bootId']==clock['bootId'],'preparation original join differs')
+    require(os.getppid()==intent['parentPid'] and process_start(os.getppid())==intent['parentStartTicks'] and os.getpgrp()==os.getpid(),'preparation parent/group birth differs')
+    body,_=fixed_preparation(phase)
+    now=time.monotonic()
+    require(intent['startedMonotonic']<=now<intent['termAt'] and intent['hardEnd']<=clock['overallDeadlineMonotonic']-TRANSPORT_SECONDS-FINAL_SECONDS,'actual preparation start expired')
+    argv=['/usr/bin/timeout','--foreground','--signal=TERM','--kill-after=1',format(intent['termAt']-now,'.6f')+'s',
+          '/bin/bash','-euo','pipefail','-c',body]
+    os.execve(argv[0],argv,dict(os.environ))
+
+
+def run_preparation(operation_id,phase,*,evidence=EVIDENCE,launch=None):
+    """Own only one source-fixed prep group. No argv, duration or script CLI port."""
+    require(os.geteuid()==0,'root preparation capture owner required')
+    body,fixed_env=fixed_preparation(phase)
+    intent=preparation_intent(operation_id,phase,evidence=evidence)
+    slot=evidence/('prep-'+phase);require(not slot.exists(),'preparation phase already consumed')
+    private_dir(slot);os.chown(slot,RUNNER_UID,RUNNER_UID,follow_symlinks=False)
+    write_new(slot/'intent.json',intent);os.chown(slot/'intent.json',RUNNER_UID,RUNNER_UID,follow_symlinks=False)
+    names=('GITHUB_SHA','GITHUB_EVENT_NAME','GITHUB_REF','GITHUB_RUN_ATTEMPT','GITHUB_REPOSITORY','GITHUB_WORKSPACE',
+           'GITHUB_RUN_ID','GITHUB_WORKFLOW_REF','OPERATION_ID','HOST_JOB_STARTED','HOST_JOB_MONOTONIC','ImageOS','ImageVersion','RUNNER_ENVIRONMENT')
+    env={name:os.environ[name] for name in names if name in os.environ}
+    env.update(fixed_env,PATH='/usr/bin:/bin',HOME='/home/runner',LANG='C.UTF-8',LC_ALL='C.UTF-8',EVIDENCE=str(evidence))
+    argv=['/usr/bin/setpriv','--reuid=1001','--regid=1001','--init-groups',sys.executable,'-I','-B',str(Path(__file__).resolve()),
+          'prep-child','--operation-id',operation_id,'--phase',phase]
+    streams={};result={**intent,'argv':argv,'exit':None,'bothStreamsEof':False,'leaderReaped':False,'signals':[],'firstCause':None}
+    child=None;selector=selectors.DefaultSelector();birth=None;stop_at=None;members={};sent_signals=set()
+    def observe_group():
+        for entry in Path('/proc').iterdir():
+            if not entry.name.isdecimal():continue
+            try:
+                values=(entry/'stat').read_text().rsplit(') ',1)[1].split()
+                if int(values[2])==child.pid and int(values[3])==child.pid:
+                    members[int(entry.name)]=int(values[19])
+            except (OSError,ValueError,IndexError):continue
+    def signal_owned(number):
+        if number in sent_signals:return
+        # A still-born member pins the original session/group even after its
+        # leader exits; never signal a numeric group with no live birth join.
+        for pid,start in tuple(members.items()):
+            try:
+                values=Path('/proc/'+str(pid)+'/stat').read_text().rsplit(') ',1)[1].split()
+                if int(values[19])==start and int(values[2])==child.pid and int(values[3])==child.pid:
+                    os.killpg(child.pid,number);sent_signals.add(number);result['signals'].append({'signal':number,'monotonic':time.monotonic()});return
+            except (OSError,ValueError,IndexError):continue
+    try:
+        require(time.monotonic()<intent['termAt'],'preparation expired before launch')
+        child=(launch or subprocess.Popen)(argv,cwd=env['GITHUB_WORKSPACE'],env=env,stdin=subprocess.DEVNULL,
+                    stdout=subprocess.PIPE,stderr=subprocess.PIPE,start_new_session=True)
+        birth=process_start(child.pid);result['pid']=child.pid;result['startTicks']=birth;members[child.pid]=birth
+        require(os.getpgid(child.pid)==child.pid,'new preparation group identity differs')
+        for name,pipe in (('stdout',child.stdout),('stderr',child.stderr)):
+            target=slot/(name+'.log');fd=os.open(target,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)
+            os.chown(target,RUNNER_UID,RUNNER_UID,follow_symlinks=False)
+            streams[pipe.fileno()]={'name':name,'pipe':pipe,'sink':os.fdopen(fd,'wb'),'bytes':0,'eof':False}
+            os.set_blocking(pipe.fileno(),False);selector.register(pipe,selectors.EVENT_READ)
+        total=0
+        while selector.get_map() or child.poll() is None:
+            observe_group();now=time.monotonic()
+            if now>=intent['termAt'] and stop_at is None:
+                result['firstCause']=result['firstCause'] or 'original preparation deadline exhausted';signal_owned(signal.SIGTERM);stop_at=min(intent['hardEnd']-.1,now+.9)
+            if stop_at is not None and now>=stop_at:signal_owned(signal.SIGKILL)
+            if now>=intent['hardEnd']:break
+            for key,_ in selector.select(min(.05,max(0,intent['hardEnd']-now))):
+                data=os.read(key.fd,65536);stream=streams[key.fd]
+                if not data:selector.unregister(key.fileobj);stream['eof']=True;continue
+                if total+len(data)>8*1024**2:
+                    result['firstCause']=result['firstCause'] or 'preparation stream cap exceeded'
+                    if stop_at is None:
+                        signal_owned(signal.SIGTERM);stop_at=min(intent['hardEnd']-.1,time.monotonic()+.9)
+                    continue
+                stream['sink'].write(data);stream['bytes']+=len(data);total+=len(data)
+        if child.poll() is None:signal_owned(signal.SIGKILL)
+        try:result['exit']=child.wait(timeout=max(.01,intent['hardEnd']-time.monotonic()));result['leaderReaped']=True
+        except subprocess.TimeoutExpired:result['firstCause']=result['firstCause'] or 'preparation wait unconfirmed'
+        result['bothStreamsEof']=all(v['eof'] for v in streams.values())
+        if result['exit']!=0:result['firstCause']=result['firstCause'] or 'preparation command failed with exit '+str(result['exit'])
+        if not result['bothStreamsEof']:result['firstCause']=result['firstCause'] or 'preparation EOF unconfirmed'
+    except BaseException as error:
+        result['firstCause']=result['firstCause'] or type(error).__name__+': '+str(error)[:512]
+        if child is not None and birth is not None:
+            try:signal_owned(signal.SIGKILL);result['exit']=child.wait(timeout=max(.01,intent['hardEnd']-time.monotonic()));result['leaderReaped']=True
+            except Exception:pass
+    finally:
+        selector.close()
+        for stream in streams.values():
+            for handle in (stream['sink'],stream['pipe']):
+                try:handle.close()
+                except OSError as error:result['firstCause']=result['firstCause'] or 'preparation stream close Unknown: '+str(error)[:256]
+        result['observedGroupMembers']=[{'pid':pid,'startTicks':start} for pid,start in sorted(members.items())]
+        result['completedMonotonic']=time.monotonic()
+        try:
+            write_new(slot/'receipt.json',result);os.chown(slot/'receipt.json',RUNNER_UID,RUNNER_UID,follow_symlinks=False)
+        except Exception as error:
+            result['firstCause']=result['firstCause'] or 'preparation receipt Unknown: '+str(error)[:256]
+        if result['firstCause'] is not None:
+            try:sys.stderr.buffer.write((slot/'stderr.log').read_bytes()[:65536])
+            except OSError:pass
+        try:
+            if os.environ.get('STARTUP_EVIDENCE'):
+                startup=Path(os.environ['STARTUP_EVIDENCE'])
+                require(startup==Path(os.environ['RUNNER_TEMP'])/(operation_id+'-startup') and not startup.is_symlink() and
+                        digest_file(startup/'clock.json',16384)['sha256']==intent['clockSha256'],'startup fallback provenance differs')
+                write_new(startup/('prep-'+phase+'-receipt.json'),result)
+                os.chown(startup/('prep-'+phase+'-receipt.json'),RUNNER_UID,RUNNER_UID,follow_symlinks=False)
+                if (slot/'stderr.log').is_file():
+                    target=startup/('prep-'+phase+'-stderr.log');write_new(target,(slot/'stderr.log').read_bytes()[:65536])
+                    os.chown(target,RUNNER_UID,RUNNER_UID,follow_symlinks=False)
+        except Exception as error:
+            result['firstCause']=result['firstCause'] or 'preparation fallback Unknown: '+str(error)[:256]
+    require(result['firstCause'] is None and result['leaderReaped'] and result['bothStreamsEof'],result['firstCause'] or 'preparation settlement Unknown')
+    return result
 
 
 def unit_microseconds(value):
@@ -788,13 +945,19 @@ def receipt(operation_id, *, allocation=ALLOCATION, evidence=EVIDENCE, transport
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.split('\n', 1)[0])
-    parser.add_argument('mode', choices=['canonicalize-checkouts', 'seal-transport', 'unit-budget', 'unit-enter', 'qualify', 'network-prerequisite', 'receipt'])
+    parser.add_argument('mode', choices=['canonicalize-checkouts', 'seal-transport', 'unit-budget', 'unit-enter', 'prep-run', 'prep-child', 'qualify', 'network-prerequisite', 'receipt'])
     parser.add_argument('--operation-id', required=True)
     parser.add_argument('--source-revision')
     parser.add_argument('--security-stage')
+    parser.add_argument('--phase',choices=tuple(PREPARATION_PHASES))
     args = parser.parse_args(argv)
     require(args.security_stage is None or args.mode == 'receipt', 'security stage is receipt-only')
-    if args.mode in ('unit-budget','unit-enter'):
+    require((args.phase is not None)==(args.mode in ('prep-run','prep-child')),'closed preparation phase join required')
+    if args.mode in ('prep-run','prep-child'):
+        host_evidence=Path(os.environ['EVIDENCE'])
+        value=(run_preparation if args.mode=='prep-run' else preparation_child)(args.operation_id,args.phase,evidence=host_evidence)
+        print(json.dumps(value,sort_keys=True))
+    elif args.mode in ('unit-budget','unit-enter'):
         host_evidence=Path(os.environ['EVIDENCE'])
         value=(unit_budget if args.mode=='unit-budget' else unit_enter)(args.operation_id,evidence=host_evidence)
         print(value['runtimeMaxSeconds'] if args.mode=='unit-budget' else json.dumps(value,sort_keys=True))

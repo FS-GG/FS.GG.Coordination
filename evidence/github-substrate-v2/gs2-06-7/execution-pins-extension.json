@@ -292,7 +292,7 @@
 {
   "kind": "workflow",
   "path": ".github/workflows/bar-hosted-image-qualification.yml",
-  "sha256": "567f6e7e4cd51db38c6d2e37de9240fe6a1fe9935543d6418ad13c5eabd30e2e",
+  "sha256": "526f02f1fb7837143928d18c909e5bd3146320755bb355b21183d6072d20eaf8",
   "externalReferences": [
     "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
     "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"

@@ -775,6 +775,23 @@ first-step boot/monotonic clock. The observer-only last300 seconds grant no
 additional native work. A refused startup retains bounded clock/outcome evidence
 through the existing single metadata uploader, even without checkout/helpers.
 
+Pre-unit effects share that same determining deadline. The two initial
+checkout actions keep their five-minute caps after a validated current native
+job birth (not earlier than Root selection minus one second of timestamp
+precision) and the at-most300-second first-step window. After checkout, the
+three source-fixed preparation phases have maximums controls300/userland480/
+admit300 seconds, each additionally clipped to D-1200 transport-30 summary.
+A root parent owns the exact born preparation session/group and bounded pipes;
+its fixeduid1001 child rechecks original boot/clock/phase at actual start before
+entering the fixed body under GNU timeout. TERM/KILL and parent wait/drain use
+the same phase endpoint, not a new relative480 seconds. Native body argv/duration
+are not dispatch/CLI inputs. Known group births may be signalled; whole
+transitive descendants remain unproved and no resources are released on that
+inference. Phase receipts and bounded original stderr also reach the provenance-
+fenced startup fallback when a pre-volume failure prevents canonical transport.
+The rejected d63 source allowed late preparation past Root D; its review and
+original checks remain retained, superseded by this source correction.
+
 Before unit creation, let D be that effective deadline and
 L=D-1200 transport-120 independent unit stop-30 final summary. At precreation
 monotonic Q, RuntimeMaxSec=min(3900,floor(L-Q-30 activation reserve)). The

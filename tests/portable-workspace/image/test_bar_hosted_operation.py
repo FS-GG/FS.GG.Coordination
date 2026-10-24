@@ -677,7 +677,7 @@ exit 41
         self.assertNotIn('continue-on-error', text)
         self.assertIn('pacman -Qkk passt', literal_block(text, 'PACMAN_SCRIPT'))
         rows = text.splitlines(keepends=True)
-        scripts = [literal_block(text, 'PACMAN_SCRIPT'), literal_block(text, 'ENTER_SCRIPT')]
+        scripts = [literal_block(text, key) for key in ('PACMAN_SCRIPT','ENTER_SCRIPT','UNIT_ENTRY_SCRIPT','PREP_CONTROLS_SCRIPT','PREP_USERLAND_SCRIPT','PREP_ADMIT_SCRIPT')]
         scripts.extend(literal_block(''.join(rows[index:]), 'run') for index, row in enumerate(rows) if row.strip() == 'run: |')
         for script in scripts:
             result = subprocess.run(['/bin/bash', '-n'], input=script, capture_output=True, text=True, timeout=10)
@@ -721,7 +721,7 @@ class ClockBudget(unittest.TestCase):
           'GITHUB_RUN_ATTEMPT':'1','GITHUB_REPOSITORY':'FS-GG/FS.GG.Coordination','GITHUB_RUN_ID':'123','RUNNER_NAME':'fixture',
           'GH_TOKEN':'inert fixture not a credential','GITHUB_ENV':str(self.root/'github-env'),'GITHUB_OUTPUT':str(self.root/'github-output'),
           'SELECTED_UTC':'2026-10-24T02:00:00Z','LATEST_START_UTC':'2026-10-24T02:05:00Z','OBSERVER_DEADLINE_UTC':'2026-10-24T03:35:00Z'}
-        self.job={'id':7,'run_id':123,'head_sha':'b'*40,'name':'full-image','runner_name':'fixture','status':'in_progress','started_at':'2026-10-24T01:59:55Z'}
+        self.job={'id':7,'run_id':123,'head_sha':'b'*40,'name':'full-image','runner_name':'fixture','status':'in_progress','started_at':'2026-10-24T01:59:59.500000Z'}
 
     def produce(self,updates=None,job=None,error=None):
         import datetime,urllib.request,io
@@ -737,7 +737,7 @@ class ClockBudget(unittest.TestCase):
 
     def test_actual_first_producer_minimum_provider_root_deadline_and_both_purposes(self):
         value=self.produce();WRAPPER.validate_clock(value,OPERATION,'b'*40)
-        self.assertEqual(value['overallDeadlineMonotonic'],5495)
+        self.assertEqual(value['overallDeadlineMonotonic'],5499.5)
         self.assertEqual(value['purpose'],'network-prerequisite')
         (Path(self.env['STARTUP_EVIDENCE'])/'clock.json').unlink();Path(self.env['STARTUP_EVIDENCE']).rmdir()
         value=self.produce({'QUALIFICATION_MODE':'qualify'},job={**self.job,'started_at':'2026-10-24T02:00:00Z'})
@@ -748,7 +748,7 @@ class ClockBudget(unittest.TestCase):
     def test_actual_first_producer_refusal_retained_before_checkout_no_retry(self):
         cases=[({'SELECTED_UTC':'1e999'},None,None),({'LATEST_START_UTC':'2026-10-24T01:59:59Z'},None,None),
           ({'OBSERVER_DEADLINE_UTC':'2026-10-24T03:35:01Z'},None,None),({}, {**self.job,'head_sha':'c'*40},None),
-          ({'GITHUB_RUN_ATTEMPT':'2'},None,None),({},None,OSError('native API Unknown'))]
+          ({'GITHUB_RUN_ATTEMPT':'2'},None,None),({},None,OSError('native API Unknown')),({}, {**self.job,'started_at':'2026-10-24T01:59:58Z'},None)]
         for n,(updates,job,error) in enumerate(cases):
             self.env['STARTUP_EVIDENCE']=str(self.root/('startup-'+str(n)))
             with self.subTest(case=n),self.assertRaises(Exception):self.produce(updates,job,error)
@@ -835,6 +835,62 @@ class ClockBudget(unittest.TestCase):
         text=WORKFLOW.read_text();metadata=text.split('- name: Retain metadata and original command streams',1)[1].split('- name: Retain only the encrypted',1)[0]
         self.assertIn('if: always()',metadata);self.assertIn('|| steps.clock.outputs.startup-path',metadata)
         self.assertEqual(metadata.count('uses:'),1);self.assertIn('timeout-minutes: 1',metadata)
+
+
+class PreparationDeadline(ClockBudget):
+    def test_fixed_phase_closure_and_no_command_or_duration_port(self):
+        for phase in ('controls','userland','admit'):
+            body,env=WRAPPER.fixed_preparation(phase)
+            self.assertIn('set -euo pipefail',body);self.assertIn('ARCH_IMAGE',env);self.assertIn('BUILDAH_SHA256',env)
+        with self.assertRaises(RuntimeError):WRAPPER.fixed_preparation('arbitrary')
+        text=WORKFLOW.read_text()
+        for phase in ('controls','userland','admit'):
+            self.assertIn('--phase '+phase+' --operation-id',text)
+        self.assertNotIn('--command',text)
+
+    def test_actual_late_phase_cannot_start480s_past_original_transport_reserve(self):
+        end=self.clock['overallDeadlineMonotonic']
+        with patch.object(time,'monotonic',return_value=end-20),self.assertRaisesRegex(RuntimeError,'aperture exhausted'):
+            WRAPPER.preparation_intent(OPERATION,'userland',evidence=self.evidence)
+        with patch.object(time,'monotonic',return_value=end-1230-20):
+            intent=WRAPPER.preparation_intent(OPERATION,'userland',evidence=self.evidence)
+        self.assertEqual(intent['hardEnd'],end-1230);self.assertEqual(intent['termAt']-(end-1230-20),19)
+        self.assertEqual(end-intent['hardEnd'],1200+30)
+
+    def test_actual_child_rechecks_before_fixed_body_and_gnu_timeout(self):
+        import sys
+        intent=WRAPPER.preparation_intent(OPERATION,'controls',evidence=self.evidence)
+        slot=self.evidence/'prep-controls';slot.mkdir();WRAPPER.write_new(slot/'intent.json',intent)
+        with patch.object(WRAPPER.os,'getppid',return_value=os.getpid()),patch.object(WRAPPER.os,'getpgrp',return_value=os.getpid()),patch.object(WRAPPER.os,'execve') as execute:
+            with patch.object(time,'monotonic',return_value=intent['termAt']+.1),self.assertRaisesRegex(RuntimeError,'actual preparation start expired'):
+                WRAPPER.preparation_child(OPERATION,'controls',evidence=self.evidence)
+            execute.assert_not_called()
+            with patch.object(time,'monotonic',return_value=intent['startedMonotonic']+.1):WRAPPER.preparation_child(OPERATION,'controls',evidence=self.evidence)
+            argv=execute.call_args.args[1];self.assertEqual(argv[:4],['/usr/bin/timeout','--foreground','--signal=TERM','--kill-after=1'])
+            self.assertLessEqual(float(argv[4][:-1]),intent['termAt']-intent['startedMonotonic'])
+            self.assertIn('canonicalize-checkouts',argv[-1])
+
+    def test_actual_owned_parent_timeout_wait_eof_and_failure_streams(self):
+        import sys
+        real_popen=subprocess.Popen
+        for name,command in [('normal',['/bin/bash','-c','printf owned-stdout; printf original-error >&2; exit 0']),
+              ('gnu-timeout',['/usr/bin/timeout','--foreground','--kill-after=1','.1s',sys.executable,'-I','-B','-c','import time;time.sleep(5)']),
+              ('parent-timeout',[sys.executable,'-I','-B','-c','import signal,time;signal.signal(signal.SIGTERM,signal.SIG_IGN);print("owned-before-timeout",flush=True);time.sleep(5)'])]:
+            with self.subTest(case=name):
+                evidence=self.root/name;evidence.mkdir();install_clock(evidence)
+                def launch(argv,**kwargs):
+                    self.assertIn('prep-child',argv);self.assertTrue(kwargs['start_new_session'])
+                    return real_popen(command,**kwargs)
+                with patch.object(WRAPPER.os,'geteuid',return_value=0),patch.object(WRAPPER.os,'chown'),patch.dict(os.environ,{'GITHUB_WORKSPACE':str(self.root)}),patch.dict(WRAPPER.PREPARATION_PHASES,{'controls':2}):
+                    if name=='normal':value=WRAPPER.run_preparation(OPERATION,'controls',evidence=evidence,launch=launch)
+                    else:
+                        with self.assertRaises(RuntimeError):WRAPPER.run_preparation(OPERATION,'controls',evidence=evidence,launch=launch)
+                        value=json.loads((evidence/'prep-controls/receipt.json').read_text())
+                self.assertTrue(value['leaderReaped']);self.assertTrue(value['bothStreamsEof']);self.assertEqual(value['descendantSettlement'],'unproved')
+                self.assertTrue((evidence/'prep-controls/stdout.log').exists())
+                if name=='parent-timeout':self.assertEqual([v['signal'] for v in value['signals']][:2],[15,9])
+                if name=='normal':self.assertEqual((evidence/'prep-controls/stderr.log').read_bytes(),b'original-error')
+                with self.assertRaises(RuntimeError),patch.object(WRAPPER.os,'geteuid',return_value=0):WRAPPER.run_preparation(OPERATION,'controls',evidence=evidence,launch=launch)
 
 
 class SyntheticCrypto(unittest.TestCase):

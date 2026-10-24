@@ -121,7 +121,7 @@ jobs:
               need(job.get('status')=='in_progress','native job is not active')
               need(type(job.get('id')) is int and job['id']>0 and type(job.get('run_id')) is int,'native job IDs required')
               need(job['run_id']==int(env['GITHUB_RUN_ID']) and job['head_sha']==env['GITHUB_SHA'] and job['name']=='full-image' and job['runner_name']==env['RUNNER_NAME'],'native source/job/runner differs')
-              native=parse(job['started_at']);need(native<=utc.timestamp(),'native job begins after first step')
+              native=parse(job['started_at']);need(selected-1<=native<=utc.timestamp(),'native job birth/Root selection differs')
               record['providerJob']={k:job[k] for k in ('id','run_id','head_sha','name','runner_name','started_at','status')}
               record['overallDeadlineMonotonic']=mono+min(native+5400,selected+5400)-utc.timestamp()
               need(record['overallDeadlineMonotonic']>time.monotonic(),'original overall deadline expired')
@@ -157,28 +157,41 @@ jobs:
           persist-credentials: false
 
       - name: Run the synthetic domain controls on the exact source
+        id: prep_controls
         shell: bash
+        timeout-minutes: 5
+        env:
+          PREP_CONTROLS_SCRIPT: |
+            set -euo pipefail
+            test "$GITHUB_REF" = refs/heads/main
+            python3 -I -B source/eng/bar_hosted_operation.py canonicalize-checkouts --operation-id "$OPERATION_ID" --source-revision "$GITHUB_SHA" \
+              > "$EVIDENCE/checkout-config-receipt.json"
+            test "$(git -C source rev-parse HEAD)" = "$GITHUB_SHA"
+            test "$(git -C product rev-parse HEAD)" = 4ddd070650e3131916a13bb2c5e75f99376e1c3a
+            test "$(git -C product rev-parse 'HEAD^{tree}')" = f6e4dc108bf065cd2fd44d48e0faf8807e1b8e3c
+            test ! -e source/.git/shallow && test ! -e product/.git/shallow
+            test -z "$(git -C source status --porcelain --untracked-files=all --ignored)"
+            test -z "$(git -C product status --porcelain --untracked-files=all --ignored)"
+            # Source copies are provisioned before loop sizing, with a2GiB cap.
+            test "$(du -sb source product | awk '{sum += $1} END {print sum}')" -le 2147483648
+            python3 -I -B source/tests/portable-workspace/image/test_bar_hosted_operation.py
+            python3 -I -B source/tests/portable-workspace/image/test_bar_hosted_domain.py
+            python3 -I -B source/eng/bar_hosted_operation.py seal-transport --operation-id "$OPERATION_ID" \
+              > "$EVIDENCE/crypto-seal-result.json"
         run: |
           set -euo pipefail
-          test "$GITHUB_REF" = refs/heads/main
           mkdir -m 0700 "$EVIDENCE"
           cp -- "$STARTUP_EVIDENCE/clock.json" "$EVIDENCE/original-clock.json"
-          python3 -I -B source/eng/bar_hosted_operation.py canonicalize-checkouts --operation-id "$OPERATION_ID" --source-revision "$GITHUB_SHA" \
-            > "$EVIDENCE/checkout-config-receipt.json"
-          test "$(git -C source rev-parse HEAD)" = "$GITHUB_SHA"
-          test "$(git -C product rev-parse HEAD)" = 4ddd070650e3131916a13bb2c5e75f99376e1c3a
-          test "$(git -C product rev-parse 'HEAD^{tree}')" = f6e4dc108bf065cd2fd44d48e0faf8807e1b8e3c
-          test ! -e source/.git/shallow && test ! -e product/.git/shallow
-          test -z "$(git -C source status --porcelain --untracked-files=all --ignored)"
-          test -z "$(git -C product status --porcelain --untracked-files=all --ignored)"
-          # Source copies are provisioned before loop sizing, with a2GiB cap.
-          test "$(du -sb source product | awk '{sum += $1} END {print sum}')" -le 2147483648
-          python3 -I -B source/tests/portable-workspace/image/test_bar_hosted_operation.py
-          python3 -I -B source/tests/portable-workspace/image/test_bar_hosted_domain.py
-          python3 -I -B source/eng/bar_hosted_operation.py seal-transport --operation-id "$OPERATION_ID" \
-            > "$EVIDENCE/crypto-seal-result.json"
+          prep_env=()
+          for name in GITHUB_SHA GITHUB_EVENT_NAME GITHUB_REF GITHUB_RUN_ATTEMPT GITHUB_REPOSITORY GITHUB_WORKSPACE \
+              GITHUB_RUN_ID GITHUB_WORKFLOW_REF OPERATION_ID HOST_JOB_STARTED HOST_JOB_MONOTONIC EVIDENCE STARTUP_EVIDENCE RUNNER_TEMP ImageOS ImageVersion RUNNER_ENVIRONMENT; do
+            if [[ -v "$name" ]]; then prep_env+=("$name=${!name}"); fi
+          done
+          sudo -n env "${prep_env[@]}" python3 -I -B source/eng/bar_hosted_operation.py prep-run \
+            --phase controls --operation-id "$OPERATION_ID"
 
       - name: Build the pinned daemonless Arch userland
+        id: prep_userland
         timeout-minutes: 8
         shell: bash
         env:
@@ -211,25 +224,34 @@ jobs:
             echo "userland.buildah=$(buildah --version)"
             echo "userland.podman=$(podman --version)"
             echo "userland.packages=$(pacman -Q buildah podman crun conmon python shadow | tr '\n' ' ')"
+          PREP_USERLAND_SCRIPT: |
+            set -euo pipefail
+            sudo docker pull --quiet "$ARCH_IMAGE"
+            container=$(sudo docker create "$ARCH_IMAGE" /bin/true)
+            sudo mkdir -m 0755 "$USERLAND"
+            sudo docker export "$container" | sudo tar -x -C "$USERLAND" --numeric-owner
+            sudo docker rm "$container" >/dev/null
+            sudo rm -f "$USERLAND/etc/resolv.conf"
+            sudo cp -L /etc/resolv.conf "$USERLAND/etc/resolv.conf"
+            # Package installation runs in a private mount namespace that ends with it.
+            sudo -E unshare --mount --pid --fork /bin/bash -c '
+              set -euo pipefail
+              mount --make-rprivate /
+              mount -t proc proc "$USERLAND/proc"
+              mount --rbind /dev "$USERLAND/dev"
+              mount -t sysfs sysfs "$USERLAND/sys"
+              exec chroot "$USERLAND" /usr/bin/env -i PATH=/usr/bin ARCH_ARCHIVE_DATE="$ARCH_ARCHIVE_DATE" \
+                BUILDAH_PACKAGE="$BUILDAH_PACKAGE" BUILDAH_SHA256="$BUILDAH_SHA256" /bin/bash -c "$PACMAN_SCRIPT"' | tee "$EVIDENCE/facts.env"
+            echo "userland.image=$ARCH_IMAGE" | tee -a "$EVIDENCE/facts.env"
         run: |
           set -euo pipefail
-          sudo docker pull --quiet "$ARCH_IMAGE"
-          container=$(sudo docker create "$ARCH_IMAGE" /bin/true)
-          sudo mkdir -m 0755 "$USERLAND"
-          sudo docker export "$container" | sudo tar -x -C "$USERLAND" --numeric-owner
-          sudo docker rm "$container" >/dev/null
-          sudo rm -f "$USERLAND/etc/resolv.conf"
-          sudo cp -L /etc/resolv.conf "$USERLAND/etc/resolv.conf"
-          # Package installation runs in a private mount namespace that ends with it.
-          sudo -E unshare --mount --pid --fork /bin/bash -c '
-            set -euo pipefail
-            mount --make-rprivate /
-            mount -t proc proc "$USERLAND/proc"
-            mount --rbind /dev "$USERLAND/dev"
-            mount -t sysfs sysfs "$USERLAND/sys"
-            exec chroot "$USERLAND" /usr/bin/env -i PATH=/usr/bin ARCH_ARCHIVE_DATE="$ARCH_ARCHIVE_DATE" \
-              BUILDAH_PACKAGE="$BUILDAH_PACKAGE" BUILDAH_SHA256="$BUILDAH_SHA256" /bin/bash -c "$PACMAN_SCRIPT"' | tee "$EVIDENCE/facts.env"
-          echo "userland.image=$ARCH_IMAGE" | tee -a "$EVIDENCE/facts.env"
+          prep_env=()
+          for name in GITHUB_SHA GITHUB_EVENT_NAME GITHUB_REF GITHUB_RUN_ATTEMPT GITHUB_REPOSITORY GITHUB_WORKSPACE \
+              GITHUB_RUN_ID GITHUB_WORKFLOW_REF OPERATION_ID HOST_JOB_STARTED HOST_JOB_MONOTONIC EVIDENCE STARTUP_EVIDENCE RUNNER_TEMP ImageOS ImageVersion RUNNER_ENVIRONMENT; do
+            if [[ -v "$name" ]]; then prep_env+=("$name=${!name}"); fi
+          done
+          sudo -n env "${prep_env[@]}" python3 -I -B source/eng/bar_hosted_operation.py prep-run \
+            --phase userland --operation-id "$OPERATION_ID"
 
       - name: Free preinstalled toolchains, stop container daemons and swap
         shell: bash
@@ -272,14 +294,25 @@ jobs:
       - name: Admit the hosted domain as root-produced evidence
         id: admit
         shell: bash
+        timeout-minutes: 5
+        env:
+          PREP_ADMIT_SCRIPT: |
+            set -euo pipefail
+            sudo env ImageOS="$ImageOS" ImageVersion="$ImageVersion" RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" \
+              python3 -I source/eng/bar_hosted_domain.py admit \
+              --allocation "$VOLUME/allocation" --load-store "$VOLUME/load-store" \
+              --backing-image "$VOLUME_IMAGE" --userland "$USERLAND" \
+              --evidence "$EVIDENCE/domain.json" --owner-uid "$(id -u)" --owner-gid "$(id -g)" \
+              | tee "$EVIDENCE/admit-result.json"
         run: |
           set -euo pipefail
-          sudo env ImageOS="$ImageOS" ImageVersion="$ImageVersion" RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" \
-            python3 -I source/eng/bar_hosted_domain.py admit \
-            --allocation "$VOLUME/allocation" --load-store "$VOLUME/load-store" \
-            --backing-image "$VOLUME_IMAGE" --userland "$USERLAND" \
-            --evidence "$EVIDENCE/domain.json" --owner-uid "$(id -u)" --owner-gid "$(id -g)" \
-            | tee "$EVIDENCE/admit-result.json"
+          prep_env=()
+          for name in GITHUB_SHA GITHUB_EVENT_NAME GITHUB_REF GITHUB_RUN_ATTEMPT GITHUB_REPOSITORY GITHUB_WORKSPACE \
+              GITHUB_RUN_ID GITHUB_WORKFLOW_REF OPERATION_ID HOST_JOB_STARTED HOST_JOB_MONOTONIC EVIDENCE STARTUP_EVIDENCE RUNNER_TEMP ImageOS ImageVersion RUNNER_ENVIRONMENT; do
+            if [[ -v "$name" ]]; then prep_env+=("$name=${!name}"); fi
+          done
+          sudo -n env "${prep_env[@]}" python3 -I -B source/eng/bar_hosted_operation.py prep-run \
+            --phase admit --operation-id "$OPERATION_ID"
 
       - name: Qualify one complete BAR image in the delegated Arch userland
         id: qualify
@@ -351,6 +384,8 @@ jobs:
         shell: bash
         env:
           STARTUP_CAPTURE_PATH: ${{ steps.clock.outputs.startup-path }}
+          CONTROLS_OUTCOME: ${{ steps.prep_controls.outcome }}
+          USERLAND_OUTCOME: ${{ steps.prep_userland.outcome }}
           CLOCK_OUTCOME: ${{ steps.clock.outcome }}
           ADMIT_OUTCOME: ${{ steps.admit.outcome }}
           QUALIFY_OUTCOME: ${{ steps.qualify.outcome }}
@@ -362,7 +397,7 @@ jobs:
             if python3 -I -B - <<'PY_STARTUP'
           import json,os
           from pathlib import Path
-          value={k:os.environ.get(k,'Unknown') for k in ('CLOCK_OUTCOME','ADMIT_OUTCOME','QUALIFY_OUTCOME')}
+          value={k:os.environ.get(k,'Unknown') for k in ('CLOCK_OUTCOME','CONTROLS_OUTCOME','USERLAND_OUTCOME','ADMIT_OUTCOME','QUALIFY_OUTCOME')}
           path=Path(os.environ['STARTUP_CAPTURE_PATH'])/'outcomes.json'
           fd=os.open(path,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)
           with os.fdopen(fd,'w') as stream:stream.write(json.dumps(value)+'\n')
