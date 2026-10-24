@@ -260,8 +260,8 @@ class Preparation(unittest.TestCase):
         for kind in ('build', 'load'):
             store = selection[kind]
             BAR.check_namespace(self.allocation / kind, Path(store['root']), Path(store['runroot']))
-        self.assertEqual(selection['clock']['workEnd'] - selection['clock']['start'], 3600)
-        self.assertEqual(selection['clock']['totalEnd'] - selection['clock']['workEnd'], 120)
+        self.assertEqual(selection['clock']['workEnd'], selection['clock']['start'] + 3600)
+        self.assertEqual(selection['clock']['totalEnd'], selection['clock']['workEnd'] + 120)
         self.assertEqual(selection['product']['revision'], WRAPPER.PRODUCT_REVISION)
         self.assertFalse((self.allocation / 'state' / OPERATION).exists(), 'preparation must not consume controller original')
         with self.assertRaises(FileExistsError):
@@ -275,7 +275,8 @@ class Preparation(unittest.TestCase):
         argv = WRAPPER.controller_argv(selection, target, digest, source=ROOT, allocation=self.allocation)
         self.assertEqual(argv[4], 'preflight')
         self.assertEqual(selection['network']['purpose'], 'network-prerequisite')
-        self.assertEqual(selection['clock']['totalEnd'] - selection['clock']['start'], 420)
+        self.assertEqual(selection['clock']['workEnd'], selection['clock']['start'] + 300)
+        self.assertEqual(selection['clock']['totalEnd'], selection['clock']['workEnd'] + 120)
         self.assertNotIn('qualify', argv)
 
     def test_bad_source_domain_stores_and_original_clock_refuse_before_exec(self):
