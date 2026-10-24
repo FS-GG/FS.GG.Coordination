@@ -6,7 +6,7 @@ if [[ $# != 2 || "$1" != --register ]]; then
   exit 2
 fi
 runner_name=$2
-[[ $runner_name =~ ^fsgg-qualification-[a-zA-Z0-9-]{1,64}$ && $(id -u) == 10001 ]]
+[[ $runner_name =~ ^fsgg-qualification-[a-zA-Z0-9-]{1,64}$ && $(id -u) == 1001 ]]
 [[ -f /etc/fsgg-qualification-runner/instance-binding.json && ! -L /etc/fsgg-qualification-runner/instance-binding.json ]]
 [[ -f /etc/fsgg-qualification-runner/acquired-input-lock.json && ! -L /etc/fsgg-qualification-runner/acquired-input-lock.json ]]
 [[ $(stat -c '%u:%a' /etc/fsgg-qualification-runner/acquired-input-lock.json) == 0:644 ]]

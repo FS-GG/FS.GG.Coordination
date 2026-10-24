@@ -59,7 +59,7 @@ all new native/compiler qualification costs remain unselected.
 Configure the organization runner group `fsgg-native-qualification` for only the
 listed protected-main workflows; verify that restriction independently before any
 registration. The fixed routing label is `fsgg-native-linux-x64-v1`. No PR or fork
-job may use this group. Registration runs as UID10001, validates the root-owned
+job may use this group. Registration runs as UID1001, validates the root-owned
 instance/image lock and actual UUID, and accepts only a short-lived registration
 token in the supported `ACTIONS_RUNNER_INPUT_TOKEN` environment input. It does not
 accept a PAT, put a token on argv, print it, use `--replace`, or reuse credentials.
@@ -71,10 +71,15 @@ update/security deadlines. Ephemeral deregistration does not destroy the VM.
 
 The existing BAR orchestration requires privileged sudo/systemd setup. Consequently
 this is a trusted-main, privileged **disposable VM**, not an untrusted multi-tenant
-sandbox. Target-specific sudo/orchestrator provisioning is not implemented until
-the provider/operator contract is supplied; no broad passwordless sudo rule is
-silently installed here. Native workload units retain NoNewPrivileges=true,
-control-group retirement and existing delegation contracts. Host policy permission
+sandbox. The image recipe explicitly installs `runner.sudoers`: runner can orchestrate
+root commands without a password, matching the existing workflow's privileged
+setup. This role is confined to this dedicated disposable image and the restricted
+protected-main runner group. It is not a security sandbox against those jobs.
+Do not install it on shared machines. The provider's finite runner/VM custodian
+is still missing until the actual target is supplied. Native workload NoNewPrivileges remains required: BAR's Buildah/RUN uses its existing
+`--security-opt=no-new-privileges` and fixed RUN checks NoNewPrivs=1. Its privileged
+outer systemd orchestration has no NNP property at the protected baseline; this source
+does not change that fact. Control-group retirement and existing delegation remain. Host policy permission
 is neither workload authority nor evidence of correct rootless execution.
 
 ## Actual qualification routing still required
@@ -84,15 +89,18 @@ At Coordination `8fb93bc9c37fdcc1760341dd182756de3e9ae42a`, the maintained gate 
 `bar-hosted-image-qualification.yml`. Its legacy profile requires actual GitHub
 Ubuntu24 image identity; a self-hosted Ubuntu26.10 VM must not fabricate those facts.
 
-After PR1062's actual protected delivery is integrated, the narrowly required source
-change is a closed dedicated profile in that same gate and its existing consumers
+PR1062's actual protected delivery `115f5a52ecbf203deeda327ce7abe7b9692c8265`
+is integrated. This source adds a closed dedicated profile in that same gate and its existing consumers
 `eng/bar_hosted_operation.py`, `eng/portable_workspace_bar.py` and
 `eng/portable_workspace_sc2.py`, plus their focused controls and maintained pins.
-Retain the legacy hosted profile; share capacity, stopped-service, loop/ext4/nodiscard,
+It retains the legacy hosted profile and shares capacity, stopped-service, loop/ext4/nodiscard,
 Buildah1.43.1 and actual AppArmor/maxuserns checks. Bind the dedicated profile to the
-accepted root-owned image/instance/group identities. Then route the existing manual
-BAR operation to the fixed group/label. Existing BAR useful-work/outer/retirement
-clocks and original intent remain determining. This source has not made that change.
+accepted root-owned image/instance/group identities. The existing manual
+BAR operation is routed to the fixed group/label. Existing BAR useful-work/outer/retirement
+clocks and original intent remain determining. The manual full-image/network-prerequisite job now routes to the fixed group/label.
+Its added closed 60-second profile phase uses the existing preparation owner and
+original clock before product/assets; unset image/provider pins refuse. No acquired
+image, registration, source admission or native execution follows from this routing.
 The Templates owner coordinates its actual native callers to the same baseline;
 ordinary PR jobs stay hosted. No source lock here may replace a published catalog gate.
 

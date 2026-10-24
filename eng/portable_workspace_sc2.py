@@ -1435,3 +1435,39 @@ def main(args, api):
             'commandNamespaceObservationGaps': [slot['ordinal'] for slot in owner.commands
                                                if 'namespaceObservation' in slot],
             'scope': 'ordinary sampled profile; native/product and whole descendant acceptance separate'}
+
+
+# Dedicated qualification IMAGE source selection. Unset pins cannot admit a VM.
+# Populate only from independently accepted signed image/target evidence.
+DEDICATED_RELATION = 'dedicated-preconfigured-ephemeral-vm'
+DEDICATED_BASELINE = 'ubuntu2610-linux-x64-v1'
+DEDICATED_IMAGE_SHA256 = None
+DEDICATED_PROVIDER_IMAGE_ID = None
+
+
+def dedicated_runner_refusals(runner):
+    """Pure closed dedicated-profile correspondence; not provider authorization."""
+    failures = []
+    expected = {'imageOS', 'imageVersion', 'githubHosted', 'dedicated'}
+    if type(runner) is not dict or set(runner) != expected:
+        return ['dedicated-runner-shape']
+    pin = DEDICATED_IMAGE_SHA256
+    if not isinstance(pin, str) or re.fullmatch(r'[0-9a-f]{64}', pin) is None \
+            or not isinstance(DEDICATED_PROVIDER_IMAGE_ID, str) or not DEDICATED_PROVIDER_IMAGE_ID:
+        failures.append('dedicated-image-unselected')
+    if runner['imageOS'] != 'ubuntu26.10' or runner['githubHosted'] is not False or runner['imageVersion'] != pin:
+        failures.append('dedicated-image')
+    value = runner['dedicated']
+    if type(value) is not dict or set(value) != {'baselineId', 'providerInstanceId', 'providerImageId',
+            'systemUuid', 'bootId', 'bindingSha256', 'oneJobOnly', 'runnerGroup', 'runnerLabel'}:
+        return failures + ['dedicated-binding-shape']
+    if value['baselineId'] != DEDICATED_BASELINE or value['providerImageId'] != DEDICATED_PROVIDER_IMAGE_ID \
+            or value['oneJobOnly'] is not True or value['runnerGroup'] != 'fsgg-native-qualification' \
+            or value['runnerLabel'] != 'fsgg-native-linux-x64-v1':
+        failures.append('dedicated-binding')
+    for key in ('providerInstanceId', 'systemUuid', 'bootId'):
+        if not isinstance(value[key], str) or not value[key]:
+            failures.append('dedicated-' + key)
+    if not isinstance(value['bindingSha256'], str) or re.fullmatch(r'[0-9a-f]{64}', value['bindingSha256']) is None:
+        failures.append('dedicated-binding-digest')
+    return failures

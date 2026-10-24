@@ -46,7 +46,7 @@ def install_clock(evidence,purpose='full-image',revision='b'*40):
            'bootId':Path('/proc/sys/kernel/random/boot_id').read_text().strip(),'firstUTC':text(utc),'firstMonotonic':first,
            'rootSelection':{'selected_utc':text(utc),'latest_start_utc':text(utc+datetime.timedelta(seconds=300)),
                             'observer_deadline_utc':text(utc+datetime.timedelta(seconds=5700))},
-           'providerJob':{'id':7,'run_id':123,'head_sha':revision,'name':'full-image','runner_name':'fixture','status':'in_progress','started_at':text(utc)},
+           'providerJob':{'id':7,'run_id':123,'head_sha':revision,'name':'full-image','runner_name':'fixture','runner_group_name':'fsgg-native-qualification','status':'in_progress','started_at':text(utc)},
            'overallDeadlineMonotonic':first+5400}
     def write(name,value):
         path=evidence/name;path.write_bytes(WRAPPER.canonical(value));path.chmod(0o600)
@@ -745,7 +745,7 @@ class ClockBudget(unittest.TestCase):
           'GITHUB_RUN_ATTEMPT':'1','GITHUB_REPOSITORY':'FS-GG/FS.GG.Coordination','GITHUB_RUN_ID':'123','RUNNER_NAME':'fixture',
           'GH_TOKEN':'inert fixture not a credential','GITHUB_ENV':str(self.root/'github-env'),'GITHUB_OUTPUT':str(self.root/'github-output'),
           'SELECTED_UTC':'2026-10-24T02:00:00Z','LATEST_START_UTC':'2026-10-24T02:05:00Z','OBSERVER_DEADLINE_UTC':'2026-10-24T03:35:00Z'}
-        self.job={'id':7,'run_id':123,'head_sha':'b'*40,'name':'full-image','runner_name':'fixture','status':'in_progress','started_at':'2026-10-24T01:59:59.500000Z'}
+        self.job={'id':7,'run_id':123,'head_sha':'b'*40,'name':'full-image','runner_name':'fixture','runner_group_name':'fsgg-native-qualification','status':'in_progress','started_at':'2026-10-24T01:59:59.500000Z'}
 
     def produce(self,updates=None,job=None,error=None,elapsed=0):
         import datetime,urllib.request,io
@@ -772,7 +772,7 @@ class ClockBudget(unittest.TestCase):
     def test_actual_first_producer_refusal_retained_before_checkout_no_retry(self):
         cases=[({'SELECTED_UTC':'1e999'},None,None),({'LATEST_START_UTC':'2026-10-24T01:59:59Z'},None,None),
           ({'OBSERVER_DEADLINE_UTC':'2026-10-24T03:35:01Z'},None,None),({}, {**self.job,'head_sha':'c'*40},None),
-          ({'GITHUB_RUN_ATTEMPT':'2'},None,None),({},None,OSError('native API Unknown')),({}, {**self.job,'started_at':'2026-10-24T01:59:58Z'},None)]
+          ({}, {**self.job,'runner_group_name':'other-group'},None),({'GITHUB_RUN_ATTEMPT':'2'},None,None),({},None,OSError('native API Unknown')),({}, {**self.job,'started_at':'2026-10-24T01:59:58Z'},None)]
         for n,(updates,job,error) in enumerate(cases):
             self.env['STARTUP_EVIDENCE']=str(self.root/('startup-'+str(n)))
             with self.subTest(case=n),self.assertRaises(Exception):self.produce(updates,job,error)
@@ -889,12 +889,12 @@ class ClockBudget(unittest.TestCase):
 
 class PreparationDeadline(ClockBudget):
     def test_fixed_phase_closure_and_no_command_or_duration_port(self):
-        for phase in ('controls','userland','admit'):
+        for phase in ('profile','controls','userland','admit'):
             body,env=WRAPPER.fixed_preparation(phase)
             self.assertIn('set -euo pipefail',body);self.assertIn('ARCH_IMAGE',env);self.assertIn('BUILDAH_SHA256',env)
         with self.assertRaises(RuntimeError):WRAPPER.fixed_preparation('arbitrary')
         text=WORKFLOW.read_text()
-        for phase in ('controls','userland','admit'):
+        for phase in ('profile','controls','userland','admit'):
             self.assertIn('--phase '+phase+' --operation-id',text)
         self.assertNotIn('--command',text)
 

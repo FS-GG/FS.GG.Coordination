@@ -31,7 +31,7 @@ def lock():
         'compiler': {'raceRequired': True, 'cgoEnabled': True, **{key: 'a' * 64 for key in
             ['compilerSha256', 'headersManifestSha256', 'linkerSha256', 'runtimeClosureSha256']}},
         'aptTransaction': {'qualifiedSignedTransactionSha256': 'a' * 64, 'expectedFinalInventorySha256': 'b' * 64},
-        'policy': {'apparmorRestrictUnprivilegedUserns': 0, 'nativeUnitNoNewPrivileges': True, 'noJobPolicySetter': True}}
+        'policy': {'apparmorRestrictUnprivilegedUserns': 0, 'nativeWorkloadNoNewPrivileges': True, 'noJobPolicySetter': True}}
 
 
 class DedicatedRunnerDataControls(unittest.TestCase):
@@ -66,7 +66,7 @@ class DedicatedRunnerDataControls(unittest.TestCase):
             with self.assertRaises(ValueError): owner.validate_lock_data(selected)
 
     def test_native_nnp_cannot_be_weakened(self):
-        selected = lock(); selected['policy']['nativeUnitNoNewPrivileges'] = False
+        selected = lock(); selected['policy']['nativeWorkloadNoNewPrivileges'] = False
         with self.assertRaises(ValueError): owner.validate_lock_data(selected)
 
     def test_sdk401_archive_identity_is_exact(self):
@@ -76,6 +76,20 @@ class DedicatedRunnerDataControls(unittest.TestCase):
     def test_matching_source_lock_is_data_not_execution(self):
         self.assertEqual(owner.validate_lock_data(lock()), lock())
         self.assertEqual(owner.validate_target_data(target()), target())
+
+    def test_registration_requires_exact_single_use_protected_route(self):
+        instance = {'schema': 'fsgg.dedicated-qualification-instance/1', 'baselineId': owner.BASELINE_ID,
+            'oneJobOnly': True, 'runnerName': 'fsgg-qualification-authored', 'runnerGroup': owner.GROUP,
+            'runnerLabel': owner.LABEL, 'workflowRestrictionVerified': True, 'credentialKind': 'short-lived-registration-token',
+            'qualifiedImageSha256': 'a' * 64, 'rootInstanceAcceptanceSha256': 'b' * 64,
+            'registrationAdmissionSha256': 'c' * 64, 'providerInstanceId': 'authored-vm',
+            'providerImageId': 'authored-image', 'systemUuid': 'authored-uuid'}
+        self.assertTrue(owner.validate_registration_data(instance, lock(), instance['runnerName']))
+        for key, value in [('runnerGroup', 'other'), ('oneJobOnly', False), ('credentialKind', 'PAT'),
+                            ('workflowRestrictionVerified', False), ('registrationAdmissionSha256', None)]:
+            selected = {**instance, key: value}
+            with self.assertRaises(ValueError): owner.validate_registration_data(selected, lock(), instance['runnerName'])
+        with self.assertRaises(ValueError): owner.validate_registration_data(instance, lock(), 'fsgg-qualification-another')
 
     def test_complete_population_detects_addition_and_substitution(self):
         with tempfile.TemporaryDirectory() as directory:

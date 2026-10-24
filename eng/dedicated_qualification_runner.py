@@ -85,7 +85,7 @@ def validate_lock_data(lock):
     require(sha(lock['aptTransaction'].get('expectedFinalInventorySha256')), 'complete final package inventory required')
     policy = lock.get('policy', {})
     require(type(policy.get('apparmorRestrictUnprivilegedUserns')) is int and policy['apparmorRestrictUnprivilegedUserns'] == 0, 'actual AppArmor policy0 required')
-    require(policy.get('nativeUnitNoNewPrivileges') is True and policy.get('noJobPolicySetter') is True, 'native NNP/job-policy contract differs')
+    require(policy.get('nativeWorkloadNoNewPrivileges') is True and policy.get('noJobPolicySetter') is True, 'native NNP/job-policy contract differs')
     return lock
 
 
@@ -163,7 +163,7 @@ def validate_registration_data(instance, lock, runner_name):
     require(instance.get('workflowRestrictionVerified') is True, 'protected-main workflow restriction must be independently verified')
     for key in ('qualifiedImageSha256', 'rootInstanceAcceptanceSha256', 'registrationAdmissionSha256'):
         require(sha(instance.get(key)), 'instance/admission missing ' + key)
-    for key in ('providerInstanceId', 'qualifiedImageId', 'systemUuid'):
+    for key in ('providerInstanceId', 'providerImageId', 'systemUuid'):
         require(isinstance(instance.get(key), str) and instance[key], 'instance missing ' + key)
     require(instance.get('credentialKind') == 'short-lived-registration-token', 'registration token role required; no PAT')
     return True

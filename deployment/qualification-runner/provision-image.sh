@@ -44,9 +44,12 @@ tar -xzf "$runner_inputs/sdk/dotnet-sdk-10.0.401-linux-x64.tar.gz" --no-same-own
 tar -xzf "$runner_inputs/go/go1.27.1.linux-amd64.tar.gz" --no-same-owner --strip-components=1 -C /opt/fsgg/toolchains/go-1.27.1
 runner_version=$(python3 -I -B -c 'import json,sys;print(json.load(open(sys.argv[1]))["runner"]["version"])' "$runner_lock")
 tar -xzf "$runner_inputs/runner/actions-runner-linux-x64-$runner_version.tar.gz" --no-same-owner -C /opt/fsgg/actions-runner
-getent passwd fsgg-runner >/dev/null || useradd --uid 10001 --create-home --shell /bin/bash fsgg-runner
-[[ $(id -u fsgg-runner) == 10001 ]]
-chown -R fsgg-runner:fsgg-runner /opt/fsgg/actions-runner
+getent group runner >/dev/null || groupadd --gid 1001 runner
+getent passwd runner >/dev/null || useradd --uid 1001 --gid runner --create-home --shell /bin/bash runner
+[[ $(id -u runner) == 1001 && $(id -g runner) == 1001 && $(getent passwd runner | cut -d: -f6) == /home/runner ]]
+chown -R runner:runner /opt/fsgg/actions-runner
+visudo -cf "$runner_source/deployment/qualification-runner/runner.sudoers"
+install -m 0440 "$runner_source/deployment/qualification-runner/runner.sudoers" /etc/sudoers.d/fsgg-qualification-runner
 install -d -m 0755 /etc/fsgg-qualification-runner
 install -m 0644 "$runner_lock" /etc/fsgg-qualification-runner/acquired-input-lock.json
 # Image publication/native gates and provider instance bindings are separate operator effects.
