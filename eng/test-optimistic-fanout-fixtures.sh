@@ -17,17 +17,18 @@ printf '{"schema":"fsgg.coordination.coherent-partition-plan/1","candidateObliga
 
 mapfile -t semantic < <(jq -r '.formalFanout.semanticShards[]' "$repo/eng/optimistic-qualification-plan.json")
 performance="$(jq -r '.formalFanout.performanceShard' "$repo/eng/optimistic-qualification-plan.json")"
+base_census="$(cd "$repo" && python3 -I -S -B eng/check-canonical-quint-accounting.py)"
 for id in "${semantic[@]}" "$performance"; do
   dir="$FSGG_FORMAL_FRAGMENT_ROOT/coherent-formal-fragment-$candidate-$id"
   mkdir "$dir"
   cp "$plan_root/candidate-obligation.json" "$dir/candidate-obligation.json"
   cp "$plan_root/partition-plan.json" "$dir/partition-plan.json"
   if [[ "$id" == base ]]; then
-    jq -n --arg digest "$(printf 'c%.0s' {1..64})" '
+    jq -n --arg digest "$(printf 'c%.0s' {1..64})" --argjson census "$base_census" '
       {schema:"fsgg.coordination.canonical-quint-qualification/1",q1Outcome:"passed",q2Outcome:"passed",
-       positiveInvariantCount:8,negativeControlCount:79,preparationDurationMs:1,q2DurationMs:1,totalDurationMs:2,
-       processCounts:{external:1,quintCli:1,apalacheVerify:1},processAccounting:"logical-invocations-plus-explicit-startup-retries/v1",
-       physicalProcessCounts:{external:1,quintCli:1,apalacheVerify:1},
+       positiveInvariantCount:8,negativeControlCount:$census.baseRejections,preparationDurationMs:1,q2DurationMs:1,totalDurationMs:2,
+       processCounts:{external:$census.baseExternal,quintCli:$census.baseQuint,apalacheVerify:$census.baseVerify},processAccounting:"logical-invocations-plus-explicit-startup-retries/v1",
+       physicalProcessCounts:{external:$census.baseExternal,quintCli:$census.baseQuint,apalacheVerify:$census.baseVerify},
        startupRetries:{total:0,verify:0,reflectionDeadline:0,earlyLifecycleExit:0},formalCounterexamples:[],
        tools:{toolchainSha256:$digest,quintSha256:$digest,apalacheJarSha256:$digest},
        inputs:{sourceSha256:$digest,contractSha256:$digest},preparationSha256:$digest,failure:null,resultSha256:$digest}' > "$dir/receipt.json"
