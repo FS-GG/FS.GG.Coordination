@@ -669,7 +669,10 @@ parent acceptance and original holds remain separate. Prepared inputs and
 ## Hosted complete BAR image generation
 
 The dispatch-only `bar-hosted-image-qualification.yml` is the complete image
-route for the same issue1032. It uses the existing `bar-headless` controller,
+route for the same issue1032. Its reviewed source of truth is
+`deployment/qualification-runner/native-qualification/`; it runs only from a
+byte-identical copy in the private `FS-GG/FS.GG.Native.Qualification` repository
+on the dedicated ephemeral runner, never as a public Coordination workflow. It uses the existing `bar-headless` controller,
 with the accepted FSBar recipe at `4ddd070650e3131916a13bb2c5e75f99376e1c3a`
 and tree `f6e4dc108bf065cd2fd44d48e0faf8807e1b8e3c`. The fixed wrapper
 `eng/bar_hosted_operation.py` binds all six recipe files and the three pinned
@@ -677,8 +680,8 @@ executing controller files. The recipe retains its exact Ubuntu snapshot,
 vcpkg/toolchain, Recoil headers/archive, HighBar stock plugin and compiled
 controls, complete BAR Rapid game graph, and Avalanche3.4 map selections.
 
-Each generation needs Programme/root's separate admission and one fresh hosted
-VM. Source delivery, the full-image dispatch choice and the earlier no-content
+Each generation needs Programme/root's separate admission and one fresh
+disposable VM. Source delivery, the full-image dispatch choice and the earlier no-content
 preflight do not grant that admission. The workflow accepts only the first
 attempt on protected main. Both Git checkouts have complete internal histories;
 the product copy is a clean, private context on the operation volume. The

@@ -31,7 +31,7 @@ PRODUCT_TREE = 'f6e4dc108bf065cd2fd44d48e0faf8807e1b8e3c'
 HELPER_FILES = {
     'eng/portable-workspace-image.py': '14f519038fd24684b458d917ddb33ab6bada86a084b39c35ce5ae7e8e9fa7aa5',
     'eng/portable_workspace_bar.py': 'eee52c851cd77a15d7818f4ac5a7cefc04a12e8bbbad2ed65752fc048b6e2bf9',
-    'eng/portable_workspace_sc2.py': '3027989b37c2c9d71fb6c6fe07681f7251e8aa78f0e91bd34b706962ece93f5b',
+    'eng/portable_workspace_sc2.py': '3b99dbeed9400268954a3cb6dc875cc1809a33e936b094bfb41ffa3a59f7e494',
 }
 PRODUCT_FILES = {
     'containers/barc-stock-headless/Containerfile': '72ab4ae75d040a2a4f94fdf6a57d910a0a51a07024238cb09d831c8f94c89392',
@@ -58,7 +58,15 @@ UNIT_STOP_SECONDS = 120
 FINAL_SECONDS = 30
 BOOKKEEPING_SECONDS = 30
 ACTIVATION_SECONDS = 30
-WORKFLOW_REF = "FS-GG/FS.GG.Coordination/.github/workflows/bar-hosted-image-qualification.yml@refs/heads/main"
+# The only dispatchable caller is the private repository's copy of the reviewed template below.
+# Public FS.GG.Coordination never runs this job; its source is checked out at an explicit pinned SHA.
+COORDINATION_REPOSITORY = "FS-GG/FS.GG.Coordination"
+CALLER_REPOSITORY = "FS-GG/FS.GG.Native.Qualification"
+WORKFLOW_REF = CALLER_REPOSITORY + "/.github/workflows/bar-hosted-image-qualification.yml@refs/heads/main"
+TEMPLATE_DIRECTORY = Path("deployment/qualification-runner/native-qualification")
+TEMPLATE_WORKFLOW = "bar-hosted-image-qualification.yml"
+RUNNER_GROUP = "Default"
+RUNNER_NAME_PREFIX = "fsgg-q-"
 RECIPIENT_PEM_SHA256 = '1be09fdd361e7a531e170eb0a8585bcd3e473937aa260080bce2ad04035d7124'
 RECIPIENT_DER_SHA256 = '664cec5127f485ec28c19877cbe260010df99f1f2917068fc2f39dd47eb2184e'
 RECIPIENT = Path(__file__).with_name('bar-hosted-recipient.pem')
@@ -185,14 +193,16 @@ def validate_clock(value, operation_id, revision=None):
     require(value.get('schema')=='fsgg.bar-hosted-clock/1' and value.get('verdict')=='accepted' and value.get('firstRefusal') is None, 'original startup clock refused')
     match=re.fullmatch(r'bar-image-([0-9]{1,20})-1',operation_id)
     require(match is not None and value.get('operationId')==operation_id,'original first run/attempt differs')
-    require(re.fullmatch(r'[0-9a-f]{40}',value.get('sourceRevision','')) and
-            (revision is None or value['sourceRevision']==revision) and value.get('workflowRef')==WORKFLOW_REF,'original clock source differs')
+    require(re.fullmatch(r'[0-9a-f]{40}',value.get('sourceRevision','')) and re.fullmatch(r'[0-9a-f]{40}',value.get('callerRevision','')) and
+            (revision is None or value['sourceRevision']==revision) and value.get('workflowRef')==WORKFLOW_REF
+            and value.get('callerRepository')==CALLER_REPOSITORY,'original clock source differs')
     require(value.get('purpose') in ('full-image','network-prerequisite'),'original clock purpose differs')
     first=utc_seconds(value['firstUTC']);root=value['rootSelection'];job=value['providerJob']
     selected,latest,observer=[utc_seconds(root[k]) for k in ('selected_utc','latest_start_utc','observer_deadline_utc')]
     require(0<latest-selected<=300 and observer-selected==5700 and selected<=first<=latest,'Root queue/observer interval refused')
-    require(job.get('run_id')==int(match[1]) and job.get('head_sha')==value['sourceRevision'] and job.get('name')=='full-image' and job.get('status')=='in_progress'
-            and type(job.get('id')) is int and job['id']>0 and isinstance(job.get('runner_name'),str) and job['runner_name'], 'native job/source join differs')
+    require(job.get('run_id')==int(match[1]) and job.get('head_sha')==value['callerRevision'] and job.get('name')=='full-image' and job.get('status')=='in_progress'
+            and type(job.get('id')) is int and job['id']>0 and isinstance(job.get('runner_name'),str)
+            and job['runner_name'].startswith(RUNNER_NAME_PREFIX) and job.get('runner_group_name')==RUNNER_GROUP, 'native job/source join differs')
     native=utc_seconds(job['started_at']);require(selected-1<=native<=first,'native job birth/Root selection differs')
     mono=value['firstMonotonic'];end=value['overallDeadlineMonotonic']
     require(type(mono) in (int,float) and type(end) in (int,float) and math.isfinite(mono) and math.isfinite(end) and mono>=0,'finite original monotonic clock required')
@@ -214,7 +224,7 @@ def work_seconds(purpose):
 
 
 def unit_budget(operation_id, *, evidence=EVIDENCE):
-    clock,pin=original_clock(operation_id,evidence=evidence,revision=os.environ.get('GITHUB_SHA'))
+    clock,pin=original_clock(operation_id,evidence=evidence,revision=os.environ.get('FSGG_SOURCE_REVISION'))
     now=time.monotonic();limit=clock['overallDeadlineMonotonic']-TRANSPORT_SECONDS-UNIT_STOP_SECONDS-FINAL_SECONDS
     runtime=min(3900,math.floor(limit-now-ACTIVATION_SECONDS))
     require(runtime>=work_seconds(clock['purpose'])+120+BOOKKEEPING_SECONDS,'remaining original budget cannot contain purpose and transport')
@@ -229,10 +239,10 @@ PREPARATION_PHASES={'profile':60,'controls':300,'userland':480,'admit':300}
 
 def fixed_preparation(phase):
     require(phase in PREPARATION_PHASES,'closed preparation phase required')
-    root=Path(__file__).resolve().parents[1];workflow=root/'.github/workflows/bar-hosted-image-qualification.yml'
+    root=Path(__file__).resolve().parents[1];template=root/TEMPLATE_DIRECTORY;workflow=template/TEMPLATE_WORKFLOW
     raw=workflow.read_bytes();require(len(raw)<=131072,'bounded fixed workflow required')
-    registry=read_json(root/'evidence/github-substrate-v2/gs2-06-7/execution-pins-extension.json')[0]
-    pins=[v['sha256'] for v in registry['documents'] if v['path']==str(workflow.relative_to(root))]
+    manifest=(template/'MANIFEST.sha256').read_bytes();require(len(manifest)<=4096,'bounded fixed workflow manifest required')
+    pins=[line.split('  ',1)[0] for line in manifest.decode().splitlines() if line.endswith('  '+TEMPLATE_WORKFLOW)]
     require(pins==[hashlib.sha256(raw).hexdigest()],'fixed preparation workflow pin differs')
     rows=raw.decode().splitlines(keepends=True)
     def block(key):
@@ -251,7 +261,7 @@ def fixed_preparation(phase):
 
 def preparation_intent(operation_id,phase,*,evidence=EVIDENCE):
     require(phase in PREPARATION_PHASES,'closed preparation phase required')
-    clock,pin=original_clock(operation_id,evidence=evidence,revision=os.environ.get('GITHUB_SHA'))
+    clock,pin=original_clock(operation_id,evidence=evidence,revision=os.environ.get('FSGG_SOURCE_REVISION'))
     now=time.monotonic();end=min(now+PREPARATION_PHASES[phase],clock['overallDeadlineMonotonic']-TRANSPORT_SECONDS-FINAL_SECONDS)
     require(end-now>1,'original preparation/transport aperture exhausted')
     return {'operationId':operation_id,'phase':phase,'clockSha256':pin['sha256'],'bootId':clock['bootId'],
@@ -265,7 +275,7 @@ def process_start(pid):
 
 def preparation_child(operation_id,phase,*,evidence=EVIDENCE):
     intent,_=read_json(evidence/('prep-'+phase)/'intent.json')
-    clock,pin=original_clock(operation_id,evidence=evidence,revision=os.environ.get('GITHUB_SHA'))
+    clock,pin=original_clock(operation_id,evidence=evidence,revision=os.environ.get('FSGG_SOURCE_REVISION'))
     require(intent['operationId']==operation_id and intent['phase']==phase and intent['clockSha256']==pin['sha256'] and intent['bootId']==clock['bootId'],'preparation original join differs')
     require(os.getppid()==intent['parentPid'] and process_start(os.getppid())==intent['parentStartTicks'] and os.getpgrp()==os.getpid(),'preparation parent/group birth differs')
     body,_=fixed_preparation(phase)
@@ -308,7 +318,7 @@ def run_preparation(operation_id,phase,*,evidence=EVIDENCE,launch=None):
     slot=evidence/('prep-'+phase);require(not slot.exists(),'preparation phase already consumed')
     private_dir(slot);os.chown(slot,RUNNER_UID,RUNNER_UID,follow_symlinks=False)
     write_new(slot/'intent.json',intent);os.chown(slot/'intent.json',RUNNER_UID,RUNNER_UID,follow_symlinks=False)
-    names=('GITHUB_SHA','GITHUB_EVENT_NAME','GITHUB_REF','GITHUB_RUN_ATTEMPT','GITHUB_REPOSITORY','GITHUB_WORKSPACE',
+    names=('FSGG_SOURCE_REVISION','GITHUB_SHA','GITHUB_EVENT_NAME','GITHUB_REF','GITHUB_RUN_ATTEMPT','GITHUB_REPOSITORY','GITHUB_WORKSPACE',
            'GITHUB_RUN_ID','GITHUB_WORKFLOW_REF','OPERATION_ID','HOST_JOB_STARTED','HOST_JOB_MONOTONIC','ImageOS','ImageVersion','RUNNER_ENVIRONMENT')
     env={name:os.environ[name] for name in names if name in os.environ}
     env.update(fixed_env,PATH='/usr/bin:/bin',HOME='/home/runner',LANG='C.UTF-8',LC_ALL='C.UTF-8',EVIDENCE=str(evidence))
@@ -465,7 +475,7 @@ def controller_start(operation_id,purpose,*,evidence=EVIDENCE,revision=None):
 
 def seal_crypto(operation_id, *, evidence=EVIDENCE):
     require(re.fullmatch(r'bar-image-[0-9]{1,20}-[0-9]{1,5}', operation_id) is not None, 'fixed run/attempt identity required')
-    clock,clock_pin=original_clock(operation_id,evidence=evidence,revision=os.environ.get('GITHUB_SHA'))
+    clock,clock_pin=original_clock(operation_id,evidence=evidence,revision=os.environ.get('FSGG_SOURCE_REVISION'))
     started=clock['firstMonotonic'];deadline=clock['overallDeadlineMonotonic']
     identity = crypto_identity(deadline)
     require(digest_file(RECIPIENT, 8192)['sha256'] == RECIPIENT_PEM_SHA256, 'public recipient PEM differs')
@@ -647,14 +657,14 @@ def canonicalize_checkouts(revision):
     require(os.environ.get('GITHUB_EVENT_NAME') == 'workflow_dispatch'
             and os.environ.get('GITHUB_REF') == 'refs/heads/main'
             and os.environ.get('GITHUB_RUN_ATTEMPT') == '1'
-            and os.environ.get('GITHUB_REPOSITORY') == 'FS-GG/FS.GG.Coordination',
-            'only the fixed first-attempt hosted checkout bootstrap is supported')
+            and os.environ.get('GITHUB_REPOSITORY') == CALLER_REPOSITORY,
+            'only the fixed first-attempt private-caller checkout bootstrap is supported')
     workspace = Path(os.environ['GITHUB_WORKSPACE'])
     source = workspace / 'source'
     bar = load_bar(source)
     receipt = {'source': None, 'product': None, 'firstRefusal': None}
     try:
-        receipt['source'] = canonicalize_checkout_gc(source, revision, None, 'https://github.com/FS-GG/FS.GG.Coordination', bar)
+        receipt['source'] = canonicalize_checkout_gc(source, revision, None, 'https://github.com/' + COORDINATION_REPOSITORY, bar)
         receipt['product'] = canonicalize_checkout_gc(workspace / 'product', PRODUCT_REVISION, PRODUCT_TREE,
                                                      'https://github.com/FS-GG/FSBarV2', bar, complete=True)
     except Exception as error:
