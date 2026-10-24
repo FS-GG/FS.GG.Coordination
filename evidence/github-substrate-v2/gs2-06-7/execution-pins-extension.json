@@ -97,7 +97,7 @@
     {
       "kind": "workflow",
       "path": ".github/workflows/callable-cli-release-publish.yml",
-      "sha256": "ac736727db6dbf7a4d4c16d8daea9e9e684a2bca32c970389b4df80324a44908",
+      "sha256": "5847d9ecb31ef4bd4382a332bd27fa31cbac2b9ee8a8252f5e2d16cc6dc6a54f",
       "externalReferences": [
         "NuGet/login@8d196754b4036150537f80ac539e15c2f1028841",
         "actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6",
@@ -112,7 +112,7 @@
     {
       "kind": "workflow",
       "path": ".github/workflows/execution-pair-forward-publish.yml",
-      "sha256": "3e16e3ef8eebad9c24792ae6877ce5f83f05d6081f54fd79292b3c51c849cf3c",
+      "sha256": "ceb79de592a43bdceb2a829bf7be8f44d8443a5ee6ecc25f0eb57300f66a7da8",
       "externalReferences": [
         "NuGet/login@8d196754b4036150537f80ac539e15c2f1028841",
         "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
@@ -136,7 +136,7 @@
     {
       "kind": "workflow",
       "path": ".github/workflows/callable-cli-release-publish-011.yml",
-      "sha256": "930eca943ee58bf9412bb9df3488a2c98d3e2b33db2218d13c3cb3f7f5947087",
+      "sha256": "2604be53bd5d9ffb0a1370c1707b205053272cfc7a2c281b426aba232c271547",
       "externalReferences": [
         "NuGet/login@8d196754b4036150537f80ac539e15c2f1028841",
         "actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6",
