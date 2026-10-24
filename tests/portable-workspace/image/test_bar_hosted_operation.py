@@ -457,11 +457,17 @@ class Transport(unittest.TestCase):
 
 class Workflow(unittest.TestCase):
     def test_optional_privileged_failure_preserves_actual_receipt_and_primary_upload_path(self):
+        self.optional_workflow_cases('privileged-failure')
+
+    def test_current_boot_overflow_preserves_actual_workflow_receipt(self):
+        self.optional_workflow_cases('overflow')
+
+    def optional_workflow_cases(self, secondary):
         text = WORKFLOW.read_text()
         receipt_script = literal_block(text.split('      - name: Retain the bounded generation receipt', 1)[1], 'run')
         summary_script = literal_block(text.split('      - name: Summarize the complete generation', 1)[1], 'run')
         for primary in ('failed', 'prerequisite'):
-            with self.subTest(primary=primary):
+            with self.subTest(primary=primary, secondary=secondary):
                 fixture = Transport('test_valid_exact_manifest_archive_and_original_streams_are_staged')
                 fixture.setUp()
                 try:
@@ -484,17 +490,23 @@ class Workflow(unittest.TestCase):
                         fixture.write_result()
                     tools = fixture.root / 'tools'; tools.mkdir()
                     runner_temp = fixture.root / 'runner-temp'; runner_temp.mkdir(mode=0o700)
-                    # The sudo port fails after an unreadable partial file.
+                    # The inert privileged port either fails with partial output
+                    # or returns valid JSON with current boot and float overflow.
                     # Actual canonical receipt runs in a genuine Python child.
                     (tools / 'sudo').write_text("""#!/bin/sh
 previous=
 for argument in "$@"; do
   if [ "$previous" = --evidence ]; then
-    printf '%s' '{partial privileged output' > "$argument"
-    chmod 000 "$argument"
+    if [ "$FIXTURE_SECONDARY" = overflow ]; then
+      printf '{"security":{"bootId":"%s"},"number":1e999}' "$FIXTURE_CURRENT_BOOT" > "$argument"
+    else
+      printf '%s' '{partial privileged output' > "$argument"
+      chmod 000 "$argument"
+    fi
   fi
   previous="$argument"
 done
+if [ "$FIXTURE_SECONDARY" = overflow ]; then exit 0; fi
 printf '%s\n' 'authored secondary readback refusal' >&2
 exit 41
 """)
@@ -513,13 +525,17 @@ exit 41
                     outputs = fixture.root / 'outputs'
                     env = {**os.environ, 'PATH': str(tools) + ':/usr/bin:/bin', 'FIXTURE_ROOT': str(fixture.root),
                            'EVIDENCE': str(fixture.evidence), 'RUNNER_TEMP': str(runner_temp),
+                           'FIXTURE_SECONDARY': secondary,
+                           'FIXTURE_CURRENT_BOOT': Path('/proc/sys/kernel/random/boot_id').read_text().strip(),
                            'OPERATION_ID': OPERATION, 'HOST_JOB_STARTED': '1700000000', 'GITHUB_OUTPUT': str(outputs)}
                     done = subprocess.run(['/bin/bash', '-c', receipt_script], env=env,
                                           capture_output=True, text=True, timeout=15)
                     self.assertEqual(done.returncode, 0, done.stderr)
                     value = json.loads((fixture.evidence / 'transport-receipt.json').read_text())
                     self.assertEqual(value['securityReadback']['status'], 'Unknown')
-                    self.assertEqual(value['securityReadback']['exit'], 41)
+                    self.assertEqual(value['securityReadback']['exit'], 0 if secondary == 'overflow' else 41)
+                    if secondary == 'overflow':
+                        self.assertIn('Out of range float', value['securityReadback']['reason'])
                     self.assertFalse(value['candidateTransportPermitted'])
                     self.assertEqual(value['networkPrerequisitePassed'], primary == 'prerequisite')
                     stage = fixture.transport / OPERATION

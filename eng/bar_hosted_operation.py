@@ -505,7 +505,12 @@ def optional_security_readback(stage, operation_id):
         data, _ = read_json(stage / 'readback.json', 256 * 1024)
         require(type(data) is dict and data.get('security', {}).get('bootId') ==
                 Path('/proc/sys/kernel/random/boot_id').read_text().strip(), 'optional readback boot differs')
-        return {**result, 'status': 'observed', 'data': data}
+        observed = {**result, 'status': 'observed', 'data': data}
+        # Valid JSON exponent overflow (e.g.1e999) can parse as inf without
+        # parse_constant being called. Keep canonicalization in this optional
+        # failure boundary so it cannot discard the primary receipt later.
+        canonical(observed)
+        return observed
     except Exception as error:
         return {**result, 'reason': type(error).__name__ + ': ' + str(error)[:512]}
 
