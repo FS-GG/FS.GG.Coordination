@@ -882,7 +882,7 @@ class PreparationDeadline(ClockBudget):
             self.assertLessEqual(float(argv[4][:-1]),intent['termAt']-intent['startedMonotonic'])
             self.assertIn('canonicalize-checkouts',argv[-1])
 
-    def test_group_birth_liveness_excludes_zombies_reused_and_foreign_members(self):
+    def test_group_birth_liveness_distinguishes_zombies_reuse_and_escape(self):
         for state,start,pgrp,expected in [('S',44,4321,[123]),('Z',44,4321,[]),('S',45,4321,[]),('S',44,999,[123])]:
             fields=['0']*20;fields[0]=state;fields[2]=str(pgrp);fields[3]='4321';fields[19]=str(start)
             with patch.object(Path,'read_text',return_value='123 (fixture) '+' '.join(fields)):
@@ -898,6 +898,14 @@ class PreparationDeadline(ClockBudget):
             self.assertEqual(WRAPPER.group_birth_observations(4321,{123:44})[0]['status'],'gone')
         with patch.object(Path,'read_text',return_value='malformed proc row'):
             self.assertEqual(WRAPPER.live_group_births(4321,{123:44}),[123])
+
+    def test_final_unknown_observation_cannot_diverge_from_parent_acceptance(self):
+        real_popen=subprocess.Popen
+        def launch(argv,**kwargs):return real_popen(['/bin/bash','-c','printf original; exit 0'],**kwargs)
+        with patch.object(WRAPPER.os,'geteuid',return_value=0),patch.object(WRAPPER.os,'chown'),patch.dict(os.environ,{'GITHUB_WORKSPACE':str(self.root)}),patch.object(WRAPPER,'live_group_births',return_value=[]),patch.object(WRAPPER,'group_birth_observations',return_value=[{'pid':123,'expectedStartTicks':44,'status':'Unknown','reason':'fixture denied final readback'}]):
+            with self.assertRaisesRegex(RuntimeError,'custody Unknown'):WRAPPER.run_preparation(OPERATION,'controls',evidence=self.evidence,launch=launch)
+        value=json.loads((self.evidence/'prep-controls/receipt.json').read_text())
+        self.assertTrue(value['leaderReaped']);self.assertTrue(value['bothStreamsEof']);self.assertEqual(value['finalGroupObservations'][0]['status'],'Unknown')
 
     def test_known_live_group_birth_blocks_success_after_leader_and_eof(self):
         real_popen=subprocess.Popen;state={'calls':0}

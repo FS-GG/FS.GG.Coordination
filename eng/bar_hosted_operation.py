@@ -289,11 +289,15 @@ def group_birth_observations(group,members):
     return observations
 
 
+def unsettled_group_observation(value):
+    return value['status']=='Unknown' or (value['status']=='observed' and value['state']!='Z'
+            and value['startTicks']==value['expectedStartTicks'])
+
+
 def live_group_births(group,members):
     # Unknown custody and same-birth escape block success; signalling below
     # still requires a fresh original PGID/SID/birth join.
-    return [v['pid'] for v in group_birth_observations(group,members) if v['status']=='Unknown' or
-            (v['status']=='observed' and v['state']!='Z' and v['startTicks']==v['expectedStartTicks'])]
+    return [v['pid'] for v in group_birth_observations(group,members) if unsettled_group_observation(v)]
 
 
 def run_preparation(operation_id,phase,*,evidence=EVIDENCE,launch=None):
@@ -381,6 +385,8 @@ def run_preparation(operation_id,phase,*,evidence=EVIDENCE,launch=None):
                 try:handle.close()
                 except OSError as error:result['firstCause']=result['firstCause'] or 'preparation stream close Unknown: '+str(error)[:256]
         result['finalGroupObservations']=group_birth_observations(child.pid,members) if child is not None else []
+        if any(unsettled_group_observation(v) for v in result['finalGroupObservations']):
+            result['firstCause']=result['firstCause'] or 'known original preparation custody Unknown at final readback'
         result['observedGroupMembers']=[{'pid':pid,'startTicks':start} for pid,start in sorted(members.items())]
         result['completedMonotonic']=time.monotonic()
         try:
