@@ -214,7 +214,10 @@ class BarProfile(unittest.TestCase):
 
     def test_actual_bar_preflight_consumes_role_specific_info_protocol(self):
         args, selection, home = self.fixture(); args.mode = 'preflight'
-        selection['network']['purpose'] = 'network-prerequisite'; self.base.rebind_selection(args, selection)
+        selection['network']['purpose'] = 'network-prerequisite'
+        selection['clock']['workEnd']=selection['clock']['start']+300
+        selection['clock']['totalEnd']=selection['clock']['workEnd']+120
+        self.base.rebind_selection(args, selection)
         spawn, calls, resources = self.ports(args, selection)
         with self.native_context(home, spawn, resources):
             result = BAR.main(args, IMAGE.__dict__)
@@ -264,7 +267,10 @@ class BarProfile(unittest.TestCase):
 
     def test_post_pull_headroom_loss_refuses_before_network_build(self):
         args, selection, home = self.fixture(); args.mode = 'preflight'
-        selection['network']['purpose'] = 'network-prerequisite'; self.base.rebind_selection(args, selection)
+        selection['network']['purpose'] = 'network-prerequisite'
+        selection['clock']['workEnd']=selection['clock']['start']+300
+        selection['clock']['totalEnd']=selection['clock']['workEnd']+120
+        self.base.rebind_selection(args, selection)
         spawn, calls, resources = self.ports(args, selection)
         def lose_headroom(argv, **kwargs):
             child = spawn(argv, **kwargs)

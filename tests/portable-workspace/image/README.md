@@ -758,31 +758,50 @@ The pinned upstream contracts are [Buildah network setup](https://github.com/con
 [passt AVX2 selection](https://passt.top/passt/tree/arch.c?id=cba357068dc586e7540971eb40bb56c5e62c4de1)
 and [Podman rootless AppArmor support reporting](https://github.com/containers/podman/blob/464c15fec06f0074c916f9eff87c4806869c2833/vendor/go.podman.io/common/pkg/apparmor/internal/supported/supported.go).
 
-The outer90-minute profile,3600+120 controller clock and resource floors remain
-unchanged. The fixed RUN has a nested120-second cap and base pull a600-second
-cap, both consuming that same work clock. The30-second kernel read shares the
-existing9-minute receipt aperture; it adds no time to the20-minute transport
-allowance. Pure validation uses focused actual-owner/closed-port controls with
-120-second wall limits; the historical139.1-second BAR suite overrun remains
-separate from its semantic test success and is not repeated to conceal it.
+The outer job remains90 minutes with the same resource floors. The full-image
+controller keeps3600 seconds of work plus120 seconds of retirement. The closed
+network-prerequisite purpose uses300 seconds of work plus120 seconds of
+retirement; it cannot export, load or encrypt a candidate, extend the full-image
+clock, retry, or spend unused time on another attempt. Its120-second RUN and
+600-second base-pull limits are clipped by that original purpose work clock.
+The30-second kernel read still shares the9-minute receipt aperture.
 
-The fresh VM repeats the selected image-version, preallocated nodiscard volume,
-daemon/user-namespace and capacity refusals. The maintained pivot-root entry
-places the Arch userland at its mount namespace root before dropping to
-uid/gid1001. Source is bound read-only. The delegated4096-task unit has a3900s
-maximum runtime and120s stop allowance with control-group cleanup. These
-platform bounds do not change the controller's3600s work and120s retirement
-clock, four-CPU affinity,12GiB observed RSS or80GiB sampled disk ceiling. The
-controller still reports hard containment and whole descendant settlement as
-unproved.
+Three required dispatch timestamps bind Root's original selection, latest first
+step (at most300 seconds later) and observer deadline (5700 seconds after
+selection). Before checkout, one bounded native job read joins the first attempt,
+source, job and runner. The effective deadline is the earlier of native job
+start+5400 seconds and Root selection+5400 seconds, projected once onto the
+first-step boot/monotonic clock. The observer-only last300 seconds grant no
+additional native work. A refused startup retains bounded clock/outcome evidence
+through the existing single metadata uploader, even without checkout/helpers.
 
-The job's90-minute limit includes provisioning and bounded evidence transport.
-Before the controller starts, the wrapper requires enough of that original
-outer clock to retain the entire62-minute controller aperture and20 minutes
-for receipts/transport. It refuses if preparation has consumed that room.
-Neither repeated local stage timeouts nor a completed toolchain stage renews
-the clock or closes the full image promise. Build time, aggregate8MiB command
-output and80GiB VFS/export/load fit remain native qualification questions.
+Before unit creation, let D be that effective deadline and
+L=D-1200 transport-120 independent unit stop-30 final summary. At precreation
+monotonic Q, RuntimeMaxSec=min(3900,floor(L-Q-30 activation reserve)). The
+root unit entry reads its actual ActiveEnterTimestampMonotonic U, invocation,
+PID/cgroup and effective properties before namespace entry. It requires
+U<=Q+30 and U+RuntimeMaxSec<=L. This is initial transient-unit configuration;
+there is no unsupported active RuntimeMax setter or clock renewal. USec duration
+properties from systemctl show are parsed as its bounded human duration format.
+
+After all wrapper preparation, the adjacent controller gate requires its full
+purpose work+120 retirement+30 bookkeeping to fit the same actual unit deadline.
+The native unit has120 seconds of separate stop allowance. Receipt/crypto9min,
+metadata1min and ciphertext10min retain their1200-second allocation; the final
+summary has a30-second bound. Full-path fit remains unproved: the previous
+312.987-second preparation observation does not establish room for the full
+clock and new margins. Source controls are not runtime admission or a successful
+network prerequisite. The fresh VM, pivot-root/drop to uid/gid1001, read-only
+source,4096-task delegation and four-CPU/14GiB/80GiB floors remain unchanged.
+Hard containment, whole descendant settlement and physical disposal remain
+unproved. Historical failures and the139.1-second source-check horizon overrun
+keep their original scope.
+
+Focused clock/transport controls without crypto/key generation run with:
+
+```sh
+python3 -I -B tests/portable-workspace/image/test_bar_hosted_operation.py ClockBudget Preparation Transport Workflow
+```
 
 The controller exports the actual image ID, verifies the bounded OCI archive
 and produced static ELF/file/hash/alias correspondence, loads only that archive
