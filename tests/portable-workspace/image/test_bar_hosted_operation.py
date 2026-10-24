@@ -641,6 +641,30 @@ exit 41
                 self.assertEqual(json.loads((Path(fixture.env['STARTUP_EVIDENCE'])/'clock.json').read_text())['verdict'],'refused')
         finally:fixture.doCleanups()
 
+    def test_owned_userland_does_not_change_host_namespace_policy(self):
+        body,environment=WRAPPER.fixed_preparation('userland')
+        commands='\n'.join(line for line in body.splitlines() if not line.lstrip().startswith('#'))
+        self.assertNotRegex(commands,r'(?m)^\s*(?:sudo\s+)?(?:/[^\s]+/)?sysctl\b')
+        self.assertNotRegex(commands,r'(?:>|tee[^\n]*)\s*/proc/sys/')
+        # Package helper capability restoration is inside the new owned Arch
+        # userland PACMAN_SCRIPT, not a live-host namespace policy repair.
+        self.assertIn('exec chroot "$USERLAND"',body)
+        self.assertIn('/bin/bash -c "$PACMAN_SCRIPT"',body)
+        self.assertIn('for helper in newuidmap newgidmap; do',environment['PACMAN_SCRIPT'])
+        self.assertIn('setcap "$capability=ep" "/usr/bin/$helper"',environment['PACMAN_SCRIPT'])
+        self.assertNotIn('setcap ',commands)
+
+    def test_preprovisioned_namespace_capability_refuses_restricted_or_unknown(self):
+        value=ENTRY.observed()
+        self.assertEqual(ENTRY.DOMAIN.finish(value)['verdict'],'admitted')
+        for restriction,maximum in ((1,63838),(None,63838),(0,0),(0,None)):
+            with self.subTest(restriction=restriction,maximum=maximum):
+                observed=ENTRY.observed()
+                observed['userns'].update(apparmorRestrictUnprivileged=restriction,maxUserNamespaces=maximum)
+                before=json.loads(json.dumps(observed))
+                self.assertEqual(ENTRY.DOMAIN.finish(observed)['refusals'],['rootless-userns'])
+                self.assertEqual(observed,before,'read-only admission must not normalize host facts')
+
     def test_source_pins_and_registration_match_actual_workflow(self):
         WRAPPER.load_bar(ROOT)
         self.assertEqual(hashlib.sha256(WRAPPER.RECIPIENT.read_bytes()).hexdigest(), WRAPPER.RECIPIENT_PEM_SHA256)
