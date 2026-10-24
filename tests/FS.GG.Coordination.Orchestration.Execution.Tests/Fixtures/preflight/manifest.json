@@ -13,19 +13,19 @@
   "traces": [
     {
       "name": "PreflightArtifactReplay.itf.json",
-      "sha256": "7605ae826e95949c0209dc7db8e27953ee1c6bc01f237e8afec83c52aa6b3ad0"
+      "sha256": "2291d33191dbd9685a78728d35d1869639314e24f4940ddc0b38e4d2e810b3e6"
     },
     {
       "name": "PreflightObservationReplay.itf.json",
-      "sha256": "811ed911b81c3ce71e62d23b9844024bffc95fafb8fbe74fabf4d41855ff5954"
+      "sha256": "1c16ddc9fad68290ff64a1fcb6ee9c0badfde9fd0f4a856ba5577df893241958"
     },
     {
       "name": "SourceDirectoryCommitReplay.itf.json",
-      "sha256": "98adbc3cf706ebf932da4a812470a7bd5768a1d7cbb80c7751629a68fe6dd6a3"
+      "sha256": "0e25766b61e790ee95632995018814794d9cb4c18d1d820c7853341d4eecb7ed"
     },
     {
       "name": "OriginalSourceCompositionReplay.itf.json",
-      "sha256": "c73c704ed9c739004328ff1d45807bdbdbb23430e71f42a07fdd74166f36cfb9"
+      "sha256": "5e4ff1ea889c5c9704323dfd5e5aaf2e793d9e3bb66a8951f74df300b558f628"
     }
   ],
   "replaySteps": {

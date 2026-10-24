@@ -612,7 +612,7 @@ let ``physical accounting preserves failed attempts and rejects incomplete or ov
     let digest (value: string) =
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes value)).ToLowerInvariant()
 
-    Assert.Equal("1dfbc268ca90c2e9631026bae77ed9227e0666e90788b6394479ba7459b0561a", digest source)
+    Assert.Equal("676fc0bafe311258629dae90d97e9d2efc693364ebc36d4d5fef28a9f76e0261", digest source)
     let marker = "// Controlled subprocess fixtures exercise the production wrappers, not native proof."
     let ending = "let requireGreen code workingDirectory executable arguments environment ="
     let start = source.IndexOf(marker, StringComparison.Ordinal)
@@ -621,10 +621,10 @@ let ``physical accounting preserves failed attempts and rejects incomplete or ov
     Assert.Equal(start, source.LastIndexOf(marker, StringComparison.Ordinal))
     Assert.Equal(finish, source.LastIndexOf(ending, StringComparison.Ordinal))
     let prefix = source.Substring(0, start)
-    Assert.Equal("32c4a3d228cbd916f44974991645dfafd04ba4943f7c59454a98414efbb45266", digest prefix)
+    Assert.Equal("bab7a0331dc90b8930c230e533d7b4b93d0c7aa418e323cdf8d6322f6290f3b9", digest prefix)
     let fragment = File.ReadAllText(Path.Combine(root, "tests/FS.GG.Coordination.ArchitectureTests/Fixtures/quint-accounting-controls.fsx.fragment"))
     Assert.True(Encoding.UTF8.GetByteCount(fragment) <= 32768)
-    Assert.Equal("0cb026147d6cee22119d640b75a8939723dd8894fbd10a23ea693bb49958f376", digest fragment)
+    Assert.Equal("4eb9b3b034a8a334ea599639c979425c3aebc858285263939319bc206504379a", digest fragment)
     Assert.StartsWith(marker, fragment)
     Assert.EndsWith("    exit 0\n\n", fragment)
     let scratch = Directory.CreateTempSubdirectory("fsgg-focused-accounting-test-")
@@ -669,7 +669,7 @@ let ``physical accounting preserves failed attempts and rejects incomplete or ov
 
         let observed = output.GetAwaiter().GetResult() + error.GetAwaiter().GetResult()
         Assert.True(child.ExitCode = 0, observed)
-        Assert.Contains("ACCOUNTING_CONTROLS_OK controls=15", observed)
+        Assert.Contains("ACCOUNTING_CONTROLS_OK controls=16", observed)
         Assert.Contains(
             "ACCOUNTING_CONTROL_ATTEMPT mode=unknown ordinal=1 exit=7 timedOut=false classification=unclassified completed=true terminal=true",
             observed
