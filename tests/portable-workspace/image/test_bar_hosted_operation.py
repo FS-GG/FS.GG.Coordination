@@ -547,7 +547,7 @@ printf '%s\n' 'authored secondary readback refusal' >&2
 exit 41
 """)
                     (tools / 'python3').write_text(
-                        '#!/usr/bin/python3\nimport importlib.util,json,os,pathlib,sys\n'
+                        '#!/usr/bin/python3\nimport importlib.util,json,os,pathlib,sys\nsys.dont_write_bytecode=True\n'
                         'spec=importlib.util.spec_from_file_location("actual_receipt",'
                         + repr(str(ROOT / 'eng/bar_hosted_operation.py')) + ')\n'
                         'module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)\n'
