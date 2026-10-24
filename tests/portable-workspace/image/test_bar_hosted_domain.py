@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Synthetic controls for the hosted-VM BAR domain helper. No VM, service,
 volume, userland or BAR content is involved."""
+import argparse
 import copy
 import importlib.util
 import hashlib
@@ -13,6 +14,7 @@ import subprocess
 import textwrap
 import tempfile
 import unittest
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[3]
 
@@ -43,6 +45,25 @@ def observed(device='7:0', backing='8:1'):
 
 
 class HostedDomain(unittest.TestCase):
+    def test_unreadable_security_evidence_stays_unknown(self):
+        with patch('builtins.open', side_effect=PermissionError('authored denial')):
+            value = DOMAIN.security_observation()
+        self.assertTrue(all(row['status'] == 'Unknown' for row in value['observations'].values()))
+        self.assertNotIn('apparmorEnabled', value)
+        self.assertIn('not host LSM absence', value['scope'])
+
+    def test_failed_kernel_readback_preserves_unknown_and_original_window(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary) / 'security.json'
+            args = argparse.Namespace(evidence=str(target), owner_uid=os.getuid(), owner_gid=os.getgid())
+            with patch.dict(os.environ, {'HOST_JOB_STARTED': '1700000000'}), \
+                 patch.object(DOMAIN, 'command', return_value=(1, '', 'authored denial')) as call:
+                DOMAIN.security_readback(args)
+            value = json.loads(target.read_text())
+            self.assertEqual(value['audit']['absenceConclusion'], 'Unknown')
+            self.assertEqual(value['audit']['exit'], 1)
+            self.assertIn('--since=@1700000000', call.call_args.args[0])
+
     def test_contract_constants_match_the_closed_bar_reader(self):
         self.assertEqual(DOMAIN.SCHEMA, BAR.HOSTED_DOMAIN_SCHEMA)
         self.assertEqual(DOMAIN.RELATION, BAR.HOSTED_RELATION)

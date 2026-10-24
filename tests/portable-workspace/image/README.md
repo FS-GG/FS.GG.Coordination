@@ -711,6 +711,61 @@ that the full controller's command protocol is valid. The failed original full
 attempt remains failed; direct-child EOF does not prove descendant settlement
 or provider disposal.
 
+The same dispatch-only workflow now has two fixed purposes. A separately
+admitted prerequisite request uses `purpose: network-prerequisite` with
+`full_image: false`; a full generation uses `purpose: full-image` with
+`full_image: true`. Other combinations cannot run. The prerequisite invokes
+`preflight --profile bar-headless` through the same maintained controller and
+Lifetime. It pulls the exact existing Ubuntu base and performs one fixed tiny
+shell/coreutils RUN with the same private network/PID/IPC namespaces, crun,
+rootless stores and no-new-privileges flag. It checks UID0, NoNewPrivs1, proc/PID
+correspondence and distinct private namespace identities. It acquires no BAR,
+engine, map or toolchain content. A full generation repeats this prerequisite
+in its own fresh VM and continues under the same original clock; it does not
+reuse a prior prerequisite VM, store or image. Prerequisite success proves
+network setup and that fixed RUN, not external egress or a full BAR candidate.
+It cannot export, load or encrypt a candidate, or close issue1032.
+
+The original15 support roles remain mandatory. Additional network evidence binds
+the fixed pasta aliases and both passt/AVX2 executable objects before effects.
+The existing managed owner lists and seals their resolved ELF loader/library
+closure, aliases and loader cache before the RUN, and guards these identities
+through retirement. The signed installed passt package/version is checked;
+unknown native hashes are observed on the fresh VM rather than invented.
+The closed configuration explicitly selects the observed pasta backend and
+fixed helper search order `/usr/bin`, `/usr/lib/podman`, so a different helper
+cannot silently precede the sealed pasta path. Helpers keep their original pathname and host policy. This route does not
+change the backend, grant privileges, drop NNP, or select host networking.
+
+Root-produced security evidence and bounded post-operation kernel observations
+retain proc mounts, namespace/credential/status/current-label information and
+Unknowns. Podman's rootless `apparmorEnabled: false` is not evidence that the
+host LSM is absent. An empty or inaccessible audit log also cannot establish
+that absence. The third failed original's pasta netns EACCES remains a failure;
+this source adds a diagnostic prerequisite, not a proved fix for its denier.
+Failed direct-child EOF/reaping still leaves descendant settlement unproved.
+
+The optional privileged security readback writes into a fresh private runner
+staging directory outside canonical controller evidence. Readback, ownership,
+collision or malformed-output failures become bounded secondary Unknowns;
+they cannot skip canonical receipt or poison its primary metadata inventory.
+Primary native errors and raw streams retain precedence. A successful metadata
+receipt cannot turn a failed qualification into success. The new network build
+also repeats the canonical resource admission immediately after base pull and
+before its build; a usage-ceiling sample does not prove fresh free headroom.
+
+The pinned upstream contracts are [Buildah network setup](https://github.com/containers/buildah/blob/310b1c8f53f3c0a7884f82fe51083577c473490a/run_linux.go),
+[passt AVX2 selection](https://passt.top/passt/tree/arch.c?id=cba357068dc586e7540971eb40bb56c5e62c4de1)
+and [Podman rootless AppArmor support reporting](https://github.com/containers/podman/blob/464c15fec06f0074c916f9eff87c4806869c2833/vendor/go.podman.io/common/pkg/apparmor/internal/supported/supported.go).
+
+The outer90-minute profile,3600+120 controller clock and resource floors remain
+unchanged. The fixed RUN has a nested120-second cap and base pull a600-second
+cap, both consuming that same work clock. The30-second kernel read shares the
+existing9-minute receipt aperture; it adds no time to the20-minute transport
+allowance. Pure validation uses focused actual-owner/closed-port controls with
+120-second wall limits; the historical139.1-second BAR suite overrun remains
+separate from its semantic test success and is not repeated to conceal it.
+
 The fresh VM repeats the selected image-version, preallocated nodiscard volume,
 daemon/user-namespace and capacity refusals. The maintained pivot-root entry
 places the Arch userland at its mount namespace root before dropping to
