@@ -64,6 +64,16 @@ DATA_CONTROLS = (
     'test_at_v2_target_has_separate_floor_and_does_not_lower_legacy_target',
     'test_at_v2_seals_distinct_private_job_label_and_software_without_bar_crosstalk',
 )
+OPERATOR = 'eng/current-public-at/operate-current-public-at.py'
+OPERATOR_TESTS = 'tests/qualification-runner/test_current_public_at_operation.py'
+OPERATOR_CONTROLS = (
+    'test_actual_reader_joins_source_run_job_metadata_and_original_archive_body',
+    'test_wrong_original_scope_metadata_and_body_stop_without_native_acceptance',
+    'test_response_status_is_checked_before_read_and_body_bound_before_digest',
+    'test_artifact_redirect_strips_private_token_and_refuses_unapproved_hosts',
+    'test_original_zip_requires_self_contained_exact_needed_inputs_without_reconstruction',
+    'test_duplicate_json_and_expired_original_clock_refuse',
+)
 MAX_FILE = 131072
 
 
@@ -278,15 +288,32 @@ def context(mode, environment, event):
                 eventSha=event_sha,runId=int(run),runAttempt=1)
 
 
+def pure_controls(root, path, class_name, names):
+    # The fixed selected tests may use temporary files and fake HTTP/ZIP data, never helpers/network.
+    active = True
+    def deny_effect(event, values):
+        if active and event in ('subprocess.Popen','socket.connect','os.system','os.exec','os.posix_spawn','os.fork'):
+            raise ValueError('native-at-source: pure controls refuse process/network effects')
+    sys.addaudithook(deny_effect)
+    try:
+        spec = importlib.util.spec_from_file_location('at_source_controls',root/path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        suite = unittest.TestSuite(getattr(module,class_name)(name) for name in names)
+        result = unittest.TextTestRunner(verbosity=1).run(suite)
+        require(result.wasSuccessful() and result.testsRun == len(names) and not result.skipped,
+                'actual AT controls failed/skipped: '+path)
+    finally:
+        active = False
+
+
 def driver_controls(root):
-    # Invoke only actual pure AT data controls. Other classes include GPG and guest-shell controls.
-    spec = importlib.util.spec_from_file_location('at_driver_controls',root/'tests/qualification-runner/test_dedicated_runner.py')
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    suite = unittest.TestSuite(module.DedicatedRunnerDataControls(name) for name in DATA_CONTROLS)
-    result = unittest.TextTestRunner(verbosity=1).run(suite)
-    require(result.wasSuccessful() and result.testsRun == len(DATA_CONTROLS) and not result.skipped,
-            'actual AT driver controls failed/skipped')
+    # Other driver tests include inert Git, GPG and guest-shell cases; the existing workflow owns them.
+    pure_controls(root,'tests/qualification-runner/test_dedicated_runner.py','DedicatedRunnerDataControls',DATA_CONTROLS)
+
+
+def operator_controls(root):
+    pure_controls(root,OPERATOR_TESTS,'Controls',OPERATOR_CONTROLS)
 
 
 def bundle_sources(root):
@@ -303,8 +330,10 @@ def bundle_sources(root):
 def public_bundle(root):
     bodies=bundle_sources(root)
     driver_controls(root)
+    operator_controls(root)
     for path in (SOURCE_WORKFLOW,VERIFIER,'eng/dedicated_qualification_runner.py',
-                 'tests/qualification-runner/test_dedicated_runner.py',PREFIX+'actionlint.yaml',PUBLIC_BAR,PREFIX+'README.md'):
+                 'tests/qualification-runner/test_dedicated_runner.py',PREFIX+'actionlint.yaml',PUBLIC_BAR,PREFIX+'README.md',
+                 OPERATOR,OPERATOR_TESTS):
         bodies[path]=read(root/path)
     return {path:digest(body) for path,body in bodies.items()}
 
@@ -317,7 +346,7 @@ def produce(mode, root, environment):
     if mode == 'public':
         files = public_bundle(root)
         receipt = dict(schema='fsgg.native-at.public-source-preparation/1',**facts,files=files,
-                       controls=list(DATA_CONTROLS),nativeQualification='not-selected')
+                       controls=list(DATA_CONTROLS+OPERATOR_CONTROLS),nativeQualification='not-selected')
     else:
         base, candidate = tree(root,facts['baseSha']), tree(root,facts['candidateSha'])
         bodies = {path:read(root/path) for path in (*PRODUCER,*PAYLOAD,LINT,BAR)}
