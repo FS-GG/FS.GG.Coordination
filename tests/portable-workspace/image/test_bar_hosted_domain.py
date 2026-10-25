@@ -5,6 +5,7 @@ import argparse
 import copy
 import importlib.util
 import hashlib
+import inspect
 import json
 import re
 import os
@@ -193,6 +194,27 @@ class DedicatedDomain(unittest.TestCase):
             self.assertIn('dedicated-image', DOMAIN.evaluate(selected))
             selected = self.dedicated(); selected['runner']['extra'] = 'ignored authority'
             self.assertIn('dedicated-runner-shape', DOMAIN.evaluate(selected))
+
+    def test_bar_domain_admits_only_the_native_qualification_binding_target(self):
+        spec = importlib.util.spec_from_file_location('dedicated_runner_for_domain_test', ROOT / 'eng/dedicated_qualification_runner.py')
+        runner = importlib.util.module_from_spec(spec); spec.loader.exec_module(runner)
+        bar = runner.TARGETS[runner.CALLER_REPOSITORY]
+        good = {'runnerRepository': runner.CALLER_REPOSITORY, 'allowedWorkflow': bar['workflow'], 'allowedJob': bar['job']}
+        self.assertEqual(DOMAIN.BAR_BINDING_TARGET, good, 'one source of truth with the layer table')
+        self.assertEqual(DOMAIN.binding_target_refusals(good), [])
+        fourd = runner.TARGETS[runner.FOURD_REPOSITORY]
+        for changes in ({'runnerRepository': runner.FOURD_REPOSITORY, 'allowedWorkflow': fourd['workflow'], 'allowedJob': fourd['job']},
+                        {'runnerRepository': runner.FOURD_REPOSITORY}, {'allowedWorkflow': fourd['workflow']}, {'allowedJob': fourd['job']},
+                        {'runnerRepository': None}, {'allowedJob': 'other'}):
+            with self.subTest(changes=changes):
+                self.assertTrue(DOMAIN.binding_target_refusals({**good, **changes}))
+        for key in good:
+            missing = dict(good); del missing[key]
+            self.assertEqual(DOMAIN.binding_target_refusals(missing), [key])
+        # The observer applies the check before it trusts or reports any other binding field.
+        source = inspect.getsource(DOMAIN.dedicated_runner_observation)
+        self.assertLess(source.index('binding_target_refusals(value)'), source.index("'imageOS'"))
+        self.assertIn('targets another repository, workflow or job', source)
 
     def test_actual_domain_reader_joins_dedicated_evidence_and_refuses_boot_replay(self):
         with tempfile.TemporaryDirectory() as directory, self.pins(), patch.object(DOMAIN, 'shared_controller', return_value=BAR.shared):

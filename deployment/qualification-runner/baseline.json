@@ -22,8 +22,7 @@
   },
   "github": {
     "organization": "FS-GG",
-    "plan": "Free: no restricted runner groups; the runner is a repository-level JIT runner of one private repository",
-    "runnerRepository": "FS-GG/FS.GG.Native.Qualification",
+    "plan": "Free: no restricted runner groups; each runner is a repository-level JIT runner of exactly one of two private repositories",
     "runnerGroup": "Default",
     "runnerNamePrefix": "fsgg-q-",
     "fixedLabel": "fsgg-native-linux-x64-v1",
@@ -33,12 +32,26 @@
     "runnerVersion": null,
     "runnerArchiveSha256": null,
     "allowedWorkflows": [
-      "FS-GG/FS.GG.Native.Qualification/.github/workflows/bar-hosted-image-qualification.yml@refs/heads/main"
+      "FS-GG/FS.GG.Native.Qualification/.github/workflows/bar-hosted-image-qualification.yml@refs/heads/main",
+      "FS-GG/FS.GG.FourD/.github/workflows/fourd-native-image-qualification.yml@refs/heads/main"
     ],
     "callerTemplate": "deployment/qualification-runner/native-qualification/bar-hosted-image-qualification.yml",
     "publicRepositories": "never enabled for the runner; FS.GG.Coordination holds no workflow that targets the label",
     "otherNativeCallers": "FS.GG.Templates svg-release-d5-current-public and retained-reference-rehearsal are public and unrouted; each needs its own private-repository dispatch caller",
-    "ordinaryPullRequestCI": "github-hosted; no PR/fork jobs on the dedicated runner"
+    "ordinaryPullRequestCI": "github-hosted; no PR/fork jobs on the dedicated runner",
+    "runnerTargets": [
+      {
+        "repository": "FS-GG/FS.GG.Native.Qualification",
+        "workflow": "FS-GG/FS.GG.Native.Qualification/.github/workflows/bar-hosted-image-qualification.yml@refs/heads/main",
+        "job": "full-image"
+      },
+      {
+        "repository": "FS-GG/FS.GG.FourD",
+        "workflow": "FS-GG/FS.GG.FourD/.github/workflows/fourd-native-image-qualification.yml@refs/heads/main",
+        "job": "native-qualification",
+        "decision": "FS-GG/.github#4819 (Root); FourD #48 f52a9bb1"
+      }
+    ]
   },
   "resources": {
     "minimumVcpu": 4,

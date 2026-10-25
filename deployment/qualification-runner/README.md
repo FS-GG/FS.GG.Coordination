@@ -73,10 +73,11 @@ all new native/compiler qualification costs remain unselected.
 
 ## Qualified-image layer: bake once, bind per boot
 
-The GitHub Free plan has no restricted runner groups, so the runner serves exactly one
-**private** repository, `FS-GG/FS.GG.Native.Qualification` (see `native-qualification/`).
-The layer below is what makes an ephemeral Ubuntu 24.04 (noble) guest the *qualified image*
-for that caller. Everything slow is baked ahead of time so the caller's 300 s first-step
+The GitHub Free plan has no restricted runner groups, so each ephemeral runner serves exactly one
+**private** repository, and only one of two is allowed: `FS-GG/FS.GG.Native.Qualification` (the BAR
+caller, see `native-qualification/`) or `FS-GG/FS.GG.FourD` (Root decision on `.github#4819`; its
+`fourd-native-image-qualification.yml`, FourD #48 `f52a9bb1`). The layer below is what makes an
+ephemeral Ubuntu 24.04 (noble) guest the *qualified image* for either caller. Everything slow is baked ahead of time so the caller's 300 s first-step
 deadline is not spent on installation.
 
 | Requirement | Where it is applied | Readback (`dedicated_qualification_runner.py verify-guest`) |
@@ -89,7 +90,7 @@ deadline is not spent on installation.
 | Runner dependencies | bake (`libicu74 libkrb5-3 zlib1g`; `libssl3t64` is in the image) instead of a live `installdependencies.sh` | `Runner.Listener` present; its version equals the lock |
 | Passwordless root for `runner` | bake: `runner.sudoers`, this disposable guest only | sudoers bytes equal `runner.sudoers`, 0440 |
 | The layer itself | bake: `/opt/fsgg/qualification-layer` with `MANIFEST.sha256` | every listed file hashes equal, the five required files are listed, nothing is unlisted |
-| `instance-binding.json` (root, 0644) | **per boot**: `guest-boot.sh --apply REQUEST.json fsgg-q-NAME` | schema, `Default` group, label, repository, `jit-config`, runner name, actual DMI UUID |
+| `instance-binding.json` (root, 0644) | **per boot**: `guest-boot.sh --apply REQUEST.json fsgg-q-NAME` | schema, `Default` group, label, one of the two repositories with its allowed workflow and job, `jit-config`, runner name, actual DMI UUID |
 
 Bake once in the separately admitted image build:
 `provision-image.sh --apply TARGET ACQUIRED-LOCK /mnt/fsgg-qualification-inputs`. It installs
@@ -107,9 +108,22 @@ ACTIONS_RUNNER_INPUT_JITCONFIG=$(cat /run/fsgg/jitconfig) /opt/fsgg/qualificatio
 
 `binding-request.json` has schema `fsgg.dedicated-qualification-binding-request/1` and exactly
 `baselineId`, `providerInstanceId`, `providerImageId`, `systemUuid` (the actual guest DMI UUID),
-`runnerName`, `qualifiedImageSha256`, `rootInstanceAcceptanceSha256`,
+`runnerName`, `runnerRepository`, `qualifiedImageSha256`, `rootInstanceAcceptanceSha256`,
 `registrationAdmissionSha256` and `repositoryScopeVerified` (`true` only after the runner's
-single-repository scope was independently read back). The request is data, not authority.
+single-repository scope was independently read back). `runnerRepository` is required and must be exactly
+one of the two targets below; the sealed binding then also carries the `allowedWorkflow` and `allowedJob`
+of that row, derived by the layer and never taken from the request. The request is data, not authority.
+
+| `runnerRepository` | `allowedWorkflow` (always on `main`) | `allowedJob` |
+|---|---|---|
+| `FS-GG/FS.GG.Native.Qualification` | `FS-GG/FS.GG.Native.Qualification/.github/workflows/bar-hosted-image-qualification.yml@refs/heads/main` | `full-image` |
+| `FS-GG/FS.GG.FourD` | `FS-GG/FS.GG.FourD/.github/workflows/fourd-native-image-qualification.yml@refs/heads/main` | `native-qualification` |
+
+Any other repository, a workflow or job from the other row, or a missing field refuses
+(`binding_from_request`, `validate_registration_data`, and so `guest-boot.sh`, `run-jit-runner.sh` and
+`verify-guest`). The BAR domain (`eng/bar_hosted_domain.py`) additionally admits only a binding whose target is
+the Native.Qualification row, so a FourD-bound guest cannot be used for BAR work; FourD's own gate owns its row.
+The host-side allowed-workflow list of the runner launcher must name the same workflow for the same repository.
 Neither script accepts a PAT or registration token, uses `--replace`, or reuses credentials;
 `run-jit-runner.sh` takes the one-job JIT configuration only through the supported
 `ACTIONS_RUNNER_INPUT_JITCONFIG` environment input and refuses unless the baked layer and

@@ -221,6 +221,17 @@ def shared_controller():
     return value
 
 
+# The BAR domain serves only the Native.Qualification caller. A sealed binding that names the other private
+# target (FS.GG.FourD) or any other workflow/job is a different runner's binding and must not admit BAR work.
+BAR_BINDING_TARGET = {'runnerRepository': 'FS-GG/FS.GG.Native.Qualification',
+                      'allowedWorkflow': 'FS-GG/FS.GG.Native.Qualification/.github/workflows/bar-hosted-image-qualification.yml@refs/heads/main',
+                      'allowedJob': 'full-image'}
+
+
+def binding_target_refusals(value):
+    return [key for key, expected in BAR_BINDING_TARGET.items() if value.get(key) != expected]
+
+
 def dedicated_runner_observation(binding_path=Path('/etc/fsgg-qualification-runner/instance-binding.json')):
     """Observe a root-sealed binding, real OS/UUID/boot; never synthesize hosted facts."""
     fd = os.open(binding_path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
@@ -241,6 +252,8 @@ def dedicated_runner_observation(binding_path=Path('/etc/fsgg-qualification-runn
     value = json.loads(raw, object_pairs_hook=unique)
     if value.get('schema') != 'fsgg.dedicated-qualification-instance/1':
         raise RuntimeError('dedicated binding schema differs')
+    if binding_target_refusals(value):
+        raise RuntimeError('dedicated binding targets another repository, workflow or job')
     os_data = {}
     for line in Path('/etc/os-release').read_text().splitlines():
         if '=' in line:

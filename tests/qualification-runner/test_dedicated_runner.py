@@ -91,6 +91,7 @@ class DedicatedRunnerDataControls(unittest.TestCase):
         value = {'schema': 'fsgg.dedicated-qualification-instance/1', 'baselineId': owner.BASELINE_ID,
             'oneJobOnly': True, 'runnerName': 'fsgg-q-20261024t2300z-0123abcd', 'runnerGroup': owner.GROUP,
             'runnerLabel': owner.LABEL, 'runnerRepository': owner.CALLER_REPOSITORY, 'repositoryScopeVerified': True,
+            'allowedWorkflow': owner.TARGETS[owner.CALLER_REPOSITORY]['workflow'], 'allowedJob': owner.TARGETS[owner.CALLER_REPOSITORY]['job'],
             'credentialKind': 'jit-config', 'qualifiedImageSha256': 'a' * 64, 'rootInstanceAcceptanceSha256': 'b' * 64,
             'registrationAdmissionSha256': 'c' * 64, 'providerInstanceId': 'authored-vm',
             'providerImageId': 'authored-image', 'systemUuid': 'authored-uuid'}
@@ -128,6 +129,67 @@ class DedicatedRunnerDataControls(unittest.TestCase):
         with self.assertRaises(ValueError): owner.binding_from_request(request, lock(), 'authored-uuid')
         with self.assertRaises(ValueError): owner.binding_from_request(self.request(repositoryScopeVerified=False), lock(), 'authored-uuid')
         with self.assertRaises(ValueError): owner.binding_from_request(self.request(runnerName='fsgg-qualification-x'), lock(), 'authored-uuid')
+
+    def test_exactly_two_private_targets_each_bound_to_one_workflow_and_job(self):
+        self.assertEqual(set(owner.TARGETS), {'FS-GG/FS.GG.Native.Qualification', 'FS-GG/FS.GG.FourD'})
+        self.assertEqual(owner.TARGETS[owner.FOURD_REPOSITORY], {
+            'workflow': 'FS-GG/FS.GG.FourD/.github/workflows/fourd-native-image-qualification.yml@refs/heads/main', 'job': 'native-qualification'})
+        self.assertEqual(owner.TARGETS[owner.CALLER_REPOSITORY]['job'], 'full-image')
+        # The BAR template's job id and the wrapper's workflow ref are the same row, not a second copy that can drift.
+        template = (ROOT / 'deployment/qualification-runner/native-qualification/bar-hosted-image-qualification.yml').read_text()
+        self.assertIn('\n  full-image:\n', template)
+        self.assertEqual(owner.TARGETS[owner.CALLER_REPOSITORY]['workflow'], BAR_OPERATION_WORKFLOW_REF)
+        for name, row in owner.TARGETS.items():
+            self.assertTrue(row['workflow'].startswith(name + '/.github/workflows/') and row['workflow'].endswith('@refs/heads/main'))
+
+    def test_both_targets_are_sealed_with_their_own_workflow_and_job(self):
+        for repository, row in owner.TARGETS.items():
+            with self.subTest(repository=repository):
+                built = owner.binding_from_request(self.request(runnerRepository=repository), lock(), 'authored-uuid')
+                self.assertEqual((built['runnerRepository'], built['allowedWorkflow'], built['allowedJob']), (repository, row['workflow'], row['job']))
+                self.assertTrue(owner.validate_registration_data(built, lock(), built['runnerName']))
+
+    def test_runner_repository_is_required_and_restricted_to_the_two_targets(self):
+        request = self.request(); del request['runnerRepository']
+        with self.assertRaises(ValueError): owner.binding_from_request(request, lock(), 'authored-uuid')
+        for repository in ('FS-GG/FS.GG.Coordination', 'FS-GG/FS.GG.Templates', 'FS-GG/FS.GG.Native.Qualification ', 'fs-gg/fs.gg.fourd',
+                           'FS-GG/FS.GG.FourD/x', '', None, ['FS-GG/FS.GG.FourD'], {'a': 1}):
+            with self.subTest(repository=repository), self.assertRaises(ValueError):
+                owner.binding_from_request(self.request(runnerRepository=repository), lock(), 'authored-uuid')
+
+    def test_workflow_or_job_of_the_other_repository_refuses(self):
+        bar, fourd = owner.TARGETS[owner.CALLER_REPOSITORY], owner.TARGETS[owner.FOURD_REPOSITORY]
+        cases = [dict(runnerRepository=owner.CALLER_REPOSITORY, allowedWorkflow=fourd['workflow']),
+                 dict(runnerRepository=owner.CALLER_REPOSITORY, allowedJob=fourd['job']),
+                 dict(runnerRepository=owner.FOURD_REPOSITORY, allowedWorkflow=bar['workflow'], allowedJob=fourd['job']),
+                 dict(runnerRepository=owner.FOURD_REPOSITORY, allowedWorkflow=fourd['workflow'], allowedJob=bar['job']),
+                 dict(runnerRepository=owner.FOURD_REPOSITORY),  # repository switched but the BAR workflow/job left in place
+                 dict(allowedWorkflow=bar['workflow'].replace('refs/heads/main', 'refs/heads/other')),
+                 dict(allowedWorkflow=None), dict(allowedJob=None), dict(allowedJob='other-job')]
+        for changes in cases:
+            with self.subTest(changes=changes), self.assertRaises(ValueError):
+                owner.validate_registration_data(self.instance(**changes), lock(), self.instance()['runnerName'])
+        for key in ('allowedWorkflow', 'allowedJob', 'runnerRepository'):
+            value = self.instance(); del value[key]
+            with self.subTest(missing=key), self.assertRaises(ValueError):
+                owner.validate_registration_data(value, lock(), value['runnerName'])
+
+    def test_request_cannot_carry_its_own_workflow_or_job(self):
+        for extra in ('allowedWorkflow', 'allowedJob'):
+            with self.subTest(extra=extra), self.assertRaises(ValueError):
+                owner.binding_from_request({**self.request(), extra: 'anything'}, lock(), 'authored-uuid')
+
+    def test_guest_readback_refuses_a_binding_that_names_the_wrong_workflow_for_its_repository(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = self.guest(Path(directory), openssl='3.0.13-0ubuntu3.16')
+            self.assertEqual(self.verify(root), [])
+            binding = root / owner.STATE_DIRECTORY.lstrip('/') / 'instance-binding.json'
+            fourd = self.instance(runnerRepository=owner.FOURD_REPOSITORY, allowedWorkflow=owner.TARGETS[owner.FOURD_REPOSITORY]['workflow'],
+                                  allowedJob=owner.TARGETS[owner.FOURD_REPOSITORY]['job'])
+            binding.write_text(json.dumps(fourd))
+            self.assertEqual(self.verify(root), [], 'a coherent FourD binding is a valid binding')
+            binding.write_text(json.dumps({**fourd, 'allowedJob': 'full-image'}))
+            self.assertTrue(any(row.startswith('instance-binding-data') for row in self.verify(root)))
 
     def test_binding_is_written_once_sealed_and_never_replaced(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -296,9 +358,11 @@ class DedicatedRunnerDataControls(unittest.TestCase):
         template = (ROOT / 'deployment/qualification-runner/native-qualification/bar-hosted-image-qualification.yml').read_text()
         self.assertIn('runs-on: [self-hosted, linux, x64, ' + owner.LABEL + ']', template)
         baseline = json.loads((ROOT / 'deployment/qualification-runner/baseline.json').read_text())['github']
-        self.assertEqual((baseline['runnerGroup'], baseline['runnerRepository'], baseline['fixedLabel'], baseline['runnerNamePrefix']),
-                         (owner.GROUP, owner.CALLER_REPOSITORY, owner.LABEL, 'fsgg-q-'))
-        self.assertEqual(baseline['allowedWorkflows'], [owner.CALLER_REPOSITORY + '/.github/workflows/bar-hosted-image-qualification.yml@refs/heads/main'])
+        self.assertEqual((baseline['runnerGroup'], baseline['fixedLabel'], baseline['runnerNamePrefix']), (owner.GROUP, owner.LABEL, 'fsgg-q-'))
+        self.assertEqual(baseline['runnerTargets'], [{'repository': name, 'workflow': row['workflow'], 'job': row['job'],
+                                                      **({'decision': baseline['runnerTargets'][1]['decision']} if name == owner.FOURD_REPOSITORY else {})}
+                                                     for name, row in owner.TARGETS.items()])
+        self.assertEqual(baseline['allowedWorkflows'], [row['workflow'] for row in owner.TARGETS.values()])
 
     def test_complete_population_detects_addition_and_substitution(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -325,6 +389,10 @@ class DedicatedRunnerDataControls(unittest.TestCase):
         self.assertEqual(value['acquiredInputLock'], 'noble/acquired-input-lock.json')  # source record, not admission
         self.assertEqual((value['carrier']['version'], value['carrier']['codename']), ('24.04', 'noble'))
 
+
+spec_operation = importlib.util.spec_from_file_location('bar_operation_source', ROOT / 'eng/bar_hosted_operation.py')
+operation = importlib.util.module_from_spec(spec_operation); spec_operation.loader.exec_module(operation)
+BAR_OPERATION_WORKFLOW_REF = operation.WORKFLOW_REF
 
 NOBLE = ROOT / 'deployment/qualification-runner/noble'
 spec_inputs = importlib.util.spec_from_file_location('noble_inputs_source', ROOT / 'deployment/qualification-runner/noble-inputs.py')
