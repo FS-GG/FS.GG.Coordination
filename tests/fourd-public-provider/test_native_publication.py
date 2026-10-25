@@ -30,7 +30,7 @@ def candidate():
     binding = pub.capsules.canonical(dict(schema='fsgg.fourd.typed-policy-binding/1', sourceSha=SOURCE, files=hashes))
     provenance = pub.capsules.canonical(dict(schema='fsgg.fourd.native-runtime-provenance/1', sourceSha=SOURCE,
         sourceTree=TREE, bindingSha256=pub.sha(binding), files=hashes, sdkVersion='10.0.400',
-        runtimeVersion='10.0.9', hostSha256='3'*64))
+        runtimeVersion='10.0.13', hostSha256=pub.runtime_installation.profile()[0]['files']['dotnet']['sha256']))
     files.update({'typed-policy-binding.json': binding, 'native-runtime-provenance.json': provenance})
     archive = pub.canonical_tar(files)
     adapters = {name: ('adapter-'+name).encode() for name in pub.bootstrap.ADAPTERS}

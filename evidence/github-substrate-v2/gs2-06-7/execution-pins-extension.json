@@ -292,10 +292,9 @@
 {
   "kind": "workflow",
   "path": ".github/workflows/fourd-typed-source.yml",
-  "sha256": "1e10bc140f3d195bb22719ffe638f18cc24a2bdf87a64849785b35db8963ae5a",
+  "sha256": "e7c2e81c57f86354dfb4bbc76e62375f4fda62d04fbd92e4bfbe657e79462adc",
   "externalReferences": [
     "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
-    "actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68",
     "actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38",
     "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
   ],

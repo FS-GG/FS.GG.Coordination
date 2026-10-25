@@ -27,6 +27,7 @@ import zipfile
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import native_bootstrap as bootstrap
+import native_runtime_profile as runtime_installation
 from native_io import capsules
 
 REPOSITORY = "FS-GG/FS.GG.Coordination"
@@ -146,12 +147,12 @@ def verify_candidate(archive, manifest_raw, *, source=None, tree=None, archive_s
     provenance = closed(members["native-runtime-provenance.json"], 65536)
     exact(provenance, {"schema", "sourceSha", "sourceTree", "bindingSha256", "files",
                        "sdkVersion", "runtimeVersion", "hostSha256"}, "provenance property inventory")
+    installed_profile, _ = runtime_installation.profile()
     require(provenance["schema"] == "fsgg.fourd.native-runtime-provenance/1"
             and all(provenance[key] == producer[key] for key in ("sourceSha", "sourceTree", "bindingSha256", "files"))
             and provenance["sdkVersion"] == "10.0.400"
-            and isinstance(provenance["runtimeVersion"], str)
-            and re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", provenance["runtimeVersion"]) is not None
-            and hex_value(provenance["hostSha256"]), "runtime provenance differs")
+            and provenance["runtimeVersion"] == installed_profile['runtimeVersion']
+            and provenance["hostSha256"] == installed_profile['files']['dotnet']['sha256'], "runtime provenance differs")
     return manifest
 
 
