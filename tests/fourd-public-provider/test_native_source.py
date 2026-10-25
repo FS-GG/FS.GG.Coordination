@@ -87,7 +87,7 @@ class NativeSourceTests(unittest.TestCase):
             "expectedRevision", "expectedTree", "expectedInventorySha256"))
         self.assertEqual(hashlib.sha256(joined.encode()).hexdigest(), result["identity"])
 
-    def test_raw_git_commit_reconstruction_under_umask077(self):
+    def test_committed_tree_archive_reconstruction_under_umask077(self):
         repo, snapshot = self.work / "git", self.work / "reconstructed"
         repo.mkdir()
         def git(*arguments):

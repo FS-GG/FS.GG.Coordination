@@ -60,7 +60,7 @@ inventory SHA256, file/byte counts and an identity derived from the three joined
 Duplicate, missing, extra or incorrectly typed JSON fields refuse through the existing closed CLI
 boundary. This is a stateless acquisition constructor; the existing lifecycle reducer and canonical
 Quint model are unchanged. Tests exercise the compiled command, an independent Python inventory
-oracle, Unicode ordering, stale bindings, changed/missing/extra bytes, raw local Git commit
+oracle, Unicode ordering, stale bindings, changed/missing/extra bytes, local committed-tree archive
 reconstruction under umask077, symlink replacement preservation, FIFO and oversized sparse files.
 The wrong source/inventory controls first establish that the same source/setup passes, so a setup
 failure cannot satisfy the negative. The path-filtered `fourd-typed-source.yml` source-only gate
