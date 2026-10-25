@@ -251,7 +251,7 @@ class NativeFixture:
         for raw in (config, layer, manifest):
             members["blobs/sha256/" + sha(raw)] = raw
         archive = self.root / "image.tar"
-        directories = ["blobs", "blobs/sha256"] if include_directories else []
+        directories = [".", "blobs", "blobs/sha256"] if include_directories else []
         with tarfile.open(archive, "w", format=tarfile.USTAR_FORMAT) as tar:
             for name in directories:
                 info = tarfile.TarInfo(name + "/")

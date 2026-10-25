@@ -343,10 +343,10 @@ module NativeJoin =
         let mutable entry=reader.GetNextEntry()
         let mutable cached=0L
         while not(isNull entry) do
-            let original=if entry.Name.StartsWith("./",StringComparison.Ordinal) then entry.Name.Substring 2 else entry.Name
-            // Python tarfile's existing OCI inventory strips directory suffix slashes.
-            // Normalize the same transport spelling before duplicate/inventory checks.
-            let name=if entry.EntryType=TarEntryType.Directory then original.TrimEnd('/') else original
+            // TarInfo strips directory suffix slashes before the existing inspector
+            // removes one ./ prefix. Keep the root-directory spelling . as well.
+            let transport=if entry.EntryType=TarEntryType.Directory then entry.Name.TrimEnd('/') else entry.Name
+            let name=if transport.StartsWith("./",StringComparison.Ordinal) then transport.Substring 2 else transport
             require (name<>"" && not(name.StartsWith("/",StringComparison.Ordinal)) && not(name.Split('/') |> Array.contains "..") && seen.Add name && seen.Count<=4096 && (name |> Seq.forall (fun c -> c>=' ' && c<='~'))) "native-archive-path-refused"
             if entry.EntryType=TarEntryType.Directory then
                 inventory.Add(name, box {|bytes=0L;path=name;``type``="directory"|})
