@@ -35,7 +35,11 @@ PAYLOAD = {SOURCE_WORKFLOW: PREFIX+'current-public-at-source-controls.yml',
            'tests/current-public-at/verify-source.py': PREFIX+'verify-current-public-at-source.py'}
 PRODUCER = ('.fsgg/routine-development.json', '.github/workflows/routine-eligibility.yml',
             'scripts/check-claim-generation.py', 'scripts/check-routine-eligibility-envelope.py', 'scripts/lib/gate.py')
-RETAINED = ('README.md',)
+RETAINED = ()
+README = 'README.md'
+README_BASE_BLOB = 'd01bfd14f0c09d0a221c4b0e1a32cd7ed8bda7ff'
+README_BASE_SHA256 = '755effd31d13b7a542159c4868c3039961f9d061b502b27346f3d0238ee61c6d'
+README_DERIVED_SHA256 = 'f26ad3fabb1f4ca1a059db108a031c16c765f66685c57464dc4741691efc2875'
 BAR = '.github/workflows/bar-hosted-image-qualification.yml'
 PUBLIC_BAR = PREFIX+'bar-hosted-image-qualification.yml'
 BAR_GUARD = (
@@ -248,13 +252,14 @@ def workflow_controls(body, held):
     return True
 
 
-def private_delta(base, candidate, bodies, base_lint, base_bar):
-    require(set(base) == set(RETAINED) | {LINT,BAR}, 'fresh receiver base must contain only the BAR three')
+def private_delta(base, candidate, bodies, base_lint, base_bar, base_readme):
+    require(set(base) == {LINT,BAR,README}, 'fresh receiver base must contain only the BAR three')
     require(set(candidate) == set(base) | set(PRODUCER) | set(PAYLOAD), 'receiver leaf population differs')
-    require(all(candidate[path] == base[path] for path in RETAINED), 'retained BAR source changed')
     require(base_lint == LINT_BASE and bodies[LINT] == LINT_DERIVED, 'actionlint closed derivation differs')
     require(bodies[BAR] == derive_bar(base_bar), 'BAR closed guard derivation differs')
-    require(set(bodies) == set(PRODUCER) | set(PAYLOAD) | {LINT,BAR}, 'ten source bodies required')
+    require(base[README] == README_BASE_BLOB and digest(base_readme) == README_BASE_SHA256
+            and digest(bodies[README]) == README_DERIVED_SHA256, 'README exact baseline/replacement differs')
+    require(set(bodies) == set(PRODUCER) | set(PAYLOAD) | {LINT,BAR,README}, 'eleven source bodies required')
     require(all(digest(bodies[path]) == PRODUCER_SHA256[path] for path in PRODUCER), 'protected canonical producer bytes differ')
     workflow_controls(bodies[HELD_WORKFLOW], True)
     workflow_controls(bodies[SOURCE_WORKFLOW], False)
@@ -324,6 +329,7 @@ def bundle_sources(root):
     workflow_controls(bodies[PAYLOAD[HELD_WORKFLOW]],True)
     # BAR source/template stays outside the AT derivation and is not rewritten here.
     require(read(root/(PREFIX+'actionlint.yaml')) == LINT_BASE, 'BAR template baseline changed')
+    require(digest(read(root/(PREFIX+README))) == README_DERIVED_SHA256, 'public README replacement differs')
     derive_bar(read(root/PUBLIC_BAR))
     return bodies
 
@@ -350,12 +356,14 @@ def produce(mode, root, environment):
                        controls=list(DATA_CONTROLS+OPERATOR_CONTROLS),nativeQualification='not-selected')
     else:
         base, candidate = tree(root,facts['baseSha']), tree(root,facts['candidateSha'])
-        bodies = {path:read(root/path) for path in (*PRODUCER,*PAYLOAD,LINT,BAR)}
-        files = private_delta(base,candidate,bodies,blob(root,facts['baseSha'],LINT),blob(root,facts['baseSha'],BAR))
+        bodies = {path:read(root/path) for path in (*PRODUCER,*PAYLOAD,LINT,BAR,README)}
+        files = private_delta(base,candidate,bodies,blob(root,facts['baseSha'],LINT),blob(root,facts['baseSha'],BAR),
+                              blob(root,facts['baseSha'],README))
         receipt = dict(schema='fsgg.native-at.source-qualification/1',**facts,files=files,
                        retainedBarFiles={path:base[path] for path in RETAINED},
                        derivedActionlint=dict(baseBlobSha=base[LINT],candidateSha256=files[LINT]),
-                       derivedBARguard=dict(baseBlobSha=base[BAR],candidateSha256=files[BAR]))
+                       derivedBARguard=dict(baseBlobSha=base[BAR],candidateSha256=files[BAR]),
+                       derivedREADME=dict(baseBlobSha=base[README],candidateSha256=files[README]))
     require(git(root,'status','--porcelain=v1','--untracked-files=all') == b'', 'source changed during controls')
     return receipt
 
@@ -425,22 +433,26 @@ def source_selftests():
                   b'    if: ${{ github.ref == \'refs/heads/main\' && github.run_attempt == 1 }}\n'
                   b'    runs-on: [self-hosted, linux, x64, fsgg-native-at-x11-v1]\n    steps:\n'
                   b'      - uses: '+CHECKOUT.encode()+b'\n')
-            base={path:'b'*40 for path in (*RETAINED,LINT,BAR)}
-            candidate={**base,**{path:'a'*40 for path in (*PRODUCER,*PAYLOAD,LINT,BAR)}}
-            bodies={path:b'inert fixture' for path in (*PRODUCER,*PAYLOAD,LINT,BAR)}
+            base={path:'b'*40 for path in (LINT,BAR,README)}
+            candidate={**base,**{path:'a'*40 for path in (*PRODUCER,*PAYLOAD,LINT,BAR,README)}}
+            bodies={path:b'inert fixture' for path in (*PRODUCER,*PAYLOAD,LINT,BAR,README)}
+            old_readme=b'inert old README';new_readme=b'inert new README'
             base_bar=b'old upstream guards\n'+BAR_GUARD+b'old native operation guards\n'
-            bodies.update({SOURCE_WORKFLOW:private_workflow(),HELD_WORKFLOW:held,LINT:LINT_DERIVED,BAR:derive_bar(base_bar)})
+            bodies.update({SOURCE_WORKFLOW:private_workflow(),HELD_WORKFLOW:held,LINT:LINT_DERIVED,BAR:derive_bar(base_bar),README:new_readme})
             # Only this constructed control substitutes source bytes; actual producer pins are restored.
-            with mock.patch.dict(PRODUCER_SHA256,{path:digest(b'inert fixture') for path in PRODUCER},clear=True):
-                self.assertEqual(len(private_delta(base,candidate,bodies,LINT_BASE,base_bar)),10)
-                for changed in ({**candidate,'extra':'a'*40},{**candidate,'README.md':'c'*40},
+            with mock.patch.dict(PRODUCER_SHA256,{path:digest(b'inert fixture') for path in PRODUCER},clear=True), \
+                    mock.patch.dict(globals(),README_BASE_BLOB='b'*40,README_BASE_SHA256=digest(old_readme),README_DERIVED_SHA256=digest(new_readme)):
+                self.assertEqual(len(private_delta(base,candidate,bodies,LINT_BASE,base_bar,old_readme)),11)
+                for changed in ({**candidate,'extra':'a'*40},
                                 {k:v for k,v in candidate.items() if k!=HELD_WORKFLOW}):
-                    with self.assertRaises(ValueError):private_delta(base,changed,bodies,LINT_BASE,base_bar)
+                    with self.assertRaises(ValueError):private_delta(base,changed,bodies,LINT_BASE,base_bar,old_readme)
                 for path,bad in ((LINT,LINT_BASE),(LINT,LINT_DERIVED+b'    - extra-label\n'),
                                  (LINT,LINT_DERIVED.replace(b'fsgg-native-linux-x64-v1',b'wrong')),
                                  (BAR,bodies[BAR].replace(b'old upstream guards',b'weakened upstream guards')),
+                                 (README,new_readme+b'arbitrary edit'),
                                  (PRODUCER[0],b'changed protected producer')):
-                    with self.assertRaises(ValueError):private_delta(base,candidate,{**bodies,path:bad},LINT_BASE,base_bar)
+                    with self.assertRaises(ValueError):private_delta(base,candidate,{**bodies,path:bad},LINT_BASE,base_bar,old_readme)
+                with self.assertRaises(ValueError):private_delta(base,candidate,bodies,LINT_BASE,base_bar,old_readme+b'changed')
 
         def test_bar_guard_transform_preserves_all_surrounding_bytes(self):
             before=b'upstream source/run checks\n'+BAR_GUARD+b'unchanged native checks\n'
