@@ -52,7 +52,6 @@ jobs:
       ARCHIVE_SHA256: ${{ inputs.archive_sha256 }}
       MANIFEST_SHA256: ${{ inputs.manifest_sha256 }}
       OPERATION_ID: ${{ inputs.operation_id }}
-      PUBLICATION_ROOT: ${{ runner.temp }}/fourd-native-producer-publication-${{ github.run_id }}-${{ github.run_attempt }}
       PYTHONDONTWRITEBYTECODE: 1
     steps:
       - name: Check out the exact protected publisher
@@ -80,6 +79,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          PUBLICATION_ROOT: ${{ runner.temp }}/fourd-native-producer-publication-${{ github.run_id }}-${{ github.run_attempt }}
         run: |
           set -euo pipefail
           umask 077
@@ -98,7 +98,7 @@ jobs:
         with:
           name: fourd-native-producer-publication-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
-            ${{ env.PUBLICATION_ROOT }}/
+            ${{ runner.temp }}/fourd-native-producer-publication-${{ github.run_id }}-${{ github.run_attempt }}/
             ${{ runner.temp }}/fourd-native-producer-publication-result.json
           if-no-files-found: warn
           retention-days: 30

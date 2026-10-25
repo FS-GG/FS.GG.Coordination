@@ -304,7 +304,7 @@
 {
   "kind": "workflow",
   "path": ".github/workflows/fourd-native-producer-publish.yml",
-  "sha256": "885a61dd6a483bbb6d1438ae4399f6d4f925aca2741ee3c51755009f48a774fc",
+  "sha256": "207a0a077ac1bff067fc0c72691dde7c71704a56b9dc96c456db0e2bd57e9066",
   "externalReferences": [
     "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
     "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
