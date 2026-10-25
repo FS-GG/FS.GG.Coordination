@@ -1,7 +1,7 @@
 {
   "aptTransaction": {
     "expectedFinalInventorySha256": "2a0d25ec6ede3165dec5e7763a2556b6ed31a2f9b04292dd5c81df0b37c1cc35",
-    "qualifiedSignedTransactionSha256": "90c1feb6cd83b5647dd99a21acb86cf2c22f6c461087ae213743ed53a9052b81"
+    "qualifiedSignedTransactionSha256": "4de075bc2e4fecec8e5a743eada2305b2180667ffe411729b01a1f8f79417d04"
   },
   "baselineId": "ubuntu2404-linux-x64-v1",
   "compiler": {
@@ -14,9 +14,9 @@
   },
   "files": [
     {
-      "bytes": 24661,
+      "bytes": 24751,
       "path": "apt/apt-transaction.json",
-      "sha256": "90c1feb6cd83b5647dd99a21acb86cf2c22f6c461087ae213743ed53a9052b81"
+      "sha256": "4de075bc2e4fecec8e5a743eada2305b2180667ffe411729b01a1f8f79417d04"
     },
     {
       "bytes": 126127,

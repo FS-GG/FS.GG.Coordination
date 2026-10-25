@@ -547,6 +547,55 @@ class NobleInputRecords(unittest.TestCase):
         self.assertEqual(done.returncode, 2, done.stderr)
         self.assertIn('HELD', done.stderr)
 
+    def test_bake_and_simulation_run_apt_with_the_one_locked_option_set(self):
+        directory = ROOT / 'deployment/qualification-runner'
+        digest = subprocess.run(['bash', '-c', 'APT_CONFIG=/evil runner_apt_sources=/dev/null; . "$1"; printf %s "$runner_apt_digest"; printf "\\n"; printf "%s\\n" "${runner_apt_fixed[@]}"; printf "cfg=%s\\n" "${APT_CONFIG-unset}"',
+                                 'x', str(directory / 'noble-apt.sh')], capture_output=True, text=True, check=True).stdout.split('\n', 1)
+        locked = self.transaction['aptOptionsSha256']
+        self.assertEqual(digest[0], locked, 'the locked transaction names the options the scripts really use')
+        lines = digest[1].splitlines()
+        self.assertEqual(lines[-1], 'cfg=unset', 'APT_CONFIG from the environment is discarded')
+        options = lines[:-1]
+        self.assertEqual(hashlib.sha256(('\n'.join(options) + '\n').encode()).hexdigest(), locked)
+        # First bake failure: the default _apt sandbox over a tree it could not read. The sandbox user is the cure.
+        for required in ('APT::Sandbox::User=root', 'Acquire::Languages=none', 'Dir::Etc::sourceparts=-'):
+            self.assertIn(required, options)
+        for forbidden in ('AllowInsecure', 'Trusted', 'AllowUnauthenticated', 'Check-Valid-Until', 'Acquire::Check'):
+            self.assertFalse([o for o in options if forbidden in o], forbidden)
+        for name in ('provision-image.sh', 'simulate-noble-bake.sh'):
+            text = (directory / name).read_text()
+            lines = text.splitlines()
+            applies = [n for n, row in enumerate(lines) if row.lstrip().startswith('apt-get')]
+            self.assertTrue(applies, name)
+            for n in applies:
+                self.assertTrue(lines[n].lstrip().startswith('apt-get "${runner_apt[@]}"'), name + ': ' + lines[n])
+                self.assertNotIn(' -o ', lines[n], name)
+            gate = [n for n, row in enumerate(lines) if 'aptOptionsSha256' in row]
+            self.assertEqual(len(gate), 1, name)
+            self.assertLess(gate[0], applies[0], name + ': the digest gate precedes every apt command')
+            for mutation in ('runner_apt+=', 'runner_apt=(', 'runner_apt_fixed', 'APT_CONFIG', 'Acquire::', 'APT::'):
+                self.assertNotIn(mutation, text, name + ' must not alter the shared apt options: ' + mutation)
+            # Run the real gate line: it passes only on the locked digest and fails closed on a missing key/file/value.
+            with tempfile.TemporaryDirectory() as scratch:
+                path = Path(scratch) / 'apt-transaction.json'
+                line = lines[gate[0]].replace('"$runner_inputs/apt/apt-transaction.json"', "'" + str(path) + "'") \
+                                     .replace('/mnt/fsgg-qualification-inputs/apt/apt-transaction.json', str(path))
+                def gate_rc(content):
+                    if content is None:
+                        path.unlink(missing_ok=True)
+                    else:
+                        path.write_text(content)
+                    return subprocess.run(['bash', '-c', 'set -euo pipefail; runner_apt_digest=' + locked + '\n' + line + '\necho ran'],
+                                          capture_output=True, text=True).returncode
+                self.assertEqual(gate_rc(json.dumps({'aptOptionsSha256': locked})), 0, name)
+                for bad in (json.dumps({'aptOptionsSha256': '0' * 64}), json.dumps({}), json.dumps({'aptOptionsSha256': ''}), '{', None):
+                    self.assertNotEqual(gate_rc(bad), 0, name + ' ' + str(bad))
+        # The lock tool computes the same digest from the same file and verify refuses a transaction naming another.
+        self.assertEqual(inputs.apt_options_digest(), locked)
+        inputs.check_apt_options(self.transaction)
+        with self.assertRaises(SystemExit): inputs.check_apt_options({**self.transaction, 'aptOptionsSha256': '0' * 64})
+        with self.assertRaises(SystemExit): inputs.check_apt_options({k: v for k, v in self.transaction.items() if k != 'aptOptionsSha256'})
+
     def test_bake_and_simulation_share_one_apt_definition_and_stay_offline_and_signed(self):
         recipe = (ROOT / 'deployment/qualification-runner/provision-image.sh').read_text()
         simulation = (ROOT / 'deployment/qualification-runner/simulate-noble-bake.sh').read_text()

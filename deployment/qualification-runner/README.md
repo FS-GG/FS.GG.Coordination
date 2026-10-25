@@ -173,9 +173,26 @@ separately selected qualification.
 The expected inventory was produced, not guessed: the cloud image was extracted rootlessly
 (`qemu-img convert` plus `debugfs rdump` of its root partition) in a scratch directory; its
 `dpkg` package set equals the signed `.manifest` exactly; then `simulate-noble-bake.sh` (the same
-`noble-apt.sh` and `runner.sources.list` as the bake, network disabled, apt sandbox user off only
-because rootless containers cannot map `_apt`) installed the transaction offline and wrote the
-inventory. Regenerate everything with `noble-inputs.py lock` after choosing a new snapshot.
+`noble-apt.sh` and `runner.sources.list` as the bake, network disabled, **no option added or removed**)
+installed the transaction offline and wrote the inventory. Regenerate everything with
+`noble-inputs.py lock` after choosing a new snapshot.
+
+The apt option set is one definition, `noble-apt.sh`, whose digest is recorded in the locked
+`apt-transaction.json` (`aptOptionsSha256`); `provision-image.sh` and the simulation refuse unless their
+sourced options hash to that value, and `noble-inputs.py verify` refuses a transaction that names another.
+First real bake failure (cause and fix): the guest's `apt-get update` printed `Get ... Packages`, then `Ign`, then
+`File not found .../Packages` for some indexes. (apt first probes `by-hash/SHA256/<hash>` because the snapshot's
+Release says `Acquire-By-Hash`; that `Ign` followed by the ordinary `Packages.xz` is normal and harmless.) With the
+default `_apt` privilege-dropping sandbox, an input tree whose files are not readable by `_apt` (for example mode
+0600/0700 from a restrictive umask) made the `Packages.xz` fetch fail, and apt then fell through `Packages.gz` and the
+uncompressed `Packages`, neither of which is locked. It was reproduced offline by running the previous
+`noble-apt.sh` in a rootless container with `_apt` mapped over a `chmod -R go-rwx` copy of the tree (the earlier
+simulation passed only because it disabled the sandbox, a difference from the guest). That reproduces the bake's exact errors; the modes of the bake's input tree were not observed, and the fix does not depend on them. The cure is
+`APT::Sandbox::User=root` (the tree is local, hash-checked and signature-verified; the bake is root). `Acquire::By-Hash=no`
+only removes the pointless by-hash probe, and `APT_CONFIG` is unset so the environment cannot add options. A missing or
+unreadable `Packages.xz` still ends in an error that names an unlocked uncompressed `Packages` (apt always walks its
+fallbacks); read that as "`Packages.xz` failed". The simulation is run against the hostile-mode copy so readability
+cannot matter again.
 The image-build VM must be offline from mirrors and must not have run `apt-daily` or
 `unattended-upgrades` before the bake, or the byte-for-byte inventory comparison refuses.
 

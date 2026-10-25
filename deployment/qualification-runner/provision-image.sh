@@ -33,6 +33,8 @@ python3 -I -B "$runner_source/eng/dedicated_qualification_runner.py" validate-in
 runner_apt_sources=$runner_source/deployment/qualification-runner/runner.sources.list
 # shellcheck source=noble-apt.sh
 . "$runner_source/deployment/qualification-runner/noble-apt.sh"
+# The apt behaviour must be exactly the one the locked transaction was simulated with.
+[[ $(python3 -I -B -c 'import json,sys;print(json.load(open(sys.argv[1]))["aptOptionsSha256"])' "$runner_inputs/apt/apt-transaction.json") == "$runner_apt_digest" ]]
 apt-get "${runner_apt[@]}" update
 apt-get "${runner_apt[@]}" --assume-yes --no-install-recommends install "${runner_packages[@]}"
 runner_inventory=$(mktemp)
