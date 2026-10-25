@@ -196,15 +196,15 @@ class NativeIOTests(unittest.TestCase):
     def test_cancel_after_key_creation_wipes_only_after_child_settlement(self):
         f,client,private,expected,reader=self.fixture()
         effects=io.Effects()
-        original=effects.run
-        def cancel_key(argv,**options):
-            if argv[:2]==["/usr/bin/openssl","pkey"]:
+        original=io.run_gated
+        def cancel_key(scope,argv,**options):
+            if scope is effects and argv[:2]==["/usr/bin/openssl","pkey"]:
                 self.assertTrue((private/"credentials/recipient.pem").exists())
                 self.assertIn("recipient-intent",[row["resource"] for row in client.response["state"]["owned"]])
                 client.signal();effects.request_cancel()
                 raise io.NativeIOError("fixture-cancel-before-key-readback")
-            return original(argv,**options)
-        with mock.patch.object(effects,"run",side_effect=cancel_key):
+            return original(scope,argv,**options)
+        with mock.patch.object(io,"run_gated",side_effect=cancel_key):
             with self.assertRaisesRegex(io.NativeIOError,"fixture-cancel-before-key-readback"):
                 io.acquire_capsule(f.packet,self.key.read_bytes(),private,effects,deadline=client.started+600,
                                    client=client,read=reader,node_tool=self.node_tool)
