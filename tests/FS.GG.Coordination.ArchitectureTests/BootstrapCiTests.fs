@@ -1140,7 +1140,8 @@ let ``bootstrap control surface stays typed thin and bounded`` () =
     Assert.InRange(lineCount ".github/workflows/bootstrap-qualification.yml", 1, 620)
     // The 29-project census adds exactly two entries to the bounded qualification plan;
     // the canonical accounting census adds its helper and three source-identity inputs.
-    Assert.InRange(lineCount "eng/bootstrap-qualification-plan.json", 1, 313)
+    // The C2 diagnostic derivative adds two closed file paths and two path prefixes: 313 -> 317.
+    Assert.InRange(lineCount "eng/bootstrap-qualification-plan.json", 1, 317)
     Assert.InRange(lineCount "eng/bootstrap-ci.fsx", 1, 26)
     Assert.InRange(lineCount "src/FS.GG.Coordination.Qualification.Contracts/BootstrapCi.fs", 1, 2500)
     Assert.InRange(lineCount "src/FS.GG.Coordination.Qualification.Contracts/QualificationReuse.fs", 1, 1500)
