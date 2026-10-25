@@ -1427,7 +1427,8 @@ class CommandInterfaceControls(unittest.TestCase):
             self.assertEqual(base64.b64decode(retained['base64']),paths['owner'].read_bytes())
             self.assertTrue(capture(dict(receipt,absoluteRetirementDeadline=250.0))['complete'])
             for key,invalid in [('absoluteRetirementDeadline',True),('absoluteRetirementDeadline',float('inf')),
-                                ('absoluteRetirementDeadline',-1),('absoluteRetirementDeadline',{'unselected':'payload'}),
+                                ('absoluteRetirementDeadline',-1),('absoluteRetirementDeadline',10**400),
+                                ('absoluteRetirementDeadline',float('nan')),('absoluteRetirementDeadline',{'unselected':'payload'}),
                                 ('detachedDomainEvidence',{}),('detachedDomainScope','private-key NEVER COPY')]:
                 with self.subTest(key=key,invalid=invalid):
                     self.assertFalse(capture(dict(receipt,**{key:invalid}))['complete'])
