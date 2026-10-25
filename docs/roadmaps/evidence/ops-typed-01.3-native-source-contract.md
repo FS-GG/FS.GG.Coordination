@@ -35,7 +35,10 @@ source capsule codec, held inode mechanisms and process settlement. Key exposure
 only after producer, exact run-bound packet and ciphertext joins; a recipient intent is recorded
 before that possible effect. A gated child receives execution permission only after F# records
 its actual PID/birth identity. Cancellation/refusal remains sticky while cleanup remains available.
-Unknown settlement cannot authorize wiping plaintext underneath possible readers.
+Unknown settlement cannot authorize wiping plaintext underneath possible readers. Owned directory retirement
+captures and verifies the original inode before descriptor-anchored descent. Relocated paths are
+persisted before mutation and reconciled by identity before parent closure; a missing old name
+cannot establish that a still-linked held directory has disappeared.
 
 Raw source reconstruction preserves the original Git commit object, tree, blob identities and
 executable modes under umask077. F# hashes the raw commit/tree closure and complete acquired
@@ -66,7 +69,16 @@ observations use separate wall-clock metadata; cross-machine monotonic values ar
 Local qualification requires acknowledged effects, actual source/image/P2 evidence, and closure
 of all owned resources. Remote workflow conclusion and Root's actual credential/release/asset/tag
 retirement readbacks are separate facts. Their absence cannot satisfy whole acceptance. Emergency
-cleanup reports mechanical observations and cannot manufacture qualification.
+cleanup reports mechanical observations and cannot manufacture qualification. It uses the same
+original cleanup end, including any already-spent 480-second allowance. Active-stage signals
+cancel the registered consumer scope, and cancellation during acknowledgement keeps an effect
+child behind its gate.
+
+Podman receives stable parent-held graph/runroot paths from first use through store stop and
+permission return. PID/birth and descriptor/inode checks prevent selecting a replaced root;
+recursive permission commands also address held directories. An unavailable anchor refuses
+rather than falling back to a mutable pathname. Actual native namespace access and recovery
+remain genuine-run proof obligations.
 
 ## Reproducible source qualification
 

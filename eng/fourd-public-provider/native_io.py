@@ -106,7 +106,34 @@ class NativeClient:
         self.config.setdefault("ownedDirectories",{})[str(holder.path)]={"identity":holder.identity,"role":role}
         self.save()
 
+    def refresh(self):
+        if self.session_path.exists():
+            latest=capsules.closed_json(self.session_path.read_bytes(),1024*1024)
+            self.history,self.response,self.config=latest["history"],latest["response"],latest["config"]
+
+    def owned_directory_present(self,holder):
+        self.refresh()
+        info=os.fstat(holder.fd)
+        if (info.st_dev,info.st_ino)!=holder.original:
+            raise NativeIOError("native-directory-held-identity-refused")
+        locations={str(holder.path)}
+        locations.update(name for name,record in self.config.get("ownedDirectories",{}).items()
+                         if record["identity"]==holder.identity)
+        found=[]
+        for name in locations:
+            try:value=Path(name).lstat()
+            except FileNotFoundError:continue
+            if not stat.S_ISDIR(value.st_mode) or (value.st_dev,value.st_ino)!=holder.original:
+                raise NativeIOError("native-directory-recorded-location-replaced")
+            found.append(Path(name))
+        if len(found)==1:
+            holder.path=found[0]
+            return True
+        if not found and info.st_nlink==0:return False
+        raise NativeIOError("native-directory-owned-location-unknown")
+
     def retire_directory(self,holder,*,deadline):
+        if not self.owned_directory_present(holder):return
         record=self.config.get("ownedDirectories",{}).get(str(holder.path))
         if record is None or record["identity"]!=holder.identity:
             raise NativeIOError("native-directory-retirement-ownership-refused")
@@ -141,9 +168,7 @@ class NativeClient:
     def observe(self, kind: str, **facts):
         # The parent waits while an owned stage child performs its consumption
         # check. Reload its latest typed journal before appending another event.
-        if self.session_path.exists():
-            latest=capsules.closed_json(self.session_path.read_bytes(),1024*1024)
-            self.history,self.response,self.config=latest["history"],latest["response"],latest["config"]
+        self.refresh()
         elapsed=self.elapsed()
         if kind=="packet":
             facts={**facts,"evidence":{**facts["evidence"],"nowUnixSeconds":self.started_unix+elapsed}}
