@@ -3,12 +3,14 @@ import copy
 import hashlib
 import importlib.util
 import json
+import lzma
 import os
 from pathlib import Path
 import shutil
 import subprocess
 import tempfile
 import unittest
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
 spec = importlib.util.spec_from_file_location('dedicated_runner_source', ROOT / 'eng/dedicated_qualification_runner.py')
@@ -425,6 +427,45 @@ class NobleInputRecords(unittest.TestCase):
         self.assertEqual(runner['digest'], 'sha256:' + lock['runner']['sha256'])
         self.assertEqual(runner['tag'], 'v' + lock['runner']['version'])
         self.assertEqual(lock['goRace']['version'], '1.27.1')
+
+    def test_verify_population_enforces_the_locked_apt_options(self):
+        # Stub external trust/tool checks only; exercise the real signed-index,
+        # pool, transaction-hash and apt-option checks on local fixture bytes.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            payload = root / 'apt/pool/fixture.deb'
+            payload.parent.mkdir(parents=True)
+            payload.write_bytes(b'authored fixture, never installed')
+            package = ('Package: fixture\nVersion: 1\nArchitecture: amd64\n'
+                       'Filename: pool/fixture.deb\nSHA256: ' + digest(payload) +
+                       '\nSize: ' + str(payload.stat().st_size) + '\n\n')
+            releases = {}
+            for suite in inputs.SUITES:
+                rows = {}
+                for component in inputs.COMPONENTS:
+                    name = component + '/binary-amd64/Packages.xz'
+                    path = root / 'apt/dists' / suite / name
+                    path.parent.mkdir(parents=True)
+                    path.write_bytes(lzma.compress(package.encode()))
+                    rows[name] = (digest(path), path.stat().st_size)
+                releases[suite] = (inputs.ARCHIVE_FINGERPRINT, None, rows)
+            transaction_path = root / 'apt/apt-transaction.json'
+            expected = {'suites': list(inputs.SUITES), 'debs': 1, 'signer': inputs.ARCHIVE_FINGERPRINT}
+            with mock.patch.object(inputs, 'load_runner'), mock.patch.object(
+                    inputs, 'verified_release', side_effect=lambda keyring, path, suite: releases[suite]):
+                for option_digest in (self.transaction['aptOptionsSha256'], '0' * 64, None):
+                    with self.subTest(aptOptionsSha256=option_digest):
+                        transaction = {'debs': [{'filename': 'pool/fixture.deb'}]}
+                        if option_digest is not None:
+                            transaction['aptOptionsSha256'] = option_digest
+                        transaction_path.write_text(json.dumps(transaction))
+                        # Rebind the outer hash so refusal must come from apt options.
+                        lock = {'aptTransaction': {'qualifiedSignedTransactionSha256': digest(transaction_path)}}
+                        if option_digest == self.transaction['aptOptionsSha256']:
+                            self.assertEqual(inputs.verify_population(root, lock, None), expected)
+                        else:
+                            with self.assertRaisesRegex(SystemExit, 'apt options differ from the locked transaction'):
+                                inputs.verify_population(root, lock, None)
 
     def test_population_rows_are_complete_ordered_and_origin_pinned(self):
         rows = self.lock['files']
