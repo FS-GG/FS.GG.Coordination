@@ -347,6 +347,14 @@ def public_command_evidence(scratch, status, end, clock, files_left, entries_lef
         owner_fields = {'argv','leader','ownedPopenPid','birthIdentityUnavailable','exit','exitObservation',
             'firstCause','additionalFailures','cleanup','residual','escapedDescendants','escapedResidual',
             'custody','sampledPeakAggregateRss','accountingScope'}
+        current_owner_fields = {'absoluteRetirementDeadline','detachedDomainEvidence','detachedDomainScope'}
+        if set(owner) == owner_fields | current_owner_fields:
+            retirement = owner['absoluteRetirementDeadline']
+            if (retirement is not None and (type(retirement) not in (int,float)
+                    or not math.isfinite(retirement) or retirement <= 0)
+                    or owner['detachedDomainEvidence'] is not None or owner['detachedDomainScope'] is not None):
+                raise ValueError('public-counterparts-owner-domain')
+            owner_fields |= current_owner_fields
         if (set(value) != result_fields or set(owner) != owner_fields
                 or SENSITIVE.search(json.dumps(value,ensure_ascii=False))
                 or any(SENSITIVE.search(body.decode('utf-8')) for body in (raw,input_raw,owner_raw))):
