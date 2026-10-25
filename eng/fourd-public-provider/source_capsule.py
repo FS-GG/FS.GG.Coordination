@@ -202,7 +202,8 @@ def _write_private(path: pathlib.Path, content: bytes, mode: int) -> None:
 
 
 def reconstruct(raw: bytes, target: pathlib.Path, expected: Mapping[str, str], *,
-                runner: CommandRunner | None = None, deadline_monotonic: float | None = None) -> pathlib.Path:
+                runner: CommandRunner | None = None, deadline_monotonic: float | None = None,
+                on_created: Callable[[pathlib.Path], None] | None = None) -> pathlib.Path:
     _value, records, commit = validate_snapshot(raw, expected)
     deadline = deadline_monotonic if deadline_monotonic is not None else time.monotonic() + 300
     command = runner or _run
@@ -211,6 +212,8 @@ def reconstruct(raw: bytes, target: pathlib.Path, expected: Mapping[str, str], *
         if remaining <= 0: raise CapsuleRefusal("git-reconstruction-timeout")
         return command(argv, target, min(30.0, remaining))
     target.mkdir(mode=0o700, parents=False, exist_ok=False)
+    if on_created is not None:
+        on_created(target)
     invoke(["/usr/bin/git", "init", "--quiet", "--template="])
     invoke(["/usr/bin/git", "config", "core.hooksPath", "/dev/null"])
     invoke(["/usr/bin/git", "config", "core.autocrlf", "false"])

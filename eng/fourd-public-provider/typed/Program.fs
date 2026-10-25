@@ -388,26 +388,46 @@ module Program =
                 {|schema="fsgg.fourd.failure-diagnostic/1";accepted=true;ready=projection.Ready
                   failureCode=Option.toObj projection.FailureCode;cleanupComplete=projection.CleanupComplete|},options)+"\n");0
 
-    let private generateQuint output =
+    let private validateNativeSource input output =
+        let bytes = readBounded input
+        rejectDuplicateProperties bytes
+        use doc = JsonDocument.Parse(bytes, JsonDocumentOptions(MaxDepth = 8))
+        let root = doc.RootElement
+        requireFields (Set ["schema"; "expectedRevision"; "expectedTree"; "expectedInventorySha256"
+                            "observedRevision"; "observedTree"; "sourceRoot"]) root
+        if requiredString root "schema" <> "fsgg.fourd.native-source-request/1" then
+            invalidArg "input" "typed-schema-refused"
+        let snapshot =
+            NativeSource.acquire (requiredString root "expectedRevision") (requiredString root "expectedTree")
+                (requiredString root "expectedInventorySha256") (requiredString root "observedRevision")
+                (requiredString root "observedTree") (requiredString root "sourceRoot")
+        File.WriteAllText(output, JsonSerializer.Serialize(NativeSource.projection snapshot, options) + "\n")
+        0
+
+    let private generateModel source output =
         let path = Path.GetFullPath output
         let parent = Path.GetDirectoryName path
         if String.IsNullOrWhiteSpace parent || not (Directory.Exists parent) || File.Exists path then
             invalidArg "output" "typed-quint-output-refused"
         use stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None)
         use writer = new StreamWriter(stream, Text.UTF8Encoding(false))
-        writer.Write(FourDOperationModel.Source)
+        writer.Write(source: string)
         writer.Flush()
         0
 
     [<EntryPoint>]
     let main argv =
         try
-            if argv.Length = 2 && argv[0] = "generate-quint" then generateQuint argv[1]
+            if argv.Length = 2 && argv[0] = "generate-quint" then generateModel FourDOperationModel.Source argv[1]
+            elif argv.Length = 2 && argv[0] = "generate-native-quint" then generateModel NativeOperationModel.Source argv[1]
             elif argv.Length <> 3 then 2
             elif argv[0] = "transition" then execute argv[1] argv[2]
             elif argv[0] = "validate-join" then validateJoin argv[1] argv[2]
             elif argv[0] = "validate-root" then validateRoot argv[1] argv[2]
             elif argv[0] = "observe-run" then observeRun argv[1] argv[2]
             elif argv[0] = "project-failure" then projectFailure argv[1] argv[2]
+            elif argv[0] = "validate-native-source" then validateNativeSource argv[1] argv[2]
+            elif Set ["native-runtime-info";"native-join";"native-root";"native-transition"] |> Set.contains argv[0] then
+                NativeProtocol.execute argv[0] argv[1] argv[2]
             else 2
         with _ -> 2

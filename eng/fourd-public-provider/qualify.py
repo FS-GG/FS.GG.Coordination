@@ -625,7 +625,7 @@ class Effects:
     def run(self, argv: Sequence[str], *, cwd: pathlib.Path, env: Mapping[str, str], timeout: float,
             capture: pathlib.Path | None, allow_cancelled: bool = False,
             termination_grace: float = 10, total_timeout: float | None = None,
-            pass_fds: Sequence[int] = ()) -> RunResult:
+            pass_fds: Sequence[int] = (), on_started=None) -> RunResult:
         if self.cancelled and not allow_cancelled:
             raise Refusal("cancelled")
         reserve = termination_grace + TERM_SETTLE_SECONDS + KILL_SETTLE_SECONDS + WAIT_SECONDS + DRAIN_SECONDS
@@ -642,6 +642,17 @@ class Effects:
         if root is None: raise Refusal("child-identity-refused")
         self.owned[root.pid] = root
         assert process.stdout is not None and process.stderr is not None
+        if on_started is not None:
+            try:
+                # Mechanical birth notification, before an inherited gate permits exec.
+                # The selected caller owns policy; legacy callers do not install a hook.
+                on_started(root)
+            except BaseException:
+                self._terminate(root, 0, lambda: None, total_deadline - WAIT_SECONDS - DRAIN_SECONDS)
+                try: process.wait(timeout=max(0.001, min(WAIT_SECONDS, total_deadline-time.monotonic())))
+                finally:
+                    process.stdout.close(); process.stderr.close()
+                raise
         selector = selectors.DefaultSelector()
         streams = (process.stdout, process.stderr)
         buffers = [bytearray(), bytearray()]
@@ -714,11 +725,12 @@ class Effects:
         if forced and process.returncode == 0: raise Refusal("child-scope-refused")
         return RunResult(process.returncode or 0, bytes(buffers[0]), bytes(buffers[1]))
 
-    def settle(self, grace: float = 0) -> bool:
+    def settle(self, grace: float = 0, *, deadline: float | None = None) -> bool:
         unresolved = self._unresolved()
         if not unresolved: return not self.topology_unknown
         root = unresolved[0]
         total = time.monotonic() + grace + TERM_SETTLE_SECONDS + KILL_SETTLE_SECONDS
+        if deadline is not None: total = min(total, deadline)
         return self._terminate(root, grace, lambda: None, total) and self._scope_clear()
 
 def verify_capacity(path: pathlib.Path) -> None:

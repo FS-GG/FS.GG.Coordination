@@ -1,0 +1,68 @@
+name: FourD typed native source
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/fourd-typed-source.yml
+      - eng/fourd-public-provider/**
+      - tests/fourd-public-provider/**
+      - global.json
+      - Directory.*.props
+      - Directory.Build.targets
+      - nuget.config
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/fourd-typed-source.yml
+      - eng/fourd-public-provider/**
+      - tests/fourd-public-provider/**
+      - global.json
+      - Directory.*.props
+      - Directory.Build.targets
+      - nuget.config
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fourd-typed-source-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-constructor:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      DOTNET_PROCESSOR_COUNT: 2
+      DOTNET_CLI_TELEMETRY_OPTOUT: 1
+      DOTNET_NOLOGO: 1
+      PYTHONDONTWRITEBYTECODE: 1
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          dotnet-version: 10.0.400
+          global-json-file: global.json
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 24.8.0
+      - name: Compile and exercise actual native producer and capsule IO
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$(mktemp -d /tmp/fourd-typed-source.XXXXXXXX)"
+          echo "FSGG_FOURD_SOURCE_GATE=$root" >> "$GITHUB_ENV"
+          dotnet publish eng/fourd-public-provider/typed/FourD.Typed.fsproj -c Release \
+            -o "$root/publish" -p:BaseIntermediateOutputPath="$root/obj/" -p:BaseOutputPath="$root/bin/" --nologo
+          export FSGG_FOURD_NATIVE_TEST_COMMAND="[\"$root/publish/FourD.Typed\"]"
+          python3 -B tests/fourd-public-provider/test_native_source.py
+          python3 -B tests/fourd-public-provider/test_native_protocol.py
+          python3 -B tests/fourd-public-provider/test_native_io.py
+          python3 -B tests/fourd-public-provider/test_native_cleanup.py
+          python3 -B tests/fourd-public-provider/test_native_emergency.py
+          python3 -B tests/fourd-public-provider/test_native_gate.py
+          npm install --prefix "$root/quint" --ignore-scripts --no-audit --no-fund @informalsystems/quint@0.32.0
+          python3 -B tests/fourd-public-provider/qualify_native.py --producer "$root/publish/FourD.Typed" \
+            --evidence "$root/evidence" --quint "$root/quint/node_modules/.bin/quint"
