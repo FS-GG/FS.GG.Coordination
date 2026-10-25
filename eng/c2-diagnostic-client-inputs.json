@@ -1,0 +1,38 @@
+{
+  "schema": "fsgg.c2-diagnostic-client-inputs/1",
+  "identity": "quint-0.32.0-fsgg-c2-diagnostic-1",
+  "upstreamRevision": "fd772606588b40def9978d8c82da69c2db7a0e3b",
+  "source": {
+    "url": "https://api.github.com/repos/quint-co/quint/tarball/fd772606588b40def9978d8c82da69c2db7a0e3b",
+    "sha256": "1a5d3118d559159c28ff850b6b72d973686178a5c816b73176775d26b2bfd0bf",
+    "maxBytes": 67108864,
+    "bytes": 51958703
+  },
+  "node": {
+    "url": "https://nodejs.org/dist/v18.20.8/node-v18.20.8-linux-x64.tar.xz",
+    "sha256": "5467ee62d6af1411d46b6a10e3fb5cacc92734dbcef465fea14e7b90993001c9",
+    "maxBytes": 33554432,
+    "bytes": 24011112
+  },
+  "deno": {
+    "url": "https://github.com/denoland/deno/releases/download/v2.9.8/deno-x86_64-unknown-linux-gnu.zip",
+    "sha256": "e890975bc2549807bbcc0b584ffafda72cc7c93349dd99c80483dd784f6c4609",
+    "maxBytes": 50331648,
+    "bytes": 41963064
+  },
+  "packageLockSha256": "91ae036c7d55c8ba9f459037d35624b88beaba13cdfe85f09407ebaf2c9a59f7",
+  "originalVerifySha256": "c6194921ce77f7c40ad75fb2b6f31e907fbe2d01de76e75b62e335a6566171f6",
+  "patchedVerifySha256": "e2af0d62c60406dee3356a98f6c41547c11b4d20ac75b83539c31613fe18b592",
+  "patchSha256": "da7001f65ec1637f970487383d8ae9b048441ae436996346fb8d872a080b58df",
+  "nodeExecutableSha256": "8f4e416b508c3c149ad62d13c37b83a61f24c40058ed3bb07fe298d9d228cd3a",
+  "denoExecutableSha256": "368bca08999e02c6911b8f248167b582276b1f547db5712b6e736d7eda1dbda7",
+  "npmVersion": "10.8.2",
+  "runtimeInventorySha256": "13e3febfd8b3495e5ab3c7ffd24270627cb6b895126f4bd054c8b83785f298f7",
+  "denort": {
+    "url": "https://github.com/denoland/deno/releases/download/v2.9.8/denort-x86_64-unknown-linux-gnu.zip",
+    "sha256": "1577df68c9fe13ec7b974d10d483e9f8974575a3d17f7c127489cf5032e14bd4",
+    "maxBytes": 41943040,
+    "bytes": 34819668
+  },
+  "denortExecutableSha256": "7b91d3d117804c0ebe05ac017a3430e0f09d9ab05b588ff0bda6f514dd0a4f2d"
+}

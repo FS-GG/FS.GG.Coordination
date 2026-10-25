@@ -150,15 +150,29 @@ jobs:
   formal-prepare:
     needs: [prepare, classify-reuse, shared-build]
     runs-on: ubuntu-latest
+    outputs:
+      c2-artifact-id: ${{ steps.c2-upload.outputs.artifact-id }}
+      c2-artifact-digest: ${{ steps.c2-upload.outputs.artifact-digest }}
     env:
       FSGG_QUINT_TOOLCHAIN_OUTPUT: /tmp/fsgg-${{ github.run_id }}-formal-toolchain/toolchain.tar.gz
+      FSGG_C2_RUN_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      FSGG_C2_CLIENT_OUTPUT: /tmp/fsgg-${{ github.run_id }}-c2-diagnostic-client
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with: { ref: '${{ needs.prepare.outputs.candidate }}', fetch-depth: 1 }
+        with: { ref: '${{ needs.prepare.outputs.candidate }}', fetch-depth: 1, persist-credentials: false }
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with: { dotnet-version: 10.0.400 }
       - name: Prepare the pinned canonical toolchain once
         run: bash eng/bootstrap-gates/canonical-quint-prepare.sh
+      - name: Build and preflight the C2-only diagnostic client
+        run: python3 -I -B eng/c2_diagnostic_client.py build "$FSGG_C2_CLIENT_OUTPUT"
+      - name: Retain the source-bound C2 diagnostic client
+        id: c2-upload
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: c2-diagnostic-client-${{ github.run_id }}-1-${{ needs.prepare.outputs.candidate }}
+          path: ${{ env.FSGG_C2_CLIENT_OUTPUT }}
+          if-no-files-found: error
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: coherent-formal-toolchain-${{ needs.prepare.outputs.candidate }}
@@ -202,6 +216,17 @@ jobs:
           FSGG_PARTITION: ${{ matrix.partition }}
           NUGET_PACKAGES: ${{ runner.temp }}/nuget-${{ matrix.partition }}
         run: bash eng/bootstrap-gates/optimistic-run-partition.sh
+      - name: Authenticate the current C2 client before base formal work
+        if: ${{ matrix.kind == 'formal' && matrix.shard == 'base' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FSGG_C2_CLIENT_ROOT: /tmp/fsgg-${{ github.run_id }}-c2-client-base
+          FSGG_C2_ARTIFACT_ID: ${{ needs.formal-prepare.outputs.c2-artifact-id }}
+          FSGG_C2_ARTIFACT_DIGEST: ${{ needs.formal-prepare.outputs.c2-artifact-digest }}
+        run: |
+          python3 -I -B eng/c2_diagnostic_client.py consume "$FSGG_C2_CLIENT_ROOT"
+          printf 'FSGG_C2_CLIENT_ROOT=%s\n' "$FSGG_C2_CLIENT_ROOT" >> "$GITHUB_ENV"
+          printf 'FSGG_C2_CLIENT_MANIFEST_SHA256=%s\n' "$(sha256sum "$FSGG_C2_CLIENT_ROOT/manifest.json" | cut -d ' ' -f1)" >> "$GITHUB_ENV"
       - name: Run one independently isolated formal shard
         if: ${{ matrix.kind == 'formal' }}
         env:

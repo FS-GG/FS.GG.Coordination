@@ -1,0 +1,21 @@
+const path=require('path');const fs=require('fs');const cp=require('child_process');
+const root=process.argv[2]; const source=root+'/source';
+const grpc=require(source+'/node_modules/@grpc/grpc-js');const loader=require(source+'/node_modules/@grpc/proto-loader');
+const protobuf=require(source+'/node_modules/protobufjs');require(source+'/node_modules/protobufjs/ext/descriptor');
+const opts={keepCase:true,longs:String,enums:String,defaults:true,oneofs:true};
+const proto=process.argv[5];
+const cmdDef=loader.loadSync(proto,opts);const cmd=grpc.loadPackageDefinition(cmdDef).shai.cmdExecutor;
+const reflDef=loader.loadSync(source+'/src/reflection.proto',opts);const refl=grpc.loadPackageDefinition(reflDef).grpc.reflection.v1alpha;
+const root=protobuf.loadSync(proto);const descriptor=require(source+'/node_modules/protobufjs/ext/descriptor');
+const set=root.toDescriptor('proto3');const fileBytes=set.file.map(f=>descriptor.FileDescriptorProto.encode(f).finish());
+const server=new grpc.Server();let requests=[];
+server.addService(refl.ServerReflection.service,{ServerReflectionInfo(call){call.on('data',()=>call.write({file_descriptor_response:{file_descriptor_proto:fileBytes}}));call.on('end',()=>call.end());}});
+server.addService(cmd.CmdExecutor.service,{run(call,cb){requests.push(call.request);cb(null,{failure:{errorType:'UNEXPECTED',data:JSON.stringify({msg:'FSGG_CONTROLLED_COMPILER_EXPLANATION',stack_trace:[]})}});},ping(call,cb){cb(null,{});}});
+server.bindAsync('127.0.0.1:0',grpc.ServerCredentials.createInsecure(),(e,port)=>{
+ if(e)throw e;
+ const fixture=root+'/controlled.qnt';fs.writeFileSync(fixture,'module Controlled { var x: int\n action init = x\' = 0\n action step = x\' = x\n val safety = x >= 0\n}\n');
+ const binary=process.argv[3];const expected=process.argv[4];
+ const child=cp.spawn(binary,['verify',fixture,'--main=Controlled','--init=init','--step=step','--invariant=safety','--max-steps=20','--backend=tlc','--verbosity=3','--server-endpoint','127.0.0.1:'+port],{env:{PATH:'/usr/bin:/bin',HOME:root+'/home',TMPDIR:root+'/tmp',QUINT_HOME:root+'/cache/test-quint',NO_COLOR:'1'},stdio:['ignore','pipe','pipe']});
+ let out='',err='';child.stdout.on('data',b=>out+=b);child.stderr.on('data',b=>err+=b);const timer=setTimeout(()=>child.kill('SIGKILL'),15000);
+ child.on('exit',(code,signal)=>{clearTimeout(timer);server.forceShutdown();const has=(out+err).includes('FSGG_CONTROLLED_COMPILER_EXPLANATION');const good=code===1&&signal===null&&requests.length===1&&requests[0].cmd==='TLA'&&has===(expected==='present');console.log(JSON.stringify({binary,code,signal,requests:requests.map(x=>x.cmd),explanationPresent:has,expected,stdout:out,stderr:err,passed:good},null,2));process.exitCode=good?0:1;});
+});

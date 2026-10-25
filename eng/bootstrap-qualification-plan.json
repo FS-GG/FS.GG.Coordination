@@ -93,6 +93,8 @@
       "eng/quint-qualification.json",
       "eng/validate-canonical-quint-protocol.fsx",
       "eng/validate-quint-qualification.fsx",
+      "eng/c2_diagnostic_client.py",
+      "eng/c2-diagnostic-client-inputs.json",
       "eng/verify-choreo-c2-bounded.sh",
       "eng/retain-choreo-c2-diagnostics.py",
       "eng/shared_process_owner.py",
@@ -108,6 +110,8 @@
     "pathPrefixes": [
       "src/FS.GG.Coordination.Protocol/",
       "eng/vendor/choreo/",
+      "eng/vendor/quint-c2-diagnostic/",
+      "eng/tests/c2-diagnostic-client/",
       "tests/FS.GG.Coordination.Orchestration.Host.Tests/",
       "tests/FS.GG.Coordination.QuintReplay.Tests/",
       "work/96-gs2-03-5-native-quint-formal-tests/counterexamples/"

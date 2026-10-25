@@ -1,0 +1,11 @@
+--- a/quint/src/verify.ts
++++ b/quint/src/verify.ts
+@@ -62,7 +62,7 @@
+   const tlaResult = await compileToTlaplus(args.serverEndpoint, args.apalacheVersion, parsedSpec, verbosityLevel)
+ 
+   if (tlaResult.isLeft()) {
+-    return cliErr('error', { ...verifying, errors: tlaResult.value.errors })
++    return cliErr(tlaResult.value.explanation, { ...verifying, errors: tlaResult.value.errors })
+   }
+ 
+   const [, invariantsList] = getInvariants(args)

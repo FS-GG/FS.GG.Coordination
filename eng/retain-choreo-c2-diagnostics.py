@@ -426,6 +426,8 @@ def public_command_evidence(scratch, status, end, clock, files_left, entries_lef
         input_shape.update(argv=[scalar],jvmArgs=[scalar],
             pins=[dict.fromkeys(('path','bytes','sha256'))],aliases=[dict.fromkeys(('path','target'))],
             mutableScope=dict.fromkeys(spec['mutableScope']),tlcConfig=dict.fromkeys(('maxHeap','stackSize','workers')))
+        if 'diagnosticClient' in spec:
+            input_shape['diagnosticClient'] = dict.fromkeys(c2_client_module().PROFILE_FIELDS)
         closed(spec,input_shape)
         # leader is the full /proc producer record; synthetic controls use it too.
         expected_status = 124 if value['firstCause']['type']=='TimeoutError' else max(1,value['commandExit'])
@@ -708,6 +710,16 @@ def validate_launch_grant(grant):
         raise ValueError('launch grant original sixty-second interval')
 
 
+def c2_client_module():
+    # Interpret the pinned sibling source, never an ambient import/bytecode cache.
+    import types
+    path=Path(__file__).with_name('c2_diagnostic_client.py')
+    raw=path.read_bytes()
+    if not 0<len(raw)<=65536: raise ValueError('C2 client source bound')
+    module=types.ModuleType('c2_diagnostic_client_checked');module.__file__=str(path)
+    exec(compile(raw,str(path),'exec'),module.__dict__)
+    return module
+
 def command_preflight(spec, *, now):
     """Pure shape/role/budget joins; filesystem checks happen against actual pins."""
     if spec.get('profile', '').startswith('proc-pair-'):
@@ -715,6 +727,10 @@ def command_preflight(spec, *, now):
     required = {'schema', 'role', 'argv', 'pins', 'aliases', 'semanticToolchainId', 'archiveSha256',
                 'started', 'workDeadline', 'totalDeadline', 'workSeconds', 'cleanupSeconds',
                 'rssBytes', 'logBytes', 'maximumGenerations', 'endpoint', 'jvmArgs', 'tlcConfig', 'mutableScope'}
+    diagnostic = spec.get('diagnosticClient')
+    if diagnostic is not None:
+        required = required | {'diagnosticClient'}
+        c2_client_module().profile_shape(diagnostic)
     if set(spec) != required or spec['schema'] != COMMAND_SCHEMA:
         raise ValueError('command schema')
     command_role('canonical-quint', spec['role'])
@@ -750,7 +766,7 @@ def command_preflight(spec, *, now):
         raise ValueError('mutable scope resource join')
     if type(spec['endpoint']) is not int or not 1024 <= spec['endpoint'] <= 65535:
         raise ValueError('command endpoint')
-    if len(spec['pins']) < 4 or len(spec['pins']) > 8:
+    if len(spec['pins']) < 4 or len(spec['pins']) > (10 if diagnostic is not None else 8):
         raise ValueError('command pin count')
     for row in spec['pins']:
         if (set(row) != {'path', 'bytes', 'sha256'} or type(row['bytes']) is not int
@@ -758,6 +774,9 @@ def command_preflight(spec, *, now):
             raise ValueError('command pin shape')
     if type(spec['aliases']) is not list or len(spec['aliases']) > 64:
         raise ValueError('command alias count')
+    if diagnostic is not None:
+        if not (Path(spec['argv'][0]).name == 'quint-c2' and spec['pins'][0]['path'] == spec['argv'][0] and spec['pins'][0]['sha256'] == diagnostic['binarySha256']):
+            raise ValueError('diagnostic executable pin')
     for row in spec['aliases']:
         if set(row) != {'path', 'target'} or not all(type(x) is str and x for x in row.values()):
             raise ValueError('command alias shape')
@@ -4078,6 +4097,8 @@ def classify_preparser_startup_retry(seconds, log_path, endpoint, argv):
         expected = [Path(argv[0]),Path(argv[2]),Path(os.environ['JAVA_HOME'])/'bin/java',
                     Path(os.environ['QUINT_HOME'])/'apalache-dist-0.56.1/apalache/lib/apalache.jar',
                     Path(__file__).with_name('shared_process_owner.py'),Path(__file__),Path(str(path)+'.tlc.json')]
+        if 'diagnosticClient' in spec:
+            expected += [Path(__file__).with_name('c2_diagnostic_client.py'), Path(argv[0]).parent/'manifest.json', Path(argv[0]).parent/'custody.json']
         if (spec['argv'][-3] != '--tlc-config='+str(path)+'.tlc.json'
                 or spec['mutableScope']['cwd'] != str(path.parent)
                 or {row['path'] for row in spec['pins']} != {str(p.resolve(strict=True)) for p in expected}
@@ -4167,6 +4188,12 @@ def execute_command(seconds, log_path, endpoint, argv):
                     if row not in aliases: aliases.append(row)
         if pins[-1]['sha256'] != OWNER_SHA: raise ValueError('shared owner pin')
         pins.append(pin_file(__file__))
+        diagnostic = None
+        if os.environ.get('FSGG_C2_CLIENT_ROOT'):
+            client_root = Path(os.environ['FSGG_C2_CLIENT_ROOT']).resolve(strict=True)
+            require(Path(argv[0]).resolve(strict=True) == client_root / 'quint-c2', 'C2 client executable role')
+            diagnostic = c2_client_module().local_client(client_root)
+            pins.extend(pin_file(p) for p in (Path(__file__).with_name('c2_diagnostic_client.py'), client_root/'manifest.json', client_root/'custody.json'))
         archive = os.environ.get('FSGG_QUINT_TOOLCHAIN_ARCHIVE')
         spec = dict(schema=COMMAND_SCHEMA, role='verify', argv=argv, pins=pins, aliases=aliases,
                     semanticToolchainId=TOOLCHAIN_ID, archiveSha256=pin_file(archive)['sha256'] if archive else None,
@@ -4178,6 +4205,7 @@ def execute_command(seconds, log_path, endpoint, argv):
                                   'inventorySeconds':1, 'maximumEntries':25000, 'sampleIntervalSeconds':.5,
                                   'javaToolOptions':'-Djava.io.tmpdir='+str(tmpdir),
                                   'denoDir':str(mutable_root/'cache/deno'), 'xdgCacheHome':str(mutable_root/'cache')})
+        if diagnostic is not None: spec['diagnosticClient'] = diagnostic
         command_preflight(spec, now=time.monotonic())
         for row in pins:
             if pin_file(row['path']) != row: raise ValueError('command input drift')
