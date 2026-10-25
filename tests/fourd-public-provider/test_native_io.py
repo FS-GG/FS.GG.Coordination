@@ -20,7 +20,7 @@ import native_bootstrap as bootstrap
 import native_io as io
 import native_run as driver
 from test_native_protocol import NativeFixture, canonical, sha
-from test_source_capsule import SourceCapsuleTests
+import test_source_capsule as capsule_tests
 
 
 class NativeIOTests(unittest.TestCase):
@@ -74,7 +74,7 @@ class NativeIOTests(unittest.TestCase):
     def fixture(self):
         producer = self.bootstrap()
         f = NativeFixture(self.root, [str(Path(producer['runtimeRoot'])/'FourD.Typed')])
-        value, expected = SourceCapsuleTests().fixture(self.root)
+        value, expected = capsule_tests.SourceCapsuleTests().fixture(self.root)
         substitutions = {f.revision:expected['sourceSha'],f.tree:expected['sourceTree'],f.inventory:expected['inventorySha256']}
         def replace(value):
             if isinstance(value,dict):return {key:replace(item) for key,item in value.items()}
@@ -90,7 +90,7 @@ class NativeIOTests(unittest.TestCase):
         plain=io.capsules.canonical(value)
         descriptor.update(plaintextBytes=len(plain),plaintextSha256=sha(plain),
                           recipientPublicKeySha256=sha(self.public.read_bytes()),
-                          sealerSha256=sha((bootstrap.Path(bootstrap.__file__).parent/'seal_native_custody.mjs').read_bytes()))
+                          sealerSha256=sha((io.HERE/'seal_native_custody.mjs').read_bytes()))
         capsule=f.packet['sourceCapsule']
         capsule.update(descriptorSha256=sha(canonical(descriptor)),recipientPublicKeySha256=descriptor['recipientPublicKeySha256'])
         publisher_plain=self.root/'publisher-snapshot.json';publisher_plain.write_bytes(plain);publisher_plain.chmod(0o600)
