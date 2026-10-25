@@ -282,9 +282,13 @@ class OwnedDirectory:
                 raise NativeIOError("native-directory-held-identity-refused")
             parent_info = os.fstat(parent)
             root_info = os.fstat(self.fd)
-            if stat.S_IMODE(root_info.st_mode) & 0o077 and stat.S_IMODE(parent_info.st_mode) & 0o077:
+            if root_info.st_uid != os.getuid() or stat.S_IMODE(root_info.st_mode) & 0o077:
                 raise NativeIOError("native-directory-private-capture-refused")
-            if parent_info.st_uid != os.getuid() or stat.S_IMODE(parent_info.st_mode) & 0o022:
+            # Direct /tmp and /dev/shm children retain private captured roots. A
+            # writable shared parent is admissible only under its sticky protection.
+            shared_writable = bool(stat.S_IMODE(parent_info.st_mode) & 0o022)
+            if (parent_info.st_uid not in (0, os.getuid())
+                    or shared_writable and not parent_info.st_mode & stat.S_ISVTX):
                 raise NativeIOError("native-directory-parent-boundary-refused")
             # Capture under a fresh private sibling name. Moving a frozen directory
             # across parents requires changing its '..' and would need an unsafe

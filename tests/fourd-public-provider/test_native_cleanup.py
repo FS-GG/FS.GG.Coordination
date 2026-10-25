@@ -63,6 +63,29 @@ class NativeDirectoryRetirementTests(unittest.TestCase):
         self.assertFalse(self.root.exists())
         self.assertEqual(sentinel.read_text(), "preserve outside")
 
+    def test_private_direct_tmp_child_retires_under_sticky_parent(self):
+        temporary = tempfile.TemporaryDirectory(prefix="native-retire-direct-", dir="/tmp")
+        self.addCleanup(temporary.cleanup)
+        root = Path(temporary.name)
+        (root / "data").write_text("private direct child")
+        holder = io.OwnedDirectory(root)
+        self.addCleanup(holder.close)
+        holder.retire(deadline=time.monotonic() + 5)
+        self.assertFalse(root.exists())
+        self.assertFalse(holder.path.exists())
+
+    def test_nonsticky_writable_parent_stays_refused(self):
+        self.base.chmod(0o777)
+        with self.assertRaisesRegex(io.NativeIOError, "parent-boundary-refused"):
+            self.holder.retire(deadline=time.monotonic() + 5)
+        self.assertEqual((self.root / "nested/data").read_text(), "owned plaintext fixture")
+
+    def test_target_must_already_be_private_before_capture(self):
+        self.root.chmod(0o755)
+        with self.assertRaisesRegex(io.NativeIOError, "private-capture-refused"):
+            self.holder.retire(deadline=time.monotonic() + 5)
+        self.assertEqual((self.root / "nested/data").read_text(), "owned plaintext fixture")
+
     def replace_after_check(self):
         original = self.holder.revalidate
         displaced = self.base / "displaced-owned"
