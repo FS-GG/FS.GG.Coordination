@@ -155,9 +155,10 @@ class NativeClient:
         # A separate short-lived mechanism scope treats any already-running effect
         # child as baseline; a reducer call cannot adopt or kill that sibling.
         scope = Effects()
-        result = scope.run([str(self.executable), command, str(input_path), str(output_path)],
+        result = run_gated(scope, [str(self.executable), command, str(input_path), str(output_path)],
+                           client=None, operation=None,
                            cwd=self.work, env=safe_environment(self.work, self.host), timeout=15,
-                           total_timeout=35, capture=None, allow_cancelled=True)
+                           total_timeout=35, allow_cancelled=True)
         if not scope.settle() or result.returncode not in (0, 2) or not output_path.exists():
             raise NativeIOError("native-producer-response-unknown")
         value = capsules.closed_json(output_path.read_bytes(), 1024 * 1024)
@@ -377,8 +378,8 @@ class OwnedDirectory:
 
 def run_gated(effects: Effects, argv: list[str], *, client: NativeClient | None,
               operation: str | None, cwd: Path, env: dict, timeout: float,
-              total_timeout: float, pass_fds=(), on_started=None):
-    """Intent must already be recorded. Real child birth is acknowledged before exec."""
+              total_timeout: float, pass_fds=(), on_started=None, allow_cancelled: bool | None = None):
+    """Record birth before exec; a supplied client acknowledges its existing intent."""
     gate_read, gate_write = os.pipe2(os.O_CLOEXEC)
     def born(identity):
         if client is not None:
@@ -399,24 +400,17 @@ def run_gated(effects: Effects, argv: list[str], *, client: NativeClient | None,
         return effects.run(["/usr/bin/python3", "-I", "-B", str(HERE / "native_child.py"),
                             str(gate_read), *argv], cwd=cwd, env=env, timeout=timeout,
                            total_timeout=total_timeout, capture=None, pass_fds=(gate_read, *pass_fds),
-                           allow_cancelled=operation in ("cleanup", "collection"), on_started=born)
+                           allow_cancelled=(operation in ("cleanup", "collection") if allow_cancelled is None else allow_cancelled),
+                           on_started=born)
     finally:
         os.close(gate_read); os.close(gate_write)
 
 
 def git_observation(source: Path, target: Path, effects: Effects, env: dict, remaining: Callable[[], float]):
     def git(*args):
-        # A fast read can exit before Effects records its PID/start identity.
-        # Reuse the maintained same-PID gate: exec Git only after observed birth.
-        gate_read, gate_write = os.pipe()
-        try:
-            result = effects.run(["/usr/bin/python3", "-I", "-B", str(HERE / "native_child.py"),
-                                  str(gate_read), "/usr/bin/git", *args], cwd=source, env=env,
-                                 timeout=min(15, remaining()), total_timeout=remaining(), capture=None,
-                                 pass_fds=(gate_read,), on_started=lambda _identity: os.write(gate_write, b"1"))
-        finally:
-            os.close(gate_read)
-            os.close(gate_write)
+        result = run_gated(effects, ["/usr/bin/git", *args], client=None, operation=None,
+                           cwd=source, env=env, timeout=min(15, remaining()),
+                           total_timeout=remaining())
         if result.returncode:
             raise NativeIOError("native-git-observation-refused")
         return result.stdout
@@ -505,15 +499,16 @@ def acquire_capsule(packet: dict, key: bytes, private: Path, effects: Effects, *
             digest=hashlib.sha256()
             for block in iter(lambda:tool.read(65536),b""):digest.update(block)
         if digest.hexdigest()!=node_tool["sha256"]:raise NativeIOError("native-node-bytes-refused")
-        version=effects.run([str(node_path),"--version"],cwd=private,env=env,timeout=min(5,remaining()-36),total_timeout=remaining(),capture=None)
+        version=run_gated(effects,[str(node_path),"--version"],client=None,operation=None,cwd=private,env=env,timeout=min(5,remaining()-36),total_timeout=remaining())
         if version.returncode or version.stdout.decode().strip()!=node_tool["version"]:
             raise NativeIOError("native-node-version-refused")
         node=str(node_path)
         credential_owner.revalidate()
         recipient = create_credential("recipient.pem", key); held.append(recipient)
-        public = effects.run(["/usr/bin/openssl", "pkey", "-in", f"/proc/self/fd/{recipient.fd}", "-pubout"],
+        public = run_gated(effects, ["/usr/bin/openssl", "pkey", "-in", f"/proc/self/fd/{recipient.fd}", "-pubout"],
+                             client=None, operation=None,
                              cwd=private, env=env, timeout=min(15, remaining()), total_timeout=remaining(),
-                             capture=None, pass_fds=(recipient.fd,))
+                             pass_fds=(recipient.fd,))
         if public.returncode:
             raise NativeIOError("native-key-readback-unknown")
         identity = f"{recipient.device}:{recipient.inode}"
@@ -549,8 +544,8 @@ def acquire_capsule(packet: dict, key: bytes, private: Path, effects: Effects, *
         expected = {"sourceSha": packet["product"]["revision"], "sourceTree": packet["product"]["tree"],
                     "inventorySha256": packet["product"]["inventorySha256"]}
         def runner(argv, cwd, timeout):
-            response = effects.run(argv, cwd=cwd, env=env, timeout=min(timeout, remaining()-36),
-                                   total_timeout=remaining(), capture=None)
+            response = run_gated(effects, argv, client=None, operation=None, cwd=cwd, env=env,
+                                 timeout=min(timeout, remaining()-36), total_timeout=remaining())
             if response.returncode:
                 raise NativeIOError("native-git-reconstruction-child-failed")
             return response.stdout
