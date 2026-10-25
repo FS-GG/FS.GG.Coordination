@@ -1,6 +1,6 @@
 """Pure, inert preflight of the actual C2 producer/artifact/base-consumer contract."""
-import copy, hashlib, importlib.util, io, json, os, pathlib, stat, tempfile, unittest, zipfile
-from unittest.mock import patch
+import copy, hashlib, importlib.util, io, json, os, pathlib, stat, tempfile, unittest, zipfile, types
+from unittest.mock import patch, Mock
 ROOT=pathlib.Path(__file__).resolve().parents[3]
 spec=importlib.util.spec_from_file_location('client',ROOT/'eng/c2_diagnostic_client.py');M=importlib.util.module_from_spec(spec);spec.loader.exec_module(M)
 class Controls(unittest.TestCase):
@@ -28,6 +28,39 @@ class Controls(unittest.TestCase):
             out=pathlib.Path(d)/'new';M.extract(raw,meta,out)
             self.assertEqual((out/M.BIN).read_bytes(),b'inert byte fixture, never executed')
             self.assertEqual(stat.S_IMODE((out/M.BIN).stat().st_mode),0o700)
+    def test_late_final_process_completion_is_not_a_positive_native_read(self):
+        clock=[0.0];out=Mock();err=Mock();out.fileno.return_value=31;err.fileno.return_value=32
+        process=Mock(stdout=out,stderr=err);process.poll.return_value=0
+        def wait(timeout):clock[0]=11.0;return 0
+        process.wait.side_effect=wait
+        class Selector:
+            def __init__(self):self.entries={}
+            def register(self,file,event,data):self.entries[file]=types.SimpleNamespace(fileobj=file,data=data)
+            def unregister(self,file):self.entries.pop(file)
+            def get_map(self):return self.entries
+            def select(self,timeout):return [(v,None) for v in list(self.entries.values())]
+            def close(self):self.entries.clear()
+        with patch.object(M.time,'monotonic',side_effect=lambda:clock[0]),patch.object(M.subprocess,'Popen',return_value=process),patch.object(M.selectors,'DefaultSelector',Selector),patch.object(M.os,'read',return_value=b''):
+            with self.assertRaisesRegex(ValueError,'late native process'):M.bounded_gh('fixed',32,10)
+        process.wait.assert_called_once_with(timeout=10.0)
+
+    def test_late_extraction_and_custody_never_authorize_formal_work(self):
+        for phase in ('extract','custody'):
+            m,r,j,a,raw=self.fixture();clock=[0.0];responses=[json.dumps(x).encode() for x in (r,j,a)]+[raw]
+            env=dict(GITHUB_RUN_ID='101',GITHUB_RUN_ATTEMPT='1',GITHUB_REPOSITORY=M.REPO,FSGG_C2_ARTIFACT_ID='301',FSGG_C2_ARTIFACT_DIGEST=M.digest(raw))
+            original_extract=M.extract;original_write=pathlib.Path.write_text
+            def extract(*args):
+                value=original_extract(*args)
+                if phase=='extract':clock[0]=117.0
+                return value
+            def write(path,*args,**kwargs):
+                value=original_write(path,*args,**kwargs)
+                if path.name=='custody.json' and phase=='custody':clock[0]=117.0
+                return value
+            with patch.dict(os.environ,env),patch.object(M.time,'monotonic',side_effect=lambda:clock[0]),patch.object(M,'bounded_gh',side_effect=responses),patch.object(M,'extract',side_effect=extract),patch.object(pathlib.Path,'write_text',write),patch('builtins.print') as positive,tempfile.TemporaryDirectory() as d:
+                with self.assertRaisesRegex(ValueError,'late consumer'):M.consume(pathlib.Path(d)/'new')
+                positive.assert_not_called()
+
     def test_actual_consumer_stages_only_authenticated_archive_and_local_tamper_refuses(self):
         m,r,j,a,raw=self.fixture();responses=[json.dumps(x).encode() for x in (r,j,a)]+[raw]
         env=dict(GITHUB_RUN_ID='101',GITHUB_RUN_ATTEMPT='1',GITHUB_REPOSITORY=M.REPO,FSGG_C2_ARTIFACT_ID='301',FSGG_C2_ARTIFACT_DIGEST=M.digest(raw))

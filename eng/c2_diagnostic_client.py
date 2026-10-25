@@ -91,23 +91,41 @@ def validate_manifest(m,source,run):
 
 def bounded_gh(endpoint,cap,deadline):
     p=subprocess.Popen(['gh','api',endpoint],stdout=subprocess.PIPE,stderr=subprocess.PIPE,start_new_session=True)
-    out=bytearray();err=bytearray();sel=selectors.DefaultSelector();sel.register(p.stdout,selectors.EVENT_READ,out);sel.register(p.stderr,selectors.EVENT_READ,err)
+    out=bytearray();err=bytearray();sel=selectors.DefaultSelector();sel.register(p.stdout,selectors.EVENT_READ,out);sel.register(p.stderr,selectors.EVENT_READ,err);primary=None
     try:
         while sel.get_map():
             require(time.monotonic()<deadline,'native read deadline')
-            for key,_ in sel.select(min(.2,max(0,deadline-time.monotonic()))):
+            events=sel.select(min(.2,max(0,deadline-time.monotonic())))
+            require(time.monotonic()<deadline,'late native selector completion')
+            for key,_ in events:
                 b=os.read(key.fileobj.fileno(),65536)
+                require(time.monotonic()<deadline,'late native read completion')
                 if not b:sel.unregister(key.fileobj);continue
                 key.data.extend(b);require(len(out)<=cap and len(err)<=8192,'native read byte cap')
-        require(p.wait(timeout=max(.1,deadline-time.monotonic()))==0,'native read refused')
-        return bytes(out)
+        remaining=deadline-time.monotonic();require(remaining>0,'native completion deadline')
+        status=p.wait(timeout=remaining)
+        require(time.monotonic()<deadline,'late native process completion')
+        require(status==0,'native read refused')
+        result=bytes(out);require(time.monotonic()<deadline,'late native result completion')
+        return result
+    except BaseException as error:
+        primary=error
+        raise
     finally:
         sel.close()
-        if p.poll() is None:
-            os.killpg(p.pid,signal.SIGTERM)
-            try:p.wait(timeout=2)
-            except subprocess.TimeoutExpired:os.killpg(p.pid,signal.SIGKILL);p.wait(timeout=2)
-        p.stdout.close();p.stderr.close()
+        try:
+            if p.poll() is None:
+                try:os.killpg(p.pid,signal.SIGTERM)
+                except ProcessLookupError:pass
+                try:p.wait(timeout=2)
+                except subprocess.TimeoutExpired:
+                    try:os.killpg(p.pid,signal.SIGKILL)
+                    except ProcessLookupError:pass
+                    p.wait(timeout=2)
+        except BaseException as cleanup:
+            if primary is None:raise
+            primary.add_note('C2 native read cleanup: '+type(cleanup).__name__)
+        finally:p.stdout.close();p.stderr.close()
 
 def extract(archive,meta,destination):
     require(len(archive)==meta['size_in_bytes'] and 'sha256:'+digest(archive)==meta['digest'],'native archive digest/size')
@@ -125,7 +143,8 @@ def extract(archive,meta,destination):
     return manifest
 
 def consume(destination):
-    end=time.monotonic()+120;run_id=int(os.environ['GITHUB_RUN_ID']);source=revision()
+    # One120s horizon:116s work plus at most4s direct-child cleanup.
+    end=time.monotonic()+116;run_id=int(os.environ['GITHUB_RUN_ID']);source=revision()
     require(os.environ.get('GITHUB_RUN_ATTEMPT')=='1' and os.environ.get('GITHUB_REPOSITORY')==REPO,'consumer current attempt/repository')
     prefix='repos/'+REPO+'/actions/';read=lambda p:document(bounded_gh(prefix+p,1048576,end))
     run=read('runs/'+str(run_id));jobs=read('runs/'+str(run_id)+'/attempts/1/jobs?per_page=100');artifacts=read('runs/'+str(run_id)+'/artifacts?per_page=100')
@@ -141,10 +160,15 @@ def consume(destination):
         require(sum(i.filename=='manifest.json' for i in z.infolist())==1 and z.getinfo('manifest.json').file_size<=65536,'manifest member')
         m=document(z.read('manifest.json'))
     validate_manifest(m,source,run_id);meta=native_join(m,run,jobs,artifacts,source,run_id,selected_id,selected_digest)
+    require(time.monotonic()<end,'consumer extraction deadline')
     m=extract(raw,meta,destination)
+    require(time.monotonic()<end,'late consumer extraction')
     receipt=dict(schema='fsgg.c2-diagnostic-client-custody/1',artifactId=meta['id'],artifactDigest=meta['digest'],manifestSha256=file_sha(destination/'manifest.json'),source=source,run=run_id,attempt=1)
+    require(time.monotonic()<end,'consumer custody deadline')
     (destination/'custody.json').write_text(json.dumps(receipt,sort_keys=True)+'\n')
+    require(time.monotonic()<end,'late consumer custody persistence')
     print(str(destination/BIN))
+    require(time.monotonic()<end,'late consumer positive result')
 
 PROFILE_FIELDS={'identity','source','run','attempt','artifactId','artifactDigest','manifestSha256','inputsSha256','binarySha256'}
 def profile_shape(value):
