@@ -353,12 +353,18 @@ def run_gated(effects: Effects, argv: list[str], *, client: NativeClient | None,
     gate_read, gate_write = os.pipe2(os.O_CLOEXEC)
     def born(identity):
         if client is not None:
+            if client.cancelled and operation not in ("cleanup","collection"):
+                client.observe("cancel")
+                raise NativeIOError("native-cancelled-before-child-gate")
             value = client.observe("ack", operation=operation, pid=identity.pid,
                                    startIdentity=str(identity.start_ticks))
             if not value.get("eventAccepted",False):
                 raise NativeIOError("native-child-ack-refused")
         if on_started is not None:
             on_started(identity)
+        if client is not None and client.cancelled and operation not in ("cleanup","collection"):
+            client.observe("cancel")
+            raise NativeIOError("native-cancelled-before-child-gate")
         os.write(gate_write, b"1")
     try:
         return effects.run(["/usr/bin/python3", "-I", "-B", str(HERE / "native_child.py"),

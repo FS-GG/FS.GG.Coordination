@@ -62,6 +62,7 @@ jobs:
           python3 -B tests/fourd-public-provider/test_native_io.py
           python3 -B tests/fourd-public-provider/test_native_cleanup.py
           python3 -B tests/fourd-public-provider/test_native_emergency.py
+          python3 -B tests/fourd-public-provider/test_native_gate.py
           npm install --prefix "$root/quint" --ignore-scripts --no-audit --no-fund @informalsystems/quint@0.32.0
           python3 -B tests/fourd-public-provider/qualify_native.py --producer "$root/publish/FourD.Typed" \
             --evidence "$root/evidence" --quint "$root/quint/node_modules/.bin/quint"
