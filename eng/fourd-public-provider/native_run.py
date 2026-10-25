@@ -123,6 +123,8 @@ def run(args, *, reader=None, consumer=None):
     private_directory(args.private)
     work=args.private/"native-control"
     producer=capsules.closed_json(args.producer_evidence.read_bytes(),65536)
+    node_tool=capsules.closed_json(args.node_tool.read_bytes(),65536)
+    if node_tool.get("version")!="v24.8.0":raise NativeIOError("native-node-profile-refused")
     client=NativeClient(Path(producer["runtimeRoot"])/"FourD.Typed",work,mode=args.mode,
                         started=args.started,started_unix=args.started_unix,host=Path(producer["hostPath"]))
     client.config={"private":str(args.private),"coordinationSource":str(Path(__file__).resolve().parents[2])}
@@ -155,7 +157,7 @@ def run(args, *, reader=None, consumer=None):
             if status!=200: raise NativeIOError("native-capsule-read-unknown")
             return raw
         deadline=client.started+client.response["state"]["deadlines"]["preflight"]
-        source=acquire_capsule(packet,key,args.private,effects,deadline=deadline,client=client,read=read)
+        source=acquire_capsule(packet,key,args.private,effects,deadline=deadline,client=client,read=read,node_tool=node_tool)
         key=b""
         context=prepare_context(source,args.private/"context",effects,deadline=deadline,client=client)
         evidence=source_evidence(client,context,source,effects)
@@ -207,6 +209,7 @@ def main():
     parser=argparse.ArgumentParser()
     parser.add_argument("--producer-evidence",type=Path,required=True)
     parser.add_argument("--locator",type=Path,required=True)
+    parser.add_argument("--node-tool",type=Path,required=True)
     parser.add_argument("--private",type=Path,required=True)
     parser.add_argument("--result",type=Path,required=True)
     parser.add_argument("--started",type=float,required=True)

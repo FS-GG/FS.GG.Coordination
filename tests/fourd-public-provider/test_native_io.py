@@ -33,6 +33,8 @@ class NativeIOTests(unittest.TestCase):
         cls.storage = tempfile.TemporaryDirectory(prefix='native-io-', dir='/tmp')
         cls.root = Path(cls.storage.name)
         cls.host = Path(shutil.which('dotnet')).resolve()
+        node=Path(shutil.which("node")).resolve(strict=True)
+        cls.node_tool=dict(path=str(node),sha256=sha(node.read_bytes()),version=subprocess.check_output([str(node),"--version"],text=True).strip())
         archive = cls.root / 'runtime.tar'
         prepared = bootstrap.prepare_artifact(ROOT, Path(command[0]).parent, cls.host, archive)
         cls.adoption = dict(schema='fsgg.fourd.native-producer-adoption/1', **prepared,
@@ -141,7 +143,7 @@ class NativeIOTests(unittest.TestCase):
         f,client,private,expected,reader=fixture
         effects=io.Effects()
         source=io.acquire_capsule(f.packet,self.key.read_bytes(),private,effects,deadline=client.started+600,
-                                  client=client,read=read or reader)
+                                  client=client,read=read or reader,node_tool=self.node_tool)
         self.assertTrue(effects.settle())
         context=driver.prepare_context(source,private/'context',effects,deadline=client.started+600,client=client)
         proof=driver.source_evidence(client,context,source,effects)
@@ -198,7 +200,7 @@ class NativeIOTests(unittest.TestCase):
         with mock.patch.object(effects,"run",side_effect=cancel_key):
             with self.assertRaisesRegex(io.NativeIOError,"fixture-cancel-before-key-readback"):
                 io.acquire_capsule(f.packet,self.key.read_bytes(),private,effects,deadline=client.started+600,
-                                   client=client,read=reader)
+                                   client=client,read=reader,node_tool=self.node_tool)
         self.assertTrue(effects.settle())
         self.assertEqual([],list((private/"credentials").iterdir()))
         self.assertFalse((private/"source").exists())

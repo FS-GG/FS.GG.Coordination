@@ -15,7 +15,6 @@ import math
 import os
 from pathlib import Path
 import signal
-import shutil
 import stat
 import subprocess
 import sys
@@ -440,7 +439,7 @@ def git_observation(source: Path, target: Path, effects: Effects, env: dict, rem
 
 
 def acquire_capsule(packet: dict, key: bytes, private: Path, effects: Effects, *,
-                    deadline: float, client: NativeClient, read: Callable):
+                    deadline: float, client: NativeClient, read: Callable, node_tool: dict):
     """Actual capsule/raw-commit IO; expected identities originate in the typed root join."""
     client.require_action("acquire-capsule")
     credentials, source = private / "credentials", private / "source"
@@ -485,6 +484,22 @@ def acquire_capsule(packet: dict, key: bytes, private: Path, effects: Effects, *
         if result.get("refusal"):
             raise NativeIOError("native-capsule-join-refused")
         client.require_action("expose-recipient-key")
+        if set(node_tool)!={"path","sha256","version"}:raise NativeIOError("native-node-input-refused")
+        node_path=Path(node_tool["path"])
+        if not node_path.is_absolute() or node_path.resolve(strict=True)!=node_path:
+            raise NativeIOError("native-node-path-refused")
+        descriptor=os.open(node_path,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK|os.O_CLOEXEC)
+        with os.fdopen(descriptor,"rb") as tool:
+            info=os.fstat(tool.fileno())
+            if not stat.S_ISREG(info.st_mode) or info.st_size>256*1024*1024:
+                raise NativeIOError("native-node-file-refused")
+            digest=hashlib.sha256()
+            for block in iter(lambda:tool.read(65536),b""):digest.update(block)
+        if digest.hexdigest()!=node_tool["sha256"]:raise NativeIOError("native-node-bytes-refused")
+        version=effects.run([str(node_path),"--version"],cwd=private,env=env,timeout=min(5,remaining()-36),total_timeout=remaining(),capture=None)
+        if version.returncode or version.stdout.decode().strip()!=node_tool["version"]:
+            raise NativeIOError("native-node-version-refused")
+        node=str(node_path)
         credential_owner.revalidate()
         recipient = create_credential("recipient.pem", key); held.append(recipient)
         public = effects.run(["/usr/bin/openssl", "pkey", "-in", f"/proc/self/fd/{recipient.fd}", "-pubout"],
@@ -504,9 +519,6 @@ def acquire_capsule(packet: dict, key: bytes, private: Path, effects: Effects, *
         capsules.validate_outer_capsule(raw, packet["runNonce"]+"-source", packet["product"]["revision"], capsule["descriptorSha256"])
         if hashlib.sha256((HERE / "seal_native_custody.mjs").read_bytes()).hexdigest() != capsule["descriptor"]["sealerSha256"]:
             raise NativeIOError("native-sealer-bytes-refused")
-        selected_node=shutil.which("node")
-        if selected_node is None:raise NativeIOError("native-node-unavailable")
-        node=str(Path(selected_node).resolve(strict=True))
         result = run_gated(effects, [node, str(HERE / "seal_native_custody.mjs"), "unseal",
             f"/proc/self/fd/{encrypted.fd}", f"/proc/self/fd/{recipient.fd}", str(plaintext_output),
             packet["runNonce"]+"-source", packet["product"]["revision"], capsule["descriptorSha256"]],
