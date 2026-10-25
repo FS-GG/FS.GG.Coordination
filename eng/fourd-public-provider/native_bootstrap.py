@@ -180,7 +180,7 @@ def prepare_artifact(source: Path, published: Path, host: Path, archive: Path):
                        env=safe_environment(Path("/nonexistent"),host),timeout=15,check=True,
                        stdout=subprocess.PIPE,stderr=subprocess.PIPE)
         runtime=capsules.closed_json(response.read_bytes(),65536)["runtimeVersion"]
-    sdk = subprocess.check_output([str(host), "--version"], cwd=source, env=safe_environment(Path("/nonexistent"),host),
+    sdk = subprocess.check_output([str(host), "--version"], cwd=source, env=safe_environment(archive.parent,host),
                                   timeout=15, text=True).strip()
     provenance = {"schema": "fsgg.fourd.native-runtime-provenance/1", "sourceSha": revision, "sourceTree": tree,
                   "bindingSha256": hashlib.sha256(binding_raw).hexdigest(), "files": hashes,
