@@ -167,7 +167,7 @@ class NativeFixture:
         self.ok("producer", evidence=self.producer)
         self.ok("packet", evidence=self.root_evidence)
         self.ok("capsule", evidence=self.capsule_evidence)
-        self.ok("key-exposed", resource="key", identity="key-inode", publicKeySha256="d" * 64)
+        self.ok("key-exposed", resource="recipient-key", identity="key-inode", publicKeySha256="d" * 64)
 
     def prepared(self):
         self.bound()
@@ -345,6 +345,18 @@ class NativeProtocolTests(unittest.TestCase):
         f.finish()
         Path(target).write_bytes(canonical(f.observed))
 
+    def test_cancel_after_capsule_still_requires_recipient_retirement(self):
+        f = self.f
+        f.ok("producer", evidence=f.producer)
+        f.ok("packet", evidence=f.root_evidence)
+        result = f.ok("capsule", evidence=f.capsule_evidence)
+        self.assertEqual(["recipient-intent"], [row["resource"] for row in result["state"]["owned"]])
+        f.event("cancel")
+        f.event("begin-cleanup")
+        _, result = f.event("retired")
+        self.assertEqual("incomplete", result["state"]["phase"])
+        self.assertFalse(result["state"]["cleanupComplete"])
+
     def test_source_executable_mode_is_real(self):
         f = self.f
         f.bound()
@@ -426,7 +438,7 @@ class NativeProtocolTests(unittest.TestCase):
         f = self.f
         f.bound()
         f.ok("begin-cleanup")
-        code, result = f.event("close", resource="key", identity="replacement-inode", childrenRemaining=0, readersRemaining=0, pathsRemaining=0)
+        code, result = f.event("close", resource="recipient-key", identity="replacement-inode", childrenRemaining=0, readersRemaining=0, pathsRemaining=0)
         self.assertEqual(code, 2)
         self.assertIn("owned-settlement-refused", result["refusal"])
 
