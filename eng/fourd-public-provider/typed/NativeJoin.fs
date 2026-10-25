@@ -41,10 +41,8 @@ module NativeJoin =
             p <- Path.GetDirectoryName p
     let bytes maximum path =
         noLinks path
-        let info = FileInfo path
-        require (info.Exists && info.Length > 0L && info.Length <= maximum) "native-file-bound-refused"
-        let result = File.ReadAllBytes path
-        require (int64 result.Length <= maximum) "native-file-bound-refused"
+        let result,_ = NativeSourceFiles.readBounded maximum path
+        require (result.Length>0) "native-file-bound-refused"
         result
     let parse (raw: byte array) =
         let mutable reader = Utf8JsonReader(ReadOnlySpan raw, JsonReaderOptions(MaxDepth=32))
@@ -234,10 +232,9 @@ module NativeJoin =
                     require (mode="100644" || mode="100755") "native-git-mode-refused"
                     let path=Path.Combine(sourceRoot,relative)
                     noLinks path
-                    require ((FileInfo path).Length<=67108864L) "native-source-file-bound-refused"
-                    let content=File.ReadAllBytes path
+                    let content,heldMode=NativeSourceFiles.readBounded 67108864L path
                     require (gitHash "blob" content=hash) "native-git-blob-refused"
-                    let executable=File.GetUnixFileMode(path) &&& (UnixFileMode.UserExecute ||| UnixFileMode.GroupExecute ||| UnixFileMode.OtherExecute) <> enum<UnixFileMode> 0
+                    let executable=heldMode &&& 0o111us <> 0us
                     require (executable=(mode="100755")) "native-context-mode-refused"
                     count<-count+1
                     require (count<=8192) "native-git-file-count-refused"
@@ -331,7 +328,8 @@ module NativeJoin =
     let private archiveJoin (e:JsonElement) =
         let path=str e "archivePath"
         noLinks path
-        use archive=new FileStream(path,FileMode.Open,FileAccess.Read,FileShare.Read,65536,FileOptions.SequentialScan)
+        let opened,_,_=NativeSourceFiles.openRegular path
+        use archive=opened
         require (archive.Length=number e "archiveBytes" && archive.Length<=4294967296L) "native-archive-size-refused"
         let archiveHash=Convert.ToHexString(SHA256.HashData archive).ToLowerInvariant()
         require (archiveHash=str e "archiveSha256") "native-archive-byte-identity-refused"
@@ -376,8 +374,8 @@ module NativeJoin =
             | true,raw -> parse raw
             | _ ->
                 require (files.ContainsKey name && fst files[name]<=16777216L) "native-oci-metadata-bound-refused"
-                use raw=new FileStream(path,FileMode.Open,FileAccess.Read,FileShare.Read)
-                use tar=new TarReader(raw)
+                archive.Position<-0L
+                use tar=new TarReader(archive,true)
                 let mutable item=tar.GetNextEntry()
                 while not(isNull item) && (if item.Name.StartsWith("./",StringComparison.Ordinal) then item.Name.Substring 2 else item.Name)<>name do item<-tar.GetNextEntry()
                 require (not(isNull item)) "native-oci-member-missing"

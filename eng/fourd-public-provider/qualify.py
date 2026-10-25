@@ -725,11 +725,12 @@ class Effects:
         if forced and process.returncode == 0: raise Refusal("child-scope-refused")
         return RunResult(process.returncode or 0, bytes(buffers[0]), bytes(buffers[1]))
 
-    def settle(self, grace: float = 0) -> bool:
+    def settle(self, grace: float = 0, *, deadline: float | None = None) -> bool:
         unresolved = self._unresolved()
         if not unresolved: return not self.topology_unknown
         root = unresolved[0]
         total = time.monotonic() + grace + TERM_SETTLE_SECONDS + KILL_SETTLE_SECONDS
+        if deadline is not None: total = min(total, deadline)
         return self._terminate(root, grace, lambda: None, total) and self._scope_clear()
 
 def verify_capacity(path: pathlib.Path) -> None:

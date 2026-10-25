@@ -365,6 +365,17 @@ class NativeProtocolTests(unittest.TestCase):
         self.assertEqual("incomplete", result["state"]["phase"])
         self.assertFalse(result["state"]["cleanupComplete"])
 
+    def test_native_source_transition_refuses_fifo_without_waiting_for_writer(self):
+        f=self.f;f.bound();f.intent("source")
+        target=f.context/"README";target.unlink();os.mkfifo(target,0o600)
+        import time
+        started=time.monotonic()
+        code,result=f.event("source",evidence=f.source)
+        self.assertLess(time.monotonic()-started,3)
+        self.assertEqual(2,code)
+        self.assertIn("native-source-regular-file-refused",result["refusal"])
+        self.assertFalse(result["state"]["qualified"])
+
     def test_source_executable_mode_is_real(self):
         f = self.f
         f.bound()

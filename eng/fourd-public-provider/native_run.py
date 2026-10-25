@@ -185,19 +185,16 @@ def run(args, *, reader=None, consumer=None):
             client.observe("cancel")
         else:
             client.observe("refuse",reason=(str(error) if isinstance(error,NativeIOError) else "native-io-failure"))
+        if "begin-cleanup" in client.response.get("actions",[]):client.observe("begin-cleanup")
         # The real consumer installs its guaranteed emergency cleanup. Before
         # source acquisition, only this bounded mechanism scope can own effects.
-        settled=effects.settle()
+        end=client.started+client.response["state"]["operationDeadlines"]["cleanup"]
+        settled=effects.settle(deadline=end)
         if settled:
             for holder in client.owned_directories.values():
                 if holder.path==args.private or holder.path.name=="credentials":continue
                 try:
-                    holder.revalidate()
-                    import shutil
-                    for directory,_folders,_files in os.walk(Path(f"/proc/self/fd/{holder.fd}")):
-                        Path(directory).chmod(0o700)
-                    holder.revalidate()
-                    shutil.rmtree(holder.path)
+                    client.retire_directory(holder,deadline=end)
                 except BaseException:pass  # Missing cleanup evidence stays incomplete.
                 finally:holder.close()
         write_new(args.result,client.response)

@@ -25,10 +25,15 @@ def retire(session:Path,evidence:Path):
     failures=[]
     # This is still the original window. A late observer retains Unknown rather
     # than starting another cleanup command with a fresh allowance.
-    end=client.started+(5400 if client.mode=="full" else 1200)
+    state=(client.response or {}).get("state",{})
+    if state.get("phase") not in ("cleanup","retired","collecting","incomplete"):
+        client.observe("refuse",reason="native-interrupted-caller")
+        client.observe("begin-cleanup")
+        state=client.response["state"]
+    end=client.started+state["operationDeadlines"]["cleanup"]
     if time.monotonic()>=end:
         write_new(evidence,{"schema":"fsgg.fourd.native-emergency-retirement/1","observedSession":True,
-                            "originalWindowExpired":True,"failures":["original-window-expired"]})
+                            "cleanupBudgetExpired":True,"failures":["cleanup-budget-exhausted"]})
         return 2
     scope=Effects()
     for intent in (client.response or {}).get("state",{}).get("intents",[]):
@@ -38,7 +43,7 @@ def retire(session:Path,evidence:Path):
         if status=="live" and current.start_ticks==int(ticks):scope.owned[pid]=current
         elif status=="unknown":failures.append("owned-child-identity-unknown")
         # A reused PID is not the old identity and grants no signalling right.
-    try:settled=scope.settle()
+    try:settled=scope.settle(deadline=end)
     except BaseException:settled=False
     if not settled:failures.append("owned-child-settlement-unknown")
     owned=client.config.get("ownedDirectories",{})
@@ -54,7 +59,7 @@ def retire(session:Path,evidence:Path):
         # Authenticate the complete context again before executing its cleanup.
         context=client.config.get("contextSource")
         packet=client.config.get("packet")
-        if context and packet and Path(context).is_dir() and client.config.get("imageState"):
+        if state.get("phase")=="cleanup" and context and packet and Path(context).is_dir() and client.config.get("imageState"):
             product=packet["product"]
             proof=client.call("validate-native-source",{"schema":"fsgg.fourd.native-source-request/1",
                 "expectedRevision":product["revision"],"expectedTree":product["tree"],"expectedInventorySha256":product["inventorySha256"],
@@ -73,6 +78,7 @@ def retire(session:Path,evidence:Path):
                         result=scope.run(argv,cwd=client.work,env=env,timeout=remaining-36,total_timeout=remaining,capture=None,allow_cancelled=True)
                         if result.returncode:failures.append("private-store-cleanup-unknown")
                     except BaseException:failures.append("private-store-cleanup-unknown")
+                else:failures.append("cleanup-budget-exhausted")
             else:failures.append("cleanup-source-bytes-unknown")
         for name,identity in client.config.get("ownedFiles",{}).items():
             path=Path(name)
@@ -83,7 +89,7 @@ def retire(session:Path,evidence:Path):
                     os.close(held.fd);failures.append("credential-path-replaced");continue
                 if not held.wipe_close():failures.append("credential-retirement-unknown")
             except BaseException:failures.append("credential-retirement-unknown")
-        for name,record in owned.items():
+        for name,record in list(client.config.get("ownedDirectories",{}).items()):
             if record["role"] not in ("source","context","snapshot"):continue
             path=Path(name)
             if not path.exists():continue
@@ -91,8 +97,7 @@ def retire(session:Path,evidence:Path):
                 holder=OwnedDirectory(path)
                 try:
                     if holder.identity!=record["identity"]:raise RuntimeError("owned-directory-replaced")
-                    for directory,_folders,_files in os.walk(path):Path(directory).chmod(0o700)
-                    shutil.rmtree(path)
+                    client.retire_directory(holder,deadline=end)
                 finally:holder.close()
             except BaseException:failures.append("plaintext-tree-retirement-unknown")
         root.close()

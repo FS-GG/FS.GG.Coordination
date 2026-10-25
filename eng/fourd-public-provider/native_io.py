@@ -82,6 +82,7 @@ class NativeClient:
         self.config = {}
         self.transient_evidence = []
         self.owned_directories = {}
+        self.active_scopes = []
 
     @classmethod
     def load(cls, path: Path):
@@ -104,6 +105,15 @@ class NativeClient:
         self.owned_directories[role]=holder
         self.config.setdefault("ownedDirectories",{})[str(holder.path)]={"identity":holder.identity,"role":role}
         self.save()
+
+    def retire_directory(self,holder,*,deadline):
+        record=self.config.get("ownedDirectories",{}).get(str(holder.path))
+        if record is None or record["identity"]!=holder.identity:
+            raise NativeIOError("native-directory-retirement-ownership-refused")
+        def captured(value):
+            self.config["ownedDirectories"][str(value.path)]=dict(record)
+            self.save()
+        holder.retire(deadline=deadline,on_captured=captured)
 
     def elapsed(self):
         now = self.clock()
@@ -159,6 +169,7 @@ class NativeClient:
 
     def signal(self, *_):
         self.cancelled = True
+        for scope in self.active_scopes:scope.request_cancel()
 
 
 class OwnedDirectory:
@@ -343,7 +354,7 @@ def acquire_capsule(packet: dict, key: bytes, private: Path, effects: Effects, *
         raise
     finally:
         # Child-created plaintext may exist even when unseal never acknowledged success.
-        try: settled = effects.settle()
+        try: settled = effects.settle(deadline=deadline)
         except BaseException: settled = False
         if plaintext_exists() and all(item.path != plaintext_path for item in held):
             try:

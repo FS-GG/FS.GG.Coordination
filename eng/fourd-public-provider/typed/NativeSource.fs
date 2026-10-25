@@ -18,7 +18,7 @@ type NativeSourceSnapshot = private {
     TotalBytes: int64
 }
 
-module private NativeSourceFiles =
+module internal NativeSourceFiles =
     [<Struct; StructLayout(LayoutKind.Sequential, Size=256)>]
     type LinuxStatx =
         val mutable Mask: uint32
@@ -45,11 +45,24 @@ module private NativeSourceFiles =
         let handle = new SafeFileHandle(nativeint descriptor, true)
         try
             let mutable status = Unchecked.defaultof<LinuxStatx>
-            if statx(handle, "", 0x1000, 0x201u, &status) <> 0 || status.Mask &&& 0x201u <> 0x201u
+            if statx(handle, "", 0x1000, 0x203u, &status) <> 0 || status.Mask &&& 0x203u <> 0x203u
                || status.Mode &&& 0xF000us <> 0x8000us then
                 invalidArg "source" "native-source-regular-file-refused"
-            new FileStream(handle, FileAccess.Read), status.Size
+            new FileStream(handle, FileAccess.Read), status.Size, status.Mode
         with _ -> handle.Dispose(); reraise()
+
+    let readBounded maximum path =
+        let opened,length,mode=openRegular path
+        use stream=opened
+        if length>uint64 maximum then invalidArg "source" "native-source-size-refused"
+        use output=new MemoryStream()
+        let buffer=Array.zeroCreate<byte> 65536
+        let mutable count=stream.Read(buffer,0,buffer.Length)
+        while count>0 do
+            if output.Length+int64 count>maximum then invalidArg "source" "native-source-size-refused"
+            output.Write(buffer,0,count)
+            count<-stream.Read(buffer,0,buffer.Length)
+        output.ToArray(),mode
 
 module NativeSource =
     open NativeSourceFiles
@@ -113,7 +126,7 @@ module NativeSource =
             hash.AppendData name
             hash.AppendData [| 0uy |]
             ordinary path
-            let opened, length = openRegular path
+            let opened, length, _ = openRegular path
             use stream = opened
             if length > uint64 (maximumBytes - total) then invalidArg "source" "native-source-size-refused"
             let mutable count = stream.Read(buffer, 0, buffer.Length)
