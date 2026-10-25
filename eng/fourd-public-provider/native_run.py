@@ -194,6 +194,9 @@ def run(args, *, reader=None, consumer=None):
                 try:
                     holder.revalidate()
                     import shutil
+                    for directory,_folders,_files in os.walk(Path(f"/proc/self/fd/{holder.fd}")):
+                        Path(directory).chmod(0o700)
+                    holder.revalidate()
                     shutil.rmtree(holder.path)
                 except BaseException:pass  # Missing cleanup evidence stays incomplete.
                 finally:holder.close()

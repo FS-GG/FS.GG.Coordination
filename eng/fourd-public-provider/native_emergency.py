@@ -84,7 +84,7 @@ def retire(session:Path,evidence:Path):
                 if not held.wipe_close():failures.append("credential-retirement-unknown")
             except BaseException:failures.append("credential-retirement-unknown")
         for name,record in owned.items():
-            if record["role"] not in ("source","context"):continue
+            if record["role"] not in ("source","context","snapshot"):continue
             path=Path(name)
             if not path.exists():continue
             try:
