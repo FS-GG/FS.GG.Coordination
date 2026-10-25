@@ -187,9 +187,24 @@ module NativePolicy =
                 e,{s with P2Ready=true}
             | "resources" ->
                 shape ["path";"launcherUid";"launcherGid"]; requireAlive()
-                require (s.Phase="source-ready" && number e "launcherUid">0L && number e "launcherGid">=0L) "native-resources-order-refused"
+                require ((s.Phase="source-ready" || s.Phase="preflight-running") && s.Elapsed<deadline s "preflight"
+                         && number e "launcherUid">0L && number e "launcherGid">=0L) "native-resources-order-refused"
                 resources (str e "path") |> ignore
                 e,{s with Resources=Some(number e "launcherUid",number e "launcherGid")}
+            | "checkpoint" ->
+                shape ["path"]; requireAlive()
+                require (s.Phase="image-running" && s.Elapsed<deadline s "image") "native-checkpoint-order-refused"
+                let facts=json (str e "path")
+                closed ["schema";"phase";"scratchUsedBytes";"scratchFreeBytes";"requiredHeadroomBytes";"availableHeadroomBytes";"admitted";"memory"] facts
+                let used,free=number facts "scratchUsedBytes",number facts "scratchFreeBytes"
+                let remaining=max 0L (5368709120L-used)
+                let required=remaining+2147483648L
+                let observed=memoryHeadroom (facts.GetProperty "memory")
+                require (str facts "schema"="fsgg.fourd.image-temporary-checkpoint/1"
+                         && (Set ["before-prepare";"before-fresh-load";"before-build";"before-save"] |> Set.contains (str facts "phase"))) "native-checkpoint-schema-refused"
+                require (used>=0L && free>=remaining && observed>=required && number facts "availableHeadroomBytes"=observed
+                         && number facts "requiredHeadroomBytes"=required) "native-checkpoint-headroom-refused"
+                e,s
             | "preflight" | "image" | "p2" ->
                 shape ["path"]; requireAlive()
                 require (s.Phase=kind+"-running" && acknowledged kind s && s.Elapsed < deadline s kind && s.SourceIdentity=s.CurrentIdentity && s.SourceIdentity.IsSome) "native-result-without-acquired-join"

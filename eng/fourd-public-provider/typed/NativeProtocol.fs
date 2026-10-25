@@ -53,8 +53,10 @@ module NativeProtocol =
                     history.Add normalized
                     state<-next
                 let fresh=request.GetProperty "observation"
-                let normalized,next =
-                    try NativePolicy.apply false state fresh
+                let normalized,next,eventAccepted =
+                    try
+                        let normalized,next=NativePolicy.apply false state fresh
+                        normalized,next,true
                     with error ->
                         // A failed fresh constructor is itself sticky evidence. Persist it in
                         // the qualified journal so a later valid retry cannot erase refusal.
@@ -69,10 +71,11 @@ module NativeProtocol =
                             try let k=str fresh "kind" in k="remote" || k="remote-credential-retirement"
                             with _ -> false
                         let refused=JsonSerializer.SerializeToElement({|kind=(if remote then "root-refuse" else "refuse");elapsed=elapsed;reason=code|})
-                        NativePolicy.apply false state refused
+                        let normalized,next=NativePolicy.apply false state refused
+                        normalized,next,false
                 history.Add normalized
                 let projection=NativePolicy.projection next
-                write output {|schema="fsgg.fourd.native-transition/1";history=history.ToArray();state=projection;modelState=NativePolicy.modelProjection next;actions=NativePolicy.actions next;refusal=(if isNull projection.refusal then projection.rootObservationRefusal else projection.refusal)|}
+                write output {|schema="fsgg.fourd.native-transition/1";eventAccepted=eventAccepted;history=history.ToArray();state=projection;modelState=NativePolicy.modelProjection next;actions=NativePolicy.actions next;refusal=(if isNull projection.refusal then projection.rootObservationRefusal else projection.refusal)|}
                 if isNull projection.refusal && isNull projection.rootObservationRefusal then 0 else 2
             | _ -> fail "native-command-refused"
         with error ->

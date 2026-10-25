@@ -13,6 +13,10 @@
     <Compile Include="NativeSource.fs" />
     <Compile Include="Policy.fs" />
     <Compile Include="RunObservation.fs" />
+    <Compile Include="NativeJoin.fs" />
+    <Compile Include="NativePolicy.fs" />
+    <Compile Include="NativeProtocol.fs" />
+    <Compile Include="NativeOperationModel.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 </Project>
