@@ -350,7 +350,40 @@ class TransportControls(unittest.TestCase):
         with mock.patch.object(pub.urllib.request,'build_opener',return_value=opener):
             status,raw=pub.API('fixture-secret',time.monotonic()+10).request('GET',PREFIX+'/actions/artifacts/800/zip',binary=True)
         self.assertEqual((200,b'fixture'),(status,raw));self.assertIn('Authorization',observed[0].headers)
+        self.assertEqual('application/vnd.github+json',observed[0].headers['Accept'])
         self.assertNotIn('Authorization',observed[1].headers)
+
+    def test_binary_release_asset_keeps_octet_stream_accept(self):
+        observed=[]
+        def open_request(request,timeout):
+            observed.append(request);return self.Response(200,b'asset')
+        opener=mock.Mock();opener.open.side_effect=open_request
+        with mock.patch.object(pub.urllib.request,'build_opener',return_value=opener):
+            self.assertEqual((200,b'asset'),pub.API('fixture',time.monotonic()+10).request(
+                'GET',PREFIX+'/releases/assets/1001',binary=True))
+        self.assertEqual('application/octet-stream',observed[0].headers['Accept'])
+
+    def test_actual_artifact_transport_status_is_checked_before_zip_identity(self):
+        api=FixtureAPI();original=api.request;endpoint=PREFIX+'/actions/artifacts/'+str(ARTIFACT)+'/zip'
+        status=[200]
+        def open_request(request,timeout):
+            self.assertEqual('https://api.github.com'+endpoint,request.full_url)
+            if request.headers.get('Accept')!='application/vnd.github+json':
+                return self.Response(415,b'unsupported Accept')
+            return self.Response(status[0],api.zipped)
+        opener=mock.Mock();opener.open.side_effect=open_request
+        transport=pub.API('fixture',time.monotonic()+10)
+        def request(method,path,body=None,**options):
+            if method=='GET' and path==endpoint:return transport.request(method,path,body,**options)
+            return original(method,path,body,**options)
+        api.request=request
+        with mock.patch.object(pub.urllib.request,'build_opener',return_value=opener):
+            self.assertEqual(api.archive,pub.qualify(api,api.identity)[0])
+            status[0]=415
+            with mock.patch.object(pub,'unpack_pair') as unpack:
+                with self.assertRaisesRegex(pub.Refused,'download HTTP status 415'):
+                    pub.qualify(api,api.identity)
+                unpack.assert_not_called()
 
     def test_write_redirect_and_foreign_read_redirect_are_not_followed(self):
         for method,location in (('POST','https://github.com/fixture'),('GET','https://foreign.invalid/fixture')):
