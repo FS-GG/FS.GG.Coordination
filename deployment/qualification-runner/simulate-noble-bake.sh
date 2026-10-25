@@ -22,4 +22,4 @@ runner_apt_sources=/layer/runner.sources.list
 apt-get "${runner_apt[@]}" update
 apt-get "${runner_apt[@]}" --assume-yes --no-install-recommends install "${runner_packages[@]}"
 dpkg-query -W -f='${binary:Package}\t${Version}\n' | LC_ALL=C sort > /out/package-inventory.expected
-apt-get check
+apt-get "${runner_apt[@]}" check

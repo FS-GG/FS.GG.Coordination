@@ -125,6 +125,10 @@ def apt_options_digest():
     return done.stdout
 
 
+def check_apt_options(transaction):
+    need(transaction.get('aptOptionsSha256') == apt_options_digest(), 'apt options differ from the locked transaction')
+
+
 def package_index(root):
     index = {}
     for suite in SUITES:
@@ -165,7 +169,7 @@ def verify_population(root, lock, archive_keyring):
     transaction = json.loads((root / 'apt/apt-transaction.json').read_text())
     need(sorted(row['filename'] for row in transaction['debs']) == pool, 'transaction .deb set differs from the pool')
     need(lock['aptTransaction']['qualifiedSignedTransactionSha256'] == sha256(root / 'apt/apt-transaction.json'), 'transaction digest differs')
-    need(transaction.get('aptOptionsSha256') == apt_options_digest(), 'apt options differ from the locked transaction')
+    check_apt_options(transaction)
     return {'suites': list(SUITES), 'debs': len(pool), 'signer': ARCHIVE_FINGERPRINT}
 
 
