@@ -388,6 +388,22 @@ module Program =
                 {|schema="fsgg.fourd.failure-diagnostic/1";accepted=true;ready=projection.Ready
                   failureCode=Option.toObj projection.FailureCode;cleanupComplete=projection.CleanupComplete|},options)+"\n");0
 
+    let private validateNativeSource input output =
+        let bytes = readBounded input
+        rejectDuplicateProperties bytes
+        use doc = JsonDocument.Parse(bytes, JsonDocumentOptions(MaxDepth = 8))
+        let root = doc.RootElement
+        requireFields (Set ["schema"; "expectedRevision"; "expectedTree"; "expectedInventorySha256"
+                            "observedRevision"; "observedTree"; "sourceRoot"]) root
+        if requiredString root "schema" <> "fsgg.fourd.native-source-request/1" then
+            invalidArg "input" "typed-schema-refused"
+        let snapshot =
+            NativeSource.acquire (requiredString root "expectedRevision") (requiredString root "expectedTree")
+                (requiredString root "expectedInventorySha256") (requiredString root "observedRevision")
+                (requiredString root "observedTree") (requiredString root "sourceRoot")
+        File.WriteAllText(output, JsonSerializer.Serialize(NativeSource.projection snapshot, options) + "\n")
+        0
+
     let private generateQuint output =
         let path = Path.GetFullPath output
         let parent = Path.GetDirectoryName path
@@ -409,5 +425,6 @@ module Program =
             elif argv[0] = "validate-root" then validateRoot argv[1] argv[2]
             elif argv[0] = "observe-run" then observeRun argv[1] argv[2]
             elif argv[0] = "project-failure" then projectFailure argv[1] argv[2]
+            elif argv[0] = "validate-native-source" then validateNativeSource argv[1] argv[2]
             else 2
         with _ -> 2
