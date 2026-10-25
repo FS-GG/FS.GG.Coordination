@@ -317,3 +317,9 @@ Public artifact metadata can be read without that permission. The prefix does
 not assume cross-repository ZIP access, add a token/App, change Actions policy or
 publish a substitute artifact. Missing attachment/provenance stops the original
 operation without reconstruction or retry.
+
+The existing native-qualification `MANIFEST.sha256` remains scoped to the three
+legacy BAR template members, in its original workflow/README/actionlint order.
+The AT source payloads are separately bound by the exact public/private source
+verifier and protected producer tuple. A directory gaining AT source files does
+not widen the legacy BAR workflow manifest or its enforcing preparation check.
