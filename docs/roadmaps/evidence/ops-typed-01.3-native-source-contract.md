@@ -141,6 +141,33 @@ is admitted. A custom pipeline model is deferred: there is no automatic retry, f
 and shared writer ordering remains with the unchanged ADR0097 lock. These are effect-safety controls,
 not a measured claim of CI savings, exhaustive verification or publication authority.
 
+## Deterministic consumer runtime prefix
+
+The first published7460 archive remains an immutable scoped publication result. Its observed host7dda
+came from the ambient qualification installation; SDK 400/401 alone do not reproduce that host or supply
+runtime 13 on a fresh c068 guest. The new shared `native-runtime-profile.json` pins official SDK10.0.400,
+SDK10.0.401 and explicit runtime10.0.13 archives, all sizes/SHA512 values, and compiler/host/runtime members.
+Their side-by-side union uses host8b3 and preserves strict F# host-hash and effective-version joins. It
+requires fresh protected-source qualification/publication; the old archive is never relabeled or edited.
+The c068 SDK401/runtime12 baseline is not modified.
+
+`native_runtime_profile.py` verifies all frozen input archives before creating a fresh private prefix,
+refuses links/traversal/unknown inventory, verifies the complete installed file census and key pinned bytes,
+and never executes staged binaries. Qualification uses this isolated prefix rather than ambient SDK setup.
+Receiver staging runs after the original clock starts and before producer, packet or key use, at most 240s
+also clipped to the original 600s full/540s capability preflight. Root supplies the actual publisher result;
+only after actual staging does the workflow construct the existing closed adoption record with its real
+hostPath. Independent public bootstrap and the executing F# producer still validate custody, five-file
+closure, loaded FSharp.Core, host hash and effective runtime. Metadata staging grants none of those proofs.
+
+The consumer retains a keyless same-run bootstrap Actions artifact before packet wait, with actual runtime,
+producer and Node facts and the full-mode P2 DLL hash from the unchanged pinned source. Root's existing
+private Actions routes can observe/download that original artifact independently of Checks availability.
+Upload, issuer observation and packet delivery spend the same original preflight; no handoff restarts it.
+Recipient RSA custody stays with Root through the existing repository-secret interface and AES-GCM/RSA-OAEP
+capsule/release route. GitHub's secret-transport public key is a distinct platform key. Actual target,
+credential provisioning, source sealing, dispatch, adoption and remote retirement remain separately selected.
+
 ## Remaining actual first-run inputs and effects
 
 Root must select the protected producer and FourD consumer revisions after source integration,

@@ -43,12 +43,20 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
-      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
-        with:
-          dotnet-version: |
-            10.0.400
-            10.0.401
-          global-json-file: global.json
+      - name: Check exact runtime preparation before acquiring toolchains
+        run: python3 -B tests/fourd-public-provider/test_native_runtime_profile.py
+      - name: Stage the exact isolated official compiler and runtime closure
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          root="$(mktemp -d /tmp/fourd-native-runtime.XXXXXXXX)"
+          python3 -I -B eng/fourd-public-provider/native_runtime_profile.py stage \
+            --archives "$root/archives" --output "$root/runtime" --budget-seconds 240 \
+            > "$root/runtime-profile-facts.json"
+          echo "DOTNET_ROOT=$root/runtime" >> "$GITHUB_ENV"
+          echo "DOTNET_INSTALL_DIR=$root/runtime" >> "$GITHUB_ENV"
+          echo "$root/runtime" >> "$GITHUB_PATH"
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
         with:
           node-version: 24.8.0
