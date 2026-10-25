@@ -21,6 +21,15 @@ IMAGE_URL_PATTERN = r'https://cloud-images\.ubuntu\.com/releases/noble/release-[
 GROUP = 'Default'
 LABEL = 'fsgg-native-linux-x64-v1'
 CALLER_REPOSITORY = 'FS-GG/FS.GG.Native.Qualification'
+FOURD_REPOSITORY = 'FS-GG/FS.GG.FourD'
+# Exactly two private repositories may own a dedicated JIT runner (GitHub Free: one runner, one repository). Each
+# is bound to one allowed workflow (on main) and one job id; a sealed binding names exactly one row.
+TARGETS = {
+    CALLER_REPOSITORY: {'workflow': CALLER_REPOSITORY + '/.github/workflows/bar-hosted-image-qualification.yml@refs/heads/main',
+                        'job': 'full-image'},
+    FOURD_REPOSITORY: {'workflow': FOURD_REPOSITORY + '/.github/workflows/fourd-native-image-qualification.yml@refs/heads/main',
+                       'job': 'native-qualification'},
+}
 RUNNER_NAME_PATTERN = r'fsgg-q-[A-Za-z0-9][A-Za-z0-9-]{0,63}'
 RUNNER_UID = 1001
 STATE_DIRECTORY = '/etc/fsgg-qualification-runner'
@@ -186,7 +195,11 @@ def validate_registration_data(instance, lock, runner_name):
     require(instance.get('baselineId') == BASELINE_ID and instance.get('oneJobOnly') is True, 'single-use baseline instance required')
     require(runner_name_ok(runner_name) and instance.get('runnerName') == runner_name, 'exact ephemeral fsgg-q- runner name required')
     require(instance.get('runnerGroup') == GROUP and instance.get('runnerLabel') == LABEL, 'fixed Default-group route differs')
-    require(instance.get('runnerRepository') == CALLER_REPOSITORY, 'private caller repository binding differs')
+    repository = instance.get('runnerRepository')
+    target = TARGETS.get(repository) if isinstance(repository, str) else None
+    require(target is not None, 'runner repository must be one of the two private qualification targets')
+    require(instance.get('allowedWorkflow') == target['workflow'] and instance.get('allowedJob') == target['job'],
+            'allowed workflow/job differ from the repository binding')
     require(instance.get('repositoryScopeVerified') is True, 'repository-level single-repository runner scope must be independently verified')
     for key in ('qualifiedImageSha256', 'rootInstanceAcceptanceSha256', 'registrationAdmissionSha256'):
         require(sha(instance.get(key)), 'instance/admission missing ' + key)
@@ -196,7 +209,7 @@ def validate_registration_data(instance, lock, runner_name):
     return True
 
 
-REQUEST_FIELDS = ('baselineId', 'providerInstanceId', 'providerImageId', 'systemUuid', 'runnerName', 'qualifiedImageSha256',
+REQUEST_FIELDS = ('baselineId', 'providerInstanceId', 'providerImageId', 'systemUuid', 'runnerName', 'runnerRepository', 'qualifiedImageSha256',
                   'rootInstanceAcceptanceSha256', 'registrationAdmissionSha256', 'repositoryScopeVerified')
 
 
@@ -205,8 +218,11 @@ def binding_from_request(request, lock, system_uuid):
     require(request.get('schema') == 'fsgg.dedicated-qualification-binding-request/1', 'binding request schema')
     require(set(request) == set(REQUEST_FIELDS) | {'schema'}, 'binding request fields differ')
     require(isinstance(system_uuid, str) and system_uuid and request['systemUuid'] == system_uuid, 'actual machine UUID differs from the request')
+    repository = request['runnerRepository']
+    require(isinstance(repository, str) and repository in TARGETS, 'runner repository must be one of the two private qualification targets')
     instance = {'schema': 'fsgg.dedicated-qualification-instance/1', 'oneJobOnly': True, 'runnerGroup': GROUP,
-                'runnerLabel': LABEL, 'runnerRepository': CALLER_REPOSITORY, 'credentialKind': 'jit-config',
+                'runnerLabel': LABEL, 'credentialKind': 'jit-config',
+                'allowedWorkflow': TARGETS[repository]['workflow'], 'allowedJob': TARGETS[repository]['job'],
                 **{key: request[key] for key in REQUEST_FIELDS}}
     validate_registration_data(instance, lock, instance['runnerName'])
     return instance
