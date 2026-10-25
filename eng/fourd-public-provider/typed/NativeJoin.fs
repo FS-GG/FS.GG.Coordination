@@ -83,6 +83,10 @@ module NativeJoin =
         let executingHost=Environment.ProcessPath
         require (not(String.IsNullOrWhiteSpace executingHost) && Path.GetFileName executingHost="FourD.Typed") "native-producer-standalone-apphost-required"
         hashFile expectedFiles["FourD.Typed"] executingHost |> ignore
+        let executingRoot=Path.GetDirectoryName executingHost
+        for KeyValue(name,expected) in expectedFiles do
+            hashFile expected (Path.Combine(executingRoot,name)) |> ignore
+        hashFile expectedFiles["FSharp.Core.dll"] (typeof<option<int>>.Assembly.Location) |> ignore
         let root = str request "runtimeRoot"
         for KeyValue(name, expected) in expectedFiles do hashFile expected (Path.Combine(root,name)) |> ignore
         let bindingHash,provenanceHash = str request "expectedBindingSha256",str request "expectedProvenanceSha256"
