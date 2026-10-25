@@ -40,6 +40,128 @@ def lock():
 
 
 class DedicatedRunnerDataControls(unittest.TestCase):
+    def test_at_factory_closure_uses_real_git_objects_and_refuses_source_or_object_drift(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary)
+            subprocess.run(['git','init','-q',str(root)],check=True)
+            for name in owner.AT_FACTORY_FILES:
+                path=root/owner.AT_FACTORY_PREFIX/name;path.parent.mkdir(parents=True,exist_ok=True)
+                path.write_text('inert source '+name+'\n')
+            subprocess.run(['git','-C',str(root),'add','.'],check=True)
+            subprocess.run(['git','-C',str(root),'-c','user.name=Fixture','-c','user.email=fixture@example.invalid','commit','-qm','inert source'],check=True)
+            revision=subprocess.check_output(['git','-C',str(root),'rev-parse','HEAD'],text=True).strip()
+            import time
+            result=owner.factory_git_closure(root,revision,time.monotonic()+10)
+            self.assertEqual(set(owner.AT_FACTORY_FILES),set(result))
+            # A mutated working file cannot replace the source-bound Git blob.
+            path=root/owner.AT_FACTORY_PREFIX/owner.AT_FACTORY_FILES[0];path.write_text('changed working source')
+            self.assertEqual(result,owner.factory_git_closure(root,revision,time.monotonic()+10))
+            with self.assertRaises(ValueError):owner.factory_git_closure(root,'0'*40,time.monotonic()+10)
+            with self.assertRaises(ValueError):owner.factory_git_closure(root,revision,time.monotonic()-1)
+            import zlib
+            stored=root/'.git/objects'/revision[:2]/revision[2:];original=stored.read_bytes()
+            stored.chmod(0o600)
+            raw=zlib.decompress(original);header,body=raw.split(b'\0',1);changed=body+b'\nchanged object body'
+            stored.write_bytes(zlib.compress(b'commit '+str(len(changed)).encode()+b'\0'+changed))
+            with self.assertRaises(ValueError):owner.factory_git_closure(root,revision,time.monotonic()+10)
+            stored.write_bytes(original)
+            alternate=root/'.git/objects/info/alternates';alternate.write_text('/untrusted/objects\n')
+            with self.assertRaises(ValueError):owner.factory_git_closure(root,revision,time.monotonic()+10)
+
+    def test_at_pool_capture_is_fd_anchored_bounded_and_failed_capture_stays_private(self):
+        import types,time
+        for attack in ('none','symlink','hardlink'):
+            with self.subTest(attack=attack),tempfile.TemporaryDirectory() as temporary:
+                root=Path(temporary);runner=root/'runner';pool=runner/'native-at-pool';pool.mkdir(parents=True)
+                destination=root/'root-pools';destination.mkdir(mode=0o755)
+                software=self.at_software();transaction=b'original solver input';software['frozenPlan']['transactionSha256']=hashlib.sha256(transaction).hexdigest()
+                software_sha=hashlib.sha256(json.dumps(software,sort_keys=True,separators=(',',':')).encode()).hexdigest()
+                request={'atSoftwareContract':software,'atSoftwareContractSha256':software_sha}
+                state=root/'state';state.mkdir();(state/'instance-binding.json').write_text(json.dumps(request))
+                archive=pool/'archives/pool/tool.deb';archive.parent.mkdir(parents=True);archive.write_bytes(b'inert bytes')
+                receipt={'schema':'fsgg.current-reference-noble-frozen-inputs/1','originalTransactionSha256':software['frozenPlan']['transactionSha256'],
+                    'rootRequestSha256':software['rootRequestSha256'],'archives':[{'path':'pool/tool.deb','sha256':hashlib.sha256(archive.read_bytes()).hexdigest(),'bytes':11}]}
+                (pool/'frozen-inputs.json').write_text(json.dumps(receipt))
+                for suite in ('noble','noble-updates','noble-security'):
+                    path=pool/'metadata'/str(suite+'.InRelease');path.parent.mkdir(exist_ok=True);path.write_bytes(b'inert metadata')
+                    for component in ('main','universe'):
+                        for kind in ('binary-amd64-Packages.xz','source-Sources.xz'):(pool/'metadata'/str(suite+'-'+component+'-'+kind)).write_bytes(b'inert index')
+                for name in ('transaction.json','apt-config.log','apt-update.log','apt-simulate.log','status'):
+                    path=pool/'originals'/name;path.parent.mkdir(exist_ok=True);path.write_bytes(transaction if name=='transaction.json' else b'original input')
+                if attack=='symlink':
+                    archive.unlink();archive.symlink_to(root/'foreign-secret')
+                elif attack=='hardlink':os.link(archive,root/'alias')
+                lstat=Path.lstat
+                def root_parent(path,*args,**kwargs):
+                    value=lstat(path,*args,**kwargs)
+                    return types.SimpleNamespace(st_mode=value.st_mode,st_uid=0) if path==destination else value
+                with mock.patch.object(owner,'at_factory_binding',return_value=request),mock.patch.object(owner,'AT_POOL_ROOT',str(destination)),mock.patch.object(owner,'STATE_DIRECTORY',str(state)),mock.patch.object(owner,'RUNNER_UID',os.getuid()),mock.patch.object(Path,'lstat',root_parent),mock.patch.dict(os.environ,{'RUNNER_TEMP':str(runner),'FSGG_AT_DEADLINE_MONOTONIC':str(time.monotonic()+120)},clear=True):
+                    if attack=='none':
+                        result=owner.capture_at_pool();captured=Path(result['pool']);self.assertFalse(result['installation'])
+                        self.assertEqual(b'inert bytes',(captured/'archives/pool/tool.deb').read_bytes())
+                        self.assertEqual(0o755,captured.stat().st_mode&0o777);self.assertTrue((captured/'pool-seal.json').is_file())
+                    else:
+                        with self.assertRaises((ValueError,OSError)):owner.capture_at_pool()
+                        captured=destination/software_sha
+                        self.assertEqual(0o700,captured.stat().st_mode&0o777)
+                        self.assertFalse((captured/'pool-seal.json').exists())
+
+    def at_software(self):
+        return {'schema':'fsgg.current-reference-noble-software/1','platform':'ubuntu-24.04-x11',
+                'stage':'facility-prefix','templatesSource':'a'*40,'rootRequestSha256':owner.AT_ROOT_REQUEST_SHA256,
+                'expectedFinalInventory':{'packages':993,'sha256':owner.AT_INVENTORY_SHA256},'resources':dict(owner.AT_RESOURCES),
+                'frozenPlan':{'repository':'FS-GG/FS.GG.Templates','repositoryId':1281961814,
+                    'workflowPath':'.github/workflows/fable-external-reference-source.yml','source':'b'*40,
+                    'runId':1,'runAttempt':1,'artifactId':2,'artifactSha256':'c'*64,'artifactBytes':100,'transactionSha256':'d'*64}}
+
+    def at_request(self):
+        software=self.at_software()
+        return self.request(schema='fsgg.dedicated-qualification-binding-request/2',runnerWorkload=owner.AT_WORKLOAD,
+            atSoftwareContract=software,atSoftwareContractSha256=hashlib.sha256(json.dumps(software,sort_keys=True,separators=(',',':')).encode()).hexdigest())
+
+    def test_at_v2_software_is_closed_exact_and_never_an_arbitrary_command_profile(self):
+        owner.validate_at_software(self.at_software())
+        for change in ['extra','platform','stage','root','inventory','resources','producer','artifact','retry','float']:
+            value=self.at_software()
+            if change=='extra':value['commands']=['unselected']
+            elif change=='platform':value['platform']='ubuntu-26.10'
+            elif change=='stage':value['stage']='arbitrary-shell'
+            elif change=='root':value['rootRequestSha256']='f'*64
+            elif change=='inventory':value['expectedFinalInventory']['packages']=992
+            elif change=='resources':value['resources']['memoryBytes']+=1
+            elif change=='producer':value['frozenPlan']['repository']='FS-GG/FS.GG.Rendering'
+            elif change=='artifact':value['frozenPlan']['artifactSha256']=None
+            elif change=='retry':value['frozenPlan']['runAttempt']=2
+            else:value['resources']['vcpu']=2.0
+            with self.subTest(change=change),self.assertRaises(ValueError):owner.validate_at_software(value)
+
+    def test_at_v2_target_has_separate_floor_and_does_not_lower_legacy_target(self):
+        value=target();value.update(schema='fsgg.dedicated-qualification-target/2',runnerWorkload=owner.AT_WORKLOAD,atLayerSource='a'*40)
+        value['resources'].update(vcpu=2,memoryBytes=4*1024**3)
+        owner.validate_target_data(value)
+        for change in ['legacy','scope','layer','memory','extra']:
+            bad=copy.deepcopy(value)
+            if change=='legacy':bad['schema']='fsgg.dedicated-qualification-target/1'
+            elif change=='scope':bad['runnerWorkload']='bar'
+            elif change=='layer':bad['atLayerSource']=None
+            elif change=='memory':bad['resources']['memoryBytes']-=1
+            else:bad['command']='unselected'
+            with self.subTest(change=change),self.assertRaises(ValueError):owner.validate_target_data(bad)
+
+    def test_at_v2_seals_distinct_private_job_label_and_software_without_bar_crosstalk(self):
+        request=self.at_request();instance=owner.binding_from_request(request,lock(),'authored-uuid')
+        self.assertEqual(owner.AT_LABEL,instance['runnerLabel']);self.assertEqual(owner.AT_TARGET['workflow'],instance['allowedWorkflow'])
+        self.assertEqual('current-public-at',instance['allowedJob']);self.assertTrue(owner.validate_registration_data(instance,lock(),instance['runnerName']))
+        self.assertEqual(owner.LABEL,owner.binding_from_request(self.request(),lock(),'authored-uuid')['runnerLabel'])
+        for key,value in [('runnerLabel',owner.LABEL),('allowedJob','full-image'),('allowedWorkflow',owner.TARGETS[owner.CALLER_REPOSITORY]['workflow']),('runnerRepository',owner.FOURD_REPOSITORY),('runnerWorkload','bar'),('atSoftwareContractSha256','f'*64)]:
+            bad={**instance,key:value}
+            with self.subTest(key=key),self.assertRaises(ValueError):owner.validate_registration_data(bad,lock(),bad['runnerName'])
+        for key in ['atSoftwareContract','atSoftwareContractSha256','runnerWorkload']:
+            bad=dict(request);del bad[key]
+            with self.assertRaises(ValueError):owner.binding_from_request(bad,lock(),'authored-uuid')
+        with self.assertRaises(ValueError):owner.binding_from_request({**request,'schema':'fsgg.dedicated-qualification-binding-request/1'},lock(),'authored-uuid')
+        with self.assertRaises(ValueError):owner.binding_from_request({**request,'runnerRepository':owner.FOURD_REPOSITORY},lock(),'authored-uuid')
+
     def test_missing_target_stays_unknown(self):
         with self.assertRaises(ValueError): owner.validate_target_data({})
 

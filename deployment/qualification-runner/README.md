@@ -259,3 +259,37 @@ and tiny file-population checks only. It does not run SDKs, compilers, userns pr
 - [GitHub self-hosted runner requirements](https://docs.github.com/en/actions/reference/runners/self-hosted-runners)
 - [GitHub ephemeral runner guidance](https://docs.github.com/en/actions/how-tos/manage-runners/self-hosted-runners/autoscale)
 - [Runner supported environment inputs](https://github.com/actions/runner/blob/main/src/Runner.Listener/CommandSettings.cs)
+
+### Separate ATv2 factory handoff (source preparation)
+
+ATv2 uses the distinct private `current-public-at` job and
+`fsgg-native-at-x11-v1` label. Legacy BAR/FourD target/binding defaults remain v1.
+An AT-capable baked driver/image needs separate image and caller qualification;
+advancing this source does not admit the existing BAR image to AT.
+
+The baked driver has two fixed handoffs before privileged factory execution.
+`seal-at-controller` reads and verifies the selected Templates commit, every tree
+on seven closed source paths and each blob's Git object body identity. It never
+executes checkout code, follows replacement refs/alternate object stores, fetches
+missing objects or accepts an arbitrary command. It copies only those source and
+fixture bytes into `/opt/fsgg/current-at-controller/<selected-source>` with a
+root-owned seal bound to the actual instance binding. The factory refuses an
+unsealed entry before importing sibling helpers.
+
+`capture-at-pool` reads only `$RUNNER_TEMP/native-at-pool`, through no-follow
+root/directory/file descriptors. Each original input must be a stable, single-link,
+UID1001-owned regular file; source ancestor replacement cannot redirect an open
+handle outside that domain. The declared archive population remains at most2048
+and512MiB,128MiB per archive. Fifteen metadata and five original solver inputs are
+captured separately; the entire handoff is bounded at768MiB. Failed partial
+capture stays root-private. Completed bytes are exposed read-only under
+`/var/lib/fs-gg-current-at-pools/<software-contract-sha256>`; the factory rechecks
+its root seal, binding, exact membership, ownership and content before use.
+
+These handoffs require the separately sealed ATv2 binding and actual guest/layer
+readback, use original absolute deadlines, and refuse the full-current-public
+stage in this factory-prefix slice. They grant no installation, runtime, IME,
+Orca, provider, Studio, outer-containment or VM-retirement acceptance. Actual
+installation and keymap preparation require the selected factory phases, while
+full AT remains behind the producer's `None` admission. Root owns selection,
+aggregate storage/reservation, qualified image/caller delivery and VM destruction.
