@@ -185,6 +185,18 @@ def local_client(path):
     require(not (path/BIN).is_symlink() and (path/BIN).is_file() and 0<(path/BIN).stat().st_size<=LIMIT,'bounded local executable');require((path/BIN).stat().st_size==b['bytes'] and file_sha(path/BIN)==b['sha256'],'local binary drift')
     return dict(identity=m['identity'],source=c['source'],run=c['run'],attempt=1,artifactId=c['artifactId'],artifactDigest=c['artifactDigest'],manifestSha256=c['manifestSha256'],inputsSha256=m['inputsSha256'],binarySha256=b['sha256'])
 
+def finish_build(output,binary,manifest,end):
+    require(time.monotonic()<end,'original build completion deadline')
+    validate_manifest(manifest,revision(),manifest['custody']['run'])
+    output.mkdir(mode=0o700);shutil.copyfile(binary,output/BIN);(output/BIN).chmod(0o700)
+    shutil.copyfile(ROOT/'eng/vendor/quint-c2-diagnostic/LICENSE',output/'LICENSE')
+    require(time.monotonic()<end,'late build payload persistence')
+    (output/'manifest.json').write_text(json.dumps(manifest,sort_keys=True)+'\n')
+    require(time.monotonic()<end,'late build manifest persistence')
+    result={'artifact':name(manifest['custody']),'binary':manifest['binary'],'manifestSha256':file_sha(output/'manifest.json')}
+    require(time.monotonic()<end,'late build positive result')
+    return result
+
 def build(output):
     import importlib.util
     v=inputs();c=custody(os.environ);declared_recipe=recipe();tracked=subprocess.check_output(['git','ls-files','-z','--',*FILES],cwd=ROOT).decode().split('\0');require(set(tracked)-{''}==set(FILES),'tracked producer input closure');require(subprocess.run(['git','diff','--quiet','HEAD'],cwd=ROOT).returncode==0,'clean producer source');require(not output.exists(),'fresh output root')
@@ -254,11 +266,10 @@ def build(output):
     a=document(after.read_bytes());f=document(functions.read_bytes());require(a['passed'] is True and len(f['controls'])==6 and all(x['passed'] is True for x in f['controls']),'new production-entry controls')
     require(inventory(runtime)==v['runtimeInventorySha256'] and file_sha(denort)==v['denort']['sha256'],'post-build runtime input drift')
     require(recipe()==declared_recipe and revision()==c['source'] and subprocess.run(['git','diff','--quiet','HEAD'],cwd=ROOT).returncode==0,'producer source changed during build')
-    output.mkdir(mode=0o700);shutil.copyfile(new,output/BIN);(output/BIN).chmod(0o700)
-    license_path=ROOT/'eng/vendor/quint-c2-diagnostic/LICENSE';shutil.copyfile(license_path,output/'LICENSE')
+    license_path=ROOT/'eng/vendor/quint-c2-diagnostic/LICENSE'
     manifest=dict(license=dict(path='LICENSE',bytes=license_path.stat().st_size,sha256=file_sha(license_path)),schema='fsgg.c2-diagnostic-client-build/1',identity=v['identity'],custody=c,inputsSha256=file_sha(INPUT),recipe=declared_recipe,binary=dict(path=BIN,bytes=new.stat().st_size,sha256=file_sha(new)),buildRoot=str(scratch),preflight=dict(oldMissingExplanation=old_receipt['explanationPresent'] is False,newRetainedExplanation=a['explanationPresent'] is True,exitPreserved=a['code']==old_receipt['code']==1,oneCompileEach=a['requests']==old_receipt['requests']==['TLA'],functionControls=len(f['controls']),runtimeInventorySha256=inventory(runtime)))
-    validate_manifest(manifest,c['source'],c['run']);(output/'manifest.json').write_text(json.dumps(manifest,sort_keys=True)+'\n')
-    print(json.dumps({'artifact':name(c),'binary':manifest['binary'],'manifestSha256':file_sha(output/'manifest.json')}))
+    result=finish_build(output,new,manifest,end)
+    print(json.dumps(result));require(time.monotonic()<end,'late build report completion')
 
 def main():
     p=argparse.ArgumentParser();p.add_argument('command',choices=['build','consume','check']);p.add_argument('root',type=pathlib.Path);a=p.parse_args()

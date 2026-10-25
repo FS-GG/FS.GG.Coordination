@@ -28,6 +28,20 @@ class Controls(unittest.TestCase):
             out=pathlib.Path(d)/'new';M.extract(raw,meta,out)
             self.assertEqual((out/M.BIN).read_bytes(),b'inert byte fixture, never executed')
             self.assertEqual(stat.S_IMODE((out/M.BIN).stat().st_mode),0o700)
+    def test_build_final_stage_cannot_publish_a_late_positive_manifest(self):
+        m,*_=self.fixture()
+        for late in (False,True):
+            clock=[0.0];original=pathlib.Path.write_text
+            def write(path,*args,**kwargs):
+                result=original(path,*args,**kwargs)
+                if late and path.name=='manifest.json':clock[0]=11.0
+                return result
+            with tempfile.TemporaryDirectory() as d,patch.object(M.time,'monotonic',side_effect=lambda:clock[0]),patch.object(pathlib.Path,'write_text',write):
+                root=pathlib.Path(d);binary=root/'built';binary.write_bytes(b'inert byte fixture, never executed')
+                if late:
+                    with self.assertRaisesRegex(ValueError,'late build manifest'):M.finish_build(root/'artifact',binary,m,10)
+                else:self.assertEqual(M.finish_build(root/'artifact',binary,m,10)['binary'],m['binary'])
+
     def test_late_final_process_completion_is_not_a_positive_native_read(self):
         clock=[0.0];out=Mock();err=Mock();out.fileno.return_value=31;err.fileno.return_value=32
         process=Mock(stdout=out,stderr=err);process.poll.return_value=0
