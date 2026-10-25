@@ -21,6 +21,7 @@ import stat
 import subprocess
 import sys
 import unittest
+from unittest import mock
 
 PUBLIC = 'FS-GG/FS.GG.Coordination'
 PRIVATE = 'FS-GG/FS.GG.Native.Qualification'
@@ -34,7 +35,23 @@ PAYLOAD = {SOURCE_WORKFLOW: PREFIX+'current-public-at-source-controls.yml',
            'tests/current-public-at/verify-source.py': PREFIX+'verify-current-public-at-source.py'}
 PRODUCER = ('.fsgg/routine-development.json', '.github/workflows/routine-eligibility.yml',
             'scripts/check-claim-generation.py', 'scripts/check-routine-eligibility-envelope.py', 'scripts/lib/gate.py')
-RETAINED = ('.github/workflows/bar-hosted-image-qualification.yml', 'README.md')
+RETAINED = ('README.md',)
+BAR = '.github/workflows/bar-hosted-image-qualification.yml'
+PUBLIC_BAR = PREFIX+'bar-hosted-image-qualification.yml'
+BAR_GUARD = (
+    b'          cmp -- "$template/bar-hosted-image-qualification.yml" caller/.github/workflows/bar-hosted-image-qualification.yml\n'
+    b'          cmp -- "$template/README.md" caller/README.md\n'
+    b'          cmp -- "$template/actionlint.yaml" caller/.github/actionlint.yaml\n'
+    b'          test "$(git -C caller ls-files | LC_ALL=C sort | tr \'\\n\' \' \')" = \'.github/actionlint.yaml .github/workflows/bar-hosted-image-qualification.yml README.md \'\n')
+# Actual protected .github Git blobs at this revision, not a native-installation claim.
+# Freeze must still compare these five files to the actual selected protected producer.
+PRODUCER_SOURCE = '0e8f845392baa5b1df4e28a436adfd3dbc338b04'
+PRODUCER_SHA256 = dict(zip(PRODUCER, (
+    '631b83bd0b2204016679497917411dc90fa53e4e88c625b043942c0a82c0070d',
+    'c78d4513d755270d5b0d5fb6d8c5d873d372c0d8e19fba08b622ac6bb7129899',
+    '7995b5331f2d9564313f6d317f733f53174781aeb3bd50ecfa28755c036553c2',
+    'f311a6300f48cf0bca763c2e4092c3f026c13223c9868a9fd1afb611fb94ffaa',
+    '9511b7f62ea101a397fd375d8653fc0b4fcb9a07ddb583e874d3cd60cc886d6c'), strict=True))
 LINT = '.github/actionlint.yaml'
 LINT_BASE = (b'# Declares the one self-hosted label of this private caller repository so actionlint accepts it.\n'
              b'self-hosted-runner:\n  labels:\n    - fsgg-native-linux-x64-v1\n')
@@ -91,6 +108,12 @@ jobs:
           retention-days: 7
           compression-level: 0
 '''
+
+
+def derive_bar(body):
+    require(body.count(BAR_GUARD) == 1, 'BAR baseline guard must occur exactly once')
+    return body.replace(BAR_GUARD,
+        b'          python3 -I -B source/eng/current-public-at/verify-current-public-at-source.py bar-runtime --caller caller --source source\n')
 
 
 def require(value, message):
@@ -214,12 +237,14 @@ def workflow_controls(body, held):
     return True
 
 
-def private_delta(base, candidate, bodies, base_lint):
-    require(set(base) == set(RETAINED) | {LINT}, 'fresh receiver base must contain only the BAR three')
+def private_delta(base, candidate, bodies, base_lint, base_bar):
+    require(set(base) == set(RETAINED) | {LINT,BAR}, 'fresh receiver base must contain only the BAR three')
     require(set(candidate) == set(base) | set(PRODUCER) | set(PAYLOAD), 'receiver leaf population differs')
     require(all(candidate[path] == base[path] for path in RETAINED), 'retained BAR source changed')
     require(base_lint == LINT_BASE and bodies[LINT] == LINT_DERIVED, 'actionlint closed derivation differs')
-    require(set(bodies) == set(PRODUCER) | set(PAYLOAD) | {LINT}, 'nine source bodies required')
+    require(bodies[BAR] == derive_bar(base_bar), 'BAR closed guard derivation differs')
+    require(set(bodies) == set(PRODUCER) | set(PAYLOAD) | {LINT,BAR}, 'ten source bodies required')
+    require(all(digest(bodies[path]) == PRODUCER_SHA256[path] for path in PRODUCER), 'protected canonical producer bytes differ')
     workflow_controls(bodies[HELD_WORKFLOW], True)
     workflow_controls(bodies[SOURCE_WORKFLOW], False)
     return {path:digest(body) for path,body in bodies.items()}
@@ -264,16 +289,22 @@ def driver_controls(root):
             'actual AT driver controls failed/skipped')
 
 
-def public_bundle(root):
+def bundle_sources(root):
     bodies = {path:read(root/path) for path in PAYLOAD.values()}
     require(bodies[PAYLOAD['tests/current-public-at/verify-source.py']] == read(root/VERIFIER), 'private verifier mirror differs')
     workflow_controls(bodies[PAYLOAD[SOURCE_WORKFLOW]],False)
     workflow_controls(bodies[PAYLOAD[HELD_WORKFLOW]],True)
     # BAR source/template stays outside the AT derivation and is not rewritten here.
     require(read(root/(PREFIX+'actionlint.yaml')) == LINT_BASE, 'BAR template baseline changed')
+    derive_bar(read(root/PUBLIC_BAR))
+    return bodies
+
+
+def public_bundle(root):
+    bodies=bundle_sources(root)
     driver_controls(root)
     for path in (SOURCE_WORKFLOW,VERIFIER,'eng/dedicated_qualification_runner.py',
-                 'tests/qualification-runner/test_dedicated_runner.py',PREFIX+'actionlint.yaml'):
+                 'tests/qualification-runner/test_dedicated_runner.py',PREFIX+'actionlint.yaml',PUBLIC_BAR,PREFIX+'README.md'):
         bodies[path]=read(root/path)
     return {path:digest(body) for path,body in bodies.items()}
 
@@ -289,13 +320,39 @@ def produce(mode, root, environment):
                        controls=list(DATA_CONTROLS),nativeQualification='not-selected')
     else:
         base, candidate = tree(root,facts['baseSha']), tree(root,facts['candidateSha'])
-        bodies = {path:read(root/path) for path in (*PRODUCER,*PAYLOAD,LINT)}
-        files = private_delta(base,candidate,bodies,blob(root,facts['baseSha'],LINT))
+        bodies = {path:read(root/path) for path in (*PRODUCER,*PAYLOAD,LINT,BAR)}
+        files = private_delta(base,candidate,bodies,blob(root,facts['baseSha'],LINT),blob(root,facts['baseSha'],BAR))
         receipt = dict(schema='fsgg.native-at.source-qualification/1',**facts,files=files,
                        retainedBarFiles={path:base[path] for path in RETAINED},
-                       derivedActionlint=dict(baseBlobSha=base[LINT],candidateSha256=files[LINT]))
+                       derivedActionlint=dict(baseBlobSha=base[LINT],candidateSha256=files[LINT]),
+                       derivedBARguard=dict(baseBlobSha=base[BAR],candidateSha256=files[BAR]))
     require(git(root,'status','--porcelain=v1','--untracked-files=all') == b'', 'source changed during controls')
     return receipt
+
+
+def bar_runtime(caller, source, environment):
+    """Source correspondence only; all existing BAR native/upstream/run guards still apply."""
+    require(environment.get('GITHUB_REPOSITORY') == PRIVATE
+            and environment.get('GITHUB_REPOSITORY_ID') == '1432517271', 'BAR caller repository differs')
+    head, revision = environment.get('GITHUB_SHA'), environment.get('FSGG_SOURCE_REVISION')
+    require(sha(head) and sha(revision), 'BAR source/caller identities unavailable')
+    require(Path(__file__).resolve() == source/VERIFIER, 'BAR verifier must execute from selected public source')
+    for root, expected in ((caller,head),(source,revision)):
+        require(git(root,'rev-parse','HEAD').decode().strip() == expected, 'BAR checkout identity differs')
+        require(git(root,'status','--porcelain=v1','--untracked-files=all','--ignored') == b'', 'BAR checkout has extra/changed source')
+    git(source,'merge-base','--is-ancestor',revision,'refs/remotes/origin/main')
+    bundle=bundle_sources(source)
+    rows=tree(caller,head)
+    require(set(rows)==set(PRODUCER)|set(PAYLOAD)|{LINT,BAR,'README.md'}, 'BAR complete caller population differs')
+    expected={path:bundle[public] for path,public in PAYLOAD.items()}
+    expected.update({LINT:LINT_DERIVED,BAR:derive_bar(read(source/PUBLIC_BAR)),
+                     'README.md':read(source/(PREFIX+'README.md'))})
+    for path,body in expected.items():
+        require(read(caller/path)==body, 'BAR protected caller bytes differ: '+path)
+    for path in PRODUCER:
+        require(digest(read(caller/path))==PRODUCER_SHA256[path], 'BAR canonical producer bytes differ: '+path)
+    for root in (caller,source):
+        require(git(root,'status','--porcelain=v1','--untracked-files=all','--ignored') == b'', 'BAR source changed during collection')
 
 
 def source_selftests():
@@ -338,16 +395,31 @@ def source_selftests():
                   b'    if: ${{ github.ref == \'refs/heads/main\' && github.run_attempt == 1 }}\n'
                   b'    runs-on: [self-hosted, linux, x64, fsgg-native-at-x11-v1]\n    steps:\n'
                   b'      - uses: '+CHECKOUT.encode()+b'\n')
-            base={path:'b'*40 for path in (*RETAINED,LINT)}
-            candidate={**base,**{path:'a'*40 for path in (*PRODUCER,*PAYLOAD,LINT)}}
-            bodies={path:b'inert fixture' for path in (*PRODUCER,*PAYLOAD,LINT)}
-            bodies.update({SOURCE_WORKFLOW:private_workflow(),HELD_WORKFLOW:held,LINT:LINT_DERIVED})
-            self.assertEqual(len(private_delta(base,candidate,bodies,LINT_BASE)),9)
-            for changed in ({**candidate,'extra':'a'*40},{**candidate,'README.md':'c'*40},
-                            {k:v for k,v in candidate.items() if k!=HELD_WORKFLOW}):
-                with self.assertRaises(ValueError):private_delta(base,changed,bodies,LINT_BASE)
-            for bad in (LINT_BASE,LINT_DERIVED+b'    - extra-label\n',LINT_DERIVED.replace(b'fsgg-native-linux-x64-v1',b'wrong')):
-                with self.assertRaises(ValueError):private_delta(base,candidate,{**bodies,LINT:bad},LINT_BASE)
+            base={path:'b'*40 for path in (*RETAINED,LINT,BAR)}
+            candidate={**base,**{path:'a'*40 for path in (*PRODUCER,*PAYLOAD,LINT,BAR)}}
+            bodies={path:b'inert fixture' for path in (*PRODUCER,*PAYLOAD,LINT,BAR)}
+            base_bar=b'old upstream guards\n'+BAR_GUARD+b'old native operation guards\n'
+            bodies.update({SOURCE_WORKFLOW:private_workflow(),HELD_WORKFLOW:held,LINT:LINT_DERIVED,BAR:derive_bar(base_bar)})
+            # Only this constructed control substitutes source bytes; actual producer pins are restored.
+            with mock.patch.dict(PRODUCER_SHA256,{path:digest(b'inert fixture') for path in PRODUCER},clear=True):
+                self.assertEqual(len(private_delta(base,candidate,bodies,LINT_BASE,base_bar)),10)
+                for changed in ({**candidate,'extra':'a'*40},{**candidate,'README.md':'c'*40},
+                                {k:v for k,v in candidate.items() if k!=HELD_WORKFLOW}):
+                    with self.assertRaises(ValueError):private_delta(base,changed,bodies,LINT_BASE,base_bar)
+                for path,bad in ((LINT,LINT_BASE),(LINT,LINT_DERIVED+b'    - extra-label\n'),
+                                 (LINT,LINT_DERIVED.replace(b'fsgg-native-linux-x64-v1',b'wrong')),
+                                 (BAR,bodies[BAR].replace(b'old upstream guards',b'weakened upstream guards')),
+                                 (PRODUCER[0],b'changed protected producer')):
+                    with self.assertRaises(ValueError):private_delta(base,candidate,{**bodies,path:bad},LINT_BASE,base_bar)
+
+        def test_bar_guard_transform_preserves_all_surrounding_bytes(self):
+            before=b'upstream source/run checks\n'+BAR_GUARD+b'unchanged native checks\n'
+            expected=(b'upstream source/run checks\n'
+                      b'          python3 -I -B source/eng/current-public-at/verify-current-public-at-source.py bar-runtime --caller caller --source source\n'
+                      b'unchanged native checks\n')
+            self.assertEqual(derive_bar(before),expected)
+            for body in (b'no guard',before+BAR_GUARD,BAR_GUARD.replace(b'cmp --',b'cmp ')):
+                with self.assertRaises(ValueError):derive_bar(body)
 
     result=unittest.TextTestRunner(verbosity=1).run(unittest.defaultTestLoader.loadTestsFromTestCase(Controls))
     require(result.wasSuccessful(),'source self-tests failed')
@@ -355,8 +427,12 @@ def source_selftests():
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('mode',choices=('public','private','self-test'))
+    parser.add_argument('mode',choices=('public','private','self-test','bar-runtime'))
+    parser.add_argument('--caller',type=Path)
+    parser.add_argument('--source',type=Path)
     args=parser.parse_args()
+    require((args.mode=='bar-runtime' and args.caller is not None and args.source is not None)
+            or (args.mode!='bar-runtime' and args.caller is None and args.source is None), 'caller/source paths are only for fixed BAR source guard')
     os.sched_setaffinity(0,{min(os.sched_getaffinity(0))})
     resource.setrlimit(resource.RLIMIT_AS,(2*1024**3,2*1024**3))
     resource.setrlimit(resource.RLIMIT_CPU,(180,180))
@@ -366,12 +442,16 @@ def main():
             command=values[1]
             require(isinstance(command,list) and command[:8]==['git','--no-replace-objects','-c','core.hooksPath=/dev/null',
                     '-c','core.fsmonitor=false','-c','core.untrackedCache=false']
-                    and len(command)>8 and command[8] in ('rev-parse','status','cat-file','ls-tree'), 'unexpected source-control subprocess')
+                    and len(command)>8 and command[8] in ('rev-parse','status','cat-file','ls-tree','merge-base'), 'unexpected source-control subprocess')
         if event in ('socket.connect','os.system','os.exec','os.posix_spawn'):
             raise ValueError('native-at-source: source controls refuse native/network effects')
     sys.addaudithook(inert)
     source_selftests()
     if args.mode == 'self-test':
+        return 0
+    if args.mode == 'bar-runtime':
+        bar_runtime(args.caller.resolve(strict=True),args.source.resolve(strict=True),os.environ)
+        print('BAR caller source correspondence passed; native/upstream/run gates remain separate')
         return 0
     root=Path(os.environ['GITHUB_WORKSPACE']).resolve(strict=True)
     receipt=produce(args.mode,root,os.environ)
