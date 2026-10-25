@@ -292,11 +292,22 @@
 {
   "kind": "workflow",
   "path": ".github/workflows/fourd-typed-source.yml",
-  "sha256": "e5db3ed306eaea2db9ced72a6efc4633ff1631e008220bc7a76040422b48d7df",
+  "sha256": "1e10bc140f3d195bb22719ffe638f18cc24a2bdf87a64849785b35db8963ae5a",
   "externalReferences": [
     "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
     "actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68",
-    "actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38"
+    "actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38",
+    "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
+  ],
+  "localReferences": []
+},
+{
+  "kind": "workflow",
+  "path": ".github/workflows/fourd-native-producer-publish.yml",
+  "sha256": "885a61dd6a483bbb6d1438ae4399f6d4f925aca2741ee3c51755009f48a774fc",
+  "externalReferences": [
+    "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+    "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
   ],
   "localReferences": []
 }
