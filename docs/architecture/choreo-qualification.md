@@ -115,3 +115,26 @@ bytes. A fresh download/build preparation must pass the existing byte checks.
 
 Installed O3 adoption remains a separate operation. This qualification decision
 does not install, activate, dispatch, or publish a runtime dependency.
+
+## C2 diagnostic client preparation
+
+The C2-only derivative preserves the pinned 0.32.0 compiler's returned explanation in
+its existing verification path. Canonical Quint, C3 and C5 retain their published binary.
+The derivative has its own source, patch, compiler, dependency and output identities;
+it is not the upstream release and does not explain an earlier hosted failure.
+
+Preflight uses closed input/provenance predicates and actual production-entry controls.
+The existing preparation job builds once, proves the unpatched missing explanation and
+the derivative's retained explanation before upload, and emits a separate artifact for
+base consumers only. Before formal work, a base consumer authenticates the current
+run/attempt, source, producer job and immutable artifact, then verifies its complete
+manifest and executable bytes. Build children receive a private environment without
+workflow credentials; only the read-only provenance/download parent receives the
+existing Actions token. No new trigger, secret, publication or execution authority is
+introduced. Missing, stale, malformed or changed evidence blocks the dependent work.
+
+This bounded static and actual-caller preflight addresses a demonstrated visibility
+failure. A custom scheduling model or measurement campaign would add no determining
+proof. Build and transfer costs remain separate from formal runtime; no CI savings are
+claimed. Command budgets, retry eligibility, ownership and original outcomes remain
+unchanged, and new exact-head formal qualification is still required.

@@ -98,12 +98,21 @@ cd "$scratch_root"
   --backend=rust \
   --verbosity=1
 
+c2_quint_bin="$quint_bin"
+if [[ -n "${FSGG_C2_CLIENT_ROOT:-}" ]]; then
+  python3 -I -B "$repo_root/eng/c2_diagnostic_client.py" check "$FSGG_C2_CLIENT_ROOT" >/dev/null
+  c2_quint_bin="$FSGG_C2_CLIENT_ROOT/quint-c2"
+elif [[ "${GITHUB_ACTIONS:-}" == true ]]; then
+  printf 'C2 diagnostic client custody is required before hosted formal work\n' >&2
+  exit 1
+fi
+
 verify_lane() {
   local main="$1"
   local endpoint_base="$2"
   local log="$scratch_root/$main.log"
   bash "$repo_root/eng/run-choreo-c2-tlc.sh" 150 "$log" "$endpoint_base" -- \
-    "$quint_bin" verify "$model" \
+    "$c2_quint_bin" verify "$model" \
     --main="$main" \
     --init=init \
     --step=step \

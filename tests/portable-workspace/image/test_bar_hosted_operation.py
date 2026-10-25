@@ -904,6 +904,33 @@ class ClockBudget(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, 'original clock source differs'):
             WRAPPER.validate_clock(good, OPERATION, 'a' * 40)
 
+    def test_profile_then_controls_initialization_preserves_original_evidence(self):
+        text = WORKFLOW.read_text()
+        profile = literal_block(text.split('- name: Refuse unselected dedicated image before product or asset acquisition', 1)[1], 'run').split('prep_env=()', 1)[0]
+        controls = literal_block(text.split('- name: Run the synthetic domain controls on the exact source', 1)[1], 'run').split('prep_env=()', 1)[0]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory); startup = root / 'startup'; startup.mkdir()
+            clock = b'{"original":"profile-clock"}\n'; (startup / 'clock.json').write_bytes(clock)
+            evidence = root / 'evidence'
+            env = {'PATH': '/usr/bin:/bin', 'EVIDENCE': str(evidence), 'STARTUP_EVIDENCE': str(startup)}
+            def run(script):
+                return subprocess.run(['/bin/bash', '-c', script], env=env, capture_output=True, timeout=5)
+            self.assertEqual(run(profile).returncode, 0)
+            receipt = evidence / 'profile-receipt.json'; receipt.write_bytes(b'original-profile-receipt\n')
+            before = (evidence.stat(), receipt.stat(), receipt.read_bytes())
+            old = controls.replace('mkdir -p -m 0700 "$EVIDENCE"', 'mkdir -m 0700 "$EVIDENCE"')
+            self.assertNotEqual(run(old).returncode, 0, 'original controls initialization must reproduce EEXIST')
+            result = run(controls); self.assertEqual(result.returncode, 0, result.stderr)
+            after = evidence.stat()
+            self.assertEqual((after.st_ino, after.st_uid, after.st_gid, after.st_mode),
+                             (before[0].st_ino, before[0].st_uid, before[0].st_gid, before[0].st_mode))
+            self.assertEqual(after.st_mode & 0o777, 0o700)
+            current = receipt.stat()
+            self.assertEqual((current.st_ino, current.st_uid, current.st_gid, current.st_mode, current.st_size, current.st_mtime_ns),
+                             (before[1].st_ino, before[1].st_uid, before[1].st_gid, before[1].st_mode, before[1].st_size, before[1].st_mtime_ns))
+            self.assertEqual(receipt.read_bytes(), before[2])
+            self.assertEqual((evidence / 'original-clock.json').read_bytes(), clock)
+
     def test_fixed_preparation_is_pinned_to_the_manifest_of_the_template(self):
         template = ROOT / 'deployment/qualification-runner/native-qualification'
         body, env = WRAPPER.fixed_preparation('profile')

@@ -78,14 +78,20 @@ jobs:
     if: ${{ needs.reuse-decision.outputs.route == 'execute' && needs.reuse-decision.outputs.formal-route == 'execute' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    outputs:
+      c2-artifact-id: ${{ steps.c2-upload.outputs.artifact-id }}
+      c2-artifact-digest: ${{ steps.c2-upload.outputs.artifact-digest }}
     env:
       NUGET_PACKAGES: /tmp/fsgg-${{ github.run_id }}-nuget-canonical-quint-prepare
       FSGG_QUINT_TOOLCHAIN_OUTPUT: /tmp/fsgg-${{ github.run_id }}-canonical-quint-toolchain/toolchain.tar.gz
+      FSGG_C2_RUN_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      FSGG_C2_CLIENT_OUTPUT: /tmp/fsgg-${{ github.run_id }}-c2-diagnostic-client
     steps:
       - name: Check out the exact candidate
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
       - name: Set up the pinned .NET SDK
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with:
@@ -93,6 +99,15 @@ jobs:
           global-json-file: global.json
       - name: Prepare the pinned canonical toolchain
         run: bash eng/bootstrap-gates/canonical-quint-prepare.sh
+      - name: Build and preflight the C2-only diagnostic client
+        run: python3 -I -B eng/c2_diagnostic_client.py build "$FSGG_C2_CLIENT_OUTPUT"
+      - name: Retain the source-bound C2 diagnostic client
+        id: c2-upload
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: c2-diagnostic-client-${{ github.run_id }}-1-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ${{ env.FSGG_C2_CLIENT_OUTPUT }}
+          if-no-files-found: error
       - name: Upload the pinned canonical toolchain
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
@@ -130,6 +145,17 @@ jobs:
         with:
           name: canonical-quint-toolchain
           path: /tmp/fsgg-${{ github.run_id }}-canonical-quint-toolchain
+      - name: Authenticate the current C2 client before base formal work
+        if: ${{ matrix.shard == 'base' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FSGG_C2_CLIENT_ROOT: /tmp/fsgg-${{ github.run_id }}-c2-client-base
+          FSGG_C2_ARTIFACT_ID: ${{ needs.canonical-quint-prepare.outputs.c2-artifact-id }}
+          FSGG_C2_ARTIFACT_DIGEST: ${{ needs.canonical-quint-prepare.outputs.c2-artifact-digest }}
+        run: |
+          python3 -I -B eng/c2_diagnostic_client.py consume "$FSGG_C2_CLIENT_ROOT"
+          printf 'FSGG_C2_CLIENT_ROOT=%s\n' "$FSGG_C2_CLIENT_ROOT" >> "$GITHUB_ENV"
+          printf 'FSGG_C2_CLIENT_MANIFEST_SHA256=%s\n' "$(sha256sum "$FSGG_C2_CLIENT_ROOT/manifest.json" | cut -d ' ' -f1)" >> "$GITHUB_ENV"
       - name: Run one independent canonical shard
         run: bash eng/bootstrap-gates/canonical-quint-shard.sh
       - name: Upload the canonical shard receipt

@@ -1401,6 +1401,58 @@ class CommandInterfaceControls(unittest.TestCase):
                 self.assertEqual(status,result['originalExitCode'])
                 self.assertLessEqual((root/'diagnostics/failure.json').stat().st_size,98304)
 
+    def test_distinct_c2_profile_retains_exact_tuple_without_renewing_clock_or_retry(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);scratch=root/'scratch';scratch.mkdir();paths,value=self.public_counterpart_fixture(scratch)
+            spec=value['input'];spec['argv'][0]='/client/quint-c2';spec['pins'][0].update(path=spec['argv'][0],sha256='e'*64)
+            spec['pins'] += [{'path':'/client/pin'+str(i),'bytes':10,'sha256':'f'*64} for i in range(5)]
+            spec['diagnosticClient']=dict(identity='quint-0.32.0-fsgg-c2-diagnostic-1',source='a'*40,run=101,attempt=1,artifactId=301,artifactDigest='sha256:'+'b'*64,manifestSha256='c'*64,inputsSha256='d'*64,binarySha256='e'*64)
+            module.command_preflight(spec,now=101)
+            self.assertEqual((spec['workSeconds'],spec['cleanupSeconds'],spec['maximumGenerations']),(150,30,6))
+            def write():
+                for key,body in [('command',value),('input',spec),('owner',value['ownerReceipt'])]:paths[key].write_text(json.dumps(body,indent=2)+'\n')
+            write();result=module.capture(scratch,root/'accepted',1,max_output=98304)
+            self.assertTrue(result['publicCommandEvidence']['complete'],result['publicCommandEvidence'])
+            for change in [lambda:spec['diagnosticClient'].update(attempt=2),lambda:spec['diagnosticClient'].update(extra='unknown'),lambda:spec['pins'][0].update(sha256='0'*64),lambda:spec.update(workSeconds=151)]:
+                original=copy.deepcopy(spec);change()
+                with self.assertRaises(ValueError):module.command_preflight(spec,now=101)
+                spec.clear();spec.update(original)
+            self.assertFalse(module.preparser_startup_observation(value,'[TLC] Compiling to TLA+ (via Apalache)...',19822))
+
+    def test_public_counterparts_accept_actual_current_owner_receipt_without_detached_domain(self):
+        owner_spec=importlib.util.spec_from_file_location('public_owner_producer',ROOT/'eng/shared_process_owner.py')
+        owner=importlib.util.module_from_spec(owner_spec);owner_spec.loader.exec_module(owner)
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);scratch=root/'scratch';scratch.mkdir()
+            paths,value=self.public_counterpart_fixture(scratch)
+            # Execute the real receipt producer on its bounded failed-launch path;
+            # no Quint, JVM, model or child executable is launched.
+            output=scratch/'producer.log'
+            with patch.object(owner.subprocess,'Popen',side_effect=FileNotFoundError('injected absent public executable')):
+                with self.assertRaises(FileNotFoundError):
+                    owner.run(value['input']['argv'],str(scratch),{},time.monotonic()+2,1,1024**2,str(output),4096)
+            receipt=json.loads(Path(str(output)+'.result.json').read_bytes())
+            self.assertEqual({k:receipt[k] for k in ('absoluteRetirementDeadline','detachedDomainEvidence','detachedDomainScope')},
+                             {'absoluteRetirementDeadline':None,'detachedDomainEvidence':None,'detachedDomainScope':None})
+            def capture(changed):
+                value['ownerReceipt']=changed
+                paths['owner'].write_text(json.dumps(changed))
+                paths['command'].write_text(json.dumps(value))
+                return module.capture(scratch,root/('diagnostics-'+str(len(list(root.iterdir())))),1,max_output=98304)['publicCommandEvidence']
+            result=capture(receipt)
+            self.assertTrue(result['complete'],result)
+            retained=next(row for row in result['files'] if row['name']==paths['owner'].name)
+            self.assertEqual(base64.b64decode(retained['base64']),paths['owner'].read_bytes())
+            self.assertTrue(capture(dict(receipt,absoluteRetirementDeadline=250.0))['complete'])
+            for key,invalid in [('absoluteRetirementDeadline',True),('absoluteRetirementDeadline',float('inf')),
+                                ('absoluteRetirementDeadline',-1),('absoluteRetirementDeadline',10**400),
+                                ('absoluteRetirementDeadline',float('nan')),('absoluteRetirementDeadline',{'unselected':'payload'}),
+                                ('detachedDomainEvidence',{}),('detachedDomainScope','private-key NEVER COPY')]:
+                with self.subTest(key=key,invalid=invalid):
+                    self.assertFalse(capture(dict(receipt,**{key:invalid}))['complete'])
+            partial=dict(receipt);partial.pop('detachedDomainScope')
+            self.assertFalse(capture(partial)['complete'])
+
     def test_public_verify_counterparts_fail_closed_on_missing_private_changed_inputs(self):
         cases=('missing-owner','input-mismatch','owner-mismatch','private-profile','unknown-result',
                'unknown-owner','escaped-sensitive','duplicate-key','malformed','final-log-mismatch',
