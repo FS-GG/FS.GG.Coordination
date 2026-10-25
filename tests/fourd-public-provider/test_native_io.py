@@ -221,5 +221,84 @@ class NativeIOTests(unittest.TestCase):
         self.assertFalse((self.root/'private').exists())
 
 
+class GitObservationBirthTests(unittest.TestCase):
+    """Real short Git children, without a producer, CLR, recipient or native work."""
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory(prefix='native-git-birth-', dir='/tmp')
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.source = self.root / 'source'
+        self.source.mkdir(mode=0o700)
+        self.env = io.safe_environment(Path('/nonexistent'))
+        subprocess.run(['/usr/bin/git', 'init', '-q', str(self.source)], env=self.env, check=True)
+        (self.source / 'README').write_text('fixture\n')
+        for args in (['add', 'README'], ['-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid',
+                      '-c', 'commit.gpgsign=false', 'commit', '-qm', 'fixture']):
+            subprocess.run(['/usr/bin/git', *args], cwd=self.source, env=self.env, check=True)
+
+    def test_delayed_parent_records_same_pid_before_exact_git_exec(self):
+        effects = io.Effects()
+        deadline = time.monotonic() + 60  # Includes the unchanged Effects settlement reserve.
+        original_identity, original_run = io.mechanisms._process_identity, effects.run
+        births, commands, allowances = [], [], []
+        def delayed(pid):
+            time.sleep(0.03)  # Force the original fast-child race; the gated child stays live.
+            return original_identity(pid)
+        def record(argv, **options):
+            gated = argv[:4] == ['/usr/bin/python3', '-I', '-B', str(io.HERE / 'native_child.py')]
+            commands.append(argv[5:] if gated else argv)
+            allowances.append((options['timeout'], options['total_timeout']))
+            if gated:
+                self.assertEqual((int(argv[4]),), options['pass_fds'])
+                born = options['on_started']
+                def observed(identity):
+                    self.assertEqual(identity, original_identity(identity.pid))
+                    self.assertEqual(identity, effects.owned[identity.pid])
+                    self.assertEqual(identity.pid, os.getpgid(identity.pid))
+                    self.assertEqual(Path('/proc/self/cgroup').read_bytes(), Path(f'/proc/{identity.pid}/cgroup').read_bytes())
+                    self.assertIn(str(io.HERE / 'native_child.py').encode(), Path(f'/proc/{identity.pid}/cmdline').read_bytes())
+                    births.append(identity)
+                    born(identity)
+                options = {**options, 'on_started': observed}
+            result = original_run(argv, **options)
+            self.assertTrue(gated, 'Git exec needs the existing birth gate')
+            return result
+        target = self.root / 'observed.json'
+        with mock.patch.object(io.mechanisms, '_process_identity', side_effect=delayed), \
+             mock.patch.object(effects, 'run', side_effect=record):
+            revision, tree, held = io.git_observation(self.source, target, effects, self.env, lambda: deadline-time.monotonic())
+        self.assertEqual([
+            ['/usr/bin/git', 'rev-parse', 'HEAD'], ['/usr/bin/git', 'rev-parse', 'HEAD^{tree}'],
+            ['/usr/bin/git', 'status', '--porcelain', '--untracked-files=all'],
+            ['/usr/bin/git', 'cat-file', 'commit', revision], ['/usr/bin/git', 'cat-file', 'tree', tree],
+            ['/usr/bin/git', 'ls-tree', '-z', tree]], commands)
+        self.assertEqual(len(commands), len(births))
+        self.assertTrue(all(0 < execution <= 15 and 0 < total <= 60 for execution,total in allowances))
+        self.assertEqual(sorted([total for _,total in allowances], reverse=True), [total for _,total in allowances])
+        observed = json.loads(target.read_bytes())
+        self.assertEqual(revision, observed['revision'])
+        self.assertEqual(tree, observed['tree'])
+        self.assertTrue(held.wipe_close())
+        self.assertTrue(effects.settle(deadline=deadline))
+
+    def test_rejected_birth_never_executes_git_and_settles(self):
+        effects = io.Effects()
+        deadline = time.monotonic() + 60
+        original_run = effects.run
+        captured = []
+        def reject(argv, **options):
+            def denied(identity):
+                captured.append(identity)
+                raise io.NativeIOError('fixture-birth-refused')
+            return original_run(argv, **{**options, 'on_started': denied})
+        target = self.root / 'must-not-exist.json'
+        with mock.patch.object(effects, 'run', side_effect=reject):
+            with self.assertRaisesRegex(io.NativeIOError, 'fixture-birth-refused'):
+                io.git_observation(self.source, target, effects, self.env, lambda: deadline-time.monotonic())
+        self.assertFalse(target.exists())
+        self.assertEqual(1, len(captured))
+        self.assertTrue(effects.settle(deadline=deadline))
+
+
 if __name__=='__main__':
     unittest.main()
