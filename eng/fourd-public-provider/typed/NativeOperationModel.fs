@@ -48,10 +48,10 @@ module NativeOperationModel =
   pure def nextCloseRole(s) =
     if (s.ownedRoles.contains("cleanup") and not(s.closedRoles.contains("cleanup"))) "cleanup"
     else if (s.ownedRoles.contains("image") and not(s.closedRoles.contains("image"))) "image"
-    else if (s.ownedRoles.contains("key-intent") and not(s.closedRoles.contains("key-intent"))) "key-intent"
-    else if (s.ownedRoles.contains("key") and not(s.closedRoles.contains("key"))) "key"
     else if (s.ownedRoles.contains("p2") and not(s.closedRoles.contains("p2"))) "p2"
     else if (s.ownedRoles.contains("preflight") and not(s.closedRoles.contains("preflight"))) "preflight"
+    else if (s.ownedRoles.contains("key-intent") and not(s.closedRoles.contains("key-intent"))) "key-intent"
+    else if (s.ownedRoles.contains("key") and not(s.closedRoles.contains("key"))) "key"
     else "source"
   var state: State
   action init = state' = initial("full")

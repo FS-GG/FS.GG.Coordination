@@ -71,10 +71,30 @@ class NativeIOTests(unittest.TestCase):
                 return 200,value,[]
         return bootstrap.acquire_producer(adoption,ROOT,self.root/'acquired',reader=Reader(),deadline=time.monotonic()+60)
 
-    def fixture(self):
+    def fixture(self, additional_files=None):
         producer = self.bootstrap()
         f = NativeFixture(self.root, [str(Path(producer['runtimeRoot'])/'FourD.Typed')])
         value, expected = capsule_tests.SourceCapsuleTests().fixture(self.root)
+        if additional_files:
+            repo=self.root/'original'
+            for name,(raw,mode) in additional_files.items():
+                path=repo/name;path.parent.mkdir(parents=True,exist_ok=True)
+                path.write_bytes(raw);path.chmod(mode)
+            subprocess.run(['git','-C',str(repo),'add','.'],check=True)
+            subprocess.run(['git','-C',str(repo),'-c','user.name=Fixture','-c','user.email=fixture@example.invalid',
+                            'commit','--quiet','-m','actual consumer closure'],check=True)
+            def git(*arguments):return subprocess.check_output(['git','-C',str(repo),*arguments])
+            revision=git('rev-parse','HEAD').decode().strip();tree=git('rev-parse','HEAD^{tree}').decode().strip()
+            inventory=hashlib.sha256();records=[]
+            for item in git('ls-tree','-rz','--full-tree','HEAD').split(b'\0'):
+                if not item:continue
+                metadata,name=item.split(b'\t',1);mode,kind,oid=metadata.split()
+                if kind!=b'blob':raise AssertionError('fixture closure must contain ordinary blobs')
+                raw=(repo/name.decode()).read_bytes();inventory.update(name+b'\0'+raw+b'\0')
+                records.append(dict(path=name.decode(),mode=mode.decode(),blobOid=oid.decode(),bytes=len(raw),
+                                    sha256=sha(raw),contentBase64=base64.b64encode(raw).decode()))
+            expected=dict(sourceSha=revision,sourceTree=tree,inventorySha256=inventory.hexdigest())
+            value=dict(schema=io.capsules.SNAPSHOT_SCHEMA,**expected,commitObjectBase64=base64.b64encode(git('cat-file','commit','HEAD')).decode(),files=records)
         substitutions = {f.revision:expected['sourceSha'],f.tree:expected['sourceTree'],f.inventory:expected['inventorySha256']}
         def replace(value):
             if isinstance(value,dict):return {key:replace(item) for key,item in value.items()}
