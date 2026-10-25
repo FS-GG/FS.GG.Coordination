@@ -68,6 +68,31 @@ class DedicatedRunnerDataControls(unittest.TestCase):
             alternate=root/'.git/objects/info/alternates';alternate.write_text('/untrusted/objects\n')
             with self.assertRaises(ValueError):owner.factory_git_closure(root,revision,time.monotonic()+10)
 
+    def test_at_git_reader_blocks_specific_protocol_override_even_without_no_lazy_support(self):
+        import time
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);subprocess.run(['git','init','-q',str(root)],check=True)
+            sentinel=root/'external-helper-ran';helper=root/'inert-helper.sh'
+            helper.write_text('#!/bin/sh\nprintf inert > "'+str(sentinel)+'"\nexit 1\n');helper.chmod(0o700)
+            for key,value in [('extensions.partialClone','origin'),('remote.origin.promisor','true'),
+                              ('remote.origin.url','ext::sh '+str(helper)),('protocol.ext.allow','always')]:
+                subprocess.run(['git','-C',str(root),'config',key,value],check=True)
+            popen=subprocess.Popen;observed=[]
+            def old_git(command,**kwargs):
+                # Exercise the whitelist without relying on a newer Git's no-lazy support.
+                env=dict(kwargs['env']);env.pop('GIT_NO_LAZY_FETCH',None);observed.append(env)
+                return popen(command,**{**kwargs,'env':env})
+            def removed_whitelist(command,**kwargs):
+                env=dict(kwargs['env']);env.pop('GIT_NO_LAZY_FETCH',None);env.pop('GIT_ALLOW_PROTOCOL',None)
+                return popen(command,**{**kwargs,'env':env})
+            with mock.patch.object(owner.subprocess,'Popen',side_effect=removed_whitelist),self.assertRaises(ValueError):
+                owner.factory_git_closure(root,'a'*40,time.monotonic()+5)
+            self.assertEqual('inert',sentinel.read_text());sentinel.unlink()
+            with mock.patch.object(owner.subprocess,'Popen',side_effect=old_git),self.assertRaises(ValueError):
+                owner.factory_git_closure(root,'a'*40,time.monotonic()+5)
+            self.assertTrue(observed);self.assertEqual('',observed[0]['GIT_ALLOW_PROTOCOL'])
+            self.assertEqual('0',observed[0]['GIT_PROTOCOL_FROM_USER']);self.assertFalse(sentinel.exists())
+
     def test_at_handoff_clock_never_renews_process_entry_or_accepts_nonfinite_overall(self):
         with mock.patch.object(owner,'AT_ENTRY_STARTED',100),mock.patch.object(owner.time,'monotonic',return_value=120):
             with mock.patch.dict(os.environ,{'FSGG_AT_DEADLINE_MONOTONIC':'150'},clear=True):self.assertEqual(135,owner.at_handoff_deadline())

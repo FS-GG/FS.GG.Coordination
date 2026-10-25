@@ -501,7 +501,8 @@ def factory_git_closure(checkout,revision,deadline):
         if key not in cache:
             left=deadline-time.monotonic();require(left>0,'original factory seal deadline exhausted')
             env={'PATH':'/usr/bin:/bin','LANG':'C','LC_ALL':'C','GIT_CONFIG_NOSYSTEM':'1',
-                 'GIT_CONFIG_GLOBAL':'/dev/null','GIT_NO_LAZY_FETCH':'1','GIT_TERMINAL_PROMPT':'0'}
+                 'GIT_CONFIG_GLOBAL':'/dev/null','GIT_NO_LAZY_FETCH':'1','GIT_TERMINAL_PROMPT':'0',
+                 'GIT_ALLOW_PROTOCOL':'','GIT_PROTOCOL_FROM_USER':'0'}
             command=['/usr/bin/git','--no-replace-objects','--git-dir='+str(database),
                 '-c','core.fsmonitor=false','-c','protocol.allow=never','cat-file',kind,identity]
             child=subprocess.Popen(command,env=env,stdout=subprocess.PIPE,stderr=subprocess.PIPE,start_new_session=True)
