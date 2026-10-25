@@ -98,6 +98,49 @@ executable mode, producer binding or cancellation timing after a positive setup.
 consumer tests exercise its actual lifecycle and P2 argument/compatibility bridge with explicit
 machine-effect fixtures; they cannot establish native machine capability.
 
+## Frozen producer publication
+
+The source gate prepares one `fourd-native-producer-linux-x64.tar` and
+`native-producer-manifest.json` before its real acquisition controls. Those controls consume
+that frozen archive. Only a successful original protected-main push retains the pair as
+`fourd-native-producer-candidate-<source>-<run>-1`; a pull-request synthetic checkout cannot
+qualify publication. The archive contains exactly the existing seven runtime members. The
+separate manifest binds source/tree, five file hashes, binding/provenance and nine adapter hashes.
+Compiler SDK10.0.400 stays pinned; the gate installs the same SDK100400/100401 profile as FourD's
+consumer and records the actual loaded runtime and dotnet-host hash. This does not establish the
+actual runner's matching host/runtime or select an adoption path.
+
+`native_publication.py preflight` acquires and verifies a selected original qualification run,
+native Actions job/check provenance, exact artifact and frozen pair without a publication write.
+Its source, qualification run/artifact IDs and two digests become the separate Root-reviewed
+inputs to `fourd-native-producer-publish.yml`. Publication requires that source to remain exact
+`main`, the original protected dispatcher, the registered org writer lock and no previous publisher
+run for that source. This deliberately permits one original publication attempt per source;
+preflight and recovery are separate read-only commands, not reruns of that attempt.
+
+The writer uses only the repository's built-in `contents: write` and `actions: read` token.
+It never rebuilds or executes the acquired archive. After explicit tag/release absence reads,
+four possible sends are each fsynced to the original journal before transport: create the
+immutable source tag, create its draft release, upload the exact archive, publish the release.
+Both release calls set `make_latest: "false"`, preserving the CLI release's latest pointer.
+No overwrite or deletion is available. Source, qualification and publisher status are rechecked
+before each send. A lost response or contradictory result stops the original attempt; an existing
+journal is readback-only. The original server run remains a non-replay barrier even if its journal
+artifact cannot be acquired; missing custody remains Unknown.
+
+Public release/asset metadata, author/uploader, immutable tag target and an unauthenticated
+download of the exact seven-member archive must match before a publication observation is emitted.
+`readback` cannot send mutations, including when a draft or absence is observed. Root still selects
+the closed consumer adoption using those actual IDs plus an independently observed runner host path;
+publication success is not native qualification, credential retirement or whole-Delivery acceptance.
+
+Pipeline preflight uses configuration checks and direct inert execution of this fixed four-write
+controller. The controls exercise a successful path, each lost-response boundary, original recovery,
+main/qualification/cancellation drift and causal archive/provenance faults before any real publisher
+is admitted. A custom pipeline model is deferred: there is no automatic retry, fan-out or rebuild,
+and shared writer ordering remains with the unchanged ADR0097 lock. These are effect-safety controls,
+not a measured claim of CI savings, exhaustive verification or publication authority.
+
 ## Remaining actual first-run inputs and effects
 
 Root must select the protected producer and FourD consumer revisions after source integration,

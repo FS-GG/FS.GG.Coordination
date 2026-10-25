@@ -19,6 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import native_bootstrap as bootstrap
 import native_io as io
 import native_run as driver
+import native_publication as publication
 from test_native_protocol import NativeFixture, canonical, sha
 import test_source_capsule as capsule_tests
 
@@ -35,8 +36,14 @@ class NativeIOTests(unittest.TestCase):
         cls.host = Path(shutil.which('dotnet')).resolve()
         node=Path(shutil.which("node")).resolve(strict=True)
         cls.node_tool=dict(path=str(node),sha256=sha(node.read_bytes()),version=subprocess.check_output([str(node),"--version"],text=True).strip())
-        archive = cls.root / 'runtime.tar'
-        prepared = bootstrap.prepare_artifact(ROOT, Path(command[0]).parent, cls.host, archive)
+        frozen = os.environ.get('FSGG_FOURD_NATIVE_CANDIDATE')
+        if frozen:
+            archive = Path(frozen) / publication.ARCHIVE
+            _archive, _raw, manifest = publication.read_pair(Path(frozen))
+            prepared = manifest['producer']
+        else:
+            archive = cls.root / 'runtime.tar'
+            prepared = bootstrap.prepare_artifact(ROOT, Path(command[0]).parent, cls.host, archive)
         cls.adoption = dict(schema='fsgg.fourd.native-producer-adoption/1', **prepared,
                             releaseId=90, assetId=91, tag='fixture-runtime', name='runtime.tar',
                             authorId=9, hostPath=str(cls.host))
