@@ -131,7 +131,7 @@ class Controls(unittest.TestCase):
             self.assertLess(preparation.index('c2_diagnostic_client.py build'),preparation.index('id: c2-upload'))
             block=text.split('      - name: Authenticate the current C2 client',1)[1].split('      - name: Run one',1)[0]
             self.assertIn(condition,block);self.assertIn('needs.'+producer+'.outputs.c2-artifact-id',block);self.assertIn('needs.'+producer+'.outputs.c2-artifact-digest',block)
-        prepare=(ROOT/'eng/bootstrap-gates/optimistic-prepare.sh').read_text();self.assertIn('eng/c2_diagnostic_client.py',prepare);self.assertIn('eng/vendor/quint-c2-diagnostic/*',prepare)
+        prepare=(ROOT/'eng/bootstrap-gates/optimistic-prepare.sh').read_text();self.assertIn('--toolchain \"$(digest_tracked_set eng/c2-diagnostic-client-inputs.json',prepare);self.assertIn('eng/c2_diagnostic_client.py',prepare);self.assertIn('eng/vendor/quint-c2-diagnostic/*',prepare)
     def test_public_profile_is_distinct_closed_and_legacy_identity_is_not_replaced(self):
         p=dict(identity='quint-0.32.0-fsgg-c2-diagnostic-1',source='a'*40,run=101,attempt=1,artifactId=301,artifactDigest='sha256:'+'b'*64,manifestSha256='c'*64,inputsSha256='d'*64,binarySha256='e'*64)
         self.assertEqual(M.profile_shape(p),p)
