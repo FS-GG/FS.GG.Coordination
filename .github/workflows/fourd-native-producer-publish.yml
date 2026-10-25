@@ -1,0 +1,105 @@
+name: FourD native producer publication
+run-name: FourD producer ${{ inputs.source_sha }} ${{ inputs.operation_id }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Exact protected main source and publisher revision
+        required: true
+        type: string
+      qualification_run_id:
+        description: Successful original protected-main source qualification run
+        required: true
+        type: string
+      qualification_artifact_id:
+        description: Exact frozen candidate artifact from that qualification
+        required: true
+        type: string
+      archive_sha256:
+        description: Root-reviewed frozen runtime archive digest
+        required: true
+        type: string
+      manifest_sha256:
+        description: Root-reviewed frozen artifact manifest digest
+        required: true
+        type: string
+      operation_id:
+        description: Original publication identity; no replay or overwrite
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fourd-native-producer-${{ inputs.source_sha }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: publish-native-producer [org-publication-writer]
+    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.run_attempt == 1 }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    permissions:
+      contents: write
+      actions: read
+    env:
+      SOURCE_SHA: ${{ inputs.source_sha }}
+      QUALIFICATION_RUN_ID: ${{ inputs.qualification_run_id }}
+      QUALIFICATION_ARTIFACT_ID: ${{ inputs.qualification_artifact_id }}
+      ARCHIVE_SHA256: ${{ inputs.archive_sha256 }}
+      MANIFEST_SHA256: ${{ inputs.manifest_sha256 }}
+      OPERATION_ID: ${{ inputs.operation_id }}
+      PYTHONDONTWRITEBYTECODE: 1
+    steps:
+      - name: Check out the exact protected publisher
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+      - name: Acquire org publication writer lock
+        shell: bash
+        timeout-minutes: 12
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LOCK_COMMIT: c799a9f9b21d52eb9766cf0950722e3e55145d39
+          LOCK_SCRIPT_SHA256: dca3fe60e5ebf4a6ff33e52b1ede6ee255b377790688e0958cb4ebcc90df53e6
+          LOCK_MAX_WAIT_MINUTES: '10'
+        run: |
+          set -euo pipefail
+          lock="$RUNNER_TEMP/publication_writer_lock.py"
+          curl --fail --silent --show-error --location --output "$lock" \
+            "https://raw.githubusercontent.com/FS-GG/.github/${LOCK_COMMIT}/scripts/publication_writer_lock.py"
+          echo "${LOCK_SCRIPT_SHA256}  ${lock}" | sha256sum --check --strict
+          python3 -I -B "$lock" acquire --max-wait-minutes "$LOCK_MAX_WAIT_MINUTES"
+      - name: Publish only the reviewed frozen qualification bytes
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PUBLICATION_ROOT: ${{ runner.temp }}/fourd-native-producer-publication-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          umask 077
+          test "$SOURCE_SHA" = "$GITHUB_SHA"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test -z "$(git status --porcelain --untracked-files=all)"
+          timeout --signal=TERM --kill-after=5s 550s python3 -I -B eng/fourd-public-provider/native_publication.py publish \
+            --source "$SOURCE_SHA" --qualification-run-id "$QUALIFICATION_RUN_ID" \
+            --artifact-id "$QUALIFICATION_ARTIFACT_ID" --archive-sha256 "$ARCHIVE_SHA256" \
+            --manifest-sha256 "$MANIFEST_SHA256" --operation-id "$OPERATION_ID" \
+            --publisher-run-id "$GITHUB_RUN_ID" --directory "$PUBLICATION_ROOT" --budget-seconds 540 \
+            > "$RUNNER_TEMP/fourd-native-producer-publication-result.json"
+      - name: Retain original publication custody on every outcome
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: fourd-native-producer-publication-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/fourd-native-producer-publication-${{ github.run_id }}-${{ github.run_attempt }}/
+            ${{ runner.temp }}/fourd-native-producer-publication-result.json
+          if-no-files-found: warn
+          retention-days: 30
+          compression-level: 0
