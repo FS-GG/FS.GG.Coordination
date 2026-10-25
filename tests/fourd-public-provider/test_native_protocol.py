@@ -293,7 +293,7 @@ class NativeFixture:
 @unittest.skipUnless(os.environ.get("FSGG_FOURD_NATIVE_TEST_COMMAND"), "compiled native command required")
 class NativeProtocolTests(unittest.TestCase):
     def setUp(self):
-        self.temporary = tempfile.TemporaryDirectory(prefix="fourd-native-test-")
+        self.temporary = tempfile.TemporaryDirectory(prefix="fourd-native-test-",dir="/tmp")
         self.addCleanup(self.temporary.cleanup)
         self.f = NativeFixture(self.temporary.name, json.loads(os.environ["FSGG_FOURD_NATIVE_TEST_COMMAND"]))
 

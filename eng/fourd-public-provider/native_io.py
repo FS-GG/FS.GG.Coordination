@@ -62,7 +62,8 @@ def private_directory(path: Path):
 
 def safe_environment(home: Path, host: Path | None = None):
     result = {"PATH": "/usr/bin:/bin", "HOME": str(home), "LANG": "C.UTF-8",
-              "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_TERMINAL_PROMPT": "0"}
+              "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_TERMINAL_PROMPT": "0",
+              "DOTNET_PROCESSOR_COUNT":"2"}
     if host is not None:
         result["DOTNET_ROOT"] = str(host.parent)
     return result
@@ -133,7 +134,10 @@ class NativeClient:
         if self.session_path.exists():
             latest=capsules.closed_json(self.session_path.read_bytes(),1024*1024)
             self.history,self.response,self.config=latest["history"],latest["response"],latest["config"]
-        observation = {"kind": kind, "elapsed": self.elapsed(), **facts}
+        elapsed=self.elapsed()
+        if kind=="packet":
+            facts={**facts,"evidence":{**facts["evidence"],"nowUnixSeconds":self.started_unix+elapsed}}
+        observation = {"kind": kind, "elapsed": elapsed, **facts}
         value = self.call("native-transition", {
             "schema": "fsgg.fourd.native-transition-request/1", "mode": self.mode,
             "startedUnixSeconds": self.started_unix, "history": self.history, "observation": observation})
