@@ -1,115 +1,103 @@
 # FourD native acquisition source contract
 
-This is the bounded source mapping for [Delivery 1051](https://github.com/FS-GG/FS.GG.Coordination/issues/1051).
-It prepares the existing qualification-local `FourD.Typed` producer for FourD's native-image route.
-It does not establish consumer activation, publication, native acceptance or retirement. The
+[Delivery 1051](https://github.com/FS-GG/FS.GG.Coordination/issues/1051) retains the full
 [owning plan](https://github.com/FS-GG/.github/blob/main/docs/roadmaps/2026-10-01-typed-administrative-fsharp-quint.md)
-continues to govern the complete .3/.4 promise.
+.3/.4 acceptance. This source batch implements the
+[accepted native contract](https://github.com/FS-GG/FS.GG.Coordination/issues/1051#issuecomment-6394833099).
+Source qualification does not establish publication, consumer adoption, a genuine native run,
+remote retirement, rollback or replacement closure. Coordination#917/#956 remain retired.
+The existing accepted FourD#37 operation and original attempts remain independent evidence.
 
-## Current production mapping
+## Producer and consumer boundary
 
-The source inspection uses FourD PR48's protected merge
-[`f52a9bb1c4fc74ccb8bc38e0d10d321711c08eae`](https://github.com/FS-GG/FS.GG.FourD/commit/f52a9bb1c4fc74ccb8bc38e0d10d321711c08eae).
-Live refs and operation facts must be refreshed before adoption. Coordination#917's accepted source
-and the retired workflow remain historical evidence; Coordination#956's retirement is not reversed.
+The qualification-local `FourD.Typed` executable owns native acquisition, action admission,
+result classification and retirement. `native-join`, `native-root` and `native-transition` use
+closed JSON boundaries and privately constructed joined identities. `generate-native-quint`
+projects the distinct native lifecycle. The legacy reducer, generated model and 2700-second
+attempt2 protocol remain unchanged.
 
-| Production seam at that revision | Current observation/decision owner | Replacement boundary and remaining proof |
-| --- | --- | --- |
-| `.github/workflows/fourd-native-image-qualification.yml` | Fixed first `workflow_dispatch` on protected FourD main; runner identity/job readback; one finite window | Preserve runner and original-attempt safeguards. Bind the final root packet to this workflow, source, producer closure and operation before effects. No run is admitted by this document. |
-| `native-image.py:resource_admission` | Python combines current CPU/memory/filesystem observations and chooses admission | Keep OS probes as adapters; move the decision into the native-profile typed owner. Reservation/authority remains external to resource measurement. |
-| `native-image.py:exact_source` | Git HEAD/tree/cleanliness and `source-inventory.py --git` | Preserve Git custody observations. `validate-native-source` independently verifies the complete reconstructed bytes against the expected source inventory. Revalidate at consumption; a previous validation is not an immutable filesystem handle. |
-| `prepare-image.py:archive_source` and reconstruction | Held output stream receives `git archive`; `tarfile` reconstructs a plaintext build context | Existing capsule sealing/reconstruction must be joined to this actual route. Checkout and plaintext archive alone do not fulfill encrypted transport. Preserve raw commit, modes, umask077, child settlement and held-inode cleanup. |
-| `native-image.py:fresh_load_inner/fresh_load` | Python joins archive/manifest/config identities and verifies post-namespace identity | Keep Podman, file and namespace observations as adapters. Native-profile F# admission/result transitions must consume the actual joins and retain provisional-versus-final identity. |
-| `native-image.py:qualify_p2` | Executes the separate production P2 assembly through the FourD FSI adapter | P2 remains the execution authority. A completed FSI child is not positive P2 operation evidence. Consume exact source/image/result evidence and retain unknown or unacknowledged outcomes. |
-| `native-image.py:cleanup`; workflow final acceptance/disposition | Python removes scoped stores and combines P2/acceptance/cleanup step outcomes | Preserve guaranteed emergency cleanup and resource ownership. Typed classification must separately consume actual child/namespace/store/credential retirement facts. A successful cleanup cannot manufacture an operation result. |
+`native_bootstrap.py` acquires an immutable seven-member runtime archive before private source
+or recipient-key exposure. Root's adoption binds the public Coordination source SHA/tree,
+five executable/runtime files, binding/provenance hashes, adapter hashes, release/asset IDs,
+author/uploader, size/digest and installed host identity. The acquired executable independently
+checks its executing five-file closure and loaded FSharp.Core. Publication uses existing
+GitHub release/asset custody; no new service or signing authority is introduced.
 
-The workflow pins Coordination P2 source `9d99573628ee31e966a61a28b9b36f7414b10f33`,
-tree `e96774e11969b2730ebcf40ab47a06d7a17d46d6`. That pin identifies P2, not the
-replacement acquisition producer. FourD's source revision, the Coordination producer revision and
-P2's revision are three distinct identities. Existing `typed_policy.py:executable` defaults its
-producer source check to `GITHUB_SHA`; it cannot be reused unchanged when the consumer SHA belongs
-to FourD. `Join.fs` and `RunObservation.fs` still select the retired Coordination workflow and its
-attempt2/capacity+qualification job protocol; none is a native-image admission contract.
+The first-dispatch native packet joins fresh actual FourD run/job observations, fixed runner
+profile, original actor, attempt1, protected placement, product source, producer and unchanged
+P2 source. Its encrypted source descriptor retains existing nonce, raw descriptor, author/hash
+and recipient binding. The packet may arrive through a bounded same-run wait after producer
+bootstrap. Root preprovisions the one-use recipient credential; bootstrap children never receive
+it. Missing or stale metadata refuses rather than creating another attempt or clock.
 
-## Implemented reconstructed-source constructor
+Python performs bounded HTTP, filesystem and process IO. `native_io.py` uses the existing
+source capsule codec, held inode mechanisms and process settlement. Key exposure is permitted
+only after producer, exact run-bound packet and ciphertext joins; a recipient intent is recorded
+before that possible effect. A gated child receives execution permission only after F# records
+its actual PID/birth identity. Cancellation/refusal remains sticky while cleanup remains available.
+Unknown settlement cannot authorize wiping plaintext underneath possible readers.
 
-The existing producer gains the closed `validate-native-source` command. Its request schema is
-`fsgg.fourd.native-source-request/1`; the only additional fields are `expectedRevision`,
-`expectedTree`, `expectedInventorySha256`, `observedRevision`, `observedTree` and `sourceRoot`.
-Expected values come from the authenticated final packet; observed revision/tree come from the
-existing Git acquisition adapter. The command does not authenticate either producer or packet.
+Raw source reconstruction preserves the original Git commit object, tree, blob identities and
+executable modes under umask077. F# hashes the raw commit/tree closure and complete acquired
+clean context independently. The build uses a held, frozen context without `.git`; production
+P2 receives the separately reconstructed clean Git worktree. Source identity is revalidated at
+consumption, including inside the image stage before building.
 
-`NativeSource.acquire` constructs a private validated snapshot only when revision/tree observations
-match their expected values and the complete acquired directory hashes to the expected inventory.
-It enumerates all files, including any extra files, and uses FourD's exact UTF-8 path, NUL, file
-bytes, NUL inventory algorithm. UTF-8 lexical order matches Python's Unicode scalar ordering,
-including non-BMP names. Strict UTF-8 encoding refuses invalid names. The constructor rejects
-symlinked roots/ancestors/entries, nonregular held inodes, more than 8192 files, more than 16384 total
-filesystem entries, nesting deeper than 128 levels and more than 64 MiB
-of acquired file bytes. This bounded profile covers the inspected FourD tree's 179 regular blobs
-and 1776671 source bytes; symlink-bearing future sources need an explicit compatible contract.
+FourD's maintained native workflow and `native_typed.py` consume this protocol. Resource probes,
+Podman, OCI parsing, namespace observations and cleanup commands remain IO mechanisms. F#
+streams and validates the actual OCI archive before custody inspection or image loading, joins
+fresh loaded/post-namespace image identities, and consumes the actual P2 result. Legacy success
+flags are derived only as an F# compatibility projection for unchanged P2. Raw flags and a
+self-authored `qualified` field cannot grant native success.
 
-Linux `open` uses `O_NOFOLLOW|O_NONBLOCK|O_CLOEXEC`, and `statx` inspects the held descriptor
-before reading. FIFO input refuses without waiting for a writer. Neither validation nor refusal
-modifies source bytes or replacement targets. Filesystem mutation after validation still requires
-consumer revalidation and the owning lifecycle's invalidation transition; this source slice does
-not supply a race-free build handoff or cleanup ownership protocol.
+## Original-clock profile
 
-The successful projection schema is `fsgg.fourd.native-source/1`. It carries revision, tree,
-inventory SHA256, file/byte counts and an identity derived from the three joined source identities.
-Duplicate, missing, extra or incorrectly typed JSON fields refuse through the existing closed CLI
-boundary. This is a stateless acquisition constructor; the existing lifecycle reducer and canonical
-Quint model are unchanged. Tests exercise the compiled command, an independent Python inventory
-oracle, Unicode ordering, stale bindings, changed/missing/extra bytes, local committed-tree archive
-reconstruction under umask077, symlink replacement preservation, FIFO and oversized sparse files.
-The wrong source/inventory controls first establish that the same source/setup passes, so a setup
-failure cannot satisfy the negative. The path-filtered `fourd-typed-source.yml` source-only gate
-builds the existing producer with the repository's pinned SDK 10.0.400 and executes these controls
-on a standard hosted runner within five minutes. It does not enroll a native route. There is no
-cross-job reuse, image work or mutable shared output; local focused checks took about three seconds
-including an incremental build. Cold hosted setup/restore cost remains unmeasured.
+| Native profile | Preflight | Image | P2 | Cleanup end | Collection end |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Full, 5400 seconds | 600 | 3325 | 4740 | 5220 | 5400 |
+| Capability, 1200 seconds | 540 | Forbidden | Forbidden | 1020 | 1200 |
 
-## Producer acquisition and budget decisions still required
+Bootstrap, packet wait and source acquisition spend that same original clock. Cleanup is at
+most 480 seconds and collection at most 180 seconds, each also clamped by its original end.
+P2 reserves command1200/operation900, wrapper120, termination20, drain15 and handoff60:
+1415 seconds must remain before admission. Child start never renews an allowance. Remote
+observations use separate wall-clock metadata; cross-machine monotonic values are not compared.
 
-The producer remains nonpackable. Its existing runtime closure is exactly `FourD.Typed`,
-`FourD.Typed.dll`, `FourD.Typed.deps.json`, `FourD.Typed.runtimeconfig.json` and `FSharp.Core.dll`.
-The existing binding hashes those five files and records the Coordination source SHA. A native
-successor must bind that producer source/tree, qualified exact runtime closure, binding bytes,
-runtime/SDK provenance and final packet independently of FourD/P2 identities, and verify acquired
-bytes before invoking them. A self-authored matching hash map alone is not publication or custody.
-Reuse FourD's qualified source/runtime acquisition route. If an installed CLI/package is selected,
-publish and pin that exact existing producer through its normal route; a local build is not
-installed delivery. No package or source/runtime adoption is selected by this constructor.
+Local qualification requires acknowledged effects, actual source/image/P2 evidence, and closure
+of all owned resources. Remote workflow conclusion and Root's actual credential/release/asset/tag
+retirement readbacks are separate facts. Their absence cannot satisfy whole acceptance. Emergency
+cleanup reports mechanical observations and cannot manufacture qualification.
 
-The native workflow has a 90-minute full window and a 20-minute preflight-only window. The legacy
-operation protocol validates at most 2700 seconds, with its run protocol ending new effects at 2460
-seconds. These contracts are incompatible as a whole-operation replacement. Root must select a
-native-profile lifecycle/time contract before consumer integration; this slice expands neither
-limit and does not divide the operation into renewing budgets. Preserve the existing monotonic
-full window, phase deadlines, P2 allowance, cleanup reserve and original attempt identity. Any
-stateful native-profile extension requires corresponding canonical Quint/F# traces and negatives.
+## Reproducible source qualification
 
-## Regression and acceptance remainder
+`.github/workflows/fourd-typed-source.yml` builds the nonpackable producer into fresh `/tmp`
+outputs and runs the acquired-byte, real capsule IO and native protocol controls.
+`tests/fourd-public-provider/qualify_native.py` pins Quint0.32.0 and locked FsQuint0.1.0,
+compares actual compiled reducer observations with independently executed ITFs, requires causal
+oracle mutations to diverge, and retains tool/source/DLL/model identities and bounded run logs.
+The fixed simulation budget is 5000 samples, maximum60 steps, seed20261025. Sampling is not
+exhaustive verification. No Quint `verify`, native image, container, VM or live capsule operation
+is part of this source gate.
 
-The maintained `test_source_capsule.py` scenarios cover real sealing/raw commit reconstruction,
-mode/commit/tree/inventory/order changes, traversal/duplicate/link/gitlink refusal and cancellation
-during reconstruction. `test_qualification.py` retains child-scope settlement, unacknowledged effects,
-held-original-inode wiping with replacement preservation, plaintext created before unseal failure,
-cleanup failures and sticky cancellation. `test_typed_policy.py` retains stale admission, missing
-identity, forged state, incomplete cleanup and false-success refusal. These maintained regressions
-remain source evidence for their original route. The relevant scenarios must also run through the
-native replacement; merely rerunning the retired adapter's tests does not establish parity.
+The real IO controls prepare/acquire the seven-member producer, seal/unseal fixture source
+with RSA3072 and Node AES, reconstruct a nonroot raw Git commit and modes, validate the clean
+context, and retire held credentials after settlement. Causal controls change ciphertext,
+executable mode, producer binding or cancellation timing after a positive setup. FourD's
+consumer tests exercise its actual lifecycle and P2 argument/compatibility bridge with explicit
+machine-effect fixtures; they cannot establish native machine capability.
 
-The root-wrapper regression set additionally retains raw bounded HTTP identity, original/target
-attempt discrimination, complete job census, cancellation intent/result separation, aggregate
-monotonic budget, signal-during-retirement and unknown remote settlement. Its frozen packet
-identities remain in the [accepted source evidence](ops-typed-01.3-source-integration-20261001.md).
-A native successor must map applicable invariants to its actual first-dispatch/local-child protocol;
-the old attempt2/job names are not copied into a new workflow.
+## Remaining actual first-run inputs and effects
 
-Remaining Delivery 1051 acceptance includes protected reservation, encrypted source transport,
-source/root/producer packet adoption, native typed lifecycle integration, effect-free final-packet
-preflight, all relevant replacement regressions, refusal/rollback, native result and cleanup/credential
-retirement, and parity-proven retirement of only the superseded Python policy. Preserve FourD#37's
-accepted scope and original failed/refused attempts. A capable runner is required for the final native
-effect; its absence does not block this source work. No source PR closes Delivery 1051.
+Root must select the protected producer and FourD consumer revisions after source integration,
+publish/adopt the qualified runtime bytes through existing release custody, and supply the
+immutable adoption and packet locator inputs. The locator/actual IDs remain unselected here.
+The actual installed host/runtime closure, fixed qualified runner, original attempt1 packet,
+encrypted product capsule, preprovisioned recipient credential and unchanged P2 executor bytes
+must join before the first genuine native operation. P2 remains pinned to Coordination commit
+`9d99573628ee31e966a61a28b9b36f7414b10f33`, tree
+`e96774e11969b2730ebcf40ab47a06d7a17d46d6`.
+
+Actual dispatch, publication, supplier qualification, remote conclusion/retirement, refusal and
+rollback rehearsal, original-attempt reconciliation and replacement/legacy retirement remain
+Root's operational acceptance gates. The Atlas record must be refreshed with protected source
+citations after integration; Root owns that capture gap until those citations exist.
