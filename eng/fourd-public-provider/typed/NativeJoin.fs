@@ -75,6 +75,14 @@ module NativeJoin =
         let source,tree = str request "expectedSourceSha",str request "expectedSourceTree"
         require (hex 40 source && hex 40 tree) "native-producer-source-refused"
         let expectedFiles = fileMap (request.GetProperty "expectedFiles")
+        // A matching foreign closure is insufficient: the command making this decision
+        // must itself be the qualified assembly and standalone apphost.
+        let executingAssembly=typeof<NativeSourceSnapshot>.Assembly.Location
+        require (not(String.IsNullOrWhiteSpace executingAssembly)) "native-producer-executing-assembly-required"
+        hashFile expectedFiles["FourD.Typed.dll"] executingAssembly |> ignore
+        let executingHost=Environment.ProcessPath
+        require (not(String.IsNullOrWhiteSpace executingHost) && Path.GetFileName executingHost="FourD.Typed") "native-producer-standalone-apphost-required"
+        hashFile expectedFiles["FourD.Typed"] executingHost |> ignore
         let root = str request "runtimeRoot"
         for KeyValue(name, expected) in expectedFiles do hashFile expected (Path.Combine(root,name)) |> ignore
         let bindingHash,provenanceHash = str request "expectedBindingSha256",str request "expectedProvenanceSha256"
@@ -234,7 +242,7 @@ module NativeJoin =
         require ((NativeSource.projection snapshot).fileCount=count) "native-context-closure-refused"
         snapshot
 
-    let private memoryHeadroom e =
+    let memoryHeadroom e =
         require (str e "schema"="fsgg.fourd.image-temporary-memory/1") "native-memory-schema-refused"
         let mutable available=number e "memAvailableBytes"
         require (available>=0L && available<=number e "memTotalBytes" && number e "processId">0L) "native-memory-host-refused"

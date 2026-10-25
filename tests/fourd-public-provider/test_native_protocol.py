@@ -31,13 +31,20 @@ class NativeFixture:
         self.started = 1800000000
         self.runtime = self.root / "runtime"
         self.runtime.mkdir()
+        if len(command) != 1:
+            raise AssertionError("native tests require the standalone production FourD.Typed apphost")
+        apphost = Path(command[0]).resolve(strict=True)
+        if apphost.name != "FourD.Typed":
+            raise AssertionError("native tests require the production FourD.Typed apphost")
         self.files = {}
         for name in ("FourD.Typed", "FourD.Typed.dll", "FourD.Typed.deps.json", "FourD.Typed.runtimeconfig.json", "FSharp.Core.dll"):
-            raw = ("fixture-runtime-" + name).encode()
-            (self.runtime / name).write_bytes(raw)
-            self.files[name] = sha(raw)
-        host = self.root / "host"
-        host.write_bytes(b"fixture-dotnet-host")
+            acquired = apphost.parent / name
+            shutil.copy2(acquired, self.runtime / name)
+            self.files[name] = sha(acquired.read_bytes())
+        host_name = os.environ.get("FSGG_FOURD_NATIVE_TEST_DOTNET_HOST") or shutil.which("dotnet")
+        if not host_name:
+            raise AssertionError("actual dotnet host required")
+        host = Path(host_name).resolve(strict=True)
         binding = {"schema": "fsgg.fourd.typed-policy-binding/1", "sourceSha": "a" * 40, "files": self.files}
         binding_path = self.write("binding.json", binding)
         self.producer = dict(runtimeRoot=str(self.runtime), bindingPath=str(binding_path), hostPath=str(host),
@@ -315,6 +322,33 @@ class NativeProtocolTests(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertEqual(retried["state"]["refusal"], "native-context-mode-refused")
         self.assertFalse(retried["state"]["successful"])
+
+    def test_borrowed_runtime_closure_cannot_qualify_the_executing_producer(self):
+        f = self.f
+        actual_apphost = Path(f.command[0])
+        original_apphost = sha(actual_apphost.read_bytes())
+        original_dll = sha(actual_apphost.with_name("FourD.Typed.dll").read_bytes())
+        for member in ("FourD.Typed.dll", "FourD.Typed"):
+            with self.subTest(member=member):
+                borrowed = f.root / ("borrowed-" + member)
+                borrowed.mkdir()
+                for name in f.files:
+                    shutil.copy2(f.runtime / name, borrowed / name)
+                (borrowed / member).write_bytes(b"foreign closure member with a matching declared hash")
+                files = {name: sha((borrowed / name).read_bytes()) for name in f.files}
+                evidence = dict(f.producer, runtimeRoot=str(borrowed), expectedFiles=files)
+                binding = dict(schema="fsgg.fourd.typed-policy-binding/1", sourceSha=evidence["expectedSourceSha"], files=files)
+                binding_path = f.write("borrowed-binding.json", binding)
+                evidence.update(bindingPath=str(binding_path), expectedBindingSha256=sha(binding_path.read_bytes()))
+                provenance = json.loads(Path(f.producer["provenancePath"]).read_bytes())
+                provenance.update(files=files, bindingSha256=evidence["expectedBindingSha256"])
+                provenance_path = f.write("borrowed-provenance.json", provenance)
+                evidence.update(provenancePath=str(provenance_path), expectedProvenanceSha256=sha(provenance_path.read_bytes()))
+                code, result = f.call("native-join", dict(schema="fsgg.fourd.native-producer-request/1", producer=evidence))
+                self.assertEqual(code, 2)
+                self.assertIn("native-acquired-bytes-refused", result["refusal"])
+                self.assertEqual(sha(actual_apphost.read_bytes()), original_apphost)
+                self.assertEqual(sha(actual_apphost.with_name("FourD.Typed.dll").read_bytes()), original_dll)
 
     def test_packet_wait_consumes_original_clock(self):
         f = self.f
