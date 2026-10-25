@@ -75,7 +75,7 @@ module NativeProtocol =
                         normalized,next,false
                 history.Add normalized
                 let projection=NativePolicy.projection next
-                write output {|schema="fsgg.fourd.native-transition/1";eventAccepted=eventAccepted;history=history.ToArray();state=projection;modelState=NativePolicy.modelProjection next;actions=NativePolicy.actions next;refusal=(if isNull projection.refusal then projection.rootObservationRefusal else projection.refusal)|}
+                write output {|schema="fsgg.fourd.native-transition/1";eventAccepted=eventAccepted;history=history.ToArray();state=projection;imageBinding=NativePolicy.admittedImageBinding next;modelState=NativePolicy.modelProjection next;actions=NativePolicy.actions next;refusal=(if isNull projection.refusal then projection.rootObservationRefusal else projection.refusal)|}
                 if isNull projection.refusal && isNull projection.rootObservationRefusal then 0 else 2
             | _ -> fail "native-command-refused"
         with error ->

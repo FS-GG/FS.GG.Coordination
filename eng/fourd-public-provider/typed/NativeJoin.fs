@@ -146,13 +146,15 @@ module NativeJoin =
         require (number runner "id" > 0L && number runner "groupId" > 0L && token (str runner "name")) "native-runner-refused"
         let labels = runner.GetProperty("labels").EnumerateArray() |> Seq.map (fun v -> v.GetString()) |> Seq.toList
         require (labels.Length > 0 && labels.Length = (Set.ofList labels).Count && List.forall token labels) "native-runner-labels-refused"
+        require ((str runner "name").StartsWith("fsgg-q-",StringComparison.Ordinal)
+                 && Set.ofList labels=Set ["self-hosted";"linux";"x64";"fsgg-native-linux-x64-v1"]) "native-fixed-runner-profile-refused"
         let run,jobs = json (str request "runPath"),json (str request "jobPath")
         let links=request.GetProperty("jobLinkHeaders").EnumerateArray() |> Seq.toArray
         require (links.Length=0 && number jobs "total_count"=1L && jobs.GetProperty("jobs").GetArrayLength()=1) "native-job-census-refused"
         let job=jobs.GetProperty("jobs")[0]
         require (str job "name"="native-qualification") "native-job-name-refused"
         require (number run "id" = runId && number run "run_attempt" = 1L && str run "head_sha" = placement && str run "event" = "workflow_dispatch" && str run "path" = ".github/workflows/fourd-native-image-qualification.yml" && str run "head_branch" = "main" && str (run.GetProperty "repository") "full_name" = "FS-GG/FS.GG.FourD" && number (run.GetProperty "repository") "id" = 1390568106L && number (run.GetProperty "actor") "id" = actor && number (run.GetProperty "triggering_actor") "id" = actor && str run "status" = "in_progress") "native-run-readback-refused"
-        require (number job "run_id" = runId && number job "run_attempt" = 1L && str job "head_sha" = placement && str job "status" = "in_progress" && number job "runner_id" = number runner "id" && str job "runner_name" = str runner "name" && number job "runner_group_id" = number runner "groupId" && (job.GetProperty("labels").EnumerateArray() |> Seq.map (fun v -> v.GetString()) |> Set.ofSeq) = Set.ofList labels) "native-job-readback-refused"
+        require (number job "run_id" = runId && number job "run_attempt" = 1L && str job "head_sha" = placement && str job "status" = "in_progress" && number job "runner_id" = number runner "id" && str job "runner_name" = str runner "name" && number job "runner_group_id" = number runner "groupId" && str job "runner_group_name"="Default" && (job.GetProperty("labels").EnumerateArray() |> Seq.map (fun v -> v.GetString()) |> Set.ofSeq) = Set.ofList labels) "native-job-readback-refused"
         let capsule = p.GetProperty "sourceCapsule"
         closed ["transport";"releaseId";"assetId";"tag";"name";"ciphertextBytes";"ciphertextSha256";"descriptor";"descriptorSha256";"recipientPublicKeySha256"] capsule
         require (str capsule "transport" = "coordination-release-asset" && number capsule "releaseId" > 0L && number capsule "assetId" > 0L && number capsule "ciphertextBytes" >= 2L && number capsule "ciphertextBytes" <= 25165824L && hex 64 (str capsule "ciphertextSha256") && hex 64 (str capsule "recipientPublicKeySha256") && token (str capsule "tag") && token (str capsule "name")) "native-capsule-refused"

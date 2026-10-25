@@ -57,10 +57,13 @@ module NativePolicy =
             | "image-running" when s.Elapsed<deadline s "image" && s.RevalidatedPhase=Some "image-running" && s.SourceIdentity=s.CurrentIdentity -> [|"execute-image-command"|] | "cleanup" -> [|"settle-owned-resources"|]
             | "retired" -> [|"collect"|] | "collecting" -> [|"finish"|] | _ -> [|"observe-child"|]
     let projection s =
+        let fromIntent op limit = s.Intents.TryFind op |> Option.map(fun value -> min (deadline s op) (value.Started+limit)) |> Option.defaultValue(deadline s op)
+        let cleanupEnd=s.CleanupStarted |> Option.map(fun started -> min (deadline s "cleanup") (started+480)) |> Option.defaultValue(deadline s "cleanup")
         let capability=s.Mode="capability" && s.Outcome="capability-complete" && not s.Cancelled && s.Refusal.IsNone && cleanupComplete s
         let disposition=if successful s then "qualified" elif capability then "capability-only" elif s.Phase="incomplete" then "incomplete" elif s.Refusal.IsSome && s.Outcome="refused" then "refused" elif s.Phase="finished" || s.Cancelled || s.Refusal.IsSome then "unknown" else "running"
         {| disposition=disposition;exitCode=(if successful s || capability then 0 else 2);qualified=successful s; schema="fsgg.fourd.native-state/1"; mode=s.Mode; startedUnixSeconds=s.StartedUnix; elapsed=s.Elapsed
            deadlines={|preflight=deadline s "preflight";image=deadline s "image";p2=deadline s "p2";cleanup=deadline s "cleanup";collection=deadline s "collection"|}
+           operationDeadlines={|preflight=deadline s "preflight";image=deadline s "image";p2=fromIntent "p2" 1415;cleanup=cleanupEnd;collection=fromIntent "collection" 180|}
            allowances={|collection=180;cleanup=480;p2Command=1200;p2Operation=900;wrapper=120;termination=20;drain=15;handoff=60|}
            remaining=max 0 (budget s-s.Elapsed); phase=s.Phase; outcome=s.Outcome
            producerIdentity=s.Producer |> Option.map producerIdentity |> Option.toObj

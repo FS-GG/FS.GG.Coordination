@@ -103,7 +103,7 @@ class NativeFixture:
                                          bindingSha256=self.producer["expectedBindingSha256"], provenanceSha256=self.producer["expectedProvenanceSha256"]),
                            product=dict(revision=self.revision, tree=self.tree, inventorySha256=self.inventory),
                            p2=dict(revision=self.p2proof["sourceSha"], tree=self.p2proof["sourceTree"], executorDllSha256=sha(executor.read_bytes())),
-                           runner=dict(id=5, name="fixture-runner", groupId=6, labels=["linux", "x64"]),
+                           runner=dict(id=5, name="fsgg-q-fixture-runner", groupId=6, labels=["self-hosted","linux","x64","fsgg-native-linux-x64-v1"]),
                            sourceCapsule=capsule, operationId="fourd-portable-technical")
         self.packet_path = self.write("packet.json", self.packet)
         run = dict(id=42, run_attempt=1, head_sha=self.revision, event="workflow_dispatch",
@@ -111,7 +111,7 @@ class NativeFixture:
                    repository=dict(full_name="FS-GG/FS.GG.FourD", id=1390568106), actor=dict(id=9), triggering_actor=dict(id=9), status="in_progress")
         self.run_path = self.write("run.json", run)
         job = dict(id=43, name="native-qualification", run_id=42, run_attempt=1, head_sha=self.revision, status="in_progress", runner_id=5,
-                   runner_name="fixture-runner", runner_group_id=6, labels=["linux", "x64"])
+                   runner_name="fsgg-q-fixture-runner", runner_group_id=6, runner_group_name="Default", labels=["self-hosted","linux","x64","fsgg-native-linux-x64-v1"])
         self.job_path = self.write("job.json", dict(total_count=1,jobs=[job]))
         self.release = dict(id=70, tag_name="fourd-native-42", author=dict(id=9), draft=False, prerelease=False,
                             assets=[dict(id=72, name="fourd-native-packet.json", size=self.packet_path.stat().st_size,
