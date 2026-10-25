@@ -48,6 +48,7 @@ module NativeOperationModel =
   pure def nextCloseRole(s) =
     if (s.ownedRoles.contains("cleanup") and not(s.closedRoles.contains("cleanup"))) "cleanup"
     else if (s.ownedRoles.contains("image") and not(s.closedRoles.contains("image"))) "image"
+    else if (s.ownedRoles.contains("key-intent") and not(s.closedRoles.contains("key-intent"))) "key-intent"
     else if (s.ownedRoles.contains("key") and not(s.closedRoles.contains("key"))) "key"
     else if (s.ownedRoles.contains("p2") and not(s.closedRoles.contains("p2"))) "p2"
     else if (s.ownedRoles.contains("preflight") and not(s.closedRoles.contains("preflight"))) "preflight"
@@ -59,7 +60,7 @@ module NativeOperationModel =
     state' = { ...state, producer: true, phase: "packet-wait" } }
   action packet = all { alive(state), state.phase == "packet-wait", state.elapsed < phaseLimit(state,"source"),
     state' = { ...state, root: true, phase: "bound" } }
-  action capsule = all { alive(state), state.phase == "bound", state' = { ...state, phase: "capsule-ready" } }
+  action capsule = all { alive(state), state.phase == "bound", state' = { ...state, phase: "capsule-ready", ownedRoles: state.ownedRoles.union(Set("key-intent")), owned: state.owned + 1 } }
   action key = all { alive(state), state.phase == "capsule-ready", state.root, state.producer,
     state' = { ...state, phase: "key-ready", ownedRoles: state.ownedRoles.union(Set("key")), owned: state.owned + 1 } }
   action intentSource = all { alive(state), state.phase == "key-ready", state.elapsed < phaseLimit(state,"source"), state' = intentNext(state,"source") }

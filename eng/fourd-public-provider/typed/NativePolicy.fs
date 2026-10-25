@@ -33,6 +33,9 @@ module NativePolicy =
     let private owned s resource identity =
         require (token resource && token identity && not (s.Owned.ContainsKey resource)) "native-resource-ownership-refused"
         { s with Owned=s.Owned.Add(resource,identity) }
+    // Reserve the possible recipient effect before returning permission to expose it.
+    let private reserveRecipient s =
+        owned s "recipient-intent" (str ((packet (root s)).GetProperty "sourceCapsule") "recipientPublicKeySha256")
     let private acknowledged op s =
         match s.Intents.TryFind op with Some i -> i.Pid.IsSome && i.StartIdentity.IsSome | None -> false
     let private expectedPhase = function
@@ -136,11 +139,11 @@ module NativePolicy =
                 shape ["evidence"]; require (not historical) "native-historical-ciphertext-refused"; requireAlive()
                 require (s.Phase="bound" && s.StartedUnix+int64 s.Elapsed<rootExpiry(root s)) "native-capsule-order-refused"
                 let proof=acquireCapsule (root s) (e.GetProperty "evidence")
-                JsonSerializer.SerializeToElement({|kind="capsule-proof";elapsed=s.Elapsed;identity=proof|}),{s with Phase="capsule-ready"}
+                JsonSerializer.SerializeToElement({|kind="capsule-proof";elapsed=s.Elapsed;identity=proof|}),{ reserveRecipient s with Phase="capsule-ready" }
             | "capsule-proof" ->
                 shape ["identity"]; require historical "native-self-authored-capsule-proof-refused"; requireAlive()
                 require (s.Phase="bound" && str e "identity"=capsuleProofIdentity(root s) && s.StartedUnix+int64 s.Elapsed<rootExpiry(root s)) "native-capsule-proof-refused"
-                e,{s with Phase="capsule-ready"}
+                e,{ reserveRecipient s with Phase="capsule-ready" }
             | "key-exposed" ->
                 shape ["resource";"identity";"publicKeySha256"]; requireAlive(); require (str e "publicKeySha256"=str ((packet (root s)).GetProperty "sourceCapsule") "recipientPublicKeySha256") "native-key-identity-refused"; require (s.Phase="capsule-ready" && s.StartedUnix+int64 s.Elapsed < rootExpiry (root s)) "native-key-before-binding-refused"
                 e,{ owned s (str e "resource") (str e "identity") with Phase="key-ready" }
@@ -306,6 +309,7 @@ module NativePolicy =
             | "collecting" | "finished" | "incomplete" -> "collection"
             | _ -> ""
         let role resource =
+            if resource="recipient-intent" then "key-intent" else
             s.Intents |> Map.toSeq |> Seq.tryFind (fun (_,i) -> i.Resource=resource) |> Option.map fst |> Option.defaultValue "key"
         let archive=if s.ArchiveProof.IsSome then 1 else 0
         let currentArchive=if s.CurrentArchiveIdentity.IsNone then 0 elif s.ArchiveProof |> Option.exists (fun p -> Some(archiveIdentity p)=s.CurrentArchiveIdentity) then 1 else 2
