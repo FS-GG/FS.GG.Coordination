@@ -201,11 +201,11 @@ class Qualification:
             if steps is None:
                 steps = len(json.loads(observations[name].read_bytes()))
             selected_trace = self.evidence / (name + "-{seq}.itf.json")
-            profile = dict(modelSha256=model_hash, module=module, init="init", step=step,
+            profile = dict(modelSha256=model_hash, module=module, init="initCapability" if name=="capability" else "init", step=step,
                            invariant="invariant", seed=SEED, samples=1, steps=steps, witnesses=list(witnesses))
             self.profiles[name] = profile
             log = self.run("witness-" + name, [*self.quint, "run", str(model), "--main", module,
-                           "--step", step, "--invariant", "invariant", "--max-samples", "1",
+                           "--init",profile["init"],"--step", step, "--invariant", "invariant", "--max-samples", "1",
                            "--max-steps", str(steps), "--seed", SEED, "--n-traces", "1",
                            "--out-itf", str(selected_trace), "--verbosity", "1", "--witnesses", *witnesses])
             text = log.read_text()

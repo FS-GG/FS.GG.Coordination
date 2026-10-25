@@ -165,7 +165,6 @@ module FourDNativeJourney {
 }
 module FourDNativeCapabilityJourney {
   import FourDNativeOperation.*
-  action init = state' = initial("capability")
   action capabilityStep = any {
     producer, packet, capsule, key, intentSource, ackSource, source,
     all { not(state.resources), resources }, intentPreflight, ackPreflight, preflight,
