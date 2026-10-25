@@ -406,8 +406,17 @@ def run_gated(effects: Effects, argv: list[str], *, client: NativeClient | None,
 
 def git_observation(source: Path, target: Path, effects: Effects, env: dict, remaining: Callable[[], float]):
     def git(*args):
-        result = effects.run(["/usr/bin/git", *args], cwd=source, env=env,
-                             timeout=min(15, remaining()), total_timeout=remaining(), capture=None)
+        # A fast read can exit before Effects records its PID/start identity.
+        # Reuse the maintained same-PID gate: exec Git only after observed birth.
+        gate_read, gate_write = os.pipe()
+        try:
+            result = effects.run(["/usr/bin/python3", "-I", "-B", str(HERE / "native_child.py"),
+                                  str(gate_read), "/usr/bin/git", *args], cwd=source, env=env,
+                                 timeout=min(15, remaining()), total_timeout=remaining(), capture=None,
+                                 pass_fds=(gate_read,), on_started=lambda _identity: os.write(gate_write, b"1"))
+        finally:
+            os.close(gate_read)
+            os.close(gate_write)
         if result.returncode:
             raise NativeIOError("native-git-observation-refused")
         return result.stdout
