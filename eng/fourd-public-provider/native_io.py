@@ -15,6 +15,7 @@ import math
 import os
 from pathlib import Path
 import signal
+import shutil
 import stat
 import subprocess
 import sys
@@ -503,13 +504,20 @@ def acquire_capsule(packet: dict, key: bytes, private: Path, effects: Effects, *
         capsules.validate_outer_capsule(raw, packet["runNonce"]+"-source", packet["product"]["revision"], capsule["descriptorSha256"])
         if hashlib.sha256((HERE / "seal_native_custody.mjs").read_bytes()).hexdigest() != capsule["descriptor"]["sealerSha256"]:
             raise NativeIOError("native-sealer-bytes-refused")
-        result = run_gated(effects, ["/usr/bin/node", str(HERE / "seal_native_custody.mjs"), "unseal",
+        selected_node=shutil.which("node")
+        if selected_node is None:raise NativeIOError("native-node-unavailable")
+        node=str(Path(selected_node).resolve(strict=True))
+        result = run_gated(effects, [node, str(HERE / "seal_native_custody.mjs"), "unseal",
             f"/proc/self/fd/{encrypted.fd}", f"/proc/self/fd/{recipient.fd}", str(plaintext_output),
             packet["runNonce"]+"-source", packet["product"]["revision"], capsule["descriptorSha256"]],
             client=client, operation="source", cwd=private, env=env, timeout=min(120, remaining()-36),
             total_timeout=remaining(), pass_fds=(encrypted.fd,recipient.fd,credential_owner.fd))
         if result.returncode:
-            raise NativeIOError("native-unseal-child-failed")
+            error=NativeIOError("native-unseal-child-failed")
+            # The pinned public sealer emits only fixed error names and OS
+            # diagnostics. Keep bounded mechanism context without source/key bytes.
+            error.add_note(f"node={node}; exit={result.returncode}; stderr-sha256={hashlib.sha256(result.stderr).hexdigest()}")
+            raise error
         plaintext = open_plaintext(); held.append(plaintext)
         client.config.setdefault("ownedFiles",{})[str(plaintext.path)]={"device":plaintext.device,"inode":plaintext.inode}
         client.save()
