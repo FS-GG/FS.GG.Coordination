@@ -216,7 +216,11 @@ class API:
         upload = endpoint.startswith("/repos/" + REPOSITORY + "/releases/") and "/assets?name=" in endpoint
         url = ("https://uploads.github.com" if upload else "https://api.github.com") + endpoint
         raw = body if isinstance(body, bytes) else (capsules.canonical(body) if body is not None else None)
-        headers = {"Accept": "application/octet-stream" if binary else "application/vnd.github+json",
+        artifact_zip = method == "GET" and re.fullmatch(
+            "/repos/" + re.escape(REPOSITORY) + r"/actions/artifacts/[1-9][0-9]*/zip", endpoint) is not None
+        # Actions ZIP downloads negotiate JSON before redirecting to binary storage.
+        # Release-asset downloads retain their separate octet-stream negotiation.
+        headers = {"Accept": "application/octet-stream" if binary and not artifact_zip else "application/vnd.github+json",
                    "X-GitHub-Api-Version": "2022-11-28", "User-Agent": "fsgg-fourd-native-publication/1"}
         if self.token and not public:
             headers["Authorization"] = "Bearer " + self.token
@@ -391,7 +395,8 @@ def qualify(api, identity):
             and hex_value(artifact["digest"][7:]), "qualification artifact provenance")
     status, archive_zip = api.request("GET", "/repos/"+REPOSITORY+"/actions/artifacts/"+str(artifact_id)+"/zip",
                                       limit=MAX_ARCHIVE+MAX_JSON, binary=True)
-    require(status == 200 and len(archive_zip) == artifact["size_in_bytes"]
+    require(status == 200, "qualification artifact download HTTP status " + str(status))
+    require(len(archive_zip) == artifact["size_in_bytes"]
             and sha(archive_zip) == artifact["digest"][7:], "qualification artifact download digest/size")
     archive, raw_manifest = unpack_pair(archive_zip)
     adapters = {}
