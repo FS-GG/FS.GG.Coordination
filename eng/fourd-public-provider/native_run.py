@@ -17,7 +17,7 @@ sys.dont_write_bytecode = True
 sys.path.insert(0,str(Path(__file__).resolve().parent))
 from native_io import (Effects, HeldFile, NativeClient, NativeIOError, OwnedDirectory,
                        acquire_capsule, capsules, git_observation, private_directory,
-                       safe_environment, write_new)
+                       run_gated, safe_environment, write_new)
 from native_bootstrap import GitHubReader
 
 
@@ -84,9 +84,10 @@ def prepare_context(source: Path, target: Path, effects: Effects, *, deadline: f
     archive=HeldFile.create(target/"source.tar",b"")
     try:
         remaining=deadline-time.monotonic()
-        response=effects.run(["/usr/bin/git","archive","--format=tar",f"--output=/proc/self/fd/{archive.fd}","HEAD"],
+        response=run_gated(effects,["/usr/bin/git","archive","--format=tar",f"--output=/proc/self/fd/{archive.fd}","HEAD"],
+                             client=None,operation=None,
                              cwd=source,env=safe_environment(Path("/nonexistent")),timeout=min(30,remaining-36),
-                             total_timeout=remaining,capture=None,pass_fds=(archive.fd,))
+                             total_timeout=remaining,pass_fds=(archive.fd,))
         if response.returncode:
             raise NativeIOError("native-context-archive-child-failed")
         # Source capsule bounds the full source payload to8MiB/512files. A32MiB

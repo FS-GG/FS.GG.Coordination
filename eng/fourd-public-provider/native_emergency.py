@@ -10,7 +10,7 @@ import time
 
 sys.dont_write_bytecode=True
 sys.path.insert(0,str(Path(__file__).resolve().parent))
-from native_io import Effects,HeldFile,NativeClient,OwnedDirectory,capsules,mechanisms,safe_environment,write_new
+from native_io import Effects,HeldFile,NativeClient,OwnedDirectory,capsules,mechanisms,run_gated,safe_environment,write_new
 
 
 def retire(session:Path,evidence:Path):
@@ -75,7 +75,7 @@ def retire(session:Path,evidence:Path):
                           "--build-runroot",client.config["buildRunroot"],"--fresh-runroot",client.config["freshRunroot"],
                           "--image-tmpdir",client.config["imageTmpdir"]]
                     try:
-                        result=scope.run(argv,cwd=client.work,env=env,timeout=remaining-36,total_timeout=remaining,capture=None,allow_cancelled=True)
+                        result=run_gated(scope,argv,client=None,operation=None,cwd=client.work,env=env,timeout=remaining-36,total_timeout=remaining,allow_cancelled=True)
                         if result.returncode:failures.append("private-store-cleanup-unknown")
                     except BaseException:failures.append("private-store-cleanup-unknown")
                 else:failures.append("cleanup-budget-exhausted")

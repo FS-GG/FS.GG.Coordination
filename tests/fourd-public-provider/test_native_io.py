@@ -196,15 +196,15 @@ class NativeIOTests(unittest.TestCase):
     def test_cancel_after_key_creation_wipes_only_after_child_settlement(self):
         f,client,private,expected,reader=self.fixture()
         effects=io.Effects()
-        original=effects.run
-        def cancel_key(argv,**options):
-            if argv[:2]==["/usr/bin/openssl","pkey"]:
+        original=io.run_gated
+        def cancel_key(scope,argv,**options):
+            if scope is effects and argv[:2]==["/usr/bin/openssl","pkey"]:
                 self.assertTrue((private/"credentials/recipient.pem").exists())
                 self.assertIn("recipient-intent",[row["resource"] for row in client.response["state"]["owned"]])
                 client.signal();effects.request_cancel()
                 raise io.NativeIOError("fixture-cancel-before-key-readback")
-            return original(argv,**options)
-        with mock.patch.object(effects,"run",side_effect=cancel_key):
+            return original(scope,argv,**options)
+        with mock.patch.object(io,"run_gated",side_effect=cancel_key):
             with self.assertRaisesRegex(io.NativeIOError,"fixture-cancel-before-key-readback"):
                 io.acquire_capsule(f.packet,self.key.read_bytes(),private,effects,deadline=client.started+600,
                                    client=client,read=reader,node_tool=self.node_tool)
@@ -297,6 +297,104 @@ class GitObservationBirthTests(unittest.TestCase):
                 io.git_observation(self.source, target, effects, self.env, lambda: deadline-time.monotonic())
         self.assertFalse(target.exists())
         self.assertEqual(1, len(captured))
+        self.assertTrue(effects.settle(deadline=deadline))
+
+
+class ArchiveBirthClosureTests(unittest.TestCase):
+    """Actual Git archive/FD and gate controls; no producer, CLR, key or native work."""
+    def setUp(self):
+        GitObservationBirthTests.setUp(self)
+        script = self.source / 'tool.sh'
+        script.write_text('#!/bin/sh\nexit 0\n')
+        script.chmod(0o755)
+        for args in (['add', 'tool.sh'], ['-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid',
+                      '-c', 'commit.gpgsign=false', 'commit', '-qm', 'executable fixture']):
+            subprocess.run(['/usr/bin/git', *args], cwd=self.source, env=self.env, check=True)
+
+    def test_actual_archive_preserves_fd_and_modes_after_delayed_birth(self):
+        effects = io.Effects()
+        deadline = time.monotonic() + 60
+        actual_identity, actual_run = io.mechanisms._process_identity, effects.run
+        observed = []
+        def delayed(pid):
+            time.sleep(0.03)
+            return actual_identity(pid)
+        def record(argv, **options):
+            gated = argv[:4] == ['/usr/bin/python3', '-I', '-B', str(io.HERE / 'native_child.py')]
+            target = argv[5:] if gated else argv
+            archive_fd = int(target[3].rsplit('/', 1)[1])
+            original_born = options.get('on_started')
+            def born(identity):
+                self.assertEqual(identity, actual_identity(identity.pid))
+                self.assertEqual(identity, effects.owned[identity.pid])
+                self.assertEqual(identity.pid, os.getpgid(identity.pid))
+                self.assertEqual(Path('/proc/self/cgroup').read_bytes(), Path(f'/proc/{identity.pid}/cgroup').read_bytes())
+                parent = os.fstat(archive_fd)
+                child = Path(f'/proc/{identity.pid}/fd/{archive_fd}').stat()
+                self.assertEqual((parent.st_dev, parent.st_ino), (child.st_dev, child.st_ino))
+                self.assertEqual(0, child.st_size, 'Git has not written before birth permission')
+                observed.append((identity, target, options['timeout'], options['total_timeout']))
+                if original_born is not None: original_born(identity)
+            result = actual_run(argv, **{**options, 'on_started': born})
+            self.assertTrue(gated)
+            self.assertEqual((0, b'', b''), (result.returncode, result.stdout, result.stderr))
+            return result
+        target = self.root / 'context'
+        with mock.patch.object(io.mechanisms, '_process_identity', side_effect=delayed), \
+             mock.patch.object(effects, 'run', side_effect=record):
+            context = driver.prepare_context(self.source, target, effects, deadline=deadline)
+        self.assertEqual(b'fixture\n', (context / 'README').read_bytes())
+        self.assertEqual(b'#!/bin/sh\nexit 0\n', (context / 'tool.sh').read_bytes())
+        self.assertFalse((context / 'README').stat().st_mode & 0o111)
+        self.assertTrue((context / 'tool.sh').stat().st_mode & 0o111)
+        self.assertFalse((context / '.git').exists())
+        self.assertFalse((target / 'source.tar').exists(), 'held archive retired after settled child')
+        self.assertEqual(1, len(observed))
+        identity, argv, execution, total = observed[0]
+        self.assertEqual(['/usr/bin/git', 'archive', '--format=tar', 'HEAD'], argv[:3] + argv[4:])
+        self.assertTrue(0 < execution <= 30 and 0 < total <= 60)
+        self.assertTrue(effects.settle(deadline=deadline))
+
+    def test_archive_rejected_birth_does_not_write_and_settles(self):
+        effects = io.Effects()
+        deadline = time.monotonic() + 60
+        original_run = effects.run
+        def reject(argv, **options):
+            def denied(_identity): raise io.NativeIOError('fixture-archive-birth-refused')
+            return original_run(argv, **{**options, 'on_started': denied})
+        target = self.root / 'denied-context'
+        with mock.patch.object(effects, 'run', side_effect=reject):
+            with self.assertRaisesRegex(io.NativeIOError, 'fixture-archive-birth-refused'):
+                driver.prepare_context(self.source, target, effects, deadline=deadline)
+        self.assertEqual([], list((target / 'source').iterdir()))
+        self.assertFalse((target / 'source.tar').exists())
+        self.assertTrue(effects.settle(deadline=deadline))
+
+    def test_archive_wrong_gate_permission_refuses_before_extract(self):
+        effects = io.Effects()
+        deadline = time.monotonic() + 60
+        actual_write = os.write
+        def wrong_permission(fd, value):
+            return actual_write(fd, b'0' if value == b'1' else value)
+        target = self.root / 'wrong-permission-context'
+        with mock.patch.object(io.os, 'write', side_effect=wrong_permission):
+            with self.assertRaisesRegex(io.NativeIOError, 'native-context-archive-child-failed'):
+                driver.prepare_context(self.source, target, effects, deadline=deadline)
+        self.assertEqual([], list((target / 'source').iterdir()))
+        self.assertFalse((target / 'source.tar').exists())
+        self.assertTrue(effects.settle(deadline=deadline))
+
+    def test_mechanical_cancelled_retirement_allowance_is_preserved(self):
+        deadline = time.monotonic() + 60
+        effects = io.Effects()
+        effects.request_cancel()
+        argv = ['/usr/bin/python3', '-I', '-B', '-c', 'print("mechanical-fixture")']
+        with self.assertRaisesRegex(io.mechanisms.Refusal, 'cancelled'):
+            io.run_gated(effects, argv, client=None, operation=None, cwd=self.root, env=self.env,
+                         timeout=5, total_timeout=deadline-time.monotonic())
+        result = io.run_gated(effects, argv, client=None, operation=None, cwd=self.root, env=self.env,
+                              timeout=5, total_timeout=deadline-time.monotonic(), allow_cancelled=True)
+        self.assertEqual((0, b'mechanical-fixture\n', b''), (result.returncode, result.stdout, result.stderr))
         self.assertTrue(effects.settle(deadline=deadline))
 
 
