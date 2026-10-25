@@ -3,18 +3,26 @@
 
 The existing BAR domain and actual published catalog remain determining native gates.
 A parsed JSON target or checksum does not supply provider/operator authorization.
-The only writer is `write-binding`, which seals one per-boot instance binding after the
-same validation that registration uses; it never starts, registers or provisions anything.
+The legacy writer `write-binding` seals one per-boot instance binding after registration
+data validation. Named ATv2 operations also seal a closed factory import closure and
+capture a fixed user pool for the separately admitted disposable guest. They never install
+software, dispatch, register or execute downloaded/controller code.
 """
 from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import os
 from pathlib import Path, PurePosixPath
 import re
+import selectors
+import signal
 import stat
+import subprocess
+import time
 
+AT_ENTRY_STARTED=time.monotonic()
 BASELINE_ID = 'ubuntu2404-linux-x64-v1'
 IMAGE_URL_PATTERN = r'https://cloud-images\.ubuntu\.com/releases/noble/release-[0-9]{8}/ubuntu-24\.04-server-cloudimg-amd64\.img'
 # Free plan: a repository-level JIT runner in the Default group of the private caller repository only.
@@ -30,6 +38,21 @@ TARGETS = {
     FOURD_REPOSITORY: {'workflow': FOURD_REPOSITORY + '/.github/workflows/fourd-native-image-qualification.yml@refs/heads/main',
                        'job': 'native-qualification'},
 }
+AT_WORKLOAD = 'current-public-at'
+AT_CONTROLLER_ROOT = '/opt/fsgg/current-at-controller'
+AT_POOL_ROOT = '/var/lib/fs-gg-current-at-pools'
+AT_FACTORY_PREFIX = 'tests/composition/fable-game/'
+AT_FACTORY_FILES = ('current-reference-noble-factory.py','current-reference-noble-transaction.py',
+    'current-reference-noble-acquisition.py','current-reference-native-input.py','external-reference-orca.py',
+    'fixtures/noble-c068-status.xz','fixtures/noble-source-prefix-request.json')
+AT_LABEL = 'fsgg-native-at-x11-v1'
+AT_TARGET = {'repository': CALLER_REPOSITORY,
+             'workflow': CALLER_REPOSITORY + '/.github/workflows/current-public-reference-at-qualification.yml@refs/heads/main',
+             'job': 'current-public-at'}
+AT_ROOT_REQUEST_SHA256 = '47782f4389f3451e843cd9dadff584c51f840511a085f76b063235a56f8098c9'
+AT_INVENTORY_SHA256 = '9fdf6c23ce3e223e4aaefacde405ece9a523957f24acbb9cc8465223a506958f'
+AT_RESOURCES = {'vcpu': 2, 'memoryBytes': 4 * 1024**3, 'aggregateWritableBytes': 8 * 1024**3,
+                'installSeconds': 600, 'keymapSeconds': 120, 'cleanupSeconds': 15}
 RUNNER_NAME_PATTERN = r'fsgg-q-[A-Za-z0-9][A-Za-z0-9-]{0,63}'
 RUNNER_UID = 1001
 STATE_DIRECTORY = '/etc/fsgg-qualification-runner'
@@ -74,8 +97,63 @@ def load(path, maximum=4 * 1024**2):
     return json.loads(raw, object_pairs_hook=unique)
 
 
+
+def validate_at_software(value):
+    """Closed selected software inputs, not installation/profile/runtime acceptance."""
+    require(type(value) is dict and set(value)=={'schema','platform','stage','templatesSource','frozenPlan',
+            'rootRequestSha256','expectedFinalInventory','resources'},'closed AT software contract required')
+    require(value['schema']=='fsgg.current-reference-noble-software/1' and value['platform']=='ubuntu-24.04-x11',
+            'selected Noble X11 software contract required')
+    require(value['stage'] in ('facility-prefix','full-current-public-reference') and sha(value['templatesSource'],40),
+            'exact selected AT stage/controller source required')
+    require(value['rootRequestSha256']==AT_ROOT_REQUEST_SHA256 and
+            value['expectedFinalInventory']=={'packages':993,'sha256':AT_INVENTORY_SHA256} and
+            type(value['expectedFinalInventory'].get('packages')) is int and value['resources']==AT_RESOURCES and
+            all(type(item) is int for item in value['resources'].values()),
+            'frozen selected AT inputs/resources differ')
+    plan=value['frozenPlan']
+    require(type(plan) is dict and set(plan)=={'repository','repositoryId','workflowPath','source','runId','runAttempt',
+            'artifactId','artifactSha256','artifactBytes','transactionSha256'},'complete frozen source artifact descriptor required')
+    require(plan['repository']=='FS-GG/FS.GG.Templates' and type(plan['repositoryId']) is int and plan['repositoryId']==1281961814 and
+            plan['workflowPath']=='.github/workflows/fable-external-reference-source.yml' and sha(plan['source'],40),
+            'frozen source producer identity differs')
+    require(all(type(plan[key]) is int and plan[key]>0 for key in ['runId','artifactId']) and
+            type(plan['runAttempt']) is int and plan['runAttempt']==1 and
+            type(plan['artifactBytes']) is int and 0<plan['artifactBytes']<=256*1024**2 and
+            sha(plan['artifactSha256']) and sha(plan['transactionSha256']),'frozen source artifact tuple absent')
+    require(len(json.dumps(value,sort_keys=True,separators=(',',':')).encode())<=65536,'AT software contract exceeds64KiB')
+    return value
+
+
+def _registration_target(instance):
+    if instance.get('schema')=='fsgg.dedicated-qualification-instance/2':
+        require(instance.get('runnerRepository')==AT_TARGET['repository'] and instance.get('runnerWorkload')==AT_WORKLOAD,
+                'v2 is only the named private AT target')
+        software=validate_at_software(instance.get('atSoftwareContract'))
+        require(sha(instance.get('atSoftwareContractSha256')) and
+                hashlib.sha256(json.dumps(software,sort_keys=True,separators=(',',':')).encode()).hexdigest()==instance['atSoftwareContractSha256'],
+                'sealed AT software body/digest differs')
+        return AT_TARGET,AT_LABEL
+    require(instance.get('schema')=='fsgg.dedicated-qualification-instance/1','instance binding required')
+    require(not any(key in instance for key in ['runnerWorkload','atSoftwareContract','atSoftwareContractSha256']),
+            'v2 AT fields on legacy binding refused')
+    repository=instance.get('runnerRepository')
+    target=TARGETS.get(repository) if isinstance(repository,str) else None
+    require(target is not None,'runner repository must be one of the two private qualification targets')
+    return target,LABEL
+
+
 def validate_target_data(target):
-    require(target.get('schema') == 'fsgg.dedicated-qualification-target/1', 'target schema')
+    at=target.get('schema')=='fsgg.dedicated-qualification-target/2'
+    require(target.get('schema') in ('fsgg.dedicated-qualification-target/1','fsgg.dedicated-qualification-target/2'),'target schema')
+    if at:
+        require(set(target)=={'schema','baselineId','provider','providerInstanceId','providerImageId','systemUuid',
+                'operatorAcceptanceSha256','dedicated','disposable','sharedCodexHost','architecture','os','resources',
+                'runnerWorkload','atLayerSource'},'closed named AT target required')
+        require(set(target.get('resources',{}))=={'vcpu','memoryBytes','diskBytes'},'closed AT target resources required')
+        require(target.get('runnerWorkload')==AT_WORKLOAD and sha(target.get('atLayerSource'),40),'AT-capable baked layer source required')
+    else:
+        require('runnerWorkload' not in target and 'atLayerSource' not in target,'AT fields on legacy target refused')
     require(target.get('baselineId') == BASELINE_ID, 'target baseline differs')
     for key in ('provider', 'providerInstanceId', 'providerImageId', 'systemUuid', 'operatorAcceptanceSha256'):
         require(isinstance(target.get(key), str) and target[key].strip() == target[key] and target[key], 'target missing ' + key)
@@ -85,8 +163,8 @@ def validate_target_data(target):
     require(target.get('architecture') == 'x86_64', 'x64 VM required')
     require(target.get('os') == {'id': 'ubuntu', 'version': '24.04'}, 'actual Ubuntu24.04 noble carrier required')
     resources = target.get('resources', {})
-    require(type(resources.get('vcpu')) is int and resources['vcpu'] >= 4, 'four CPU target floor')
-    require(type(resources.get('memoryBytes')) is int and resources['memoryBytes'] >= 16 * 1024**3, '16GiB candidate sizing floor; native available-memory gate remains separate')
+    require(type(resources.get('vcpu')) is int and resources['vcpu'] >= (2 if at else 4), 'selected CPU target floor')
+    require(type(resources.get('memoryBytes')) is int and resources['memoryBytes'] >= (4 if at else 16) * 1024**3, 'selected candidate sizing floor; native available-memory gate remains separate')
     require(type(resources.get('diskBytes')) is int and resources['diskBytes'] >= 256 * 1024**3, '256GiB target floor')
     return target
 
@@ -191,13 +269,10 @@ def runner_name_ok(name):
 
 def validate_registration_data(instance, lock, runner_name):
     validate_lock_data(lock)
-    require(instance.get('schema') == 'fsgg.dedicated-qualification-instance/1', 'instance binding required')
+    target,label=_registration_target(instance)
     require(instance.get('baselineId') == BASELINE_ID and instance.get('oneJobOnly') is True, 'single-use baseline instance required')
     require(runner_name_ok(runner_name) and instance.get('runnerName') == runner_name, 'exact ephemeral fsgg-q- runner name required')
-    require(instance.get('runnerGroup') == GROUP and instance.get('runnerLabel') == LABEL, 'fixed Default-group route differs')
-    repository = instance.get('runnerRepository')
-    target = TARGETS.get(repository) if isinstance(repository, str) else None
-    require(target is not None, 'runner repository must be one of the two private qualification targets')
+    require(instance.get('runnerGroup') == GROUP and instance.get('runnerLabel') == label, 'fixed Default-group route differs')
     require(instance.get('allowedWorkflow') == target['workflow'] and instance.get('allowedJob') == target['job'],
             'allowed workflow/job differ from the repository binding')
     require(instance.get('repositoryScopeVerified') is True, 'repository-level single-repository runner scope must be independently verified')
@@ -215,15 +290,19 @@ REQUEST_FIELDS = ('baselineId', 'providerInstanceId', 'providerImageId', 'system
 
 def binding_from_request(request, lock, system_uuid):
     """Closed per-boot instance binding built only from the launcher's exact request and the actual machine UUID."""
-    require(request.get('schema') == 'fsgg.dedicated-qualification-binding-request/1', 'binding request schema')
-    require(set(request) == set(REQUEST_FIELDS) | {'schema'}, 'binding request fields differ')
+    at=request.get('schema')=='fsgg.dedicated-qualification-binding-request/2'
+    require(request.get('schema') in ('fsgg.dedicated-qualification-binding-request/1','fsgg.dedicated-qualification-binding-request/2'),'binding request schema')
+    fields=REQUEST_FIELDS+(('runnerWorkload','atSoftwareContractSha256','atSoftwareContract') if at else ())
+    require(set(request)==set(fields)|{'schema'},'binding request fields differ')
     require(isinstance(system_uuid, str) and system_uuid and request['systemUuid'] == system_uuid, 'actual machine UUID differs from the request')
     repository = request['runnerRepository']
     require(isinstance(repository, str) and repository in TARGETS, 'runner repository must be one of the two private qualification targets')
-    instance = {'schema': 'fsgg.dedicated-qualification-instance/1', 'oneJobOnly': True, 'runnerGroup': GROUP,
-                'runnerLabel': LABEL, 'credentialKind': 'jit-config',
-                'allowedWorkflow': TARGETS[repository]['workflow'], 'allowedJob': TARGETS[repository]['job'],
-                **{key: request[key] for key in REQUEST_FIELDS}}
+    selected=AT_TARGET if at else TARGETS[repository]
+    if at:require(repository==CALLER_REPOSITORY and request['runnerWorkload']==AT_WORKLOAD,'AT request target differs')
+    instance={'schema':'fsgg.dedicated-qualification-instance/'+('2' if at else '1'),'oneJobOnly':True,'runnerGroup':GROUP,
+              'runnerLabel':AT_LABEL if at else LABEL,'credentialKind':'jit-config',
+              'allowedWorkflow':selected['workflow'],'allowedJob':selected['job'],
+              **{key:request[key] for key in fields}}
     validate_registration_data(instance, lock, instance['runnerName'])
     return instance
 
@@ -408,10 +487,222 @@ def verify_guest(root, source, phase, *, system_uuid=None, runner_name=None, own
     return {'phase': phase, 'refusals': refusals, 'facts': facts, 'authorization': 'readback only; not provider or Root authority'}
 
 
+def factory_git_closure(checkout,revision,deadline):
+    """Read/hash exact commit/tree/blob objects; never execute checkout code or fetch."""
+    require(sha(revision,40),'exact selected factory source required')
+    checkout=Path(checkout).resolve(strict=True);database=checkout/'.git'
+    require(database.is_dir() and not database.is_symlink() and
+            not (database/'objects/info/alternates').exists(),'ordinary isolated non-alternate Git source required')
+    cache={};aggregate=0
+    def object_bytes(kind,identity):
+        nonlocal aggregate
+        require(sha(identity,40),'Git object identity malformed')
+        key=(kind,identity)
+        if key not in cache:
+            left=deadline-time.monotonic();require(left>0,'original factory seal deadline exhausted')
+            env={'PATH':'/usr/bin:/bin','LANG':'C','LC_ALL':'C','GIT_CONFIG_NOSYSTEM':'1',
+                 'GIT_CONFIG_GLOBAL':'/dev/null','GIT_NO_LAZY_FETCH':'1','GIT_TERMINAL_PROMPT':'0',
+                 'GIT_ALLOW_PROTOCOL':'','GIT_PROTOCOL_FROM_USER':'0'}
+            command=['/usr/bin/git','--no-replace-objects','--git-dir='+str(database),
+                '-c','core.fsmonitor=false','-c','protocol.allow=never','cat-file',kind,identity]
+            child=subprocess.Popen(command,env=env,stdout=subprocess.PIPE,stderr=subprocess.PIPE,start_new_session=True)
+            output={'stdout':bytearray(),'stderr':bytearray()}
+            try:
+                with selectors.DefaultSelector() as selector:
+                    for name in output:selector.register(getattr(child,name),selectors.EVENT_READ,name)
+                    while selector.get_map():
+                        left=deadline-time.monotonic();require(left>0,'original Git object deadline exhausted')
+                        for key,_ in selector.select(min(.1,left)):
+                            body=os.read(key.fileobj.fileno(),65536)
+                            if not body:selector.unregister(key.fileobj);continue
+                            output[key.data].extend(body)
+                            require(len(output[key.data])<=(1024**2 if key.data=='stdout' else 65536),
+                                    'Git object output exceeded closed bound')
+                require(child.wait(timeout=max(.001,deadline-time.monotonic()))==0,'selected Git object unavailable')
+            except BaseException as cause:
+                try:
+                    if child.poll() is None:os.killpg(child.pid,signal.SIGKILL)
+                    child.wait(timeout=1)
+                except BaseException as secondary:cause.add_note('secondary original Git reader retirement: '+str(secondary))
+                raise
+            finally:
+                child.stdout.close();child.stderr.close()
+            body=bytes(output['stdout']);aggregate+=len(body)
+            require(aggregate<=8*1024**2 and hashlib.sha1((kind+' '+str(len(body))+'\0').encode()+body).hexdigest()==identity,
+                    'Git object body identity differs')
+            require(time.monotonic()<deadline,'original factory seal object read completed late')
+            cache[key]=body
+        return cache[key]
+    commit=object_bytes('commit',revision)
+    match=re.match(rb'tree ([0-9a-f]{40})\n',commit);require(match is not None,'selected commit root absent')
+    root=match[1].decode();result={}
+    for path in AT_FACTORY_FILES:
+        tree=root;parts=(AT_FACTORY_PREFIX+path).split('/')
+        for index,part in enumerate(parts):
+            raw=object_bytes('tree',tree);position=0;rows={}
+            while position<len(raw):
+                end=raw.index(b'\0',position);mode,name=raw[position:end].split(b' ',1)
+                identity=raw[end+1:end+21];require(len(identity)==20 and name not in rows,'Git tree entry malformed/duplicate')
+                rows[name]=(mode,identity.hex());position=end+21
+                require(len(rows)<=10000,'Git tree population exceeded')
+            require(position==len(raw) and part.encode() in rows,'closed factory path absent')
+            mode,identity=rows[part.encode()]
+            require(mode==(b'100644' if index==len(parts)-1 else b'40000'),'factory source mode/path differs')
+            if index==len(parts)-1:result[path]=object_bytes('blob',identity)
+            else:tree=identity
+    return result
+
+
+def at_factory_binding():
+    """Actual separate ATv2 guest/binding; JSON is not Root/provider authority."""
+    require(os.geteuid()==0 and Path(__file__).resolve()==Path(LAYER_ROOT)/'eng/dedicated_qualification_runner.py',
+            'only the baked root driver may seal the factory')
+    request=load(Path(STATE_DIRECTORY)/'instance-binding.json',131072)
+    lock=load(Path(STATE_DIRECTORY)/'acquired-input-lock.json')
+    selected,label=_registration_target(request)
+    require(label==AT_LABEL,'only separate ATv2 may seal a factory')
+    validate_registration_data(request,lock,os.environ.get('RUNNER_NAME'))
+    require(all(os.environ.get(key)==value for key,value in {'GITHUB_REPOSITORY':selected['repository'],
+        'GITHUB_WORKFLOW_REF':selected['workflow'],'GITHUB_JOB':selected['job'],'GITHUB_RUN_ATTEMPT':'1'}.items()),
+        'actual selected private AT context differs')
+    observed=verify_guest('/',LAYER_ROOT,'boot',system_uuid=Path('/sys/class/dmi/id/product_uuid').read_text().strip(),
+                          runner_name=request['runnerName'])
+    require(not observed['refusals'],'actual AT guest/layer refused')
+    software=request['atSoftwareContract']
+    # This source slice prepares the installed-input prefix only. Full AT remains a separate held route.
+    require(software['stage']=='facility-prefix','full AT controller admission is not supplied by factory sealing')
+    return request
+
+
+def at_handoff_deadline():
+    overall=float(os.environ['FSGG_AT_DEADLINE_MONOTONIC'])
+    require(math.isfinite(overall) and AT_ENTRY_STARTED<overall<=AT_ENTRY_STARTED+2100,
+            'finite original AT overall clock required')
+    deadline=min(AT_ENTRY_STARTED+60,overall-15)
+    require(deadline>time.monotonic(),'original factory handoff aperture absent')
+    return deadline
+
+
+def seal_at_controller(checkout):
+    request=at_factory_binding();software=request['atSoftwareContract']
+    deadline=at_handoff_deadline()
+    bodies=factory_git_closure(checkout,software['templatesSource'],deadline)
+    destination=Path(AT_CONTROLLER_ROOT)/software['templatesSource']
+    parent=destination.parent
+    if not parent.exists():parent.mkdir(mode=0o755)
+    info=parent.lstat();require(stat.S_ISDIR(info.st_mode) and info.st_uid==0 and stat.S_IMODE(info.st_mode)==0o755,
+                               'factory seal parent is not root immutable')
+    require(not destination.exists() and not destination.is_symlink(),'fresh factory seal required; no replay')
+    destination.mkdir(mode=0o755)
+    for path,body in bodies.items():
+        target=destination/AT_FACTORY_PREFIX/path;target.parent.mkdir(parents=True,exist_ok=True,mode=0o755)
+        with target.open('xb') as stream:stream.write(body)
+        target.chmod(0o644)
+        require(time.monotonic()<deadline,'original factory seal persistence completed late')
+    receipt={'schema':'fsgg.current-reference-factory-seal/1','source':software['templatesSource'],
+             'files':{path:hashlib.sha256(body).hexdigest() for path,body in bodies.items()},
+             'rootBindingSha256':hashlib.sha256((Path(STATE_DIRECTORY)/'instance-binding.json').read_bytes()).hexdigest()}
+    output=destination/'factory-seal.json'
+    with output.open('x') as stream:stream.write(json.dumps(receipt,sort_keys=True)+'\n')
+    output.chmod(0o644);require(time.monotonic()<deadline,'original factory seal receipt persistence completed late')
+    return {'controller':str(destination/AT_FACTORY_PREFIX/'current-reference-noble-factory.py'),
+            'source':software['templatesSource'],'installation':False,'actualAT':False}
+
+
+def capture_at_pool():
+    """Capture one fixed user preparation domain through directory fds before root use."""
+    request=at_factory_binding();software=request['atSoftwareContract']
+    software_sha=request['atSoftwareContractSha256'];deadline=at_handoff_deadline()
+    base=Path(os.environ['RUNNER_TEMP']);require(base.is_absolute() and '..' not in base.parts,'fixed runner temp required')
+    source=base/'native-at-pool';rootfd=os.open('/',os.O_RDONLY|os.O_DIRECTORY)
+    try:
+        for part in source.parts[1:]:
+            child=os.open(part,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW,dir_fd=rootfd)
+            os.close(rootfd);rootfd=child
+        require(os.fstat(rootfd).st_uid==RUNNER_UID,'prepared input domain must belong to runner')
+        total=0
+        def read(relative,cap,expected=None,size=None):
+            nonlocal total
+            require(time.monotonic()<deadline,'original pool capture deadline exhausted')
+            require(re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9+._/@~-]*',relative) is not None and
+                    all(part not in ('','.','..') for part in relative.split('/')),'closed captured member path required')
+            fd=os.dup(rootfd)
+            try:
+                parts=relative.split('/')
+                for part in parts[:-1]:
+                    child=os.open(part,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW,dir_fd=fd);os.close(fd);fd=child
+                    require(os.fstat(fd).st_uid==RUNNER_UID,'captured member ancestor owner differs')
+                leaf=os.open(parts[-1],os.O_RDONLY|os.O_NONBLOCK|os.O_NOFOLLOW,dir_fd=fd)
+                with os.fdopen(leaf,'rb') as stream:
+                    before=os.fstat(stream.fileno())
+                    require(stat.S_ISREG(before.st_mode) and before.st_uid==RUNNER_UID and before.st_nlink==1 and
+                            not before.st_mode&0o022 and 0<before.st_size<=cap,'bounded regular single-owner input required')
+                    body=stream.read(cap+1);after=os.fstat(stream.fileno())
+                require(len(body)<=cap and all(getattr(before,key)==getattr(after,key) for key in
+                    ('st_dev','st_ino','st_size','st_mtime_ns','st_ctime_ns')) and len(body)==after.st_size,
+                    'captured member changed during original read')
+                total+=len(body);require(total<=768*1024**2,'aggregate captured pool exceeded')
+                require(expected is None or (hashlib.sha256(body).hexdigest()==expected and len(body)==size),'captured archive body differs')
+                require(time.monotonic()<deadline,'original pool capture read completed late')
+                return body
+            finally:os.close(fd)
+        receipt_raw=read('frozen-inputs.json',1024**2)
+        def unique(rows):
+            value={}
+            for key,item in rows:require(key not in value,'duplicate pool receipt property');value[key]=item
+            return value
+        receipt=json.loads(receipt_raw,object_pairs_hook=unique)
+        require(receipt.get('schema')=='fsgg.current-reference-noble-frozen-inputs/1' and
+                receipt.get('originalTransactionSha256')==software['frozenPlan']['transactionSha256'] and
+                receipt.get('rootRequestSha256')==software['rootRequestSha256'],'selected pool receipt differs')
+        rows=receipt.get('archives');require(type(rows) is list and 1<=len(rows)<=2048,'bounded archive population required')
+        members={'frozen-inputs.json':(receipt_raw,None,None)}
+        archive_total=0
+        for row in rows:
+            require(type(row) is dict and type(row.get('bytes')) is int and 0<row['bytes']<=128*1024**2 and
+                    sha(row.get('sha256')) and type(row.get('path')) is str,'closed archive identity required')
+            name='archives/'+row['path'];require(name not in members,'duplicate captured archive')
+            members[name]=(None,row['sha256'],row['bytes']);archive_total+=row['bytes']
+        require(archive_total<=512*1024**2,'unchanged archive population bound exceeded')
+        for suite in ('noble','noble-updates','noble-security'):
+            members['metadata/'+suite+'.InRelease']=(None,None,None)
+            for component in ('main','universe'):
+                for kind in ('binary-amd64-Packages.xz','source-Sources.xz'):
+                    members['metadata/'+suite+'-'+component+'-'+kind]=(None,None,None)
+        for name in ('transaction.json','apt-config.log','apt-update.log','apt-simulate.log','status'):
+            members['originals/'+name]=(None,software['frozenPlan']['transactionSha256'] if name=='transaction.json' else None,None)
+        parent=Path(AT_POOL_ROOT)
+        if not parent.exists():parent.mkdir(mode=0o755)
+        info=parent.lstat();require(stat.S_ISDIR(info.st_mode) and info.st_uid==0 and stat.S_IMODE(info.st_mode)==0o755,
+                                   'root pool parent is not immutable')
+        destination=parent/software_sha
+        require(not destination.exists() and not destination.is_symlink(),'fresh root pool required; no replay')
+        destination.mkdir(mode=0o700);hashes={}
+        for name,(body,expected,size) in members.items():
+            if body is None:
+                body=read(name,128*1024**2,expected if size is not None else None,size)
+                if expected is not None and size is None:require(hashlib.sha256(body).hexdigest()==expected,'selected original transaction changed')
+            target=destination/name;target.parent.mkdir(parents=True,exist_ok=True,mode=0o700)
+            with target.open('xb') as stream:stream.write(body)
+            target.chmod(0o600);hashes[name]=hashlib.sha256(body).hexdigest()
+            require(time.monotonic()<deadline,'original pool capture persistence completed late')
+        seal={'schema':'fsgg.current-reference-pool-seal/1','softwareContractSha256':software_sha,'files':hashes,
+              'rootBindingSha256':hashlib.sha256((Path(STATE_DIRECTORY)/'instance-binding.json').read_bytes()).hexdigest()}
+        target=destination/'pool-seal.json'
+        with target.open('x') as stream:stream.write(json.dumps(seal,sort_keys=True)+'\n')
+        target.chmod(0o600);require(time.monotonic()<deadline,'original pool seal persistence completed late')
+        # Publish only the completed root-owned closure. Failed partial capture stays private.
+        for path in destination.rglob('*'):path.chmod(0o755 if path.is_dir() else 0o644)
+        destination.chmod(0o755);require(time.monotonic()<deadline,'original pool publication completed late')
+        return {'pool':str(destination),'softwareContractSha256':software_sha,'installation':False,'actualAT':False}
+    finally:os.close(rootfd)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('operation', choices=['validate-inputs', 'verify-image-target', 'verify-registration', 'write-binding', 'verify-guest'])
+    parser.add_argument('operation', choices=['validate-inputs', 'verify-image-target', 'verify-registration', 'write-binding', 'verify-guest','seal-at-controller','capture-at-pool'])
     parser.add_argument('--target')
+    parser.add_argument('--checkout')
     parser.add_argument('--lock')
     parser.add_argument('--inputs')
     parser.add_argument('--approval')
@@ -421,6 +712,11 @@ def main():
     parser.add_argument('--phase', choices=['image', 'boot'])
     args = parser.parse_args()
     source = Path(__file__).resolve().parents[1]
+    if args.operation=='capture-at-pool':
+        print(json.dumps(capture_at_pool(),sort_keys=True));return
+    if args.operation=='seal-at-controller':
+        require(args.checkout,'explicit selected Templates checkout required')
+        print(json.dumps(seal_at_controller(args.checkout),sort_keys=True));return
     if args.operation == 'write-binding':
         require(args.request and args.lock and args.system_uuid, 'binding request/lock/actual UUID missing')
         instance = binding_from_request(load(args.request), load(args.lock), args.system_uuid)

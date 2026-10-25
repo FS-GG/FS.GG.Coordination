@@ -259,3 +259,67 @@ and tiny file-population checks only. It does not run SDKs, compilers, userns pr
 - [GitHub self-hosted runner requirements](https://docs.github.com/en/actions/reference/runners/self-hosted-runners)
 - [GitHub ephemeral runner guidance](https://docs.github.com/en/actions/how-tos/manage-runners/self-hosted-runners/autoscale)
 - [Runner supported environment inputs](https://github.com/actions/runner/blob/main/src/Runner.Listener/CommandSettings.cs)
+
+### Separate ATv2 factory handoff (source preparation)
+
+ATv2 uses the distinct private `current-public-at` job and
+`fsgg-native-at-x11-v1` label. Legacy BAR/FourD target/binding defaults remain v1.
+An AT-capable baked driver/image needs separate image and caller qualification;
+advancing this source does not admit the existing BAR image to AT.
+
+The baked driver has two fixed handoffs before privileged factory execution.
+`seal-at-controller` reads and verifies the selected Templates commit, every tree
+on seven closed source paths and each blob's Git object body identity. It never
+executes checkout code, follows replacement refs/alternate object stores, fetches
+missing objects or accepts an arbitrary command. It copies only those source and
+fixture bytes into `/opt/fsgg/current-at-controller/<selected-source>` with a
+root-owned seal bound to the actual instance binding. The factory refuses an
+unsealed entry before importing sibling helpers.
+
+`capture-at-pool` reads only `$RUNNER_TEMP/native-at-pool`, through no-follow
+root/directory/file descriptors. Each original input must be a stable, single-link,
+UID1001-owned regular file; source ancestor replacement cannot redirect an open
+handle outside that domain. The declared archive population remains at most2048
+and512MiB,128MiB per archive. Fifteen metadata and five original solver inputs are
+captured separately; the entire handoff is bounded at768MiB. Failed partial
+capture stays root-private. Completed bytes are exposed read-only under
+`/var/lib/fs-gg-current-at-pools/<software-contract-sha256>`; the factory rechecks
+its root seal, binding, exact membership, ownership and content before use.
+
+These handoffs require the separately sealed ATv2 binding and actual guest/layer
+readback, use original absolute deadlines, and refuse the full-current-public
+stage in this factory-prefix slice. They grant no installation, runtime, IME,
+Orca, provider, Studio, outer-containment or VM-retirement acceptance. Actual
+installation and keymap preparation require the selected factory phases, while
+full AT remains behind the producer's `None` admission. Root owns selection,
+aggregate storage/reservation, qualified image/caller delivery and VM destruction.
+
+The AT prefix's original source ZIP is a separate fixed-file attachment contract,
+not a use of BAR's bake input directory or an inferred capability of per-boot
+`REQUEST.json`. The proposed guest path is
+`/mnt/fsgg-current-at-inputs/source-artifact.zip`. Its opened descriptor must join
+an actual mount at that exact directory with `ro,nodev,nosuid,noexec`; all path
+ancestors are root-owned/nonwritable and followed through no-follow handles.
+The file is regular, root-owned, single-link and stable across the read, with
+exact length and SHA256 from the sealed software's original artifact descriptor.
+No path or URI override exists. Actual host source attachment, backing identity,
+read-only guest mapping and retirement must be supplied by the separately
+qualified Home transport; this source does not establish that transport exists.
+The current public `guest-boot.sh` consumes an already supplied request file and
+contains no arbitrary-file attachment implementation.
+
+The guest independently joins public original run/job/artifact metadata, then
+checks the supplied original ZIP before preparing any archive pool. Its private
+job token is used only for its own live caller metadata and output artifact.
+The built-in token is [limited to the workflow repository](https://docs.github.com/en/actions/concepts/security/github_token);
+[foreign Actions artifact ZIP download requires repository Actions read](https://docs.github.com/en/rest/actions/artifacts#download-an-artifact).
+Public artifact metadata can be read without that permission. The prefix does
+not assume cross-repository ZIP access, add a token/App, change Actions policy or
+publish a substitute artifact. Missing attachment/provenance stops the original
+operation without reconstruction or retry.
+
+The existing native-qualification `MANIFEST.sha256` remains scoped to the three
+legacy BAR template members, in its original workflow/README/actionlint order.
+The AT source payloads are separately bound by the exact public/private source
+verifier and protected producer tuple. A directory gaining AT source files does
+not widen the legacy BAR workflow manifest or its enforcing preparation check.
