@@ -68,6 +68,12 @@ class DedicatedRunnerDataControls(unittest.TestCase):
             alternate=root/'.git/objects/info/alternates';alternate.write_text('/untrusted/objects\n')
             with self.assertRaises(ValueError):owner.factory_git_closure(root,revision,time.monotonic()+10)
 
+    def test_at_handoff_clock_never_renews_process_entry_or_accepts_nonfinite_overall(self):
+        with mock.patch.object(owner,'AT_ENTRY_STARTED',100),mock.patch.object(owner.time,'monotonic',return_value=120):
+            with mock.patch.dict(os.environ,{'FSGG_AT_DEADLINE_MONOTONIC':'150'},clear=True):self.assertEqual(135,owner.at_handoff_deadline())
+            for value in ('nan','inf','-inf','110','99999'):
+                with self.subTest(value=value),mock.patch.dict(os.environ,{'FSGG_AT_DEADLINE_MONOTONIC':value},clear=True),self.assertRaises(ValueError):owner.at_handoff_deadline()
+
     def test_at_pool_capture_is_fd_anchored_bounded_and_failed_capture_stays_private(self):
         import types,time
         for attack in ('none','symlink','hardlink'):

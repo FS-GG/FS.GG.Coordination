@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import os
 from pathlib import Path, PurePosixPath
 import re
@@ -21,6 +22,7 @@ import stat
 import subprocess
 import time
 
+AT_ENTRY_STARTED=time.monotonic()
 BASELINE_ID = 'ubuntu2404-linux-x64-v1'
 IMAGE_URL_PATTERN = r'https://cloud-images\.ubuntu\.com/releases/noble/release-[0-9]{8}/ubuntu-24\.04-server-cloudimg-amd64\.img'
 # Free plan: a repository-level JIT runner in the Default group of the private caller repository only.
@@ -571,10 +573,18 @@ def at_factory_binding():
     return request
 
 
+def at_handoff_deadline():
+    overall=float(os.environ['FSGG_AT_DEADLINE_MONOTONIC'])
+    require(math.isfinite(overall) and AT_ENTRY_STARTED<overall<=AT_ENTRY_STARTED+2100,
+            'finite original AT overall clock required')
+    deadline=min(AT_ENTRY_STARTED+60,overall-15)
+    require(deadline>time.monotonic(),'original factory handoff aperture absent')
+    return deadline
+
+
 def seal_at_controller(checkout):
     request=at_factory_binding();software=request['atSoftwareContract']
-    start=time.monotonic();deadline=min(start+60,float(os.environ['FSGG_AT_DEADLINE_MONOTONIC'])-15)
-    require(deadline>start,'original factory seal aperture absent')
+    deadline=at_handoff_deadline()
     bodies=factory_git_closure(checkout,software['templatesSource'],deadline)
     destination=Path(AT_CONTROLLER_ROOT)/software['templatesSource']
     parent=destination.parent
@@ -601,8 +611,7 @@ def seal_at_controller(checkout):
 def capture_at_pool():
     """Capture one fixed user preparation domain through directory fds before root use."""
     request=at_factory_binding();software=request['atSoftwareContract']
-    software_sha=request['atSoftwareContractSha256'];start=time.monotonic()
-    deadline=min(start+60,float(os.environ['FSGG_AT_DEADLINE_MONOTONIC'])-15)
+    software_sha=request['atSoftwareContractSha256'];deadline=at_handoff_deadline()
     base=Path(os.environ['RUNNER_TEMP']);require(base.is_absolute() and '..' not in base.parts,'fixed runner temp required')
     source=base/'native-at-pool';rootfd=os.open('/',os.O_RDONLY|os.O_DIRECTORY)
     try:

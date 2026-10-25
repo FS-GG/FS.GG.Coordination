@@ -1,0 +1,203 @@
+name: Current public reference AT factory prefix
+
+# Source template only. The separate private NativeQualification receiver owns
+# its actual run/job/actor and artifact custody. Public Rendering is not a native caller.
+# Root selects one reviewed source/input/resource envelope after primary BAR.
+# This fixed prefix installs frozen Noble inputs and observes retired keymaps;
+# it never claims a browser, Orca, real IME, provider or whole4817 result.
+on:
+  workflow_dispatch:
+    inputs:
+      coordination_sha:
+        description: Exact reviewed protected Coordination source
+        type: string
+        required: true
+      software_sha256:
+        description: Exact software body already sealed in the selected ATv2 guest
+        type: string
+        required: true
+      selected_utc:
+        description: Original Root selection UTC
+        type: string
+        required: true
+      latest_start_utc:
+        description: Original latest start within300s of selection
+        type: string
+        required: true
+      observer_deadline_utc:
+        description: Original observer deadline2100s after selection
+        type: string
+        required: true
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: current-public-at-factory-prefix
+  cancel-in-progress: false
+
+jobs:
+  current-public-at:
+    if: ${{ github.ref == 'refs/heads/main' && github.run_attempt == 1 }}
+    runs-on: [self-hosted, linux, x64, fsgg-native-at-x11-v1]
+    timeout-minutes: 35
+    env:
+      FSGG_SOURCE_REVISION: ${{ inputs.coordination_sha }}
+      AT_SOFTWARE_SHA256: ${{ inputs.software_sha256 }}
+      SELECTED_UTC: ${{ inputs.selected_utc }}
+      LATEST_START_UTC: ${{ inputs.latest_start_utc }}
+      OBSERVER_DEADLINE_UTC: ${{ inputs.observer_deadline_utc }}
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - name: Bind original private caller job and clock before acquisition
+        id: clock
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 -I -B <<'PY_CLOCK'
+          import datetime,hashlib,json,math,os,re,signal,stat,time,urllib.request
+          from pathlib import Path
+          started=time.monotonic();now=datetime.datetime.now(datetime.timezone.utc);env=os.environ
+          output=Path(env['RUNNER_TEMP'])/'native-at-startup';output.mkdir(mode=0o700)
+          record={'schema':'fsgg.native-at-original-clock/1','disposition':'refused','firstCause':None,
+              'callerRepository':env['GITHUB_REPOSITORY'],'callerSource':env['GITHUB_SHA'],
+              'runId':int(env['GITHUB_RUN_ID']),'attempt':1,'actor':env['GITHUB_ACTOR'],
+              'firstMonotonic':started,'firstUTC':now.isoformat(),'actualAT':False,'whole4817Acceptance':False}
+          def need(value,message):
+              if not value:raise ValueError(message)
+          def expire(number,frame):raise TimeoutError('original first-step15s clock exhausted')
+          signal.signal(signal.SIGALRM,expire);signal.setitimer(signal.ITIMER_REAL,15)
+          failure=None
+          try:
+              need(env['GITHUB_REPOSITORY']=='FS-GG/FS.GG.Native.Qualification' and env['GITHUB_REPOSITORY_ID']=='1432517271','actual private repository differs')
+              need(env['GITHUB_WORKFLOW_REF']=='FS-GG/FS.GG.Native.Qualification/.github/workflows/current-public-reference-at-qualification.yml@refs/heads/main' and env['GITHUB_JOB']=='current-public-at','actual private workflow/job differs')
+              need(env['GITHUB_REF']=='refs/heads/main' and env['GITHUB_EVENT_NAME']=='workflow_dispatch' and env['GITHUB_RUN_ATTEMPT']=='1' and env['RUNNER_ENVIRONMENT']=='self-hosted','original main dispatch/selfhosted route required')
+              need(re.fullmatch('[0-9a-f]{40}',env['GITHUB_SHA']) and re.fullmatch('[0-9a-f]{40}',env['FSGG_SOURCE_REVISION']) and re.fullmatch('[0-9a-f]{64}',env['AT_SOFTWARE_SHA256']),'exact selected source/software required')
+              def utc(value):
+                  need(re.fullmatch(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?Z',value),'strict Root UTC required')
+                  return datetime.datetime.fromisoformat(value.replace('Z','+00:00')).timestamp()
+              selected,latest,observer=[utc(env[key]) for key in ('SELECTED_UTC','LATEST_START_UTC','OBSERVER_DEADLINE_UTC')]
+              need(0<latest-selected<=300 and observer-selected==2100 and selected<=now.timestamp()<=latest,'original Root queue/observer envelope differs')
+              path=Path('/etc/fsgg-qualification-runner/instance-binding.json');info=path.lstat()
+              need(stat.S_ISREG(info.st_mode) and info.st_uid==0 and stat.S_IMODE(info.st_mode)==0o644 and info.st_size<=131072,'actual root binding absent/mutable')
+              raw=path.read_bytes();binding=json.loads(raw);software=binding['atSoftwareContract']
+              record['bootId']=Path('/proc/sys/kernel/random/boot_id').read_text().strip()
+              need(Path('/sys/class/dmi/id/product_uuid').read_text().strip()==binding['systemUuid'],'actual guest UUID differs from root binding')
+              need(binding['schema']=='fsgg.dedicated-qualification-instance/2' and binding['runnerWorkload']=='current-public-at' and binding['runnerLabel']=='fsgg-native-at-x11-v1' and binding['runnerName']==env['RUNNER_NAME'],'separate original ATv2 binding required')
+              need(software['stage']=='facility-prefix' and software['platform']=='ubuntu-24.04-x11' and re.fullmatch('[0-9a-f]{40}',software['templatesSource']),'only selected Noble factory prefix supported')
+              need(hashlib.sha256(json.dumps(software,sort_keys=True,separators=(',',':')).encode()).hexdigest()==binding['atSoftwareContractSha256']==env['AT_SOFTWARE_SHA256'],'sealed selected software differs')
+              def api(suffix):
+                  request=urllib.request.Request('https://api.github.com/repos/FS-GG/FS.GG.Native.Qualification/actions/runs/'+env['GITHUB_RUN_ID']+suffix,headers={'Authorization':'Bearer '+env['GH_TOKEN'],'Accept':'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'})
+                  with urllib.request.urlopen(request,timeout=10) as response:
+                      need(response.status==200,'actual native HTTP200 required');body=response.read(131073)
+                  need(len(body)<=131072,'native metadata body exceeded');return json.loads(body),hashlib.sha256(body).hexdigest()
+              run,run_sha=api('');jobs,jobs_sha=api('/attempts/1/jobs?per_page=100')
+              need(run['id']==int(env['GITHUB_RUN_ID']) and run['head_sha']==env['GITHUB_SHA'] and run['run_attempt']==1 and run['event']=='workflow_dispatch' and run['actor']['login']==env['GITHUB_ACTOR'] and run['repository']['id']==1432517271,'actual private run/source/actor differs')
+              need(jobs['total_count']==1 and len(jobs['jobs'])==1,'one actual native job required');job=jobs['jobs'][0]
+              need(job['run_id']==int(env['GITHUB_RUN_ID']) and job['head_sha']==env['GITHUB_SHA'] and job['name']=='current-public-at' and job['runner_name']==env['RUNNER_NAME'] and job['runner_group_name']=='Default' and job['status']=='in_progress','actual private job/runner differs')
+              need(set(job['labels'])=={'self-hosted','linux','x64','fsgg-native-at-x11-v1'} and len(job['labels'])==4,'actual exact ATlabels differ')
+              native=utc(job['started_at']);need(selected-1<=native<=now.timestamp(),'actual job birth differs')
+              deadline=started+min(selected+1800,native+1800)-now.timestamp();need(deadline-time.monotonic()>=1740,'original complete prefix aperture absent')
+              record.update(disposition='accepted',rootBindingSha256=hashlib.sha256(raw).hexdigest(),providerJob=job,
+                  nativeRunBodySha256=run_sha,nativeJobsBodySha256=jobs_sha,overallDeadlineMonotonic=deadline,
+                  softwareContractSha256=env['AT_SOFTWARE_SHA256'],templatesSource=software['templatesSource'],
+                  utcTrust='Root/provider/runner UTC; independent clock trust not established')
+          except BaseException as error:failure=error;record['firstCause']=type(error).__name__+': '+str(error)[:1024]
+          finally:signal.setitimer(signal.ITIMER_REAL,0)
+          (output/'clock.json').write_text(json.dumps(record,allow_nan=False)+'\n')
+          if failure is not None:raise failure
+          need(time.monotonic()-started<15,'original clock receipt persistence completed late')
+          with open(env['GITHUB_OUTPUT'],'a') as stream:stream.write('templates-source='+record['templatesSource']+'\n')
+          with open(env['GITHUB_ENV'],'a') as stream:stream.write('FSGG_AT_DEADLINE_MONOTONIC='+str(record['overallDeadlineMonotonic'])+'\n')
+          PY_CLOCK
+      - name: Check out exact public Coordination source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        timeout-minutes: 3
+        with:
+          repository: FS-GG/FS.GG.Coordination
+          ref: ${{ inputs.coordination_sha }}
+          path: source
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check out exact selected Templates controller
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        timeout-minutes: 3
+        with:
+          repository: FS-GG/FS.GG.Templates
+          ref: ${{ steps.clock.outputs.templates-source }}
+          path: templates
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check out exact private caller
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        timeout-minutes: 2
+        with:
+          ref: ${{ github.sha }}
+          path: caller
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify actual protected source and complete named private caller
+        shell: bash
+        timeout-minutes: 2
+        run: |
+          set -euo pipefail
+          python3 -I -B source/eng/current-public-at/verify-current-public-at-source.py bar-runtime --caller "$GITHUB_WORKSPACE/caller" --source "$GITHUB_WORKSPACE/source"
+          test "$(git -C templates rev-parse HEAD)" = '${{ steps.clock.outputs.templates-source }}'
+          git -C templates merge-base --is-ancestor HEAD refs/remotes/origin/main
+          test -z "$(git -C templates status --porcelain=v1 --untracked-files=all --ignored)"
+      - name: Authenticate original source artifact and prepare frozen archive pool
+        shell: bash
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          python3 -I -B source/eng/current-public-at/operate-current-public-at.py \
+            --templates "$GITHUB_WORKSPACE/templates" --startup "$RUNNER_TEMP/native-at-startup/clock.json"
+      - name: Seal selected factory and capture immutable pool with baked AT driver
+        shell: bash
+        timeout-minutes: 3
+        run: |
+          set -euo pipefail
+          context=()
+          for name in RUNNER_NAME RUNNER_TEMP RUNNER_ENVIRONMENT GITHUB_REPOSITORY GITHUB_WORKFLOW_REF GITHUB_JOB GITHUB_RUN_ATTEMPT GITHUB_SHA GITHUB_RUN_ID FSGG_AT_DEADLINE_MONOTONIC; do context+=("$name=${!name}"); done
+          sudo -n env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin "${context[@]}" /usr/bin/python3 -I -B /opt/fsgg/qualification-layer/eng/dedicated_qualification_runner.py \
+            seal-at-controller --checkout "$GITHUB_WORKSPACE/templates" > "$RUNNER_TEMP/native-at-startup/controller-seal.json"
+          sudo -n env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin "${context[@]}" /usr/bin/python3 -I -B /opt/fsgg/qualification-layer/eng/dedicated_qualification_runner.py \
+            capture-at-pool > "$RUNNER_TEMP/native-at-startup/pool-seal.json"
+      - name: Install frozen software and retain exact installed readback
+        shell: bash
+        timeout-minutes: 11
+        env:
+          AT_TEMPLATES_SOURCE: ${{ steps.clock.outputs.templates-source }}
+        run: |
+          set -euo pipefail
+          context=()
+          for name in RUNNER_NAME RUNNER_TEMP RUNNER_ENVIRONMENT GITHUB_REPOSITORY GITHUB_WORKFLOW_REF GITHUB_JOB GITHUB_RUN_ATTEMPT GITHUB_SHA GITHUB_RUN_ID FSGG_AT_DEADLINE_MONOTONIC; do context+=("$name=${!name}"); done
+          sudo -n env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin "${context[@]}" /usr/bin/python3 -I -B "/opt/fsgg/current-at-controller/$AT_TEMPLATES_SOURCE/tests/composition/fable-game/current-reference-noble-factory.py" \
+            install-readback --pool "/var/lib/fs-gg-current-at-pools/$AT_SOFTWARE_SHA256" --software-contract-sha256 "$AT_SOFTWARE_SHA256"
+      - name: Observe actual installed roles and retired original keymaps
+        shell: bash
+        timeout-minutes: 3
+        env:
+          AT_TEMPLATES_SOURCE: ${{ steps.clock.outputs.templates-source }}
+        run: |
+          set -euo pipefail
+          /usr/bin/python3 -I -B "/opt/fsgg/current-at-controller/$AT_TEMPLATES_SOURCE/tests/composition/fable-game/current-reference-noble-factory.py" \
+            qualify-inputs --pool "/var/lib/fs-gg-current-at-pools/$AT_SOFTWARE_SHA256" --software-contract-sha256 "$AT_SOFTWARE_SHA256" --out "$RUNNER_TEMP/native-at-facility"
+      - name: Retain original scoped prefix evidence and partial failures
+        if: always()
+        timeout-minutes: 2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: native-at-factory-prefix-${{ github.run_id }}-${{ github.run_attempt }}
+          if-no-files-found: warn
+          retention-days: 7
+          compression-level: 0
+          path: |
+            ${{ runner.temp }}/native-at-startup/**
+            ${{ runner.temp }}/native-at-originals/original-custody.json
+            ${{ runner.temp }}/native-at-pool/frozen-inputs.json
+            ${{ runner.temp }}/native-at-facility/**
+            /var/lib/fs-gg-current-at/${{ inputs.software_sha256 }}/installed-inputs.json

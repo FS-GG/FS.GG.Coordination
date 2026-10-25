@@ -1,55 +1,59 @@
 # FS.GG.Native.Qualification
 
-Private caller repository for the BAR hosted full-image qualification on the
-dedicated, ephemeral Ubuntu 24.04 LTS (noble) guest. It exists only because the FS-GG
-organization is on the GitHub Free plan: a self-hosted runner may be bound to
-this private repository and to no public one.
+Private caller repository for separately selected BAR and current-public AT work
+on dedicated disposable Ubuntu24.04 guests. Public Rendering and Templates
+workflows supply source or producer evidence; they are not native callers.
 
-This README, `.github/workflows/bar-hosted-image-qualification.yml` and
-`.github/actionlint.yaml` are byte-identical copies of the reviewed template in public
-[FS.GG.Coordination](https://github.com/FS-GG/FS.GG.Coordination) at
-`deployment/qualification-runner/native-qualification/`. `MANIFEST.sha256` there pins
-all three. Change them only by a Coordination pull request first, then copy the new bytes
-here. The unmodified workflow refuses a dispatch whose copy differs from the template at
-the pinned Coordination commit.
+The maintained sources are in public
+[FS.GG.Coordination](https://github.com/FS-GG/FS.GG.Coordination) under
+`deployment/qualification-runner/native-qualification/`. Deliver changes there
+first, then use the named reviewed bootstrap or normal private delivery. Source
+preparation and CI do not establish an assembled facility or native acceptance.
 
-## Security model
+The complete named caller has eleven files: BAR and AT workflows, the AT source
+controls workflow, the source verifier, five canonical routine-delivery producer
+files (including routine eligibility), actionlint configuration and this README. The bootstrap binds eight exact
+additions and three exact derivations: BAR's source guard, the additional AT
+label and this README. Arbitrary files or byte changes refuse. Each native
+workflow verifies the complete caller against the protected selected Coordination
+source and canonical producer pins before privileged source execution.
 
-1. **Private repository only.** The runner is a repository-level, ephemeral JIT runner
-   registered on this repository in the `Default` group. No public repository is ever
-   enabled for it, so no public workflow, fork or pull request can be assigned to it.
-2. **Dispatch only.** The sole workflow trigger is `workflow_dispatch`. There is no
-   `pull_request`, `pull_request_target`, `push`, `schedule` or `workflow_run` trigger,
-   so fork pull requests cannot start a job here, and a fork of a private repository
-   cannot be created by anyone outside the organization.
-3. **Guards.** In the unmodified workflow the job is skipped, and never takes the runner,
-   unless the run is on `refs/heads/main` and is attempt 1. Its first step then refuses
-   unless the runner is in group `Default`, its name starts with `fsgg-q-`, the native job
-   record matches this repository, run, commit and runner, and the Root selection clock is
-   within 300 s. A plain unprivileged step then refuses unless the pinned Coordination
-   commit is an ancestor of Coordination `main` and this caller's three files equal the
-   template there, before any pinned-source code runs as root. These guards live in the
-   workflow itself, so they bind only an unmodified caller; see the last paragraph of this
-   section for the controls against a modified one.
-4. **Least privilege.** `permissions: contents: read` plus `actions: read` (needed only to
-   read the run's own job record in the first step). No repository secret is used or
-   needed. Only the default token reaches the first step; checkouts persist no
-   credentials.
-5. **Pinned source.** Public FS.GG.Coordination is checked out at the explicit 40-hex
-   `coordination_sha` input, which must be an ancestor of Coordination `main`.
-6. **Disposable guest.** One job per VM. The guest is destroyed afterwards and never
-   reused. The job runs privileged inside that disposable guest only; it is not a
-   sandbox for untrusted code.
+## Execution boundaries
 
-Branch protection and rulesets are unavailable for private repositories on the Free
-plan. Therefore the remaining controls are: the workflow guards above, a collaborator list
-limited to trusted owners, the host-side assignment guard that stops a VM whose runner is
-assigned any job other than the dispatched run, and a review of every change to this
-repository.
+- BAR dispatch remains on `main`, attempt1, job `full-image`, with the four exact
+  labels `self-hosted`, `linux`, `x64`, `fsgg-native-linux-x64-v1`.
+- AT dispatch is separate: `main`, attempt1, job `current-public-at`, with the
+  four exact labels `self-hosted`, `linux`, `x64`, `fsgg-native-at-x11-v1`.
+- AT source controls and routine eligibility run on ordinary hosted runners.
+  Their pull-request or source events cannot take either native label. Fork
+  inputs cannot qualify the named first-producer source tuple.
+- Native startup joins the actual private repository, source, run, attempt, job,
+  runner and original clock through its own native API read. AT also records its
+  actual private actor. The private
+  job token reads only its own caller metadata and retains its own artifacts;
+  checkouts persist no credentials. Public producer identity is separate.
+- Each native runner is repository-scoped, ephemeral, in group `Default`, and
+  bound to one workflow/job. One job runs in one separately admitted disposable
+  VM, which must be retired afterwards. Privileged orchestration is for reviewed
+  trusted source and is not a sandbox for untrusted code.
 
-## Dispatch
+Root alone selects dispatch and the complete source/input/resource/retirement
+envelope. Collaborator restrictions, the actual host assignment guard and review
+of every private change remain necessary. Refresh actual policy and endpoint
+visibility; source checks do not create branch protection, runner access or host
+capability. Source delivery never grants retry, replay, a new operation ID or
+release of an old hold/Unknown.
 
-Only Root dispatches, after a separate admission naming the VM and the
-Coordination commit. Inputs: `purpose`, `full_image`, `coordination_sha`,
-`selected_utc`, `latest_start_utc`, `observer_deadline_utc`. The runner label is
-`fsgg-native-linux-x64-v1`.
+## AT factory prefix
+
+The held AT route prepares frozen Noble software, actual installed role readback
+and retired US/German keymaps. It requires a separately qualified ATv2 baked layer,
+root-sealed software selection, fixed read-only original source-archive attachment
+and root-owned factory/pool handoffs. BAR's image and three-file historical caller
+are not implicitly AT-capable. Attachment transport and the complete facility
+remain unassembled until independently qualified.
+
+This prefix supplies no browser, Orca, real IME, provider, Studio or whole4817
+acceptance. Full current-public AT remains behind the Templates controller's
+`None` admission. Root retains first BAR priority and owns actual facility,
+capacity, dispatch, output custody and final VM retirement.

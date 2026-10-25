@@ -293,3 +293,27 @@ Orca, provider, Studio, outer-containment or VM-retirement acceptance. Actual
 installation and keymap preparation require the selected factory phases, while
 full AT remains behind the producer's `None` admission. Root owns selection,
 aggregate storage/reservation, qualified image/caller delivery and VM destruction.
+
+The AT prefix's original source ZIP is a separate fixed-file attachment contract,
+not a use of BAR's bake input directory or an inferred capability of per-boot
+`REQUEST.json`. The proposed guest path is
+`/mnt/fsgg-current-at-inputs/source-artifact.zip`. Its opened descriptor must join
+an actual mount at that exact directory with `ro,nodev,nosuid,noexec`; all path
+ancestors are root-owned/nonwritable and followed through no-follow handles.
+The file is regular, root-owned, single-link and stable across the read, with
+exact length and SHA256 from the sealed software's original artifact descriptor.
+No path or URI override exists. Actual host source attachment, backing identity,
+read-only guest mapping and retirement must be supplied by the separately
+qualified Home transport; this source does not establish that transport exists.
+The current public `guest-boot.sh` consumes an already supplied request file and
+contains no arbitrary-file attachment implementation.
+
+The guest independently joins public original run/job/artifact metadata, then
+checks the supplied original ZIP before preparing any archive pool. Its private
+job token is used only for its own live caller metadata and output artifact.
+The built-in token is [limited to the workflow repository](https://docs.github.com/en/actions/concepts/security/github_token);
+[foreign Actions artifact ZIP download requires repository Actions read](https://docs.github.com/en/rest/actions/artifacts#download-an-artifact).
+Public artifact metadata can be read without that permission. The prefix does
+not assume cross-repository ZIP access, add a token/App, change Actions policy or
+publish a substitute artifact. Missing attachment/provenance stops the original
+operation without reconstruction or retry.
