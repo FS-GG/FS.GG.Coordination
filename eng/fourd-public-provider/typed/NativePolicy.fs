@@ -2,6 +2,7 @@ namespace FS.GG.FourD.Typed
 
 open System
 open System.Text.Json
+open System.Text.Json.Nodes
 
 /// One owner, one original clock, and distinct outcome/retirement evidence. History is a
 /// qualified local IO journal, not an authenticated portable state or new custody protocol.
@@ -11,14 +12,14 @@ module NativePolicy =
     type State = private {
         Mode:string; StartedUnix:int64; Elapsed:int; Phase:string
         Producer:Producer option; Root:Root option; SourceIdentity:string option; CurrentIdentity:string option
-        Image:JsonElement option; P2:JsonElement option; Resources:(int64*int64) option; P2Ready:bool; RevalidatedPhase:string option; Intents:Map<string,Intent>
+        ArchiveProof:ArchiveProof option; CurrentArchiveIdentity:string option; Image:JsonElement option; P2:JsonElement option; Resources:(int64*int64) option; P2Ready:bool; RevalidatedPhase:string option; Intents:Map<string,Intent>
         Owned:Map<string,string>; Closed:Set<string>; Cancelled:bool; Refusal:string option
         Outcome:string; RemoteConclusion:string option; RemoteRetirement:JsonElement option; LastRemoteElapsed:int option; RootRefusal:string option; CleanupStarted:int option; CollectionStarted:int option
     }
     let initial mode started =
         require ((mode="full" || mode="capability") && started > 0L) "native-initial-refused"
         { Mode=mode; StartedUnix=started; Elapsed=0; Phase="bootstrap"; Producer=None; Root=None
-          SourceIdentity=None; CurrentIdentity=None; Image=None; P2=None; Resources=None; P2Ready=false; RevalidatedPhase=None; Intents=Map.empty
+          SourceIdentity=None; CurrentIdentity=None; ArchiveProof=None; CurrentArchiveIdentity=None; Image=None; P2=None; Resources=None; P2Ready=false; RevalidatedPhase=None; Intents=Map.empty
           Owned=Map.empty; Closed=Set.empty; Cancelled=false; Refusal=None; Outcome="none"
           RemoteConclusion=None; RemoteRetirement=None; LastRemoteElapsed=None; RootRefusal=None; CleanupStarted=None; CollectionStarted=None }
     let budget s = if s.Mode="full" then 5400 else 1200
@@ -52,7 +53,8 @@ module NativePolicy =
             | "source-ready" -> [|"preflight"|] | "preflight-ready" when s.Mode="full" -> [|"build-image"|]
             | "preflight-ready" -> [|"begin-cleanup"|] | "image-ready" -> [|"p2"|]
             | "p2-ready" -> [|"begin-cleanup"|]
-            | "image-running" when s.RevalidatedPhase=Some "image-running" && s.SourceIdentity=s.CurrentIdentity -> [|"execute-image-command"|] | "cleanup" -> [|"settle-owned-resources"|]
+            | "image-running" when s.Elapsed<deadline s "image" && s.ArchiveProof.IsSome && s.CurrentArchiveIdentity=Some(archiveIdentity s.ArchiveProof.Value) && s.RevalidatedPhase=Some "image-running" && s.SourceIdentity=s.CurrentIdentity -> [|"inspect-image-custody";"load-image"|]
+            | "image-running" when s.Elapsed<deadline s "image" && s.RevalidatedPhase=Some "image-running" && s.SourceIdentity=s.CurrentIdentity -> [|"execute-image-command"|] | "cleanup" -> [|"settle-owned-resources"|]
             | "retired" -> [|"collect"|] | "collecting" -> [|"finish"|] | _ -> [|"observe-child"|]
     let projection s =
         let capability=s.Mode="capability" && s.Outcome="capability-complete" && not s.Cancelled && s.Refusal.IsNone && cleanupComplete s
@@ -64,10 +66,22 @@ module NativePolicy =
            producerIdentity=s.Producer |> Option.map producerIdentity |> Option.toObj
            rootIdentity=s.Root |> Option.map rootIdentity |> Option.toObj
            sourceIdentity=Option.toObj s.SourceIdentity; currentIdentity=Option.toObj s.CurrentIdentity
+           archiveProof=s.ArchiveProof |> Option.map archiveProjection |> Option.toObj;currentArchiveIdentity=Option.toObj s.CurrentArchiveIdentity
            imageObserved=s.Image.IsSome; p2Observed=s.P2.IsSome; cancelled=s.Cancelled; refusal=Option.toObj s.Refusal
            owned=s.Owned |> Map.toArray |> Array.map (fun (role,id) -> {|resource=role;identity=id|})
            closed=s.Closed |> Set.toArray; intents=s.Intents |> Map.toArray |> Array.map (fun (_,i) -> {|operation=i.Operation;resource=i.Resource;identity=i.Identity;started=i.Started;pid=Option.toNullable i.Pid;startIdentity=Option.toObj i.StartIdentity|})
            cleanupComplete=cleanupComplete s; successful=successful s; localQualified=successful s; remoteObservationElapsed=Option.toNullable s.LastRemoteElapsed; wholeAccepted=(successful s && s.RemoteConclusion=Some "success" && s.RemoteRetirement.IsSome && s.RootRefusal.IsNone); rootObservationRefusal=Option.toObj s.RootRefusal; remoteCredentialRetirement=Option.toNullable s.RemoteRetirement; remoteConclusion=Option.toObj s.RemoteConclusion |}
+
+    /// The P2 compatibility binding derives solely from the already validated raw image.
+    /// Its legacy flags are a projection of the native joins, never fresh input authority.
+    let admittedImageBinding s =
+        match s.Image with
+        | None -> JsonSerializer.SerializeToElement(null:obj)
+        | Some image ->
+            let binding=JsonNode.Parse(image.GetRawText()).AsObject()
+            binding["temporaryMountNamespaceExited"]<-JsonValue.Create true
+            binding["postNamespaceIdentityVerified"]<-JsonValue.Create true
+            JsonSerializer.SerializeToElement binding
 
     let private sourceProof s proof =
         closed ["identity";"revision";"tree";"inventorySha256"] proof
@@ -75,6 +89,12 @@ module NativePolicy =
         let id = identity [revision;tree;inventory]
         require (str proof "identity"=id && str proof "revision"=revision && str proof "tree"=tree && str proof "inventorySha256"=inventory) "native-source-proof-refused"
         { s with Phase="source-ready"; SourceIdentity=Some id; CurrentIdentity=Some id }
+
+    let private acceptArchive s proof =
+        let next={s with CurrentArchiveIdentity=Some(archiveIdentity proof)}
+        match s.ArchiveProof with
+        | Some previous when archiveIdentity previous<>archiveIdentity proof -> sticky "native-archive-rebind-refused" next
+        | _ -> {next with ArchiveProof=Some proof}
 
     /// The fresh event uses actual acquired bytes. Historical source-proof is accepted only
     /// in the prior qualified journal; retiring plaintext never requires reopening it.
@@ -160,6 +180,7 @@ module NativePolicy =
             | "revalidate-source" ->
                 shape ["evidence"]; require (not historical) "native-historical-plaintext-refused"; requireAlive()
                 require (s.Phase="source-ready" || s.Phase="preflight-ready" || s.Phase="image-ready" || s.Phase="image-running") "native-revalidation-order-refused"
+                if s.Phase="image-running" then require (s.Elapsed<deadline s "image") "native-build-deadline-refused"
                 let snapshot=acquireSource (root s) (e.GetProperty "evidence")
                 require (Some(sourceIdentity snapshot)=s.CurrentIdentity && s.SourceIdentity=s.CurrentIdentity) "native-changed-source-refused"
                 let proof=JsonSerializer.SerializeToElement({|identity=sourceIdentity snapshot;phase=s.Phase|})
@@ -205,6 +226,17 @@ module NativePolicy =
                 require (used>=0L && free>=remaining && observed>=required && number facts "availableHeadroomBytes"=observed
                          && number facts "requiredHeadroomBytes"=required) "native-checkpoint-headroom-refused"
                 e,s
+            | "archive" ->
+                shape ["path"]; require (not historical) "native-historical-archive-payload-refused"; requireAlive()
+                require (s.Mode="full" && s.Phase="image-running" && acknowledged "image" s && s.RevalidatedPhase=Some "image-running" && s.SourceIdentity.IsSome && s.SourceIdentity=s.CurrentIdentity && s.Elapsed<deadline s "image") "native-archive-consumption-order-refused"
+                let proof=acquireArchive (root s) s.SourceIdentity.Value (str e "path")
+                let normalized=JsonSerializer.SerializeToElement({|kind="archive-proof";elapsed=s.Elapsed;proof=archiveProjection proof|})
+                normalized,acceptArchive s proof
+            | "archive-proof" ->
+                shape ["proof"]; require historical "native-self-authored-archive-proof-refused"; requireAlive()
+                require (s.Mode="full" && s.Phase="image-running" && acknowledged "image" s && s.RevalidatedPhase=Some "image-running" && s.SourceIdentity.IsSome && s.SourceIdentity=s.CurrentIdentity && s.Elapsed<deadline s "image") "native-archive-proof-order-refused"
+                let proof=restoreArchive (root s) s.SourceIdentity.Value (e.GetProperty "proof")
+                e,acceptArchive s proof
             | "preflight" | "image" | "p2" ->
                 shape ["path"]; requireAlive()
                 require (s.Phase=kind+"-running" && acknowledged kind s && s.Elapsed < deadline s kind && s.SourceIdentity=s.CurrentIdentity && s.SourceIdentity.IsSome) "native-result-without-acquired-join"
@@ -216,7 +248,9 @@ module NativePolicy =
                 elif kind="image" then
                     require (s.Mode="full") "native-capability-effect-refused"
                     require (s.RevalidatedPhase=Some "image-running") "native-build-consumption-proof-required"
+                    require (s.ArchiveProof.IsSome && s.CurrentArchiveIdentity=Some(archiveIdentity s.ArchiveProof.Value)) "native-image-archive-proof-required"
                     let image=image (root s) (not historical) path
+                    require (matchesArchive (root s) s.SourceIdentity.Value s.ArchiveProof.Value image) "native-image-archive-binding-refused"
                     e,{s with Phase="image-ready";Image=Some image;RevalidatedPhase=None}
                 else
                     require (s.Mode="full" && s.Image.IsSome) "native-p2-image-required"
@@ -270,7 +304,9 @@ module NativePolicy =
             | _ -> ""
         let role resource =
             s.Intents |> Map.toSeq |> Seq.tryFind (fun (_,i) -> i.Resource=resource) |> Option.map fst |> Option.defaultValue "key"
-        {| ownedRoles=s.Owned |> Map.toArray |> Array.map (fst >> role);closedRoles=s.Closed |> Set.toArray |> Array.map role
+        let archive=if s.ArchiveProof.IsSome then 1 else 0
+        let currentArchive=if s.CurrentArchiveIdentity.IsNone then 0 elif s.ArchiveProof |> Option.exists (fun p -> Some(archiveIdentity p)=s.CurrentArchiveIdentity) then 1 else 2
+        {| archive=archive;currentArchive=currentArchive;ownedRoles=s.Owned |> Map.toArray |> Array.map (fst >> role);closedRoles=s.Closed |> Set.toArray |> Array.map role
            issued=s.Intents |> Map.toArray |> Array.map fst;acknowledged=s.Intents |> Map.toArray |> Array.filter (fun (_,i) -> i.Pid.IsSome) |> Array.map fst
            preflightDeadline=deadline s "preflight";imageDeadline=deadline s "image";p2Deadline=deadline s "p2";cleanupDeadline=deadline s "cleanup";collectionDeadline=deadline s "collection"
            collectionAllowance=180;cleanupAllowance=480;p2Command=1200;p2Operation=900;wrapper=120;termination=20;drain=15;handoff=60

@@ -12,7 +12,7 @@ module NativeOperationModel =
     preflightDeadline: int, imageDeadline: int, p2Deadline: int, cleanupDeadline: int, collectionDeadline: int,
     collectionAllowance: int, cleanupAllowance: int, p2Command: int, p2Operation: int, wrapper: int, termination: int, drain: int, handoff: int,
     mode: str, phase: str, elapsed: int, producer: bool, root: bool,
-    source: int, current: int, resources: bool, revalidated: bool,
+    archive: int, currentArchive: int, source: int, current: int, resources: bool, revalidated: bool,
     image: bool, p2: bool, p2Ready: bool, latestAck: bool, cleanupIssued: bool, intents: int, acks: int, owned: int, closed: int,
     cancelled: bool, refused: bool, outcome: str,
     cleanupStarted: int, collectionStarted: int
@@ -24,7 +24,7 @@ module NativeOperationModel =
     p2Deadline: if (mode == "full") 4740 else 0, cleanupDeadline: if (mode == "full") 5220 else 1020, collectionDeadline: if (mode == "full") 5400 else 1200,
     collectionAllowance: 180, cleanupAllowance: 480, p2Command: 1200, p2Operation: 900, wrapper: 120, termination: 20, drain: 15, handoff: 60,
     mode: mode, phase: "bootstrap", elapsed: 0, producer: false, root: false,
-    source: 0, current: 0, resources: false, revalidated: false,
+    archive: 0, currentArchive: 0, source: 0, current: 0, resources: false, revalidated: false,
     image: false, p2: false, p2Ready: false, latestAck: false, cleanupIssued: false, intents: 0, acks: 0, owned: 0, closed: 0,
     cancelled: false, refused: false, outcome: "none", cleanupStarted: -1, collectionStarted: -1
   }
@@ -75,8 +75,12 @@ module NativeOperationModel =
     state' = { ...state, revalidated: true } }
   action intentImage = all { alive(state), state.mode == "full", state.phase == "preflight-ready", state.revalidated, state.source == state.current, state.elapsed < phaseLimit(state,"image"), state' = intentNext(state,"image") }
   action ackImage = all { state.phase == "image-running", not(state.latestAck), state.elapsed < phaseLimit(state,"image"), state' = ackNext(state,"image") }
-  action revalidateBuild = all { alive(state), state.phase == "image-running", state.latestAck, state.source == state.current, state' = { ...state, revalidated: true } }
-  action image = all { alive(state), state.revalidated, state.mode == "full", state.phase == "image-running", state.latestAck, state.source == state.current, state.elapsed < phaseLimit(state,"image"),
+  action revalidateBuild = all { alive(state), state.phase == "image-running", state.latestAck, state.source == state.current, state.elapsed < phaseLimit(state,"image"), state' = { ...state, revalidated: true } }
+  action archive = all { alive(state), state.mode == "full", state.phase == "image-running", state.latestAck, state.revalidated, state.source != 0, state.source == state.current, state.elapsed < phaseLimit(state,"image"), state.currentArchive != 2,
+    state' = { ...state, archive: 1, currentArchive: 1 } }
+  action mutateArchive = all { alive(state), state.phase == "image-running", state.archive == 1, state.currentArchive == 1, state.revalidated, state.elapsed < phaseLimit(state,"image"),
+    state' = refuseNext({ ...state, currentArchive: 2 },false) }
+  action image = all { alive(state), state.archive == 1, state.currentArchive == state.archive, state.revalidated, state.mode == "full", state.phase == "image-running", state.latestAck, state.source == state.current, state.elapsed < phaseLimit(state,"image"),
     state' = { ...state, image: true, phase: "image-ready", revalidated: false } }
   action revalidateP2 = all { alive(state), state.phase == "image-ready", state.mode == "full", state' = { ...state, p2Ready: true } }
   action intentP2 = all { alive(state), state.p2Ready, state.mode == "full", state.phase == "image-ready", state.revalidated, state.source == state.current, phaseLimit(state,"p2") - state.elapsed >= 1415, state' = intentNext(state,"p2") }
@@ -111,18 +115,22 @@ module NativeOperationModel =
   action remoteSuccess = all { state.root, state.phase == "finished" or state.phase == "incomplete", state' = { ...state, remoteObservationElapsed: state.elapsed, remoteConclusion: "success" } }
   action remoteFailure = all { state.root, state.phase == "finished" or state.phase == "incomplete", state' = { ...state, remoteObservationElapsed: state.elapsed, remoteConclusion: "failure" } }
   action remoteRetirement = all { state.root, state.phase == "finished" or state.phase == "incomplete", state' = { ...state, remoteObservationElapsed: state.elapsed, remoteCredentialRetirement: true } }
-  action step = any { producer,packet,capsule,key,intentSource,ackSource,source,resources,intentPreflight,ackPreflight,preflight,revalidate,intentImage,ackImage,revalidateBuild,image,revalidateP2,intentP2,ackP2,p2,cancel,mutate,refuse,waitExpiry,beginCleanup,intentCleanup,ackCleanup,close,retired,intentCollection,ackCollection,closeCollection,finish,tick,remoteFault,remoteSuccess,remoteFailure,remoteRetirement }
+  action step = any { producer,packet,capsule,key,intentSource,ackSource,source,resources,intentPreflight,ackPreflight,preflight,revalidate,intentImage,ackImage,revalidateBuild,archive,mutateArchive,image,revalidateP2,intentP2,ackP2,p2,cancel,mutate,refuse,waitExpiry,beginCleanup,intentCleanup,ackCleanup,close,retired,intentCollection,ackCollection,closeCollection,finish,tick,remoteFault,remoteSuccess,remoteFailure,remoteRetirement }
   val identitySafe = state.source == state.current or state.outcome != "success"
   val keyBinding = not(state.ownedRoles.contains("key")) or (state.root and state.producer)
+  val archiveBeforeImage = not(state.image) or state.archive == 1
+  val changedArchiveRefuses = state.currentArchive != 2 or state.refused
   val nativeEvidence = state.outcome != "success" or (state.mode == "full" and state.p2 and state.image and state.source != 0 and not(state.cancelled) and not(state.refused))
   val capabilityCannotP2 = state.mode != "capability" or (not(state.image) and not(state.p2))
   val ownership = state.closed >= 0 and state.closed <= state.owned and state.closedRoles.subseteq(state.ownedRoles) and state.closedRoles.size() == state.closed and state.ownedRoles.size() == state.owned and state.acknowledged.subseteq(state.issued)
   val retirementTruth = state.phase != "finished" or state.closed == state.owned
   val aggregateClock = state.elapsed >= 0 and state.elapsed <= limit(state)
-  val invariant = identitySafe and keyBinding and nativeEvidence and capabilityCannotP2 and ownership and retirementTruth and aggregateClock and wholeRequiresSeparateFacts
+  val invariant = identitySafe and keyBinding and nativeEvidence and capabilityCannotP2 and ownership and retirementTruth and aggregateClock and wholeRequiresSeparateFacts and archiveBeforeImage and changedArchiveRefuses
   val localQualified = state.mode == "full" and state.phase == "finished" and state.outcome == "success" and state.p2 and not(state.cancelled) and not(state.refused)
   val wholeAccepted = localQualified and state.remoteConclusion == "success" and state.remoteCredentialRetirement and not(state.rootRefused)
   val wholeRequiresSeparateFacts = not(wholeAccepted) or (state.remoteConclusion == "success" and state.remoteCredentialRetirement and localQualified)
+  val witnessArchiveAdmitted = state.archive == 1 and state.currentArchive == 1 and state.phase == "image-running"
+  val witnessArchiveMutationRefused = state.archive == 1 and state.currentArchive == 2 and state.refused and not(state.image)
   val witnessWholeAccepted = wholeAccepted
   val witnessNativeSuccess = state.outcome == "success" and state.phase == "finished"
   val witnessUnacknowledged = state.phase == "image-running" and not(state.latestAck) and state.outcome == "unknown"
@@ -140,8 +148,9 @@ module FourDNativeJourney {
     intentPreflight, ackPreflight, preflight,
     all { not(state.revalidated), revalidate },
     intentImage, ackImage,
-    all { not(state.revalidated), revalidateBuild }, image,
-    all { not(state.p2Ready), revalidateP2 },
+    all { not(state.revalidated), revalidateBuild },
+    all { state.archive == 0, archive }, image,
+    all { state.revalidated, not(state.p2Ready), revalidateP2 },
     intentP2, ackP2, p2,
     all { state.phase == "p2-ready", beginCleanup },
     intentCleanup, ackCleanup,
@@ -209,6 +218,23 @@ module FourDNativeLostAckJourney {
     all { state.cleanupStarted >= 0, ackCollection },
     all { state.cleanupStarted >= 0, state.latestAck, closeCollection },
     all { state.cleanupStarted >= 0, state.closed == state.owned, finish }
+  }
+}
+module FourDNativeArchiveMutationJourney {
+  import FourDNativeOperation.*
+  import FourDNativeJourney.journeyStep
+  action faultStep = any {
+    all { not(state.refused), state.archive == 0, journeyStep },
+    all { not(state.refused), state.archive == 1, state.currentArchive == 1, mutateArchive },
+    all { state.refused, state.cleanupStarted == -1, beginCleanup },
+    all { state.refused, intentCleanup },
+    all { state.refused, ackCleanup },
+    all { state.refused, state.cleanupIssued, state.latestAck, closeOrdered },
+    all { state.refused, state.closed == state.owned, retired },
+    all { state.refused, intentCollection },
+    all { state.refused, ackCollection },
+    all { state.refused, state.latestAck, closeCollection },
+    all { state.refused, state.closed == state.owned, finish }
   }
 }
 """

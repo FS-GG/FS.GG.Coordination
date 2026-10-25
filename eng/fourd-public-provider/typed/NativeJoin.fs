@@ -288,7 +288,7 @@ module NativeJoin =
                     match Int64.TryParse quota with
                     | true,n when n>0L -> effective<-min effective (float n/float period)
                     | _ -> fail "native-cpu-quota-refused"
-        require (effective>0. && cpu.GetProperty("effectiveCpuUpperBound").GetDouble()=effective) "native-cpu-derived-refused"
+        require (effective>=2.0 && cpu.GetProperty("effectiveCpuUpperBound").GetDouble()=effective) "native-cpu-derived-refused"
         let filesystems=e.GetProperty("filesystems").EnumerateArray() |> Seq.toArray
         require (filesystems.Length>=2 && filesystems.Length<=4 && number e "metadataFloorBytes"=67108864L && number e "metadataFloorInodes"=1024L) "native-filesystem-observation-refused"
         for fs in filesystems |> Array.take (filesystems.Length-1) do
@@ -343,7 +343,10 @@ module NativeJoin =
         let mutable entry=reader.GetNextEntry()
         let mutable cached=0L
         while not(isNull entry) do
-            let name=if entry.Name.StartsWith("./",StringComparison.Ordinal) then entry.Name.Substring 2 else entry.Name
+            let original=if entry.Name.StartsWith("./",StringComparison.Ordinal) then entry.Name.Substring 2 else entry.Name
+            // Python tarfile's existing OCI inventory strips directory suffix slashes.
+            // Normalize the same transport spelling before duplicate/inventory checks.
+            let name=if entry.EntryType=TarEntryType.Directory then original.TrimEnd('/') else original
             require (name<>"" && not(name.StartsWith("/",StringComparison.Ordinal)) && not(name.Split('/') |> Array.contains "..") && seen.Add name && seen.Count<=4096 && (name |> Seq.forall (fun c -> c>=' ' && c<='~'))) "native-archive-path-refused"
             if entry.EntryType=TarEntryType.Directory then
                 inventory.Add(name, box {|bytes=0L;path=name;``type``="directory"|})
@@ -425,13 +428,62 @@ module NativeJoin =
         let entries=inventory |> Seq.sortBy fst |> Seq.map snd |> Seq.toArray
         require (digest (JsonSerializer.SerializeToUtf8Bytes entries)=str e "archiveInventorySha256") "native-oci-inventory-refused"
 
+    /// A byte-qualified archive generation, separate from any subsequent Podman load.
+    type ArchiveProof = private {
+        Identity:string; ArchiveSha256:string; ArchiveBytes:int64; Inventory:string
+        Manifest:string; Config:string; BuildConfig:string
+    }
+    let archiveIdentity proof = proof.Identity
+    let archiveProjection proof =
+        {| identity=proof.Identity;archiveSha256=proof.ArchiveSha256;archiveBytes=proof.ArchiveBytes
+           archiveInventorySha256=proof.Inventory;manifestDigest=proof.Manifest
+           configDigest=proof.Config;buildConfigId=proof.BuildConfig |}
+    let private archiveProofFrom root sourceIdentity (e:JsonElement) =
+        let revision,tree,inventory=product root
+        require (sourceIdentity=identity [revision;tree;inventory]) "native-archive-source-proof-refused"
+        let hash,bytes,inventory=str e "archiveSha256",number e "archiveBytes",str e "archiveInventorySha256"
+        let manifest,config,build=str e "manifestDigest",str e "configDigest",str e "buildConfigId"
+        let digestId (value:string) = value.StartsWith("sha256:",StringComparison.Ordinal) && hex 64 (value.Substring 7)
+        require (hex 64 hash && hex 64 inventory && bytes>=2L && bytes<=4294967296L && digestId manifest && digestId config && build=config) "native-archive-profile-refused"
+        {Identity=identity [rootIdentity root;sourceIdentity;hash;string bytes;inventory;manifest;config;build]
+         ArchiveSha256=hash;ArchiveBytes=bytes;Inventory=inventory;Manifest=manifest;Config=config;BuildConfig=build}
+    let acquireArchive root sourceIdentity path =
+        let e=json path
+        closed ["schema";"sourceRevision";"sourceTree";"sourceInventorySha256";"archivePath";"archiveSha256";"archiveBytes";"archiveInventorySha256";"ociDescriptors";"buildConfigId";"configDigest";"manifestDigest"] e
+        require (str e "schema"="fsgg.fourd.native-archive-candidate/1") "native-archive-candidate-schema-refused"
+        sourceBound root e
+        let proof=archiveProofFrom root sourceIdentity e
+        archiveJoin e
+        proof
+    /// Historical journal restoration does not reopen an intentionally retired archive.
+    let restoreArchive root sourceIdentity e =
+        closed ["identity";"archiveSha256";"archiveBytes";"archiveInventorySha256";"manifestDigest";"configDigest";"buildConfigId"] e
+        let proof=archiveProofFrom root sourceIdentity e
+        require (str e "identity"=proof.Identity) "native-archive-proof-refused"
+        proof
+    let matchesArchive root sourceIdentity proof e =
+        archiveIdentity (archiveProofFrom root sourceIdentity e)=archiveIdentity proof
+
     let image root acquireArchive path =
         let e = json path
-        closed ["schema";"qualified";"sourceRevision";"sourceTree";"sourceInventorySha256";"imageReference";"imageId";"buildConfigId";"manifestDigest";"configDigest";"archivePath";"archiveSha256";"archiveBytes";"archiveInventorySha256";"ociDescriptors";"buildIdentity";"freshLoadStore";"freshLoadRunroot";"loadOutputSha256";"remainingGate";"temporaryMountNamespaceExited";"postNamespaceIdentityVerified"] e
+        closed ["schema";"qualified";"sourceRevision";"sourceTree";"sourceInventorySha256";"imageReference";"imageId";"buildConfigId";"manifestDigest";"configDigest";"archivePath";"archiveSha256";"archiveBytes";"archiveInventorySha256";"ociDescriptors";"buildIdentity";"freshLoadStore";"freshLoadRunroot";"loadOutputSha256";"remainingGate";"temporaryMountNamespaceExited";"postNamespaceIdentityVerified";"nativeObservations"] e
         sourceBound root e
         let digestId name = let s = str e name in s.StartsWith("sha256:",StringComparison.Ordinal) && hex 64 (s.Substring 7)
         require (str e "schema" = "fsgg.fourd.native-image-binding/1" && not (boolean e "qualified") && (["imageId";"manifestDigest";"buildConfigId";"configDigest"] |> List.forall digestId)) "native-image-binding-refused"
-        require (str e "imageId" = str e "buildConfigId" && str e "imageId" = str e "configDigest" && (str e "imageReference").EndsWith("@"+str e "manifestDigest",StringComparison.Ordinal) && boolean e "temporaryMountNamespaceExited" && boolean e "postNamespaceIdentityVerified" && hex 64 (str e "archiveSha256") && number e "archiveBytes" >= 2L && number e "archiveBytes" <= 4294967296L) "native-image-identity-refused"
+        require (str e "imageId" = str e "buildConfigId" && str e "imageId" = str e "configDigest" && (str e "imageReference").EndsWith("@"+str e "manifestDigest",StringComparison.Ordinal) && hex 64 (str e "archiveSha256") && number e "archiveBytes" >= 2L && number e "archiveBytes" <= 4294967296L) "native-image-identity-refused"
+        // Keep the historical wire scalars, but derive native settlement from actual
+        // inspect/namespace/device/supervisor observations rather than two summary flags.
+        boolean e "temporaryMountNamespaceExited" |> ignore
+        boolean e "postNamespaceIdentityVerified" |> ignore
+        let facts=e.GetProperty "nativeObservations"
+        closed ["loadedImageId";"loadedManifestDigest";"postNamespaceImageId";"postNamespaceManifestDigest";"hostNamespaceBefore";"hostNamespaceAfter";"temporaryDeviceBefore";"temporaryDeviceAfter";"supervisorChildrenRemaining";"supervisorReadersRemaining"] facts
+        let loadedId name =
+            let value=str facts name
+            require (hex 64 value) "native-loaded-image-id-refused"
+            "sha256:"+value
+        require (loadedId "loadedImageId"=str e "configDigest" && loadedId "postNamespaceImageId"=str e "configDigest" && str facts "loadedManifestDigest"=str e "manifestDigest" && str facts "postNamespaceManifestDigest"=str e "manifestDigest") "native-loaded-image-join-refused"
+        require (token(str facts "hostNamespaceBefore") && str facts "hostNamespaceBefore"=str facts "hostNamespaceAfter" && number facts "temporaryDeviceBefore">=0L && number facts "temporaryDeviceBefore"=number facts "temporaryDeviceAfter") "native-post-namespace-boundary-refused"
+        require (number facts "supervisorChildrenRemaining"=0L && number facts "supervisorReadersRemaining"=0L) "native-image-supervisor-unsettled"
         if acquireArchive then archiveJoin e
         e
     let p2 root image path =

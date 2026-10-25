@@ -177,12 +177,33 @@ class NativeFixture:
         self.intent("preflight")
         self.ok("preflight", path=str(self.preflight_path))
 
-    def image_ready(self):
+    def image_build_ready(self):
         self.prepared()
         self.ok("revalidate-source", evidence=self.source)
         self.intent("image")
-        self.ok("revalidate-source", evidence=self.source)
-        self.ok("image", path=str(self.image_path))
+        result = self.ok("revalidate-source", evidence=self.source)
+        if result["actions"] != ["execute-image-command"]:
+            raise AssertionError(result)
+
+    def image_archive_ready(self):
+        self.image_build_ready()
+        result = self.ok("archive", path=str(self.archive_path))
+        if result["actions"] != ["inspect-image-custody", "load-image"]:
+            raise AssertionError(result)
+        if "imageBinding" in result and result["imageBinding"] is not None:
+            raise AssertionError("P2 binding appeared before native image validation")
+
+    def image_ready(self):
+        self.image_archive_ready()
+        result = self.ok("image", path=str(self.image_path))
+        # The owner wires this projection into NativeProtocol's response. Once present,
+        # verify that only F# derived the compatibility flags from the validated snapshot.
+        if "imageBinding" in result:
+            expected = dict(self.image, temporaryMountNamespaceExited=True, postNamespaceIdentityVerified=True)
+            if result["imageBinding"] != expected:
+                raise AssertionError("P2 binding is not the exact validated-image projection")
+            if self.image["temporaryMountNamespaceExited"] or self.image["postNamespaceIdentityVerified"]:
+                raise AssertionError("fixture raw flags must not authorize the P2 projection")
 
     def finish(self):
         self.ok("begin-cleanup")
@@ -195,7 +216,7 @@ class NativeFixture:
         self.ok("close", resource="collection-scope", identity="collection-inode", childrenRemaining=0, readersRemaining=0, pathsRemaining=0)
         return self.ok("finish")
 
-    def make_native_evidence(self):
+    def make_native_evidence(self, layer_bytes=None, include_directories=False):
         gib = 1024**3
         memory = dict(schema="fsgg.fourd.image-temporary-memory/1", memTotalBytes=16 * gib, memAvailableBytes=15 * gib,
                       swapTotalBytesObservedNotCredited=0, swapFreeBytesObservedNotCredited=0,
@@ -219,7 +240,7 @@ class NativeFixture:
                            rootlessUidMapSha256="f" * 64, rootlessGidMapSha256="f" * 64, operationUidGid32768Mapped=True, namespaceRootMapsLaunchingUser=True,
                            persistentStorage={}, targetStores={name: dict(graphDriver="vfs", rootless=True) for name in ("build", "fresh-load")},
                            runrootsShortDistinctPrivate=True, imageCopyTemporaryStorage=temporary, targetStoreSurvivorListingProbed=True, noSudoOrHostFallback=True))
-        layer = b"fixture uncompressed layer bytes"
+        layer = b"fixture uncompressed layer bytes" if layer_bytes is None else layer_bytes
         config = canonical(dict(os="linux", architecture="amd64", config=dict(User="32768:32768", Env=["HOME=/output/home"], Entrypoint=[], Cmd=[], Volumes={}), rootfs=dict(type="layers", diff_ids=["sha256:" + sha(layer)]))).rstrip(b"\n")
         descriptor = lambda media, raw: dict(mediaType=media, digest="sha256:" + sha(raw), size=len(raw))
         config_d = descriptor("application/vnd.oci.image.config.v1+json", config)
@@ -230,19 +251,34 @@ class NativeFixture:
         for raw in (config, layer, manifest):
             members["blobs/sha256/" + sha(raw)] = raw
         archive = self.root / "image.tar"
+        directories = ["blobs", "blobs/sha256"] if include_directories else []
         with tarfile.open(archive, "w", format=tarfile.USTAR_FORMAT) as tar:
+            for name in directories:
+                info = tarfile.TarInfo(name + "/")
+                info.type, info.mode = tarfile.DIRTYPE, 0o700
+                tar.addfile(info)
             for name, raw in members.items():
                 info = tarfile.TarInfo(name)
                 info.size, info.mode = len(raw), 0o600
                 tar.addfile(info, io.BytesIO(raw))
         inventory = [dict(path=name, type="file", bytes=len(raw), sha256=sha(raw)) for name, raw in sorted(members.items())]
+        inventory += [dict(path=name, type="directory", bytes=0) for name in directories]
+        inventory.sort(key=lambda item: item["path"])
         descriptors = [dict(role=role, digest=d["digest"], bytes=d["size"], mediaType=d["mediaType"]) for role, d in (("manifest", manifest_d), ("config", config_d), ("layer", layer_d))]
         self.image = dict(schema="fsgg.fourd.native-image-binding/1", qualified=False, sourceRevision=self.revision, sourceTree=self.tree,
                           sourceInventorySha256=self.inventory, imageReference="fixture@" + manifest_d["digest"], imageId=config_d["digest"], buildConfigId=config_d["digest"], manifestDigest=manifest_d["digest"], configDigest=config_d["digest"],
                           archivePath=str(archive), archiveSha256=sha(archive.read_bytes()), archiveBytes=archive.stat().st_size,
                           archiveInventorySha256=sha(canonical(inventory).rstrip(b"\n")), ociDescriptors=descriptors, buildIdentity={}, freshLoadStore="fixture/store", freshLoadRunroot="fixture/runroot", loadOutputSha256="f" * 64,
-                          remainingGate="production P2 native operation", temporaryMountNamespaceExited=True, postNamespaceIdentityVerified=True)
+                          remainingGate="production P2 native operation", temporaryMountNamespaceExited=False, postNamespaceIdentityVerified=False,
+                          nativeObservations=dict(loadedImageId=config_d["digest"][7:], loadedManifestDigest=manifest_d["digest"],
+                              postNamespaceImageId=config_d["digest"][7:], postNamespaceManifestDigest=manifest_d["digest"],
+                              hostNamespaceBefore="mnt:[10]", hostNamespaceAfter="mnt:[10]", temporaryDeviceBefore=3,
+                              temporaryDeviceAfter=3, supervisorChildrenRemaining=0, supervisorReadersRemaining=0))
         self.image_path = self.write("image.json", self.image)
+        self.archive_candidate = {name: self.image[name] for name in (
+            "sourceRevision", "sourceTree", "sourceInventorySha256", "archivePath", "archiveSha256", "archiveBytes", "archiveInventorySha256", "ociDescriptors", "buildConfigId", "configDigest", "manifestDigest")}
+        self.archive_candidate["schema"] = "fsgg.fourd.native-archive-candidate/1"
+        self.archive_path = self.write("archive-candidate.json", self.archive_candidate)
         self.p2 = dict(schema="fsgg.fourd.native-p2-qualification/1", outcome="passed", qualified=True,
                        coordinationRevision=self.p2proof["sourceSha"], executorDllSha256=self.packet["p2"]["executorDllSha256"],
                        sourceRevision=self.revision, sourceTree=self.tree, sourceInventorySha256=self.inventory,
@@ -271,6 +307,7 @@ class NativeProtocolTests(unittest.TestCase):
         shutil.rmtree(f.context)
         f.git_path.unlink()
         Path(f.image["archivePath"]).unlink()
+        f.archive_path.unlink()
         Path(f.p2proof["executorDllPath"]).unlink()
         result = f.finish()
         self.assertTrue(result["state"]["successful"])
@@ -395,14 +432,121 @@ class NativeProtocolTests(unittest.TestCase):
 
     def test_archive_false_digest_cannot_make_image(self):
         f = self.f
-        f.prepared()
-        f.ok("revalidate-source", evidence=f.source)
-        f.intent("image")
-        f.ok("revalidate-source", evidence=f.source)
+        f.image_archive_ready()
         Path(f.image["archivePath"]).write_bytes(b"altered OCI archive")
         code, result = f.event("image", path=str(f.image_path))
         self.assertEqual(code, 2)
         self.assertIn("archive-size-refused", result["refusal"])
+
+    def test_image_requires_archive_admission_before_custody_or_load(self):
+        f = self.f
+        f.image_build_ready()
+        code, result = f.event("image", path=str(f.image_path))
+        self.assertEqual(code, 2)
+        self.assertFalse(result["eventAccepted"])
+        self.assertEqual(result["state"]["refusal"], "native-image-archive-proof-required")
+        self.assertNotIn("load-image", result["actions"])
+
+    def test_oci_directory_transport_spelling_keeps_existing_inventory(self):
+        f = self.f
+        f.make_native_evidence(include_directories=True)
+        f.image_archive_ready()
+        result = f.ok("image", path=str(f.image_path))
+        self.assertTrue(result["eventAccepted"])
+        self.assertEqual(result["state"]["phase"], "image-ready")
+
+    def test_archive_config_mismatch_refuses_before_load(self):
+        f = self.f
+        f.image_build_ready()
+        f.archive_candidate["buildConfigId"] = "sha256:" + "a" * 64
+        f.write("archive-candidate.json", f.archive_candidate)
+        code, result = f.event("archive", path=str(f.archive_path))
+        self.assertEqual(code, 2)
+        self.assertFalse(result["eventAccepted"])
+        self.assertEqual(result["state"]["refusal"], "native-archive-profile-refused")
+        self.assertIsNone(result["state"]["archiveProof"])
+        self.assertNotIn("load-image", result["actions"])
+
+    def test_changed_archive_bytes_refuse_before_load(self):
+        f = self.f
+        f.image_build_ready()
+        Path(f.image["archivePath"]).write_bytes(b"changed archive bytes")
+        code, result = f.event("archive", path=str(f.archive_path))
+        self.assertEqual(code, 2)
+        self.assertFalse(result["eventAccepted"])
+        self.assertEqual(result["state"]["refusal"], "native-archive-size-refused")
+        self.assertNotIn("load-image", result["actions"])
+
+    def test_valid_second_archive_cannot_rebind_admission(self):
+        f = self.f
+        target = os.environ.get("FSGG_FOURD_NATIVE_QUINT_ARCHIVE_MUTATION_OBSERVATIONS")
+        if target:
+            f.trace_zero = True
+            f.root_evidence["nowUnixSeconds"] = f.started
+        f.image_archive_ready()
+        previous = f.observed[-1]["state"]
+        f.make_native_evidence(layer_bytes=b"different valid OCI generation")
+        code, result = f.event("archive", path=str(f.archive_path))
+        self.assertEqual(code, 2)
+        self.assertEqual(result["state"]["refusal"], "native-archive-rebind-refused")
+        self.assertEqual(previous["archive"], result["modelState"]["archive"])
+        self.assertEqual(result["modelState"]["currentArchive"], 2)
+        self.assertNotIn("load-image", result["actions"])
+        if target:
+            Path(target).write_bytes(canonical(f.observed))
+
+    def test_post_namespace_raw_image_identity_cannot_be_summarized_away(self):
+        f = self.f
+        f.image_archive_ready()
+        f.image["nativeObservations"]["postNamespaceImageId"] = "a" * 64
+        f.image["temporaryMountNamespaceExited"] = True
+        f.image["postNamespaceIdentityVerified"] = True
+        f.write("image.json", f.image)
+        code, result = f.event("image", path=str(f.image_path))
+        self.assertEqual(code, 2)
+        self.assertEqual(result["state"]["refusal"], "native-loaded-image-join-refused")
+        self.assertFalse(result["state"]["imageObserved"])
+
+    def test_post_namespace_raw_boundary_mismatch_refuses(self):
+        f = self.f
+        f.image_archive_ready()
+        f.image["nativeObservations"]["hostNamespaceAfter"] = "mnt:[11]"
+        f.write("image.json", f.image)
+        code, result = f.event("image", path=str(f.image_path))
+        self.assertEqual(code, 2)
+        self.assertEqual(result["state"]["refusal"], "native-post-namespace-boundary-refused")
+
+    def test_unsettled_image_supervisor_cannot_make_result(self):
+        f = self.f
+        f.image_archive_ready()
+        f.image["nativeObservations"]["supervisorReadersRemaining"] = 1
+        f.write("image.json", f.image)
+        code, result = f.event("image", path=str(f.image_path))
+        self.assertEqual(code, 2)
+        self.assertEqual(result["state"]["refusal"], "native-image-supervisor-unsettled")
+
+    def test_archive_allowance_cannot_survive_original_image_deadline(self):
+        f = self.f
+        f.image_archive_ready()
+        code, result = f.event("revalidate-source", elapsed=3325, evidence=f.source)
+        self.assertEqual(code, 2)
+        self.assertEqual(result["state"]["refusal"], "native-build-deadline-refused")
+        self.assertNotIn("execute-image-command", result["actions"])
+        self.assertNotIn("load-image", result["actions"])
+
+    def test_selected_native_profile_requires_two_derived_cpus(self):
+        f = self.f
+        f.bound()
+        f.intent("source")
+        f.ok("source", evidence=f.source)
+        facts = json.loads(f.resources_path.read_bytes())
+        facts["cpu"]["affinity"] = [0]
+        facts["cpu"]["effectiveCpuUpperBound"] = 1.0
+        facts["cpu"]["cgroupAncestors"][0]["quota"] = "100000"
+        f.write("resources.json", facts)
+        code, result = f.event("resources", path=str(f.resources_path), launcherUid=1000, launcherGid=1000)
+        self.assertEqual(code, 2)
+        self.assertEqual(result["state"]["refusal"], "native-cpu-derived-refused")
 
     def test_capability_cannot_start_image(self):
         other = Path(self.temporary.name) / "capability"

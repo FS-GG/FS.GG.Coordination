@@ -56,7 +56,9 @@ module NativeProtocolTests =
             match value with
             | QuintReplayValue.Record fields ->
                 name,QuintReplayValue.Record(fields |> List.map(fun (key,v) ->
-                    if key="outcome" then key,QuintReplayValue.Text "unknown" else key,v))
+                    if key="outcome" then
+                        key,(match v with QuintReplayValue.Text "success" -> QuintReplayValue.Text "unknown" | _ -> QuintReplayValue.Text "success")
+                    else key,v))
             | _ -> name,value)
         let changed={last.Actual with Bindings=bindings}
         let changed={changed with Identity=QuintReplay.stateFingerprint changed |> unwrap}
@@ -64,4 +66,16 @@ module NativeProtocolTests =
         match QuintReplay.compare trace mutated |> unwrap with
         | QuintReplayResult.Diverged _ -> ()
         | _ -> invalidOp "native false-result mutation escaped correspondence"
-        printfn "native correspondence: %d acquired reducer transitions; false-result mutation diverges" observations.Length
+        let archiveBindings=last.Actual.Bindings |> List.map(fun (name,value) ->
+            match value with
+            | QuintReplayValue.Record fields ->
+                name,QuintReplayValue.Record(fields |> List.map(fun (key,v) ->
+                    if key="archive" then key,QuintReplayValue.Integer "0" else key,v))
+            | _ -> name,value)
+        let missingArchive={last.Actual with Bindings=archiveBindings}
+        let missingArchive={missingArchive with Identity=QuintReplay.stateFingerprint missingArchive |> unwrap}
+        let mutatedArchive=(observations |> List.take (observations.Length-1)) @ [{last with Actual=missingArchive}]
+        match QuintReplay.compare trace mutatedArchive |> unwrap with
+        | QuintReplayResult.Diverged _ -> ()
+        | _ -> invalidOp "native missing-archive mutation escaped correspondence"
+        printfn "native correspondence: %d acquired reducer transitions; false-result and missing-archive mutations diverge" observations.Length
