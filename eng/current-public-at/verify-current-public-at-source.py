@@ -70,7 +70,8 @@ OPERATOR_CONTROLS = (
     'test_actual_reader_joins_source_run_job_metadata_and_original_archive_body',
     'test_wrong_original_scope_metadata_and_body_stop_without_native_acceptance',
     'test_response_status_is_checked_before_read_and_body_bound_before_digest',
-    'test_artifact_redirect_strips_private_token_and_refuses_unapproved_hosts',
+    'test_public_metadata_never_sends_private_token_or_follows_redirect',
+    'test_fixed_attachment_requires_real_root_file_mount_and_body_contract',
     'test_original_zip_requires_self_contained_exact_needed_inputs_without_reconstruction',
     'test_duplicate_json_and_expired_original_clock_refuse',
 )
