@@ -202,6 +202,8 @@ def build(output):
     node=scratch/'tools/node-v18.20.8-linux-x64';require(file_sha(node/'bin/node')==v['nodeExecutableSha256'],'Node executable digest')
     require(document(regular(node/'lib/node_modules/npm/package.json',65536))['version']==v['npmVersion'],'npm identity')
     env['PATH']=str(node/'bin')+':/usr/bin:/bin';source=scratch/'source';runtime=scratch/'runtime'
+    for helper in ('production-cli-seam.cjs','production-function-controls.cjs'):
+        run([node/'bin/node','--check',ROOT/'eng/tests/c2-diagnostic-client'/helper],scratch)
     require(file_sha(source/'package-lock.json')==v['packageLockSha256'] and file_sha(source/'src/verify.ts')==v['originalVerifySha256'],'source/lock bytes')
     run([node/'bin/npm','ci','--ignore-scripts','--no-audit','--no-fund'],source)
     run([node/'bin/npm','run','compile'],source);shutil.copytree(source/'dist',scratch/'old-dist')
