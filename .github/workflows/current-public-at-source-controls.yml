@@ -1,0 +1,52 @@
+name: Current public AT source controls
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/current-public-at-source-controls.yml
+      - eng/current-public-at/**
+      - eng/dedicated_qualification_runner.py
+      - tests/qualification-runner/**
+      - deployment/qualification-runner/**
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/current-public-at-source-controls.yml
+      - eng/current-public-at/**
+      - eng/dedicated_qualification_runner.py
+      - tests/qualification-runner/**
+      - deployment/qualification-runner/**
+
+permissions:
+  contents: read
+
+concurrency:
+  group: current-public-at-source-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-controls:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - name: Check out exact candidate source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Validate AT source and held native route
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -I -B eng/current-public-at/verify-current-public-at-source.py public
+      - name: Retain source qualification
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: native-at-public-source-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/native-at-public-source/source-preparation.json
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
