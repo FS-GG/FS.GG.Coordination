@@ -192,6 +192,154 @@ class OwnedDirectory:
         if (current.st_dev, current.st_ino) != self.original:
             raise NativeIOError("native-directory-held-identity-refused")
 
+    @staticmethod
+    def _rename_noreplace(source_fd, source, target_fd, target):
+        # No fallback to rename(): a competing entry must never be overwritten.
+        import ctypes
+        library = ctypes.CDLL(None, use_errno=True)
+        try:
+            rename = library.renameat2
+        except AttributeError as error:
+            raise NativeIOError("native-directory-atomic-capture-unavailable") from error
+        rename.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint]
+        rename.restype = ctypes.c_int
+        if rename(source_fd, os.fsencode(source), target_fd, os.fsencode(target), 1) != 0:
+            number = ctypes.get_errno()
+            raise OSError(number, os.strerror(number))
+
+    @staticmethod
+    def _open_parent(path):
+        descriptor = os.open("/", os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
+        try:
+            for component in path.parent.parts[1:]:
+                child = os.open(component, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC,
+                                dir_fd=descriptor)
+                os.close(descriptor)
+                descriptor = child
+            return descriptor
+        except BaseException:
+            os.close(descriptor)
+            raise
+
+    def retire(self, *, deadline: float, clock: Callable[[], float] = time.monotonic,
+               on_captured: Callable[[OwnedDirectory], None] | None = None):
+        """Retire a frozen tree only after the caller has settled every writer/reader.
+
+        Capture the pathname atomically under a new private quarantine name, then verify the
+        captured inode against the held descriptor before any chmod or descent. The
+        callback can persist ``holder.path`` for recovery before destructive work. A
+        callback failure or expired original deadline retains the captured location.
+        An old-path replacement is never traversed and keeps the result Unknown.
+        """
+        def within_deadline():
+            now = clock()
+            if not math.isfinite(deadline) or not math.isfinite(now) or now >= deadline:
+                raise NativeIOError("native-directory-retirement-deadline")
+
+        def same(info, identity):
+            return stat.S_ISDIR(info.st_mode) and (info.st_dev, info.st_ino) == identity
+
+        def empty(directory, depth=0):
+            within_deadline()
+            if depth > 128:
+                raise NativeIOError("native-directory-retirement-depth")
+            os.fchmod(directory, 0o700)
+            with os.scandir(directory) as entries:
+                for entry in entries:
+                    within_deadline()
+                    observed = os.stat(entry.name, dir_fd=directory, follow_symlinks=False)
+                    if stat.S_ISDIR(observed.st_mode):
+                        child = os.open(entry.name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC,
+                                        dir_fd=directory)
+                        try:
+                            held = os.fstat(child)
+                            identity = held.st_dev, held.st_ino
+                            if not same(observed, identity) or held.st_dev != self.original[0]:
+                                raise NativeIOError("native-directory-descendant-replaced")
+                            empty(child, depth + 1)
+                            within_deadline()
+                            if not same(os.stat(entry.name, dir_fd=directory, follow_symlinks=False), identity):
+                                raise NativeIOError("native-directory-descendant-replaced")
+                            within_deadline()
+                            os.rmdir(entry.name, dir_fd=directory)
+                        finally:
+                            os.close(child)
+                    else:
+                        # Symlinks and special entries are removed, never followed/opened.
+                        within_deadline()
+                        os.unlink(entry.name, dir_fd=directory)
+
+        parent = None
+        quarantine_name = None
+        original_path = Path(os.path.abspath(self.path))
+        try:
+            within_deadline()
+            if self.fd is None or original_path.name in ("", ".", ".."):
+                raise NativeIOError("native-directory-retirement-identity-refused")
+            self.revalidate()
+            parent = self._open_parent(original_path)
+            if not same(os.fstat(self.fd), self.original):
+                raise NativeIOError("native-directory-held-identity-refused")
+            parent_info = os.fstat(parent)
+            root_info = os.fstat(self.fd)
+            if stat.S_IMODE(root_info.st_mode) & 0o077 and stat.S_IMODE(parent_info.st_mode) & 0o077:
+                raise NativeIOError("native-directory-private-capture-refused")
+            if parent_info.st_uid != os.getuid() or stat.S_IMODE(parent_info.st_mode) & 0o022:
+                raise NativeIOError("native-directory-parent-boundary-refused")
+            # Capture under a fresh private sibling name. Moving a frozen directory
+            # across parents requires changing its '..' and would need an unsafe
+            # pre-capture chmod. NOREPLACE reserves the random name atomically.
+            for _ in range(16):
+                within_deadline()
+                candidate = ".fsgg-retire-" + os.urandom(16).hex()
+                try:
+                    within_deadline()
+                    self._rename_noreplace(parent, original_path.name, parent, candidate)
+                    quarantine_name = candidate
+                    break
+                except FileExistsError:
+                    continue
+            if quarantine_name is None:
+                raise NativeIOError("native-directory-quarantine-unavailable")
+            self.retirement_quarantine = original_path.parent / quarantine_name
+            observed = os.stat(quarantine_name, dir_fd=parent, follow_symlinks=False)
+            if not same(observed, self.original):
+                # Restore without overwriting a further replacement. A collision
+                # retains both foreign entries without chmod or traversal.
+                try:
+                    self._rename_noreplace(parent, quarantine_name, parent, original_path.name)
+                except OSError as error:
+                    raise NativeIOError("native-directory-foreign-restore-unknown") from error
+                raise NativeIOError("native-directory-capture-foreign")
+            self.path = self.retirement_quarantine
+            if not same(self.path.lstat(), self.original):
+                raise NativeIOError("native-directory-capture-location-unknown")
+            if on_captured is not None:
+                try:
+                    on_captured(self)
+                except BaseException as error:
+                    raise NativeIOError("native-directory-relocation-record-unknown") from error
+            within_deadline()
+            empty(self.fd)
+            within_deadline()
+            if not same(os.stat(quarantine_name, dir_fd=parent, follow_symlinks=False), self.original):
+                raise NativeIOError("native-directory-capture-replaced")
+            within_deadline()
+            os.rmdir(quarantine_name, dir_fd=parent)
+            try:
+                os.stat(original_path.name, dir_fd=parent, follow_symlinks=False)
+            except FileNotFoundError:
+                return
+            raise NativeIOError("native-directory-original-replaced")
+        except NativeIOError:
+            raise
+        except OSError as error:
+            raise NativeIOError("native-directory-retirement-unknown") from error
+        finally:
+            # Never pathname-clean an uncertain capture in a finally block.
+            if parent is not None:
+                os.close(parent)
+
     def close(self):
         if self.fd is not None:
             os.close(self.fd)
