@@ -123,7 +123,10 @@ Any other repository, a workflow or job from the other row, or a missing field r
 (`binding_from_request`, `validate_registration_data`, and so `guest-boot.sh`, `run-jit-runner.sh` and
 `verify-guest`). The BAR domain (`eng/bar_hosted_domain.py`) additionally admits only a binding whose target is
 the Native.Qualification row, so a FourD-bound guest cannot be used for BAR work; FourD's own gate owns its row.
-The host-side allowed-workflow list of the runner launcher must name the same workflow for the same repository.
+`allowedJob` is the job id, which for both workflows is also the job-record `name` that each workflow's first step
+compares (neither sets a `name:` override; a workflow that did would have to change its table row in the same
+reviewed change). The host-side allowed-workflow list of the runner launcher must name the same workflow for the
+same repository.
 Neither script accepts a PAT or registration token, uses `--replace`, or reuses credentials;
 `run-jit-runner.sh` takes the one-job JIT configuration only through the supported
 `ACTIONS_RUNNER_INPUT_JITCONFIG` environment input and refuses unless the baked layer and

@@ -138,6 +138,8 @@ class DedicatedRunnerDataControls(unittest.TestCase):
         # The BAR template's job id and the wrapper's workflow ref are the same row, not a second copy that can drift.
         template = (ROOT / 'deployment/qualification-runner/native-qualification/bar-hosted-image-qualification.yml').read_text()
         self.assertIn('\n  full-image:\n', template)
+        job_block = template.split('\n  full-image:\n', 1)[1].split('\n    steps:', 1)[0]
+        self.assertNotIn('\n    name:', '\n' + job_block, 'job id and job-record name must stay the same')
         self.assertEqual(owner.TARGETS[owner.CALLER_REPOSITORY]['workflow'], BAR_OPERATION_WORKFLOW_REF)
         for name, row in owner.TARGETS.items():
             self.assertTrue(row['workflow'].startswith(name + '/.github/workflows/') and row['workflow'].endswith('@refs/heads/main'))

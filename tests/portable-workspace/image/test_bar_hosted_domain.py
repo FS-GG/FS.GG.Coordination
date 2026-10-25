@@ -5,7 +5,7 @@ import argparse
 import copy
 import importlib.util
 import hashlib
-import inspect
+import stat as stat_module
 import json
 import re
 import os
@@ -211,10 +211,31 @@ class DedicatedDomain(unittest.TestCase):
         for key in good:
             missing = dict(good); del missing[key]
             self.assertEqual(DOMAIN.binding_target_refusals(missing), [key])
-        # The observer applies the check before it trusts or reports any other binding field.
-        source = inspect.getsource(DOMAIN.dedicated_runner_observation)
-        self.assertLess(source.index('binding_target_refusals(value)'), source.index("'imageOS'"))
-        self.assertIn('targets another repository, workflow or job', source)
+
+    def test_real_observer_refuses_a_fourd_binding_and_does_not_refuse_the_bar_binding_for_its_target(self):
+        spec = importlib.util.spec_from_file_location('dedicated_runner_for_observer_test', ROOT / 'eng/dedicated_qualification_runner.py')
+        runner = importlib.util.module_from_spec(spec); spec.loader.exec_module(runner)
+        def sealed(changes):
+            bar = runner.TARGETS[runner.CALLER_REPOSITORY]
+            return {'schema': 'fsgg.dedicated-qualification-instance/1', 'runnerRepository': runner.CALLER_REPOSITORY,
+                    'allowedWorkflow': bar['workflow'], 'allowedJob': bar['job'], 'systemUuid': 'authored-uuid', **changes}
+        real_fstat = os.fstat
+        def root_owned(descriptor):
+            info = real_fstat(descriptor)
+            return os.stat_result((stat_module.S_IFREG | 0o644, info.st_ino, info.st_dev, 1, 0, 0, info.st_size, 0, 0, 0))
+        fourd = runner.TARGETS[runner.FOURD_REPOSITORY]
+        with tempfile.TemporaryDirectory() as directory, patch.object(DOMAIN.os, 'fstat', side_effect=root_owned):
+            path = Path(directory) / 'instance-binding.json'
+            for changes in ({'runnerRepository': runner.FOURD_REPOSITORY, 'allowedWorkflow': fourd['workflow'], 'allowedJob': fourd['job']},
+                            {'allowedJob': fourd['job']}, {'allowedWorkflow': fourd['workflow']}, {'runnerRepository': 'FS-GG/FS.GG.Coordination'}):
+                path.write_text(json.dumps(sealed(changes)))
+                with self.subTest(changes=changes), self.assertRaisesRegex(RuntimeError, 'targets another repository, workflow or job'):
+                    DOMAIN.dedicated_runner_observation(path)
+            path.write_text(json.dumps(sealed({})))
+            try:
+                DOMAIN.dedicated_runner_observation(path)
+            except (RuntimeError, OSError) as error:  # later machine/UUID checks may refuse on this host
+                self.assertNotIn('another repository', str(error))
 
     def test_actual_domain_reader_joins_dedicated_evidence_and_refuses_boot_replay(self):
         with tempfile.TemporaryDirectory() as directory, self.pins(), patch.object(DOMAIN, 'shared_controller', return_value=BAR.shared):
