@@ -547,6 +547,26 @@ class NobleInputRecords(unittest.TestCase):
         self.assertEqual(done.returncode, 2, done.stderr)
         self.assertIn('HELD', done.stderr)
 
+    def test_bake_and_simulation_run_apt_with_the_one_locked_option_set(self):
+        directory = ROOT / 'deployment/qualification-runner'
+        digest = subprocess.run(['bash', '-c', 'runner_apt_sources=/dev/null; . "$1"; printf %s "$runner_apt_digest"; printf "\\n"; printf "%s\\n" "${runner_apt_fixed[@]}"',
+                                 'x', str(directory / 'noble-apt.sh')], capture_output=True, text=True, check=True).stdout.split('\n', 1)
+        locked = self.transaction['aptOptionsSha256']
+        self.assertEqual(digest[0], locked, 'the locked transaction names the options the scripts really use')
+        self.assertEqual(hashlib.sha256(digest[1].encode()).hexdigest(), locked)
+        options = digest[1]
+        # First bake failure: the _apt sandbox plus by-hash probing made apt fall back to index names that are not locked.
+        for required in ('APT::Sandbox::User=root', 'Acquire::By-Hash=no', 'Acquire::CompressionTypes::Order::=xz', 'Acquire::Languages=none'):
+            self.assertIn(required, options.splitlines())
+        for name in ('provision-image.sh', 'simulate-noble-bake.sh'):
+            text = (directory / name).read_text()
+            self.assertIn('runner_apt_digest', text, name)
+            self.assertIn('aptOptionsSha256', text, name)
+            for mutation in ('runner_apt+=', 'runner_apt=(', 'runner_apt_fixed', 'APT::Sandbox', 'By-Hash', 'CompressionTypes'):
+                self.assertNotIn(mutation, text, name + ' must not alter the shared apt options: ' + mutation)
+        # The lock tool computes the same digest from the same file and verify refuses a transaction that names another.
+        self.assertEqual(inputs.apt_options_digest(), locked)
+
     def test_bake_and_simulation_share_one_apt_definition_and_stay_offline_and_signed(self):
         recipe = (ROOT / 'deployment/qualification-runner/provision-image.sh').read_text()
         simulation = (ROOT / 'deployment/qualification-runner/simulate-noble-bake.sh').read_text()

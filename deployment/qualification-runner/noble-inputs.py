@@ -117,6 +117,14 @@ def release_hashes_text(text):
     return rows
 
 
+def apt_options_digest():
+    """Digest of the apt options shared by the bake and its simulation, computed by sourcing noble-apt.sh itself."""
+    done = subprocess.run(['bash', '-c', 'runner_apt_sources=/dev/null; . "$1"; printf %s "$runner_apt_digest"', 'noble-apt', str(HERE / 'noble-apt.sh')],
+                          capture_output=True, text=True)
+    need(done.returncode == 0 and re.fullmatch(r'[0-9a-f]{64}', done.stdout) is not None, 'noble-apt.sh digest unavailable')
+    return done.stdout
+
+
 def package_index(root):
     index = {}
     for suite in SUITES:
@@ -157,6 +165,7 @@ def verify_population(root, lock, archive_keyring):
     transaction = json.loads((root / 'apt/apt-transaction.json').read_text())
     need(sorted(row['filename'] for row in transaction['debs']) == pool, 'transaction .deb set differs from the pool')
     need(lock['aptTransaction']['qualifiedSignedTransactionSha256'] == sha256(root / 'apt/apt-transaction.json'), 'transaction digest differs')
+    need(transaction.get('aptOptionsSha256') == apt_options_digest(), 'apt options differ from the locked transaction')
     return {'suites': list(SUITES), 'debs': len(pool), 'signer': ARCHIVE_FINGERPRINT}
 
 
@@ -250,6 +259,7 @@ def cmd_lock(args):
         'schema': 'fsgg.dedicated-qualification-apt-transaction/1', 'baselineId': args.baseline,
         'snapshot': SNAPSHOT, 'archiveSigner': ARCHIVE_FINGERPRINT, 'suites': release,
         'installRequest': args.packages.split(),
+        'aptOptionsSha256': apt_options_digest(),
         'baseImage': {'release': RELEASE, 'packageManifestSha256': sha256(manifest), 'packages': len(manifest.read_text().splitlines())},
         'finalInventory': {'packages': len(inventory), 'sha256': sha256(inventory_path)},
         'debs': debs,
