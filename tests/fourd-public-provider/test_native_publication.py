@@ -50,6 +50,9 @@ def zip_pair(archive, manifest):
 
 
 class FixtureAPI:
+    def check_deadline(self):
+        pass
+
     def __init__(self):
         self.archive, self.manifest, adapters = candidate()
         self.zipped = zip_pair(self.archive, self.manifest)
@@ -361,6 +364,26 @@ class TransportControls(unittest.TestCase):
         opener=mock.Mock();opener.open.return_value=self.Response(200,b'oversized')
         with mock.patch.object(pub.urllib.request,'build_opener',return_value=opener):
             with self.assertRaises(pub.Refused):pub.API('fixture',time.monotonic()+10).request('GET',PREFIX+'/releases',limit=2)
+
+    def test_late_open_data_and_eof_cannot_qualify(self):
+        for boundary in ('open','data','eof'):
+            with self.subTest(boundary=boundary):
+                clock=[0.0]
+                response=self.Response(200,b'positive')
+                original_read=response.read
+                def read(size):
+                    block=original_read(size)
+                    if (boundary=='data' and block) or (boundary=='eof' and not block):clock[0]=10.0
+                    return block
+                response.read=read
+                def open_request(*unused,**options):
+                    if boundary=='open':clock[0]=10.0
+                    return response
+                opener=mock.Mock();opener.open.side_effect=open_request
+                with mock.patch.object(pub.time,'monotonic',side_effect=lambda:clock[0]), \
+                     mock.patch.object(pub.urllib.request,'build_opener',return_value=opener):
+                    with self.assertRaisesRegex(pub.Refused,'deadline exhausted'):
+                        pub.API('fixture',10.0).request('GET',PREFIX+'/releases')
 
 
 if __name__=='__main__':unittest.main()

@@ -203,6 +203,9 @@ class API:
     def __init__(self, token, deadline):
         self.token, self.deadline = token, deadline
 
+    def check_deadline(self):
+        require(time.monotonic() < self.deadline, "original publication deadline exhausted")
+
     def request(self, method, endpoint, body=None, *, limit=MAX_JSON, binary=False, public=False):
         remaining = self.deadline - time.monotonic()
         require(remaining > 0, "original publication deadline exhausted")
@@ -232,6 +235,7 @@ class API:
             except (OSError, TimeoutError) as error:
                 raise Unknown("publication transport outcome unknown" if write else "publication read unavailable") from error
             with response:
+                self.check_deadline()  # The blocking open may return a late positive response.
                 if response.status in (301, 302, 303, 307, 308):
                     require(not write and redirects < 4, "publication write/redirect refused")
                     location = response.headers.get("Location", "")
@@ -250,8 +254,10 @@ class API:
                         block = response.read(min(65536, limit+1-len(data)))
                     except (OSError, TimeoutError) as error:
                         raise Unknown("publication response outcome unknown") from error
+                    self.check_deadline()  # Includes a late final data block or EOF.
                     if not block:
                         require(not response.headers.get_all("Link", []), "publication census pagination refused")
+                        self.check_deadline()
                         return response.status, bytes(data)
                     data.extend(block)
             raise Refused("publication response byte bound")
@@ -568,8 +574,10 @@ def publish(api, identity, environment, directory):
     observation = public_readback(api, identity, manifest, original_facts={
         "releaseId": release["id"], "authorId": release["author"]["id"], "assetId": asset["id"]})
     main_held(api, identity["source"])
+    api.check_deadline()
     journal.value["publicReadback"] = observation
     journal.save()
+    api.check_deadline()
     return {"producer": manifest["producer"], "publication": observation,
             "runtime": runtime_profile(archive), "adoptionSelected": False}
 
