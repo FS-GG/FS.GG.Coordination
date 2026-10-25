@@ -56,7 +56,7 @@ module NativeOperationModel =
   var state: State
   action init = state' = initial("full")
   action initCapability = state' = initial("capability")
-  action producer = all { alive(state), state.phase == "bootstrap", state.elapsed < 600,
+  action producer = all { alive(state), state.phase == "bootstrap", state.elapsed < phaseLimit(state,"source"),
     state' = { ...state, producer: true, phase: "packet-wait" } }
   action packet = all { alive(state), state.phase == "packet-wait", state.elapsed < phaseLimit(state,"source"),
     state' = { ...state, root: true, phase: "bound" } }
@@ -133,6 +133,7 @@ module NativeOperationModel =
   val witnessArchiveAdmitted = state.archive == 1 and state.currentArchive == 1 and state.phase == "image-running"
   val witnessArchiveMutationRefused = state.archive == 1 and state.currentArchive == 2 and state.refused and not(state.image)
   val witnessWholeAccepted = wholeAccepted
+  val witnessCapability = state.mode == "capability" and state.outcome == "capability-complete" and state.phase == "finished" and not(state.p2)
   val witnessNativeSuccess = state.outcome == "success" and state.phase == "finished"
   val witnessUnacknowledged = state.phase == "image-running" and not(state.latestAck) and state.outcome == "unknown"
   val witnessCancelledPlaintext = state.cancelled and state.source != 0
@@ -160,6 +161,18 @@ module FourDNativeJourney {
     intentCollection, ackCollection,
     all { state.latestAck, closeCollection },
     all { state.closed == state.owned, finish }
+  }
+}
+module FourDNativeCapabilityJourney {
+  import FourDNativeOperation.*
+  action init = state' = initial("capability")
+  action capabilityStep = any {
+    producer, packet, capsule, key, intentSource, ackSource, source,
+    all { not(state.resources), resources }, intentPreflight, ackPreflight, preflight,
+    all { state.phase == "preflight-ready", beginCleanup }, intentCleanup, ackCleanup,
+    all { state.cleanupIssued, state.latestAck, closeOrdered },
+    all { state.closed == state.owned, retired }, intentCollection, ackCollection,
+    all { state.latestAck, closeCollection }, all { state.closed == state.owned, finish }
   }
 }
 module FourDNativeWholeJourney {

@@ -29,6 +29,7 @@ RUNTIME_NAMES = ("FourD.Typed", "FourD.Typed.dll", "FourD.Typed.deps.json",
 SCENARIOS = (
     ("journey", "FourDNativeJourney", "journeyStep", 50,
      ("witnessNativeSuccess", "witnessArchiveAdmitted")),
+    ("capability", "FourDNativeCapabilityJourney", "capabilityStep", 50, ("witnessCapability",)),
     ("archive-mutation", "FourDNativeArchiveMutationJourney", "faultStep", None,
      ("witnessArchiveMutationRefused",)),
     ("whole", "FourDNativeWholeJourney", "wholeStep", 50, ("witnessWholeAccepted",)),
@@ -145,13 +146,18 @@ class Qualification:
         fixture_started = time.monotonic()
         fixture_metrics = []
         observations = {}
-        for name in ("journey", "archive-mutation"):
+        for name in ("journey", "capability", "archive-mutation"):
             fixture_root = work / name
             fixture_root.mkdir()
-            fixture = module.NativeFixture(fixture_root, [str(self.producer)])
+            fixture = module.NativeFixture(fixture_root, [str(self.producer)],mode="capability" if name=="capability" else "full")
             fixture.trace_zero = True
             fixture.root_evidence["nowUnixSeconds"] = fixture.started
-            if name == "journey":
+            if name == "capability":
+                fixture.prepared()
+                result=fixture.finish()
+                if result["state"]["disposition"]!="capability-only" or result["state"]["qualified"]:
+                    raise RuntimeError("actual capability profile classification differs")
+            elif name == "journey":
                 fixture.image_archive_ready()
                 image = fixture.ok("image", path=str(fixture.image_path))
                 expected = dict(fixture.image, temporaryMountNamespaceExited=True, postNamespaceIdentityVerified=True)
@@ -244,7 +250,7 @@ class Qualification:
             raise RuntimeError("producer closure changed during qualification")
         self.summary.update(status="passed", modelSha256=model_hash,
                             implementationSha256=runtime["FourD.Typed.dll"], actualTransitions=counts,
-                            deterministicWitnesses=6, fsQuintVersion="0.1.0",
+                            deterministicWitnesses=len(SCENARIOS), fsQuintVersion="0.1.0",
                             elapsedSeconds=round(time.monotonic() - self.started, 3))
         write(self.evidence / "summary.json", self.summary)
         print("native source qualification: PASS (5000 sampled traces; " + str(sum(counts.values())) + " actual transitions)")

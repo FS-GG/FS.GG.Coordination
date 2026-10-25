@@ -345,6 +345,14 @@ class NativeProtocolTests(unittest.TestCase):
         f.finish()
         Path(target).write_bytes(canonical(f.observed))
 
+    def test_capability_bootstrap_uses_original_540_second_deadline(self):
+        root=self.f.root/"late-capability";root.mkdir()
+        f=NativeFixture(root,self.f.command,mode="capability")
+        code,result=f.event("producer",elapsed=540,evidence=f.producer)
+        self.assertEqual(2,code)
+        self.assertEqual("native-bootstrap-order-refused",result["refusal"])
+        self.assertFalse(result["state"]["qualified"])
+
     def test_cancel_after_capsule_still_requires_recipient_retirement(self):
         f = self.f
         f.ok("producer", evidence=f.producer)

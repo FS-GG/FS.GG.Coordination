@@ -122,7 +122,7 @@ module NativePolicy =
         let normalized,next =
             match kind with
             | "producer" ->
-                shape ["evidence"]; requireAlive(); require (s.Phase="bootstrap" && s.Elapsed < 600) "native-bootstrap-order-refused"
+                shape ["evidence"]; requireAlive(); require (s.Phase="bootstrap" && s.Elapsed < deadline s "source") "native-bootstrap-order-refused"
                 let p=acquireProducer (e.GetProperty "evidence")
                 e,{ s with Producer=Some p; Phase="packet-wait" }
             | "packet" ->
