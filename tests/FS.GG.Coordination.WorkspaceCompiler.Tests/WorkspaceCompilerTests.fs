@@ -173,6 +173,107 @@ module WorkspaceCompilerTests =
 
         Assert.Equal<Set<string>>(keys, authority.Completeness.ExpectedWorkKeys)
 
+    // Independently selected by Root: these are actual T003/build inputs, not a list
+    // obtained from the compiler's returned source population.
+    let private selectedBuildInputs =
+        [
+            "tests/FS.GG.Coordination.WorkspaceCompiler.Tests/GeneratedControls.fs"
+            "tests/FS.GG.Coordination.WorkspaceCompiler.Tests/WorkspaceCompilerTests.fs"
+            "tests/FS.GG.Coordination.WorkspaceCompiler.Tests/FS.GG.Coordination.WorkspaceCompiler.Tests.fsproj"
+            "tests/FS.GG.Coordination.WorkspaceCompiler.Tests/packages.lock.json"
+            "FS.GG.Coordination.sln"
+        ]
+
+    [<Fact>]
+    let ``live consumer captures independently selected test and solution inputs`` () =
+        let authority =
+            ReferenceConsumer.invoke root revision fingerprint.Value now (facts ()) (completeness ())
+            |> require
+
+        let workspace = authority.Works.Head.Workspace
+
+        for path in selectedBuildInputs do
+            let actual = workspace.Sources |> List.find (fun s -> s.Path = path)
+            Assert.Equal((bytes path).Source.Sha256, actual.Sha256)
+
+        let testPart =
+            workspace.Components
+            |> List.find (fun c -> c.Root = "tests/FS.GG.Coordination.WorkspaceCompiler.Tests")
+
+        Assert.Equal<Set<string>>(
+            selectedBuildInputs |> List.take 4 |> Set.ofList,
+            testPart.Sources |> List.map _.Path |> Set.ofList
+        )
+
+        Assert.DoesNotContain(workspace.Components, fun c -> c.Root = ".")
+
+    [<Fact>]
+    let ``live consumer selected build inputs cannot disappear or change invisibly`` () =
+        let baseline =
+            ReferenceConsumer.invoke root revision fingerprint.Value now (facts ()) (completeness ())
+            |> require
+
+        let temporary =
+            Path.Combine(Path.GetTempPath(), "compiler1081-controls-" + Guid.NewGuid().ToString("N"))
+
+        try
+            // Keep the real corpus and independently selected five inputs; never mutate
+            // the actual checkout or accepted authored bytes.
+            let paths = baseline.Works.Head.Workspace.Sources |> List.map _.Path
+
+            for path in Set.ofList (paths @ selectedBuildInputs) do
+                let destination = Path.Combine(temporary, path)
+                Directory.CreateDirectory(Path.GetDirectoryName destination) |> ignore
+                File.Copy(Path.Combine(root, path), destination)
+
+            let invoke () =
+                ReferenceConsumer.invoke temporary revision fingerprint.Value now (facts ()) (completeness ())
+
+            let before = invoke () |> require
+
+            for path in selectedBuildInputs do
+                let target = Path.Combine(temporary, path)
+                let original = File.ReadAllBytes target
+                File.Delete target
+                invoke () |> refusal "source-custody-unavailable"
+                File.WriteAllBytes(target, original)
+                File.AppendAllText(target, "\n// independent raw-source mutation\n")
+                let after = invoke () |> require
+                Assert.NotEqual<string>(before.Completeness.ManifestSha256, after.Completeness.ManifestSha256)
+
+                let sourceOf (authority: AuthoritativeObligations) =
+                    authority.Works.Head.Workspace.Sources |> List.find (fun s -> s.Path = path)
+
+                Assert.NotEqual<string>((sourceOf before).Sha256, (sourceOf after).Sha256)
+                File.WriteAllBytes(target, original)
+                let restored = invoke () |> require
+                Assert.Equal(before.Completeness.ManifestSha256, restored.Completeness.ManifestSha256)
+            // A genuine changed profile proposes a successor of the accepted model;
+            // proposal generation cannot replace acceptance or reset the lifecycle.
+            let acceptedPath = Path.Combine(temporary, modelPath)
+            let oldAccepted = File.ReadAllText acceptedPath
+
+            File.AppendAllText(
+                Path.Combine(temporary, ReferenceConsumer.workRoot, "repository-profile.md"),
+                "\nIndependent successor control.\n"
+            )
+
+            ReferenceConsumer.propose temporary |> ignore
+
+            let readModel file =
+                File.ReadAllText(Path.Combine(temporary, ReferenceConsumer.readinessRoot, file))
+                |> WorkspaceLifecycle.deserializeModel
+                |> require
+
+            let actualBase = readModel "workspace-base.json"
+            let candidate = readModel "workspace-candidate.json"
+            Assert.Equal(parsed.Value, actualBase)
+            Assert.Equal(actualBase.Revision + 1L, candidate.Revision)
+            Assert.Equal(oldAccepted, File.ReadAllText acceptedPath)
+        finally
+            if Directory.Exists temporary then
+                Directory.Delete(temporary, true)
+
     [<Fact>]
     let ``independent expected population cannot omit a task`` () =
         let c =

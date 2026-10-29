@@ -12,10 +12,10 @@ module Source1 =
     let expectedKeys = set [ "T001"; "T002"; "T003"; "T004" ]
 
     let acceptedFingerprint =
-        "f04022214c6525525016da008d93551db60cec085769fd22f65de49183b70cca"
+        "3d6494be8e719b87a7f5b301345f98892ac6085bc159a477d86d5d6ff3af6c73"
 
     let custodyRevision =
-        "local:base666e0ff00bcbd36a9234de6fa40be41696da76eb;authored-sha256:4dcf1900f5c465dea543e092018d2c73cd090c6a8e008e866bff407520d7c84e"
+        "local:base666e0ff00bcbd36a9234de6fa40be41696da76eb;authored-sha256:6cb4f235ef7e0cfcbdeee829e7dc3835866c941701421898b7f000e56f9b1327"
 
     let selectedAt = DateTimeOffset.Parse "2026-10-29T13:14:12.430911+00:00"
     let deadline = DateTimeOffset.Parse "2026-10-29T16:14:12.430911+00:00"

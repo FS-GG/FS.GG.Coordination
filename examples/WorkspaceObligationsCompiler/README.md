@@ -34,13 +34,16 @@ also apply. These are source-composition limits, not a native containment profil
 ## The genuine1081 source cohort
 
 The first live corpus is `work/1081-workspace-obligations-compiler`, authored for this
-Delivery. Programme/root independently selected T001–T004 and EV001–EV004, and
-[accepted the exact model/profile](https://github.com/FS-GG/FS.GG.Coordination/issues/1081#issuecomment-6498296777)
-at13:41:48.939187UTC on2026-10-29. The accepted revision1 fingerprint is
-`f04022214c6525525016da008d93551db60cec085769fd22f65de49183b70cca`.
+Delivery. Programme/root independently selected T001–T004 and EV001–EV004. The
+[initial revision1 acceptance](https://github.com/FS-GG/FS.GG.Coordination/issues/1081#issuecomment-6498296777)
+and first candidate remain under `readiness/1081-workspace-obligations-compiler/history/revision-1-accepted`.
+Independent review found that the first caller omitted the actual test-project inputs
+and solution from its closure. Root then [accepted the exact revision2 profile successor](https://github.com/FS-GG/FS.GG.Coordination/issues/1081#issuecomment-6499613789)
+at14:36:14.700229UTC on2026-10-29, based on accepted revision1. The current fingerprint is
+`3d6494be8e719b87a7f5b301345f98892ac6085bc159a477d86d5d6ff3af6c73`.
 `ReferenceConsumer.accept` used the published lifecycle's exact-base reduction with
-that actual actor, evidence and time. The first proposal remains unaccepted history.
-
+that actual actor, evidence and time. The first unaccepted proposal and original
+accepted model remain historical evidence.
 The authored task/evidence files preserve the work declaration at source selection;
 pending/missing declarations do not claim completed outputs. Actual qualification
 receipts and Root's subsequent source acceptance remain separate. Changing an
@@ -56,7 +59,9 @@ label joins actual base666e0ff and Root's authored manifest digest; it does not 
 new local bytes existed in that Git commit. Every consumed file also has its raw hash.
 
 Physical components separately bind authored `work/…`, reference `examples/…`,
-maintained `.fsgg` and generated `readiness/…` source paths. The workspace locator is
+automated controls `tests/FS.GG.Coordination.WorkspaceCompiler.Tests`, maintained
+`.fsgg` and generated `readiness/…` source paths. The solution is a standalone
+workspace Source; no component rooted at dot is introduced. The workspace locator is
 the actual caller-selected checkout path, independently supplied by Root for this run.
 
 ## Build and invoke
@@ -76,7 +81,9 @@ The API also supports other independently supplied data without reusing this
 example's source operation.
 
 The `propose ROOT` and `accept ROOT FINGERPRINT ACTOR EVIDENCE TIME` helpers demonstrate
-the existing lifecycle over this cohort. A proposal is not acceptance. The latter
+the existing lifecycle over this cohort. When an accepted model exists, `propose`
+uses that actual model and fingerprint as its base and proposes a successor revision.
+A proposal is not acceptance. The latter
 requires an actual authorized acceptance supplied by the caller; strings do not
 authenticate their author. Never rerun these helpers to erase original history or
 fabricate Root approval.

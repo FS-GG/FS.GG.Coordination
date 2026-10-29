@@ -87,6 +87,15 @@ module ReferenceConsumer =
         ]
         |> List.map (fun p -> "examples/WorkspaceObligationsCompiler/" + p)
 
+    let private testPaths =
+        [
+            "GeneratedControls.fs"
+            "WorkspaceCompilerTests.fs"
+            "FS.GG.Coordination.WorkspaceCompiler.Tests.fsproj"
+            "packages.lock.json"
+        ]
+        |> List.map (fun p -> "tests/FS.GG.Coordination.WorkspaceCompiler.Tests/" + p)
+
     /// Prepare this live Delivery's actual authored work model and exact-base proposal.
     /// This command writes a proposal, never accepted authority.
     let propose root =
@@ -135,12 +144,17 @@ module ReferenceConsumer =
                             []
                 })
 
+        let acceptedPath = Path.Combine(root, readinessRoot, "workspace-model.json")
+
         let initial: WorkspaceModel =
-            {
-                SchemaVersion = 1
-                Revision = 0L
-                Modules = []
-            }
+            if File.Exists acceptedPath then
+                File.ReadAllText acceptedPath |> WorkspaceLifecycle.deserializeModel |> require
+            else
+                {
+                    SchemaVersion = 1
+                    Revision = 0L
+                    Modules = []
+                }
 
         let fingerprint = WorkspaceLifecycle.fingerprint initial |> require
 
@@ -151,7 +165,10 @@ module ReferenceConsumer =
                 ProseSha256 = (source root "source-proposal" (workRoot + "/spec.md")).Source.Sha256
                 BaseFingerprint = fingerprint
                 AuthoringDepth = AuthoringDepth.StructuredSdd
-                Changes = modules |> List.map WorkspaceChange.Upsert
+                Changes =
+                    modules
+                    |> List.filter (fun m -> initial.Modules |> List.tryFind (fun old -> old.Id = m.Id) <> Some m)
+                    |> List.map WorkspaceChange.Upsert
                 Disposition = ProposalDisposition.CoherentDelta
                 EvidenceFingerprint = None
             }
@@ -168,7 +185,7 @@ module ReferenceConsumer =
 
         let candidate: WorkspaceModel =
             { initial with
-                Revision = 1L
+                Revision = initial.Revision + 1L
                 Modules = modules
             }
 
@@ -213,7 +230,7 @@ module ReferenceConsumer =
         )
 
     /// A genuine typed API caller; original facts are separately supplied, not manufactured here.
-    let invoke root revision fingerprint observedAt originalFacts completeness =
+    let private invokeCaptured root revision fingerprint observedAt originalFacts completeness =
         let accepted = source root revision (readinessRoot + "/workspace-model.json")
         let model = source root revision (readinessRoot + "/work-model.json")
         let authored = authoredPaths |> List.map (source root revision)
@@ -225,7 +242,9 @@ module ReferenceConsumer =
 
         let code = codePaths |> List.map (source root revision)
         let profile = source root revision (workRoot + "/repository-profile.md")
-        let closure = code @ [ profile ]
+        let tests = testPaths |> List.map (source root revision)
+        let solution = source root revision "FS.GG.Coordination.sln"
+        let closure = code @ tests @ [ profile; solution ]
 
         let part: Component =
             {
@@ -234,6 +253,15 @@ module ReferenceConsumer =
                 Language = "F#"
                 Commands = Source1.checks
                 Sources = code |> List.map _.Source
+            }
+
+        let testPart: Component =
+            {
+                Id = "WorkspaceCompiler.Tests"
+                Root = "tests/FS.GG.Coordination.WorkspaceCompiler.Tests"
+                Language = "F#"
+                Commands = Source1.checks
+                Sources = tests |> List.map _.Source
             }
 
         let authoredPart: Component =
@@ -284,10 +312,18 @@ module ReferenceConsumer =
                     Revision = revision
                 }
             ]
-            [ part; authoredPart; configPart; generatedPart ]
+            [ part; testPart; authoredPart; configPart; generatedPart ]
             observedAt
             completeness
             originalFacts
+
+    /// Missing selected files refuse; source IO never silently shrinks the population.
+    let invoke root revision fingerprint observedAt originalFacts completeness =
+        try
+            invokeCaptured root revision fingerprint observedAt originalFacts completeness
+        with
+        | :? IOException -> Error(NeedsEvidence [ "source-custody-unavailable" ])
+        | :? UnauthorizedAccessException -> Error(NeedsEvidence [ "source-custody-unavailable" ])
 
     [<EntryPoint>]
     let main argv =
