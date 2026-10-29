@@ -1,0 +1,54 @@
+schemaVersion: 1
+workId: 1081-workspace-obligations-compiler
+stage: evidence
+status: evidenceReady
+sourceSpec: work/1081-workspace-obligations-compiler/spec.md
+sourceClarifications: work/1081-workspace-obligations-compiler/clarifications.md
+sourceChecklist: work/1081-workspace-obligations-compiler/checklist.md
+sourcePlan: work/1081-workspace-obligations-compiler/plan.md
+sourceTasks: work/1081-workspace-obligations-compiler/tasks.yml
+evidence:
+  - id: EV001
+    kind: missing
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    artifacts: []
+    result: missing
+    synthetic: false
+    notes: [Actual source evidence remains pending; no acceptance is inferred.]
+  - id: EV002
+    kind: missing
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    artifacts: []
+    result: missing
+    synthetic: false
+    notes: [Actual source evidence remains pending; no acceptance is inferred.]
+  - id: EV003
+    kind: missing
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    artifacts: []
+    result: missing
+    synthetic: false
+    notes: [Actual source evidence remains pending; no acceptance is inferred.]
+  - id: EV004
+    kind: missing
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    artifacts: []
+    result: missing
+    synthetic: false
+    notes: [Actual source evidence remains pending; no acceptance is inferred.]

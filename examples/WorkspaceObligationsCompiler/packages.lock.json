@@ -1,0 +1,60 @@
+{
+  "version": 2,
+  "dependencies": {
+    "net10.0": {
+      "FS.GG.SDD.Artifacts": {
+        "type": "Direct",
+        "requested": "[2.5.3, 2.5.3]",
+        "resolved": "2.5.3",
+        "contentHash": "DymlMvzfslNT1qmRXJWjd//lJAmDZZRjGsx7HDMvR0V1IJIaaOd83eSxkspmG+QGxhHDQHTyt7lyMUxdzfhe2g==",
+        "dependencies": {
+          "FS.GG.Contracts": "[7.6.0]",
+          "FSharp.Core": "10.1.401",
+          "FsQuint": "[0.1.0]",
+          "YamlDotNet": "18.1.0"
+        }
+      },
+      "FSharp.Core": {
+        "type": "Direct",
+        "requested": "[10.1.401, 10.1.401]",
+        "resolved": "10.1.401",
+        "contentHash": "/lvOK51KD8IangBYkfDVna3/HrE/r4VUnX3dI01KDspctoYXmind3POeoYkqWKeXHwiKlf6Hc9TxwSnoSCWcjw=="
+      },
+      "FS.GG.Contracts": {
+        "type": "Transitive",
+        "resolved": "7.6.0",
+        "contentHash": "0qn8dQ0gtv/LuLfRxC3Ju+KkPciTKg0d+TRo4jgdpeyAOJJt3I9mp3EH60BPtchmjql82hlMOo9PLB46PPg3bg==",
+        "dependencies": {
+          "FSharp.Core": "10.1.401"
+        }
+      },
+      "YamlDotNet": {
+        "type": "Transitive",
+        "resolved": "18.1.0",
+        "contentHash": "5K+9KFg2TdTl7VXv88Qzi/0lqK6JFoNP3lRuImPYGRV7K/QYklDyTrj4+A+KAki1JsQi6qKY+hDyY7d6WRqjrw=="
+      },
+      "fs.gg.coordination.core": {
+        "type": "Project",
+        "dependencies": {
+          "FS.GG.Coordination.Protocol": "[1.0.0, )",
+          "FSharp.Core": "[10.1.302, )"
+        }
+      },
+      "fs.gg.coordination.protocol": {
+        "type": "Project",
+        "dependencies": {
+          "FSharp.Core": "[10.1.302, )"
+        }
+      },
+      "FsQuint": {
+        "type": "CentralTransitive",
+        "requested": "[0.1.0, )",
+        "resolved": "0.1.0",
+        "contentHash": "S1dCVHdcLRdXmZnjCOk+nJLhjO3acz705bEeQm2cBrwxiEsDpVj7PD8tECcKo/Bzpbw5ZOI4bLMWdlqSkISsbg==",
+        "dependencies": {
+          "FSharp.Core": "10.1.302"
+        }
+      }
+    }
+  }
+}
