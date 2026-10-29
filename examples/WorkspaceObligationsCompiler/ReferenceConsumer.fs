@@ -244,7 +244,12 @@ module ReferenceConsumer =
         let profile = source root revision (workRoot + "/repository-profile.md")
         let tests = testPaths |> List.map (source root revision)
         let solution = source root revision "FS.GG.Coordination.sln"
-        let closure = code @ tests @ [ profile; solution ]
+        let plan = source root revision "eng/bootstrap-qualification-plan.json"
+
+        let architecture =
+            source root revision "tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs"
+
+        let closure = code @ tests @ [ profile; solution; plan; architecture ]
 
         let part: Component =
             {
@@ -262,6 +267,15 @@ module ReferenceConsumer =
                 Language = "F#"
                 Commands = Source1.checks
                 Sources = tests |> List.map _.Source
+            }
+
+        let architecturePart: Component =
+            {
+                Id = "ArchitectureTests-census"
+                Root = "tests/FS.GG.Coordination.ArchitectureTests"
+                Language = "F#"
+                Commands = Set.empty
+                Sources = [ architecture.Source ]
             }
 
         let authoredPart: Component =
@@ -312,7 +326,7 @@ module ReferenceConsumer =
                     Revision = revision
                 }
             ]
-            [ part; testPart; authoredPart; configPart; generatedPart ]
+            [ part; testPart; architecturePart; authoredPart; configPart; generatedPart ]
             observedAt
             completeness
             originalFacts

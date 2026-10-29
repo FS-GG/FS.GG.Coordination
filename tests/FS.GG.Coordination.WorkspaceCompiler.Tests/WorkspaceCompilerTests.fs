@@ -173,7 +173,8 @@ module WorkspaceCompilerTests =
 
         Assert.Equal<Set<string>>(keys, authority.Completeness.ExpectedWorkKeys)
 
-    // Independently selected by Root: these are actual T003/build inputs, not a list
+    // Independently selected by Root, including the explicit census scope amendment:
+    // these are actual T003/build inputs, not a list
     // obtained from the compiler's returned source population.
     let private selectedBuildInputs =
         [
@@ -182,6 +183,8 @@ module WorkspaceCompilerTests =
             "tests/FS.GG.Coordination.WorkspaceCompiler.Tests/FS.GG.Coordination.WorkspaceCompiler.Tests.fsproj"
             "tests/FS.GG.Coordination.WorkspaceCompiler.Tests/packages.lock.json"
             "FS.GG.Coordination.sln"
+            "eng/bootstrap-qualification-plan.json"
+            "tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs"
         ]
 
     [<Fact>]

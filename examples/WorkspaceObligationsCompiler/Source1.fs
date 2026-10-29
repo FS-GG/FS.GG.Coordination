@@ -12,10 +12,10 @@ module Source1 =
     let expectedKeys = set [ "T001"; "T002"; "T003"; "T004" ]
 
     let acceptedFingerprint =
-        "3d6494be8e719b87a7f5b301345f98892ac6085bc159a477d86d5d6ff3af6c73"
+        "a3f69cacefc5f351302ee1bea9ffeea3f06864f27abca2588c59827b9d2bcc8a"
 
     let custodyRevision =
-        "local:base666e0ff00bcbd36a9234de6fa40be41696da76eb;authored-sha256:6cb4f235ef7e0cfcbdeee829e7dc3835866c941701421898b7f000e56f9b1327"
+        "local:base666e0ff00bcbd36a9234de6fa40be41696da76eb;authored-sha256:083d0dbd4e5a86978bad86670c781910fb53c4beb5ab190d73048964a3359616"
 
     let selectedAt = DateTimeOffset.Parse "2026-10-29T13:14:12.430911+00:00"
     let deadline = DateTimeOffset.Parse "2026-10-29T16:14:12.430911+00:00"
@@ -94,10 +94,14 @@ module Source1 =
                         "accepted-workspace-model"
                         "complete-authored-population"
                         "source1-original-facts"]
+                // Programme/root amended these two exact source paths at 2026-10-29T14:44:40.575874Z.
+                // Original source1 admission/attempt/clock remain unchanged; native evidence 6499825046.
                 AllowedPaths =
                     set["examples/WorkspaceObligationsCompiler"
                         "tests/FS.GG.Coordination.WorkspaceCompiler.Tests"
                         "FS.GG.Coordination.sln"
+                        "eng/bootstrap-qualification-plan.json"
+                        "tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs"
                         "work/1081-workspace-obligations-compiler"
                         "readiness/1081-workspace-obligations-compiler"]
                 AuthorizedEffects = set["workspace-edit"]

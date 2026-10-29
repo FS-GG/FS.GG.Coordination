@@ -39,8 +39,12 @@ Delivery. Programme/root independently selected T001–T004 and EV001–EV004. T
 and first candidate remain under `readiness/1081-workspace-obligations-compiler/history/revision-1-accepted`.
 Independent review found that the first caller omitted the actual test-project inputs
 and solution from its closure. Root then [accepted the exact revision2 profile successor](https://github.com/FS-GG/FS.GG.Coordination/issues/1081#issuecomment-6499613789)
-at14:36:14.700229UTC on2026-10-29, based on accepted revision1. The current fingerprint is
+at14:36:14.700229UTC on2026-10-29, based on accepted revision1. Its fingerprint is
 `3d6494be8e719b87a7f5b301345f98892ac6085bc159a477d86d5d6ff3af6c73`.
+Root subsequently [accepted the revision3 census-integration successor](https://github.com/FS-GG/FS.GG.Coordination/issues/1081#issuecomment-6499906543)
+at14:47:57.418440UTC on2026-10-29. The current fingerprint is
+`a3f69cacefc5f351302ee1bea9ffeea3f06864f27abca2588c59827b9d2bcc8a`.
+The revision2 accepted source/evidence remain in the adjacent history directory.
 `ReferenceConsumer.accept` used the published lifecycle's exact-base reduction with
 that actual actor, evidence and time. The first unaccepted proposal and original
 accepted model remain historical evidence.
@@ -61,7 +65,9 @@ new local bytes existed in that Git commit. Every consumed file also has its raw
 Physical components separately bind authored `work/…`, reference `examples/…`,
 automated controls `tests/FS.GG.Coordination.WorkspaceCompiler.Tests`, maintained
 `.fsgg` and generated `readiness/…` source paths. The solution is a standalone
-workspace Source; no component rooted at dot is introduced. The workspace locator is
+workspace Source; the selected bootstrap plan is also standalone. Its exact census
+control source is bound under the actual ArchitectureTests component root. No
+component rooted at dot is introduced. The workspace locator is
 the actual caller-selected checkout path, independently supplied by Root for this run.
 
 ## Build and invoke

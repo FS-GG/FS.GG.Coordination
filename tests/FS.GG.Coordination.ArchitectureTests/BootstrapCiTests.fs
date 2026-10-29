@@ -119,6 +119,7 @@ let private vulnerabilityJson projectCount vulnerable =
     let requiredProjects =
         [
             "eng/telemetry-host-manager/TelemetryHostManager.fsproj"
+            "examples/WorkspaceObligationsCompiler/WorkspaceObligationsCompiler.fsproj"
             "src/FS.GG.Coordination.App/FS.GG.Coordination.App.fsproj"
             "src/FS.GG.Coordination.Cli/FS.GG.Coordination.Cli.fsproj"
             "src/FS.GG.Coordination.Core/FS.GG.Coordination.Core.fsproj"
@@ -139,6 +140,7 @@ let private vulnerabilityJson projectCount vulnerable =
             "src/FS.GG.Execution.Processes/FS.GG.Execution.Processes.fsproj"
             "tests/FS.GG.Execution.Processes.Tests/FS.GG.Execution.Processes.Tests.fsproj"
             "tests/FS.GG.Coordination.ArchitectureTests/FS.GG.Coordination.ArchitectureTests.fsproj"
+            "tests/FS.GG.Coordination.WorkspaceCompiler.Tests/FS.GG.Coordination.WorkspaceCompiler.Tests.fsproj"
             "tests/FS.GG.Coordination.Orchestration.Execution.Tests/FS.GG.Coordination.Orchestration.Execution.Tests.fsproj"
             "tests/FS.GG.Coordination.Orchestration.Execution.Codex.Tests/FS.GG.Coordination.Orchestration.Execution.Codex.Tests.fsproj"
             "tests/FS.GG.Coordination.UnitTests/FS.GG.Coordination.UnitTests.fsproj"
@@ -1138,10 +1140,10 @@ let ``bootstrap control surface stays typed thin and bounded`` () =
         File.ReadAllText(Path.Combine(repositoryRoot, ".github/workflows/bootstrap-qualification.yml"))
 
     Assert.InRange(lineCount ".github/workflows/bootstrap-qualification.yml", 1, 620)
-    // The 29-project census adds exactly two entries to the bounded qualification plan;
+    // The 31-project census adds two compiler/control entries to the prior 29-project plan;
     // the canonical accounting census adds its helper and three source-identity inputs.
     // The C2 diagnostic derivative adds two closed file paths and two path prefixes: 313 -> 317.
-    Assert.InRange(lineCount "eng/bootstrap-qualification-plan.json", 1, 317)
+    Assert.InRange(lineCount "eng/bootstrap-qualification-plan.json", 1, 319)
     Assert.InRange(lineCount "eng/bootstrap-ci.fsx", 1, 26)
     Assert.InRange(lineCount "src/FS.GG.Coordination.Qualification.Contracts/BootstrapCi.fs", 1, 2500)
     Assert.InRange(lineCount "src/FS.GG.Coordination.Qualification.Contracts/QualificationReuse.fs", 1, 1500)
@@ -1480,7 +1482,7 @@ let ``workflow comments cannot bypass the exact byte contract`` () =
 
 [<Fact>]
 let ``complete vulnerability report is accepted`` () =
-    let exitCode, output, error = validateVulnerability (vulnerabilityJson 29 false)
+    let exitCode, output, error = validateVulnerability (vulnerabilityJson 31 false)
     Assert.Equal(0, exitCode)
     Assert.Equal("BOOTSTRAP_CI_OK mode=vulnerability", output)
     Assert.Equal("", error)
@@ -1488,13 +1490,69 @@ let ``complete vulnerability report is accepted`` () =
 [<Theory>]
 [<InlineData(16, false, "vulnerability-report-completeness")>]
 [<InlineData(25, false, "vulnerability-report-completeness")>]
-[<InlineData(29, true, "vulnerable-package")>]
+[<InlineData(31, true, "vulnerable-package")>]
 let ``partial and vulnerable reports are rejected`` projectCount vulnerable rule =
     let exitCode, _, error =
         validateVulnerability (vulnerabilityJson projectCount vulnerable)
 
     Assert.NotEqual(0, exitCode)
     Assert.Contains($"rule=%s{rule}", error)
+
+[<Fact>]
+let ``vulnerability contract and independent fixture match actual solution census`` () =
+    let actual =
+        File.ReadAllLines(Path.Combine(repositoryRoot, "FS.GG.Coordination.sln"))
+        |> Array.choose (fun line ->
+            let fields = line.Split('"')
+
+            if
+                line.StartsWith("Project(", StringComparison.Ordinal)
+                && fields.Length > 5
+                && fields[5].EndsWith(".fsproj", StringComparison.Ordinal)
+            then
+                Some(fields[5].Replace('\\', '/'))
+            else
+                None)
+
+    use contract =
+        JsonDocument.Parse(File.ReadAllText(Path.Combine(repositoryRoot, "eng/bootstrap-qualification-plan.json")))
+
+    use fixture = JsonDocument.Parse(vulnerabilityJson 31 false)
+
+    let declared =
+        contract.RootElement.GetProperty("requiredProjects").EnumerateArray()
+        |> Seq.map (fun p -> p.GetString())
+        |> Set.ofSeq
+
+    let independent =
+        fixture.RootElement.GetProperty("projects").EnumerateArray()
+        |> Seq.map (fun p -> p.GetProperty("path").GetString())
+        |> Set.ofSeq
+
+    Assert.Equal(31, actual.Length)
+    Assert.Equal(31, contract.RootElement.GetProperty("requiredProjectCount").GetInt32())
+    Assert.Equal<Set<string>>(Set.ofArray actual, declared)
+    Assert.Equal<Set<string>>(Set.ofArray actual, independent)
+
+[<Theory>]
+[<InlineData("examples/WorkspaceObligationsCompiler/WorkspaceObligationsCompiler.fsproj")>]
+[<InlineData("tests/FS.GG.Coordination.WorkspaceCompiler.Tests/FS.GG.Coordination.WorkspaceCompiler.Tests.fsproj")>]
+let ``vulnerability census requires each compiler project without duplicates or substitution`` project =
+    for mutation in [ "missing"; "duplicate"; "same-count" ] do
+        let report = JsonNode.Parse(vulnerabilityJson 31 false)
+        let projects = report["projects"].AsArray()
+
+        let index =
+            projects |> Seq.findIndex (fun p -> p["path"].GetValue<string>() = project)
+
+        match mutation with
+        | "missing" -> projects.RemoveAt index
+        | "duplicate" -> projects.Add(projects[index].DeepClone())
+        | _ -> projects[index]["path"] <- JsonValue.Create("src/Unexpected/Unexpected.fsproj")
+
+        let exitCode, _, error = validateVulnerability (report.ToJsonString())
+        Assert.NotEqual(0, exitCode)
+        Assert.Contains("rule=vulnerability-report-completeness", error)
 
 [<Fact>]
 let ``malformed vulnerability report is rejected`` () =
@@ -1533,7 +1591,7 @@ let ``incomplete vulnerability parameters are rejected`` () =
 [<Fact>]
 let ``same-count wrong-project vulnerability report is rejected`` () =
     let report =
-        (vulnerabilityJson 29 false)
+        (vulnerabilityJson 31 false)
             .Replace("src/FS.GG.Coordination.App/FS.GG.Coordination.App.fsproj", "src/Wrong/Wrong.fsproj")
 
     let exitCode, _, error = validateVulnerability report
@@ -1547,7 +1605,7 @@ let ``same-count wrong-project vulnerability report is rejected`` () =
 [<InlineData("tests/FS.GG.Execution.Processes.Tests/FS.GG.Execution.Processes.Tests.fsproj")>]
 let ``same-count vulnerability report requires each process contracts project`` project =
     let report =
-        (vulnerabilityJson 29 false).Replace(project, "src/Unexpected/Unexpected.fsproj")
+        (vulnerabilityJson 31 false).Replace(project, "src/Unexpected/Unexpected.fsproj")
 
     let exitCode, _, error = validateVulnerability report
     Assert.NotEqual(0, exitCode)

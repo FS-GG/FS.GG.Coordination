@@ -20,10 +20,11 @@
     "cancelInProgress": true
   },
   "requiredGateCount": 10,
-  "requiredProjectCount": 29,
+  "requiredProjectCount": 31,
   "requiredVulnerabilitySources": ["https://api.nuget.org/v3/index.json"],
   "requiredProjects": [
     "eng/telemetry-host-manager/TelemetryHostManager.fsproj",
+    "examples/WorkspaceObligationsCompiler/WorkspaceObligationsCompiler.fsproj",
     "src/FS.GG.Coordination.App/FS.GG.Coordination.App.fsproj",
     "src/FS.GG.Coordination.Cli/FS.GG.Coordination.Cli.fsproj",
     "src/FS.GG.Coordination.Core/FS.GG.Coordination.Core.fsproj",
@@ -44,6 +45,7 @@
     "src/FS.GG.Execution.Processes/FS.GG.Execution.Processes.fsproj",
     "tests/FS.GG.Execution.Processes.Tests/FS.GG.Execution.Processes.Tests.fsproj",
     "tests/FS.GG.Coordination.ArchitectureTests/FS.GG.Coordination.ArchitectureTests.fsproj",
+    "tests/FS.GG.Coordination.WorkspaceCompiler.Tests/FS.GG.Coordination.WorkspaceCompiler.Tests.fsproj",
     "tests/FS.GG.Coordination.Orchestration.Execution.Tests/FS.GG.Coordination.Orchestration.Execution.Tests.fsproj",
     "tests/FS.GG.Coordination.Orchestration.Execution.Codex.Tests/FS.GG.Coordination.Orchestration.Execution.Codex.Tests.fsproj",
     "tests/FS.GG.Coordination.UnitTests/FS.GG.Coordination.UnitTests.fsproj",
