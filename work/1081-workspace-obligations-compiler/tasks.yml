@@ -1,0 +1,69 @@
+schemaVersion: 1
+work:
+  id: 1081-workspace-obligations-compiler
+  title: Source-bound workspace obligation compiler
+  stage: tasks
+  status: tasksReady
+  sourceSpec: work/1081-workspace-obligations-compiler/spec.md
+  sourceClarifications: work/1081-workspace-obligations-compiler/clarifications.md
+  sourceChecklist: work/1081-workspace-obligations-compiler/checklist.md
+  sourcePlan: work/1081-workspace-obligations-compiler/plan.md
+  publicOrToolFacingImpact: true
+sources:
+  - label: spec
+    path: work/1081-workspace-obligations-compiler/spec.md
+    digest: 7f23325cc7a717de9e2bc2842953ef0f9288f681fa8c31a964919a8d399b637c
+    schemaVersion: 1
+  - label: clarifications
+    path: work/1081-workspace-obligations-compiler/clarifications.md
+    digest: dc1bd3d25ef519d874172731da24dc39ae81eec2bed5e48bc24a43bb8d09ea00
+    schemaVersion: 1
+  - label: checklist
+    path: work/1081-workspace-obligations-compiler/checklist.md
+    digest: e900d9c666b18245199d65d2ad3f512eeb67930d1c4c43c18c033cb87c3d0234
+    schemaVersion: 1
+  - label: plan
+    path: work/1081-workspace-obligations-compiler/plan.md
+    digest: c2033b21ad91e67adee17394bcfb140cb64d9e635880ca2e01ec25f36d01185b
+    schemaVersion: 1
+tasks:
+  - id: T001
+    title: Implement source-bound compiler
+    status: pending
+    owner: sdd_contract_join
+    dependencies: []
+    requirements: [FR-001, FR-002]
+    decisions: []
+    sourceIds: [AC-001, AC-002, AC-003, PD-001]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV001]
+  - id: T002
+    title: Connect real published-package consumer
+    status: pending
+    owner: sdd_contract_join
+    dependencies: [T001]
+    requirements: [FR-002, FR-004]
+    decisions: []
+    sourceIds: [AC-001, AC-002, AC-003, PD-002]
+    requiredSkills: [fsharp]
+    requiredEvidence: [EV002]
+  - id: T003
+    title: Qualify independent causal refusals
+    status: pending
+    owner: sdd_contract_join
+    dependencies: [T001, T002]
+    requirements: [FR-003, FR-004]
+    decisions: []
+    sourceIds: [AC-001, AC-002, AC-003, PD-003]
+    requiredSkills: [automated-tests]
+    requiredEvidence: [EV003]
+  - id: T004
+    title: Complete reviewed source acceptance
+    status: pending
+    owner: sdd_contract_join
+    dependencies: [T001, T002, T003]
+    requirements: [FR-001, FR-002, FR-003, FR-004]
+    decisions: []
+    sourceIds: [AC-001, AC-002, AC-003, PD-004]
+    requiredSkills: [readiness-evidence]
+    requiredEvidence: [EV004]

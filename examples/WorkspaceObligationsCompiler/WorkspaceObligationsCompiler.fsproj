@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="FS.GG.SDD.Artifacts" VersionOverride="[2.5.3]" />
+    <PackageReference Update="FSharp.Core" VersionOverride="[10.1.401]" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/FS.GG.Coordination.Core/FS.GG.Coordination.Core.fsproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Compiler.fsi" />
+    <Compile Include="Compiler.fs" />
+    <Compile Include="Source1.fs" />
+    <Compile Include="ReferenceConsumer.fs" />
+  </ItemGroup>
+</Project>

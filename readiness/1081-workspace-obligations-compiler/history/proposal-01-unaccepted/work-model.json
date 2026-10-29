@@ -1,0 +1,613 @@
+{
+  "schemaVersion": 1,
+  "modelVersion": "1.2.0",
+  "workId": "1081-workspace-obligations-compiler",
+  "project": {
+    "id": "fs.gg.coordination",
+    "defaultWorkRoot": "work",
+    "profile": null
+  },
+  "sources": [
+    {
+      "path": ".fsgg/agents.yml",
+      "kind": "agentsConfig",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "c67035b1cf31b6fa802c10f761eeb1e5bf5d198c38d159b54fac299957b5aac3"
+      }
+    },
+    {
+      "path": ".fsgg/project.yml",
+      "kind": "projectConfig",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "70f2a125e819d30332e8178911cfbfaf819dac8fc85fc3d77b309660838da381"
+      }
+    },
+    {
+      "path": ".fsgg/sdd.yml",
+      "kind": "sddConfig",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "fe5a7c270a975153e80ab0d08a610c9b302585dcb0b5f7c654841ceced9272cb"
+      }
+    },
+    {
+      "path": "work/1081-workspace-obligations-compiler/charter.md",
+      "kind": "source",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "fa31bbfb1145c5b4a892dfc947e45104c636d1ff4ce819fe238dc008c2e69809"
+      }
+    },
+    {
+      "path": "work/1081-workspace-obligations-compiler/checklist.md",
+      "kind": "checklist",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "44cfb4e78fd311be7535e672eb4223b7f127be4d3831a9d97d7152abb8d31f5a"
+      }
+    },
+    {
+      "path": "work/1081-workspace-obligations-compiler/clarifications.md",
+      "kind": "clarifications",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "dc1bd3d25ef519d874172731da24dc39ae81eec2bed5e48bc24a43bb8d09ea00"
+      }
+    },
+    {
+      "path": "work/1081-workspace-obligations-compiler/evidence.yml",
+      "kind": "evidence",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "412f727912ce4b7a50bb7d1480a013c7090653e0c4ac2c914aff5c1bd6517277"
+      }
+    },
+    {
+      "path": "work/1081-workspace-obligations-compiler/plan.md",
+      "kind": "plan",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "c2033b21ad91e67adee17394bcfb140cb64d9e635880ca2e01ec25f36d01185b"
+      }
+    },
+    {
+      "path": "work/1081-workspace-obligations-compiler/spec.md",
+      "kind": "spec",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "7f23325cc7a717de9e2bc2842953ef0f9288f681fa8c31a964919a8d399b637c"
+      }
+    },
+    {
+      "path": "work/1081-workspace-obligations-compiler/tasks.yml",
+      "kind": "tasks",
+      "owner": "sdd",
+      "schemaVersion": 1,
+      "rawSchemaVersion": "1",
+      "schemaStatus": "current",
+      "sourceDigest": {
+        "algorithm": "sha256",
+        "value": "cce5ecdbabbbd09314f7391d7d835c36a2eb676c11c2f29b1bcee13f45ca1ed2"
+      }
+    }
+  ],
+  "workItem": {
+    "id": "1081-workspace-obligations-compiler",
+    "title": "Source-bound workspace obligation compiler",
+    "stage": "specify",
+    "changeTier": "tier1",
+    "status": "planned"
+  },
+  "performanceIntent": null,
+  "requirements": [
+    {
+      "id": "FR-001",
+      "title": "Compile existing AuthoritativeObligations from source-bound accepted WorkspaceModel, current WorkModel and explicit component/repository identity. (Stories: US-001; Acceptance: AC-001)",
+      "text": "Compile existing AuthoritativeObligations from source-bound accepted WorkspaceModel, current WorkModel and explicit component/repository identity. (Stories: US-001; Acceptance: AC-001)",
+      "acceptanceCriteria": [
+        "AC-001"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/1081-workspace-obligations-compiler/spec.md",
+      "sourceLocation": {
+        "line": 28,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T001",
+        "T004"
+      ],
+      "linkedEvidenceIds": [
+        "EV001"
+      ]
+    },
+    {
+      "id": "FR-002",
+      "title": "Preserve independent ExpectedWorkKeys, Governance/Root obligations and original operational facts; framework Provider is the accepted RepositoryProfile identity, generated Provider uses actual PreparedConfiguration/provenance. (Stories: US-001; Acceptance: AC-001)",
+      "text": "Preserve independent ExpectedWorkKeys, Governance/Root obligations and original operational facts; framework Provider is the accepted RepositoryProfile identity, generated Provider uses actual PreparedConfiguration/provenance. (Stories: US-001; Acceptance: AC-001)",
+      "acceptanceCriteria": [
+        "AC-001"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/1081-workspace-obligations-compiler/spec.md",
+      "sourceLocation": {
+        "line": 29,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T001",
+        "T002",
+        "T004"
+      ],
+      "linkedEvidenceIds": [
+        "EV002"
+      ]
+    },
+    {
+      "id": "FR-003",
+      "title": "Refuse unavailable, changed, contradictory, malformed, omitted, over-bound or unsupported inputs without fabricating authority. (Stories: US-001; Acceptance: AC-002)",
+      "text": "Refuse unavailable, changed, contradictory, malformed, omitted, over-bound or unsupported inputs without fabricating authority. (Stories: US-001; Acceptance: AC-002)",
+      "acceptanceCriteria": [
+        "AC-002"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/1081-workspace-obligations-compiler/spec.md",
+      "sourceLocation": {
+        "line": 30,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T003",
+        "T004"
+      ],
+      "linkedEvidenceIds": [
+        "EV003"
+      ]
+    },
+    {
+      "id": "FR-004",
+      "title": "Qualify a real typed caller with published Artifacts2.5.3, causal controls and source review, preserving frozen global Artifacts1.5.0/default locks. (Stories: US-001; Acceptance: AC-003)",
+      "text": "Qualify a real typed caller with published Artifacts2.5.3, causal controls and source review, preserving frozen global Artifacts1.5.0/default locks. (Stories: US-001; Acceptance: AC-003)",
+      "acceptanceCriteria": [
+        "AC-003"
+      ],
+      "priority": null,
+      "classification": [],
+      "source": "work/1081-workspace-obligations-compiler/spec.md",
+      "sourceLocation": {
+        "line": 31,
+        "column": 1
+      },
+      "linkedTaskIds": [
+        "T002",
+        "T003",
+        "T004"
+      ],
+      "linkedEvidenceIds": [
+        "EV004"
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "id": "DEC-001",
+      "title": "Derive task/evidence/skill obligations from current authored snapshots using the existing SDD producer; a generated WorkModel is verified against that regeneration.",
+      "decision": "Derive task/evidence/skill obligations from current authored snapshots using the existing SDD producer; a generated WorkModel is verified against that regeneration.",
+      "requirementRefs": [
+        "FR-001",
+        "FR-002"
+      ],
+      "storyRefs": [],
+      "acceptanceRefs": [],
+      "source": "work/1081-workspace-obligations-compiler/clarifications.md",
+      "sourceLocation": {
+        "line": 14,
+        "column": 1
+      },
+      "linkedTaskIds": []
+    },
+    {
+      "id": "DEC-002",
+      "title": "Keep independently supplied completeness and original Requirements facts as typed data; compilation creates no attempts or budgets.",
+      "decision": "Keep independently supplied completeness and original Requirements facts as typed data; compilation creates no attempts or budgets.",
+      "requirementRefs": [
+        "FR-002",
+        "FR-003"
+      ],
+      "storyRefs": [],
+      "acceptanceRefs": [],
+      "source": "work/1081-workspace-obligations-compiler/clarifications.md",
+      "sourceLocation": {
+        "line": 15,
+        "column": 1
+      },
+      "linkedTaskIds": []
+    },
+    {
+      "id": "DEC-003",
+      "title": "The first cohort uses actual child roots. Root=\u0022.\u0022 and every production projection remain unsupported by this reference.",
+      "decision": "The first cohort uses actual child roots. Root=\u0022.\u0022 and every production projection remain unsupported by this reference.",
+      "requirementRefs": [
+        "FR-003",
+        "FR-004"
+      ],
+      "storyRefs": [],
+      "acceptanceRefs": [],
+      "source": "work/1081-workspace-obligations-compiler/clarifications.md",
+      "sourceLocation": {
+        "line": 16,
+        "column": 1
+      },
+      "linkedTaskIds": []
+    }
+  ],
+  "tasks": [
+    {
+      "id": "T001",
+      "title": "Implement source-bound compiler",
+      "status": "pending",
+      "owner": "sdd_contract_join",
+      "dependencies": [],
+      "requirements": [
+        "FR-001",
+        "FR-002"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-001",
+        "AC-002",
+        "AC-003",
+        "PD-001"
+      ],
+      "requiredSkills": [
+        "fsharp",
+        "implementation"
+      ],
+      "requiredEvidence": [
+        "EV001"
+      ],
+      "source": "work/1081-workspace-obligations-compiler/tasks.yml",
+      "sourceLocation": {
+        "line": 1,
+        "column": 1
+      }
+    },
+    {
+      "id": "T002",
+      "title": "Connect real published-package consumer",
+      "status": "pending",
+      "owner": "sdd_contract_join",
+      "dependencies": [
+        "T001"
+      ],
+      "requirements": [
+        "FR-002",
+        "FR-004"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-001",
+        "AC-002",
+        "AC-003",
+        "PD-002"
+      ],
+      "requiredSkills": [
+        "fsharp"
+      ],
+      "requiredEvidence": [
+        "EV002"
+      ],
+      "source": "work/1081-workspace-obligations-compiler/tasks.yml",
+      "sourceLocation": {
+        "line": 2,
+        "column": 1
+      }
+    },
+    {
+      "id": "T003",
+      "title": "Qualify independent causal refusals",
+      "status": "pending",
+      "owner": "sdd_contract_join",
+      "dependencies": [
+        "T001",
+        "T002"
+      ],
+      "requirements": [
+        "FR-003",
+        "FR-004"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-001",
+        "AC-002",
+        "AC-003",
+        "PD-003"
+      ],
+      "requiredSkills": [
+        "automated-tests"
+      ],
+      "requiredEvidence": [
+        "EV003"
+      ],
+      "source": "work/1081-workspace-obligations-compiler/tasks.yml",
+      "sourceLocation": {
+        "line": 3,
+        "column": 1
+      }
+    },
+    {
+      "id": "T004",
+      "title": "Complete reviewed source acceptance",
+      "status": "pending",
+      "owner": "sdd_contract_join",
+      "dependencies": [
+        "T001",
+        "T002",
+        "T003"
+      ],
+      "requirements": [
+        "FR-001",
+        "FR-002",
+        "FR-003",
+        "FR-004"
+      ],
+      "decisions": [],
+      "sourceIds": [
+        "AC-001",
+        "AC-002",
+        "AC-003",
+        "PD-004"
+      ],
+      "requiredSkills": [
+        "readiness-evidence"
+      ],
+      "requiredEvidence": [
+        "EV004"
+      ],
+      "source": "work/1081-workspace-obligations-compiler/tasks.yml",
+      "sourceLocation": {
+        "line": 4,
+        "column": 1
+      }
+    }
+  ],
+  "evidence": [
+    {
+      "id": "EV001",
+      "kind": "missing",
+      "subjectType": "task",
+      "subjectId": "T001",
+      "taskRefs": [
+        "T001"
+      ],
+      "requirementRefs": [
+        "FR-001"
+      ],
+      "artifactRefs": [],
+      "result": "missing",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/1081-workspace-obligations-compiler/evidence.yml",
+      "sourceLocation": {
+        "line": 1,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV002",
+      "kind": "missing",
+      "subjectType": "task",
+      "subjectId": "T002",
+      "taskRefs": [
+        "T002"
+      ],
+      "requirementRefs": [
+        "FR-002"
+      ],
+      "artifactRefs": [],
+      "result": "missing",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/1081-workspace-obligations-compiler/evidence.yml",
+      "sourceLocation": {
+        "line": 2,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV003",
+      "kind": "missing",
+      "subjectType": "task",
+      "subjectId": "T003",
+      "taskRefs": [
+        "T003"
+      ],
+      "requirementRefs": [
+        "FR-003"
+      ],
+      "artifactRefs": [],
+      "result": "missing",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/1081-workspace-obligations-compiler/evidence.yml",
+      "sourceLocation": {
+        "line": 3,
+        "column": 1
+      }
+    },
+    {
+      "id": "EV004",
+      "kind": "missing",
+      "subjectType": "task",
+      "subjectId": "T004",
+      "taskRefs": [
+        "T004"
+      ],
+      "requirementRefs": [
+        "FR-004"
+      ],
+      "artifactRefs": [],
+      "result": "missing",
+      "synthetic": false,
+      "performanceBudget": null,
+      "performanceEvidenceArtifact": null,
+      "performanceMeasurements": [],
+      "rationale": null,
+      "source": "work/1081-workspace-obligations-compiler/evidence.yml",
+      "sourceLocation": {
+        "line": 4,
+        "column": 1
+      }
+    }
+  ],
+  "generatedViews": [
+    {
+      "path": "readiness/1081-workspace-obligations-compiler/work-model.json",
+      "kind": "workModel",
+      "schemaVersion": 1,
+      "generator": {
+        "id": "FS.GG.SDD.Artifacts",
+        "version": "2.5.3"
+      },
+      "sources": [
+        {
+          "path": ".fsgg/agents.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "c67035b1cf31b6fa802c10f761eeb1e5bf5d198c38d159b54fac299957b5aac3"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": ".fsgg/project.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "70f2a125e819d30332e8178911cfbfaf819dac8fc85fc3d77b309660838da381"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": ".fsgg/sdd.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "fe5a7c270a975153e80ab0d08a610c9b302585dcb0b5f7c654841ceced9272cb"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/1081-workspace-obligations-compiler/charter.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "fa31bbfb1145c5b4a892dfc947e45104c636d1ff4ce819fe238dc008c2e69809"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/1081-workspace-obligations-compiler/checklist.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "44cfb4e78fd311be7535e672eb4223b7f127be4d3831a9d97d7152abb8d31f5a"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/1081-workspace-obligations-compiler/clarifications.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "dc1bd3d25ef519d874172731da24dc39ae81eec2bed5e48bc24a43bb8d09ea00"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/1081-workspace-obligations-compiler/evidence.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "412f727912ce4b7a50bb7d1480a013c7090653e0c4ac2c914aff5c1bd6517277"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/1081-workspace-obligations-compiler/plan.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "c2033b21ad91e67adee17394bcfb140cb64d9e635880ca2e01ec25f36d01185b"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/1081-workspace-obligations-compiler/spec.md",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "7f23325cc7a717de9e2bc2842953ef0f9288f681fa8c31a964919a8d399b637c"
+          },
+          "schemaVersion": 1
+        },
+        {
+          "path": "work/1081-workspace-obligations-compiler/tasks.yml",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "cce5ecdbabbbd09314f7391d7d835c36a2eb676c11c2f29b1bcee13f45ca1ed2"
+          },
+          "schemaVersion": 1
+        }
+      ],
+      "outputDigest": {
+        "algorithm": "sha256",
+        "value": "0f7f9fb07a8863ee8e056874a863360693ba7117365cacef98780decfd852c08"
+      },
+      "currency": "current"
+    }
+  ],
+  "diagnostics": [],
+  "governanceBoundaries": []
+}
