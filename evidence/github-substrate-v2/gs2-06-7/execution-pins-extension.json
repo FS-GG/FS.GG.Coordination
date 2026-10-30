@@ -112,7 +112,7 @@
     {
       "kind": "workflow",
       "path": ".github/workflows/execution-pair-forward-publish.yml",
-      "sha256": "03b1939d6cec5397bf7a0d23653de13aab72460cd3ba72298145057ae00a2f0b",
+      "sha256": "db2041b2ef90621eb16aa22a0336c5b91bc03234a8635300bb753831e7302ff8",
       "externalReferences": [
         "NuGet/login@8d196754b4036150537f80ac539e15c2f1028841",
         "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",

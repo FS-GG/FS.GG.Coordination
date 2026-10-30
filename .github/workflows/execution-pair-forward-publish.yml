@@ -87,7 +87,7 @@ jobs:
             echo "::error::ruleset App bindings are missing; complete protection evidence is unavailable"
             exit 1
           fi
-      - name: Mint a repository-scoped token solely for the complete protection read (administration write: GitHub returns ruleset bypass_actors only to write-access callers)
+      - name: Mint a repository-scoped token solely for the complete protection read (administration write, because GitHub returns ruleset bypass_actors only to write-access callers)
         id: policy
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
         with:
@@ -314,7 +314,7 @@ jobs:
           ACTUAL_INSTALLATION_ID: ${{ steps.ledger.outputs.installation-id }}
           EXPECTED_INSTALLATION_ID: ${{ secrets.FSGG_ORDINARY_LEDGER_INSTALLATION_ID }}
         run: test -n "$EXPECTED_INSTALLATION_ID" && test "$ACTUAL_INSTALLATION_ID" = "$EXPECTED_INSTALLATION_ID"
-      - name: Mint a repository-scoped token solely for the tag-protection read (administration write: bypass_actors is returned only to write-access callers)
+      - name: Mint a repository-scoped token solely for the tag-protection read (administration write, because bypass_actors is returned only to write-access callers)
         id: policy
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
         with:
