@@ -35,6 +35,7 @@ import os
 from pathlib import Path
 import re
 import shutil
+import signal
 import socket
 import stat
 import subprocess
@@ -91,7 +92,10 @@ POLICY = {
     'dotnetRuntime': '10.0.12',
     'tools': ('qemu-system-x86_64', 'qemu-img', 'systemd-run', 'systemctl', 'fallocate', 'sudo', 'gh'),
     'postingAllowanceSeconds': 300,
+    'maxCapTargets': 64,
 }
+EFFECT_TIMEOUT = 30  # every systemctl/systemd-run effect is bounded
+SCOPE_MARGIN_SECONDS = 120
 NOBLE_LOCK = 'deployment/qualification-runner/noble/acquired-input-lock.json'
 OP_PATTERN = re.compile(r'[0-9a-f]{32}')
 STEP_PATTERN = re.compile(r'[a-z][a-z0-9-]{0,23}')
@@ -104,6 +108,28 @@ class Refusal(Exception):
     def __init__(self, check, reason):
         super().__init__(f'{check}: {reason}')
         self.check, self.reason = check, reason
+
+
+class Interrupted(Exception):
+    """A termination signal turned into an exception, so the window's exit path runs."""
+
+    def __init__(self, signum):
+        super().__init__(f'signal {signal.Signals(signum).name}')
+        self.signum = signum
+
+
+SIGNALS = {'raise': True, 'pending': []}
+
+
+def _on_signal(signum, _frame):
+    if SIGNALS['raise']:
+        raise Interrupted(signum)
+    SIGNALS['pending'].append(signal.Signals(signum).name)  # during window exit: record, do not abort
+
+
+def install_signal_exceptions():
+    """SIGTERM (scope RuntimeMaxSec or stop), SIGINT and SIGHUP raise Interrupted."""
+    return {s: signal.signal(s, _on_signal) for s in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP)}
 
 
 def require(condition, check, reason):
@@ -215,7 +241,36 @@ def validate_selection(sel, caps=True, operation=True):
     validate_host_partition(sel.get('hostPartition'), None)
     require(type(sel.get('hostPartitionMaxAgeSeconds')) is int and 0 < sel['hostPartitionMaxAgeSeconds'] <= 86400,
             'selection.valid', 'hostPartitionMaxAgeSeconds bound required')
+    if sel.get('hostMemory') is not None:  # optional; when present Root must bind the floor and age
+        validate_host_memory(sel['hostMemory'], None, None)
+        require(type(sel.get('hostMemoryMinAvailableBytes')) is int and sel['hostMemoryMinAvailableBytes'] > 0
+                and type(sel.get('hostMemoryMaxAgeSeconds')) is int and 0 < sel['hostMemoryMaxAgeSeconds'] <= 86400,
+                'selection.valid', 'hostMemory needs a Root-set hostMemoryMinAvailableBytes and hostMemoryMaxAgeSeconds')
     return sel
+
+
+# ---------------------------------------------------------------------------
+# Home host-memory input (Root decision). Optional; absent means Unknown, never Supported.
+# ---------------------------------------------------------------------------
+def validate_host_memory(doc, now, max_age, floor=None):
+    check = 'capacity.host-memory'
+    require(isinstance(doc, dict) and doc.get('schema') == 'fsgg.fdev-native-home-memory/1', check,
+            'Home host-memory input fsgg.fdev-native-home-memory/1 required')
+    measured = parse_utc(doc.get('measuredAt'), check)
+    require(isinstance(doc.get('source'), str) and doc['source'].startswith('https://github.com/FS-GG/'), check,
+            'source must cite the Home post')
+    total, avail = doc.get('memTotalBytes'), doc.get('memAvailableBytes')
+    require(type(total) is int and type(avail) is int and 0 <= avail <= total, check,
+            'memTotalBytes and memAvailableBytes integers with available <= total required')
+    if now is not None:
+        age = (now - measured).total_seconds()
+        require(age >= -60, check, f'measuredAt is {-age:.0f}s in the future')
+        require(max_age is not None and age <= max_age, check,
+                f'Home host-memory reading is {age:.0f}s old; the bound is {max_age}s; re-read before the window')
+    if floor is not None:
+        require(avail >= floor, check, f'host MemAvailable {avail} is below the Root floor {floor}')
+    return {'measuredAt': doc['measuredAt'], 'source': doc['source'], 'memTotalBytes': total,
+            'memAvailableBytes': avail}
 
 
 # ---------------------------------------------------------------------------
@@ -518,6 +573,10 @@ def _pool_need(selection):
     return POLICY['guest']['rootDiskBytes'] + 24 * GIB
 
 
+def selection_marker(op, step):
+    return f'<!-- fsgg:fdev-native-selection/v1 operation={op} step={step} -->'
+
+
 def check_selection(selection, comment):
     if selection is None:
         return [row('selection.valid', UNKNOWN, None, 'no Root selection supplied; launch requires one'),
@@ -540,16 +599,21 @@ def check_selection(selection, comment):
     if comment is None:
         rows.append(row('selection.root-comment-binds-operation', UNKNOWN, None, 'Root selection comment not read'))
     else:
+        # Cooperative binding: an allowed Root account's comment on #4778 carrying the selection
+        # marker. Posts made with the same account are indistinguishable, so the marker (which the
+        # launcher's own start-witness comment never contains) is what separates a selection.
+        marker = selection_marker(selection['operationId'], selection['step'])
         ok = (comment.get('author') in POLICY['rootCommentAuthors']
               and comment.get('issueUrl', '').endswith('/FS-GG/.github/issues/4778')
-              and re.search(r'\b' + selection['operationId'] + r'\b', comment.get('body', '')) is not None)
+              and marker in comment.get('body', ''))
         rows.append(row('selection.root-comment-binds-operation', SUPPORTED if ok else UNSUPPORTED,
                         {'author': comment.get('author'), 'issueUrl': comment.get('issueUrl')},
-                        '' if ok else 'operation id absent from a Root comment on #4778'))
+                        '' if ok else f'no comment by an allowed Root account on #4778 carries {marker}'))
     return rows
 
 
-def evaluate(facts, selection=None, comment=None, host_df=None, now=None, image=None):
+def evaluate(facts, selection=None, comment=None, host_df=None, now=None, image=None, host_mem=None, mem_floor=None,
+             mem_max_age=None):
     """Every precondition, in order. Returns rows; nothing is changed."""
     rows = check_selection(selection, comment)
     if selection is not None and facts.get('claimExists') is not None:
@@ -636,6 +700,18 @@ def evaluate(facts, selection=None, comment=None, host_df=None, now=None, image=
             rows.append(row('capacity.host-partition', SUPPORTED if enough else UNSUPPORTED, reading))
         except Refusal as refusal:
             rows.append(row('capacity.host-partition', UNSUPPORTED, None, refusal.reason))
+    floor = (selection or {}).get('hostMemoryMinAvailableBytes', mem_floor)
+    max_age = (selection or {}).get('hostMemoryMaxAgeSeconds', mem_max_age)
+    if host_mem is None:
+        rows.append(row('capacity.host-memory', UNKNOWN, None, 'Home host-memory reading not supplied; never inferred'))
+    elif floor is None:
+        rows.append(row('capacity.host-memory', UNKNOWN, None, 'no Root-set host MemAvailable floor bound'))
+    else:
+        try:
+            rows.append(row('capacity.host-memory', SUPPORTED, validate_host_memory(host_mem, now, max_age, floor),
+                            f'host MemAvailable >= Root floor {floor}'))
+        except Refusal as refusal:
+            rows.append(row('capacity.host-memory', UNSUPPORTED, None, refusal.reason))
     if image is None:
         rows.append(row('image.stock-digest', UNKNOWN, None, 'stock image not hashed in this run'))
     else:
@@ -804,9 +880,7 @@ def slice_argv(remove=False):
 
 def launcher_scope_argv(selection, argv_tail):
     """The wrapper Root runs: the launcher front end bounded in its own user scope."""
-    clocks = selection['clocks']
-    runtime = sum(clocks[k] for k in ('preStartSeconds', 'usefulSeconds', 'retireSeconds', 'collectorSeconds',
-                                      'collectorRetireSeconds')) + 600
+    runtime = scope_runtime_seconds(selection['clocks'])
     name = unit_names(selection['operationId'], selection['step'])['launcher']
     return ['systemd-run', '--user', '--scope', f'--unit={name}', '-p', f'RuntimeMaxSec={runtime}',
             '-p', f'MemoryMax={POLICY["launcherScope"]["MemoryMax"]}', '-p',
@@ -913,7 +987,10 @@ def validate_home_io(doc, window):
     require(isinstance(doc.get('source'), str) and doc['source'].startswith('https://github.com/FS-GG/'),
             'io.home-evidence', 'source must cite the Home post')
     start, end = parse_utc(doc.get('observedFrom'), 'io.home-evidence'), parse_utc(doc.get('observedTo'), 'io.home-evidence')
-    require(start <= parse_utc(window['enteredAt']) and end >= parse_utc(window['exitedAt']), 'io.home-evidence',
+    require(window.get('enteredAt') and window.get('exitedAt'), 'io.home-evidence',
+            'the window has no recorded entry and exit, so no observation can cover it')
+    require(start <= parse_utc(window['enteredAt'], 'io.home-evidence')
+            and end >= parse_utc(window['exitedAt'], 'io.home-evidence'), 'io.home-evidence',
             'Home observation must cover the whole window (entry to exit)')
     iostat = doc.get('iostat', {})
     require(iostat.get('command', '').startswith('iostat -dx') and type(iostat.get('samples')) is int and
@@ -929,7 +1006,7 @@ def io_correspondence(window, home_io):
     reasons = []
     if not window.get('capsApplied', {}).get('readbackOk'):
         reasons.append('caps not read back at entry')
-    if not window.get('capsRemoved', {}).get('readbackOk'):
+    if not window.get('capsRemoved', {}).get('readbackOk') or window.get('capsRemoved', {}).get('errors'):
         reasons.append('caps not read back as removed at exit')
     if not (window.get('ioStatBefore') and window.get('ioStatAfter') and window.get('psiBefore') and window.get('psiAfter')):
         reasons.append('fdev io.stat/PSI not captured at both ends')
@@ -949,7 +1026,7 @@ def io_correspondence(window, home_io):
 def build_evidence(selection, rows, window, home_io=None):
     return {'schema': EVIDENCE_SCHEMA, 'operationId': selection['operationId'], 'step': selection['step'],
             'owningIssue': POLICY['owningIssue'], 'hostKind': POLICY['hostKind'],
-            'sharedCodexHost': shared_codex_host(rows), 'ioSharedWithHostCoTenants': True,
+            'sharedCodexHost': window_shared(rows, window), 'ioSharedWithHostCoTenants': True,
             'independence': {'fromFdev': False, 'fromHome': False},
             'custody': 'cooperative', 'tamperProof': False,
             'preflight': rows, 'window': window, 'ioCorrespondence': io_correspondence(window, home_io)}
@@ -966,8 +1043,9 @@ def validate_evidence(doc):
             'custody is cooperative and never tamper-proof')
     rows = doc.get('preflight')
     require(isinstance(rows, list) and rows, 'evidence.preflight', 'preflight rows required')
-    require(doc.get('sharedCodexHost') is shared_codex_host(rows), 'evidence.shared-codex-host',
-            'sharedCodexHost must equal the recorded exclusivity checks')
+    require(isinstance(doc.get('window'), dict), 'evidence.window', 'window record required')
+    require(doc.get('sharedCodexHost') is window_shared(rows, doc['window']), 'evidence.shared-codex-host',
+            'sharedCodexHost must follow from the entry and exit exclusivity checks and new lane units')
     io = doc.get('ioCorrespondence', {})
     require(io.get('status') in (IO_NOT_ESTABLISHED, IO_CAPTURED), 'evidence.io-correspondence',
             'status is not-established or window-evidence-captured-awaiting-root; never established by fdev')
@@ -997,8 +1075,13 @@ class Executor:
         self.timeout = timeout
 
     def run(self, argv, effect, timeout=None):
-        done = subprocess.run(argv, capture_output=True, timeout=timeout or self.timeout, check=False,
-                              stdin=subprocess.DEVNULL)
+        try:
+            done = subprocess.run(argv, capture_output=True, timeout=timeout or self.timeout, check=False,
+                                  stdin=subprocess.DEVNULL)
+        except subprocess.TimeoutExpired:
+            raise Refusal(f'effect.{effect}', f'timed out after {timeout or self.timeout}s') from None
+        except OSError as error:
+            raise Refusal(f'effect.{effect}', repr(error)) from None
         require(done.returncode == 0, f'effect.{effect}',
                 f'exit {done.returncode}: {done.stderr.decode("utf-8", "replace")[-2000:]}')
         return done.stdout.decode('utf-8', 'replace')
@@ -1086,8 +1169,41 @@ def terminal(props):
     return props.get('ActiveState') in ('inactive', 'failed') or props.get('SubState') == 'exited'
 
 
-def check_launcher_scope(host, selection):
-    """The front end must itself be bounded: its own user scope with finite limits."""
+def parse_timespan_seconds(text):
+    """Parse a systemd timespan as `systemctl show` prints it ('2h 31min 40s', '1d', or raw usec)."""
+    require(isinstance(text, str) and text.strip() and text.strip() != 'infinity', 'scope.bounded',
+            f'finite timespan required, got {text!r}')
+    text = text.strip()
+    if text.isdigit():
+        return int(text) / 1e6
+    units = {'us': 1e-6, 'usec': 1e-6, 'ms': 1e-3, 'msec': 1e-3, 's': 1, 'sec': 1, 'min': 60, 'm': 60,
+             'h': 3600, 'hr': 3600, 'd': 86400, 'w': 604800}
+    parts = re.findall(r'(\d+(?:\.\d+)?)\s*([a-z]+)', text)
+    require(parts and re.fullmatch(r'(\s*\d+(?:\.\d+)?\s*[a-z]+)+\s*', text) is not None
+            and all(unit in units for _, unit in parts), 'scope.bounded', f'unparsed timespan {text!r}')
+    return sum(float(value) * units[unit] for value, unit in parts)
+
+
+def internal_bound(clocks, n_targets):
+    """Longest the front end can run on its abnormal path: entry effects within the pre-start cut,
+    guest observation + 60 s then a bounded stop, collector observation + 60 s then a bounded stop,
+    and window exit. The launcher scope's RuntimeMaxSec must be strictly larger, so the internal
+    bounds always expire first and the window still exits."""
+    entry = clocks['preStartSeconds'] + (2 * n_targets + 10) * EFFECT_TIMEOUT
+    guest = clocks['usefulSeconds'] + clocks['retireSeconds'] + 60 + clocks['retireSeconds'] + EFFECT_TIMEOUT
+    collector = (clocks['collectorSeconds'] + clocks['collectorRetireSeconds'] + 60 + clocks['collectorRetireSeconds']
+                 + EFFECT_TIMEOUT)
+    exit_ = (n_targets + 6) * EFFECT_TIMEOUT
+    return entry + guest + collector + exit_
+
+
+def scope_runtime_seconds(clocks):
+    return internal_bound(clocks, POLICY['maxCapTargets']) + SCOPE_MARGIN_SECONDS
+
+
+def check_launcher_scope(host, selection, n_targets):
+    """The front end must itself be bounded: its own user scope with finite limits whose
+    RuntimeMaxSec strictly exceeds every internal bound on the abnormal path."""
     name = unit_names(selection['operationId'], selection['step'])['launcher']
     props = unit_show(host, name, user=True)
     require(props.get('ActiveState') == 'active', 'scope.bounded',
@@ -1096,19 +1212,81 @@ def check_launcher_scope(host, selection):
     require(self_cg.rstrip('/').endswith('/' + name), 'scope.bounded', f'launcher runs in {self_cg}, not {name}')
     for key in ('RuntimeMaxUSec', 'MemoryMax', 'TasksMax'):
         require(props.get(key) not in (None, '', 'infinity'), 'scope.bounded', f'{name} has no finite {key}')
+    runtime = parse_timespan_seconds(props['RuntimeMaxUSec'])
+    needed = internal_bound(selection['clocks'], n_targets)
+    require(runtime > needed, 'scope.bounded',
+            f'{name} RuntimeMaxSec {runtime:.0f}s does not exceed the internal bound {needed}s')
     return props
+
+
+GONE_MARKERS = ('not found', 'not loaded', 'no such unit', 'does not exist')
+
+
+def _gone(reason):
+    return any(marker in reason.lower() for marker in GONE_MARKERS)
+
+
+def remove_caps_all(host, executor, targets, devices, uid):
+    """Attempt every removal. 'Unit not found' means already gone; any other error is kept per
+    target. The kernel readback decides whether a cap is still present."""
+    results = []
+    for target in targets:
+        entry = {'unit': target['unit'], 'cgroup': target['cgroup']}
+        try:
+            executor.run(cap_remove_argv(target, uid), 'io.cap-remove', timeout=EFFECT_TIMEOUT)
+            entry['result'] = 'removed'
+        except Exception as error:  # every target is attempted whatever happened to the previous one
+            reason = error.reason if isinstance(error, Refusal) else repr(error)
+            entry.update({'result': 'already-gone'} if _gone(reason) else {'result': 'error', 'error': reason})
+        results.append(entry)
+    failures = [] if isinstance(executor, PlanOnly) else readback_removed(host, targets, devices)
+    errors = [r for r in results if r['result'] == 'error']
+    return {'targets': results, 'errors': errors, 'failures': failures, 'readbackOk': not failures,
+            'pending': bool(failures or errors), 'at': utc_text(host.now())}
+
+
+def revert_slices(executor):
+    errors = []
+    for argv in slice_argv(remove=True):
+        try:
+            executor.run(argv, 'slice.revert', timeout=EFFECT_TIMEOUT)
+        except Exception as error:
+            reason = error.reason if isinstance(error, Refusal) else repr(error)
+            if not _gone(reason):
+                errors.append({'argv': argv, 'error': reason})
+    return errors
+
+
+def window_shared(rows, window):
+    """Root ruling: sharedCodexHost is false only when the exclusivity checks pass at window entry
+    AND at window exit, and no new lane unit appeared uncapped during the window."""
+    if shared_codex_host(rows):
+        return True
+    exit_rows = window.get('exitExclusivity')
+    if not exit_rows or shared_codex_host(exit_rows):
+        return True
+    return window.get('newUncappedUnitsDuringWindow') != []
+
+
+def record_path(op):
+    """Durable window record, outside the run directory (which may never be created)."""
+    return f'{POLICY["claimsDir"]}/{op}.window.json'
+
+
+def window_exit_directive(run_dir):
+    return (f'{sys.executable} -I -B {Path(__file__).resolve()} window-exit --manifest {run_dir}/caps-manifest.json')
 
 
 class Window:
     """One launch. Holds what must be undone, so every exit path removes the caps."""
 
-    def __init__(self, host, executor, selection, facts, rows, run_root=None, poll=5.0):
+    def __init__(self, host, executor, selection, facts, rows, targets, run_root=None, poll=5.0):
         self.host, self.ex, self.sel, self.facts, self.rows = host, executor, selection, facts, rows
         self.op, self.step = selection['operationId'], selection['step']
         self.names = unit_names(self.op, self.step)
         self.run_dir = f'{run_root or POLICY["runsDir"]}/{self.op}'
         self.devices = sorted({d for d in facts['hddDevices'].values() if d})
-        self.targets = cap_targets(facts)
+        self.targets = targets
         self.uid = os.getuid()
         self.poll = poll
         self.record = {'units': self.names, 'runDir': self.run_dir, 'devices': self.devices,
@@ -1120,7 +1298,8 @@ class Window:
             sort_keys=True))
         self.record['capsPending'] = True
         for target in self.targets:
-            self.ex.run(cap_apply_argv(target, self.devices, self.sel['ioCaps'], self.uid), 'io.cap-apply')
+            self.ex.run(cap_apply_argv(target, self.devices, self.sel['ioCaps'], self.uid), 'io.cap-apply',
+                        timeout=EFFECT_TIMEOUT)
         failures = [] if isinstance(self.ex, PlanOnly) else readback_caps(self.host, self.targets, self.devices,
                                                                          self.sel['ioCaps'])
         self.record['capsApplied'] = {'readbackOk': not failures, 'failures': failures,
@@ -1128,18 +1307,11 @@ class Window:
         require(not failures, 'io.cap-readback', f'io.max readback differs: {failures}')
 
     def remove_caps(self):
-        errors = []
-        for target in self.targets:
-            try:
-                self.ex.run(cap_remove_argv(target, self.uid), 'io.cap-remove')
-            except Refusal as refusal:
-                errors.append(refusal.reason)
-        failures = [] if isinstance(self.ex, PlanOnly) else readback_removed(self.host, self.targets, self.devices)
-        self.record['capsRemoved'] = {'readbackOk': not failures and not errors, 'failures': failures,
-                                      'errors': errors, 'at': utc_text(self.host.now())}
-        self.record['capsPending'] = bool(failures or errors)
+        removal = remove_caps_all(self.host, self.ex, self.targets, self.devices, self.uid)
+        self.record['capsRemoved'] = removal
+        self.record['capsPending'] = removal['pending']
 
-    def observe_terminal(self, unit, bound_seconds):
+    def observe_terminal(self, unit, bound_seconds, stop_seconds):
         if isinstance(self.ex, PlanOnly):
             return {'planned': True}
         deadline = self.host.monotonic() + bound_seconds
@@ -1151,11 +1323,22 @@ class Window:
                 props['populated'] = 'populated 0' not in events if events else False
                 return props
             if self.host.monotonic() >= deadline:
-                self.ex.run(['sudo', '-n', 'systemctl', 'stop', unit], 'unit.stop-on-bound')
+                self.ex.run(['sudo', '-n', 'systemctl', 'stop', unit], 'unit.stop-on-bound',
+                            timeout=stop_seconds + EFFECT_TIMEOUT)
                 props = unit_show(self.host, unit)
                 props['boundExceeded'] = True
                 return props
             time.sleep(self.poll)
+
+
+def guest_outcome(guest):
+    ok = (guest.get('Result') == 'success' and guest.get('ExecMainStatus') == '0'
+          and not guest.get('boundExceeded'))
+    return 'completed-awaiting-readback' if ok else 'guest-failed-awaiting-readback'
+
+
+ENTRY_RECHECKS = ('memory.available', 'pool.free-space', 'capacity.host-partition', 'capacity.host-memory',
+                  *EXCLUSIVITY_CHECKS)
 
 
 def launch(host, executor, selection, facts, rows, run_root=None, github=None, poll=5.0, plan_ungated=False,
@@ -1164,53 +1347,61 @@ def launch(host, executor, selection, facts, rows, run_root=None, github=None, p
 
     `github` supplies the start witness and Date reads (injected in tests).
     `plan_ungated` lets a dry run list the full plan despite refusing rows; it is
-    accepted only with the PlanOnly executor, which performs nothing."""
+    accepted only with the PlanOnly executor, which performs nothing.
+    After the claim, every path (refusal, error, signal) runs window exit, writes the durable
+    window record, and raises io.cap-remove-pending with a window-exit directive if a cap may remain."""
     require(not plan_ungated or isinstance(executor, PlanOnly), 'launch.gate', 'only a dry run may plan ungated')
     if not plan_ungated:
         refuse_unless_all_supported(rows)
         require(not shared_codex_host(rows), 'exclusive.window',
                 'sharedCodexHost would be true; the window is not exclusive')
+    targets = cap_targets(facts)
+    require(len(targets) <= POLICY['maxCapTargets'], 'io.cap-scope',
+            f'{len(targets)} cap targets exceed the bounded maximum {POLICY["maxCapTargets"]}')
     if not isinstance(executor, PlanOnly):
-        check_launcher_scope(host, selection)
-    win = Window(host, executor, selection, facts, rows, run_root, poll)
+        check_launcher_scope(host, selection, len(targets))
+    win = Window(host, executor, selection, facts, rows, targets, run_root, poll)
     clocks = selection['clocks']
-    claim_path = f'{POLICY["claimsDir"]}/{selection["operationId"]}'
-    executor.create_claim(claim_path, {'operationId': win.op, 'step': win.step, 'claimedAt': utc_text(host.now()),
-                                       'bootId': _try(lambda: host.read('/proc/sys/kernel/random/boot_id').strip()),
-                                       'launcherPid': os.getpid()})
+    observe_now = reobserve or (lambda: observe(host, selection))
+    executor.create_claim(f'{POLICY["claimsDir"]}/{win.op}', {
+        'operationId': win.op, 'step': win.step, 'claimedAt': utc_text(host.now()),
+        'bootId': _try(lambda: host.read('/proc/sys/kernel/random/boot_id').strip()), 'launcherPid': os.getpid()})
     claim_mono = host.monotonic()
-    start_witness = github.post_start_witness(win.op, win.step) if github else None
-    win.record['startWitness'] = utc_text(start_witness) if start_witness else None
     win.record['outcome'] = 'refused'
+    first = None
     try:
+        start_witness = github.post_start_witness(win.op, win.step) if github else None
+        win.record['startWitness'] = utc_text(start_witness) if start_witness else None
+        entry_facts = facts
         if not isinstance(executor, PlanOnly):
-            # Capacity re-read hook at window entry: pool free space and MemAvailable again.
-            fresh = reobserve() if reobserve else observe(host, selection)
-            again = evaluate(fresh, selection, None, selection['hostPartition'], host.now())
-            again = [r for r in again if r['check'] in ('memory.available', 'pool.free-space', 'capacity.host-partition',
-                                                        *EXCLUSIVITY_CHECKS)]
-            refuse_unless_all_supported(again)
+            # Capacity and exclusivity re-read hook at window entry, after the claim.
+            entry_facts = observe_now()
+            again = evaluate(entry_facts, selection, None, selection['hostPartition'], host.now(),
+                             host_mem=selection.get('hostMemory'))
+            refuse_unless_all_supported([r for r in again if r['check'] in ENTRY_RECHECKS])
         executor.mkdir(win.run_dir, 0o700)
         win.record['enteredAt'] = utc_text(host.now())
-        win.record['ioStatBefore'] = facts.get('ioStat')
-        win.record['psiBefore'] = facts.get('ioPressure')
+        win.record['ioStatBefore'] = entry_facts.get('ioStat')
+        win.record['psiBefore'] = entry_facts.get('ioPressure')
         win.apply_caps()
         win.record['slicesSet'] = True
         for argv in slice_argv():
-            executor.run(argv, 'slice.properties')
+            executor.run(argv, 'slice.properties', timeout=EFFECT_TIMEOUT)
         if not (facts.get('commitRoot') or {}).get('exists'):
             executor.mkdir(POLICY['commitRoot'], 0o700)
         image_path = selection['image']['path']
         expected = lock_image_sha(NOBLE_LOCK)
         if not isinstance(executor, PlanOnly):
-            actual, size = sha256_file(image_path)
+            actual, _size = sha256_file(image_path)
             require(actual == expected, 'image.stock-digest', f'{image_path} sha256 {actual} != lock pin {expected}')
             for disk in selection.get('readOnlyDisks', []):
                 got, _ = sha256_file(disk['path'])
                 require(got == disk['sha256'], 'disk.digest', f'{disk["path"]} sha256 differs from the selection')
         win.record['image'] = {'path': image_path, 'sha256': expected}
         for argv in disk_prep_argv(win.run_dir, image_path):
-            executor.run(argv, 'disk.prepare', timeout=clocks['preStartSeconds'])
+            remaining = clocks['preStartSeconds'] - (host.monotonic() - claim_mono)
+            require(remaining > 0, 'clock.pre-start', 'pre-start cut exhausted during disk preparation')
+            executor.run(argv, 'disk.prepare', timeout=remaining)
         guest_uuid = str(uuidlib.uuid4())
         win.record['guestUuid'] = guest_uuid
         if not isinstance(executor, PlanOnly):
@@ -1219,39 +1410,75 @@ def launch(host, executor, selection, facts, rows, run_root=None, github=None, p
                 reserve = clocks['usefulSeconds'] + clocks['retireSeconds'] + clocks['collectorSeconds'] + clocks[
                     'collectorRetireSeconds']
                 check_enclosing(start_witness, github.date(), clocks, reserve)
-        executor.run(guest_unit_argv(selection, win.run_dir, guest_uuid), 'unit.start-guest')
+        executor.run(guest_unit_argv(selection, win.run_dir, guest_uuid), 'unit.start-guest', timeout=EFFECT_TIMEOUT)
         win.record['guest'] = win.observe_terminal(win.names['guest'], clocks['usefulSeconds'] + clocks[
-            'retireSeconds'] + 60)
-        executor.run(collector_unit_argv(selection, win.run_dir), 'unit.start-collector')
+            'retireSeconds'] + 60, clocks['retireSeconds'])
+        if github and not isinstance(executor, PlanOnly):
+            check_enclosing(start_witness, github.date(), clocks,
+                            clocks['collectorSeconds'] + clocks['collectorRetireSeconds'])
+        executor.run(collector_unit_argv(selection, win.run_dir), 'unit.start-collector', timeout=EFFECT_TIMEOUT)
         win.record['collector'] = win.observe_terminal(win.names['collector'], clocks['collectorSeconds'] + clocks[
-            'collectorRetireSeconds'] + 60)
-        win.record['outcome'] = 'completed-awaiting-readback'
+            'collectorRetireSeconds'] + 60, clocks['collectorRetireSeconds'])
+        win.record['outcome'] = guest_outcome(win.record['guest']) if not isinstance(executor, PlanOnly) else 'planned'
     except Refusal as refusal:
+        first = refusal
         win.record['firstFailure'] = {'check': refusal.check, 'reason': refusal.reason}
-        raise
-    except Exception as error:  # first failure is preserved; the window still exits
-        win.record['firstFailure'] = {'check': 'launch.unexpected', 'reason': repr(error)}
-        raise
-    finally:
+    except BaseException as error:  # signals arrive as Interrupted; the window still exits
+        first = error
+        check = 'launch.signal' if isinstance(error, Interrupted) else 'launch.unexpected'
+        win.record['firstFailure'] = {'check': check, 'reason': repr(error)}
+    if first is not None and 'guest' in win.record:
+        win.record['outcome'] = 'failed-awaiting-readback'
+    SIGNALS['raise'] = False  # window exit is not interrupted; further signals are recorded
+    try:
         if win.record.get('capsPending') is not None:
             win.remove_caps()
         if win.record.get('slicesSet'):
-            for argv in slice_argv(remove=True):
-                try:
-                    executor.run(argv, 'slice.revert')
-                except Refusal as refusal:
-                    win.record.setdefault('exitErrors', []).append(refusal.reason)
+            win.record['sliceRevertErrors'] = revert_slices(executor)
         win.record['exitedAt'] = utc_text(host.now())
         if not isinstance(executor, PlanOnly):
-            post = reobserve() if reobserve else observe(host, selection)
-            win.record['ioStatAfter'], win.record['psiAfter'] = post.get('ioStat'), post.get('ioPressure')
-            capped = {t['cgroup'] for t in win.targets}
-            win.record['newUncappedUnitsDuringWindow'] = sorted(
-                l['cgroup'] for l in post['lanes']['lanes'] if l['cgroup'] not in capped)
+            try:
+                post = observe_now()
+                own = set(win.names.values())
+                post = dict(post, units=dict(post.get('units') or {}, native=[
+                    n for n in (post.get('units') or {}).get('native') or [] if n not in own]))
+                win.record['ioStatAfter'], win.record['psiAfter'] = post.get('ioStat'), post.get('ioPressure')
+                win.record['exitExclusivity'] = check_exclusivity(post)
+                capped = {t['cgroup'] for t in win.targets}
+                win.record['newUncappedUnitsDuringWindow'] = sorted(
+                    l['cgroup'] for l in post['lanes']['lanes'] if l['cgroup'] not in capped)
+            except Exception as error:
+                win.record['exitObservationError'] = repr(error)
+        if win.record.get('capsPending'):
+            win.record['windowExitDirective'] = window_exit_directive(win.run_dir)
+        win.record['signalsDuringExit'] = list(SIGNALS['pending'])
         evidence = build_evidence(selection, rows, win.record)
-        if os.path.isdir(win.run_dir) and not isinstance(executor, PlanOnly):
-            executor.write(f'{win.run_dir}/window-evidence.json', json.dumps(evidence, indent=1, sort_keys=True))
         win.evidence = evidence
+        body = json.dumps(evidence, indent=1, sort_keys=True)
+        try:
+            executor.write(record_path(win.op), body)
+            win.record_path = record_path(win.op)
+        except Exception as error:
+            win.record_path = None
+            win.record['recordWriteError'] = repr(error)
+        if os.path.isdir(win.run_dir) and not isinstance(executor, PlanOnly):
+            try:
+                executor.write(f'{win.run_dir}/window-evidence.json', body)
+            except Exception as error:
+                win.record['runDirWriteError'] = repr(error)
+    finally:
+        SIGNALS['raise'] = True
+    if win.record.get('capsPending'):
+        pending = Refusal('io.cap-remove-pending',
+                          f'caps may remain ({len(win.record["capsRemoved"]["errors"])} errors, '
+                          f'{len(win.record["capsRemoved"]["failures"])} still present); run: '
+                          + win.record['windowExitDirective'])
+        pending.window = win
+        raise pending from first
+    if first is not None:
+        if isinstance(first, Refusal):
+            first.window = win
+        raise first
     return win
 
 
@@ -1267,14 +1494,19 @@ def dry_run(host, selection, facts, rows):
 
 
 def window_exit(host, executor, manifest_path):
-    """Recovery: remove the caps a crashed window recorded. Idempotent."""
+    """Recovery after a crashed window. Attempts every removal (an absent unit is already gone),
+    reverts both native slices, reads back, and refuses only if a cap is still present."""
     manifest = load_json(manifest_path)
     validate_operation_id(manifest.get('operationId'))
-    for target in manifest['targets']:
-        executor.run(cap_remove_argv(target, os.getuid()), 'io.cap-remove')
-    failures = readback_removed(host, manifest['targets'], manifest['devices'])
-    require(not failures, 'io.cap-remove-readback', f'caps still present: {failures}')
-    return {'removed': len(manifest['targets']), 'readbackOk': True}
+    removal = remove_caps_all(host, executor, manifest['targets'], manifest['devices'], os.getuid())
+    result = {'operationId': manifest['operationId'], 'targets': removal['targets'], 'errors': removal['errors'],
+              'sliceRevertErrors': revert_slices(executor), 'failures': removal['failures'],
+              'readbackOk': removal['readbackOk']}
+    if not removal['readbackOk']:
+        refusal = Refusal('io.cap-remove-readback', f'caps still present: {removal["failures"]}')
+        refusal.result = result
+        raise refusal
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -1373,6 +1605,9 @@ def main(argv=None):
         p.add_argument('--selection')
         p.add_argument('--host-partition-df', help='Home df input (fsgg.fdev-native-home-df/1)')
         p.add_argument('--host-partition-max-age', type=int, default=None)
+        p.add_argument('--host-memory', help='Home host-memory input (fsgg.fdev-native-home-memory/1)')
+        p.add_argument('--host-memory-floor', type=int, default=None, help='Root-set host MemAvailable floor (bytes)')
+        p.add_argument('--host-memory-max-age', type=int, default=None)
         p.add_argument('--image', help='hash this stock image against the noble lock pin')
         p.add_argument('--privileged-census', action='store_true', help='read pool writers via sudo -n (read-only)')
         p.add_argument('--no-github', action='store_true', help='skip reading the Root selection comment')
@@ -1405,7 +1640,9 @@ def main(argv=None):
             if selection and not args.no_github:
                 comment = _try(lambda: GitHub(None, host).comment(selection['rootSelection']['commentId']))
             facts = observe(host, selection, args.privileged_census)
-            rows = evaluate(facts, selection, comment, host_df, host.now(), image)
+            host_mem = load_json(args.host_memory) if args.host_memory else (selection or {}).get('hostMemory')
+            rows = evaluate(facts, selection, comment, host_df, host.now(), image, host_mem,
+                            args.host_memory_floor, args.host_memory_max_age)
             if args.command == 'preflight':
                 print(json.dumps({'schema': 'fsgg.fdev-native-preflight/1', 'observedAt': facts['observedAt'],
                                   'changesMade': False, 'summary': _summary(rows), 'rows': rows}, indent=1))
@@ -1416,11 +1653,12 @@ def main(argv=None):
                 return 0 if not result['wouldRefuse'] else 2
             validate_selection(selection)
             executor = Executor()
+            install_signal_exceptions()
             win = launch(host, executor, selection, facts, rows, github=GitHub(executor, host))
             print(json.dumps(win.evidence, indent=1, sort_keys=True))
             return 0
         if args.command == 'window-exit':
-            print(json.dumps(window_exit(host, Executor(), args.manifest))); return 0
+            print(json.dumps(window_exit(host, Executor(), args.manifest), indent=1)); return 0
         if args.command == 'attach-home-io':
             print(json.dumps(attach_home_io(load_json(args.evidence), load_json(args.home_io)), indent=1)); return 0
         if args.command == 'validate-evidence':
@@ -1433,7 +1671,15 @@ def main(argv=None):
             print(json.dumps(collect(host, args.run_dir, args.guest_unit, args.operation, args.export_dir), indent=1))
             return 0
     except Refusal as refusal:
-        print(json.dumps({'refused': {'check': refusal.check, 'reason': refusal.reason}}), file=sys.stderr)
+        report = {'refused': {'check': refusal.check, 'reason': refusal.reason}}
+        window = getattr(refusal, 'window', None)
+        if window is not None:
+            report['windowRecord'] = getattr(window, 'record_path', None)
+            report['windowExitDirective'] = window.record.get('windowExitDirective')
+            report['firstFailure'] = window.record.get('firstFailure')
+        if getattr(refusal, 'result', None) is not None:
+            report['windowExit'] = refusal.result
+        print(json.dumps(report, indent=1), file=sys.stderr)
         return 3
     return 1
 

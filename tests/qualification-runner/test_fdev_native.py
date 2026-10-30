@@ -4,18 +4,23 @@ No VM, guest, unit, cap, claim or GitHub effect is performed: effects go to a re
 executor over a temporary cgroup tree, and every fail-closed check is shown to refuse
 on its own with zero effects before the point of failure.
 """
+import contextlib
 import copy
 import datetime as dt
 import hashlib
 import importlib.util
+import io
 import json
 import os
 from pathlib import Path
+import shutil
+import signal
 import socket
 import subprocess
 import sys
 import tempfile
 import threading
+import time
 import unittest
 from unittest import mock
 
@@ -43,6 +48,12 @@ def host_df(measured='2026-10-30T18:24:13Z'):
             'source': 'https://github.com/FS-GG/.github/issues/4778#issuecomment-6530390005', 'dfOutput': HOME_DF}
 
 
+def host_memory(measured='2026-10-30T18:30:00Z', avail=12 * 1024 ** 3):
+    return {'schema': 'fsgg.fdev-native-home-memory/1', 'measuredAt': measured,
+            'source': 'https://github.com/FS-GG/.github/issues/4778#issuecomment-3', 'memTotalBytes': 66_500_000_000,
+            'memAvailableBytes': avail}
+
+
 def selection():
     return {'schema': 'fsgg.fdev-native-window-selection/1', 'operationId': OP, 'step': 'bake',
             'rootSelection': {'issue': 'FS-GG/.github#4778', 'commentId': 1},
@@ -52,12 +63,14 @@ def selection():
             'exemptCgroups': [ROOT_SESSION],
             'rootDrainAttestation': 'https://github.com/FS-GG/.github/issues/4778#issuecomment-1',
             'image': {'path': '/srv/v3-pool/native/inputs/noble.img', 'lock': fn.NOBLE_LOCK},
-            'readOnlyDisks': [], 'seedDir': None, 'hostPartition': host_df(), 'hostPartitionMaxAgeSeconds': 7200}
+            'readOnlyDisks': [], 'seedDir': None, 'hostPartition': host_df(), 'hostPartitionMaxAgeSeconds': 7200,
+            'hostMemory': host_memory(), 'hostMemoryMinAvailableBytes': 8 * 1024 ** 3, 'hostMemoryMaxAgeSeconds': 7200}
 
 
 def comment():
     return {'author': 'EHotwagner', 'issueUrl': 'https://github.com/FS-GG/.github/issues/4778',
-            'body': f'Root selects operation {OP} for the bake step.'}
+            'body': f'Root selects operation {OP} for the bake step.\n'
+                    f'<!-- fsgg:fdev-native-selection/v1 operation={OP} step=bake -->'}
 
 
 def facts():
@@ -93,15 +106,16 @@ def facts():
 IMAGE = {'path': '/x', 'expected': 'a' * 64, 'sha256': 'a' * 64, 'match': True}
 
 
-def rows(f=None, s=None, c=None, d=None, image=None, now=NOW):
-    return fn.evaluate(f or facts(), s or selection(), c if c is not None else comment(),
-                       d if d is not None else host_df(), now, image or IMAGE)
+def rows(f=None, s=None, c=None, d=None, image=None, now=NOW, m=None):
+    s = s or selection()
+    return fn.evaluate(f or facts(), s, c if c is not None else comment(),
+                       d if d is not None else host_df(), now, image or IMAGE, m if m is not None else s['hostMemory'])
 
 
 # One mutation per fail-closed check. Each must flip exactly its own row.
 def _set(path, value):
     def apply(f, s, c, d, image):
-        target = {'f': f, 's': s, 'c': c, 'd': d, 'i': image}[path[0]]
+        target = {'f': f, 's': s, 'c': c, 'd': d, 'i': image, 'm': s['hostMemory']}[path[0]]
         for key in path[1:-1]:
             target = target[key]
         target[path[-1]] = value
@@ -111,7 +125,7 @@ def _set(path, value):
 MUTATIONS = {
     'selection.valid': _set(('s', 'schema'), 'other/1'),
     'selection.operation-not-retired': _set(('s', 'operationId'), 'd2f2171d7c5d55aacdc560a09e19b46a'),
-    'selection.root-comment-binds-operation': _set(('c', 'body'), 'Root selects another operation.'),
+    'selection.root-comment-binds-operation': _set(('c', 'body'), f'Root selects operation {OP} without the marker.'),
     'claim.absent': _set(('f', 'claimExists'), True),
     'kvm.device': _set(('f', 'kvm', 'rw'), False),
     'kvm.nested': _set(('f', 'kvm', 'nested'), '0'),
@@ -136,6 +150,7 @@ MUTATIONS = {
     'io.no-stale-caps': _set(('f', 'ioMax', STORE), ['254:80 rbps=max wbps=1000 riops=max wiops=max']),
     'services.cap-targets-resolved': _set(('f', 'services', 0, 'uid'), None),
     'capacity.host-partition': _set(('d', 'measuredAt'), '2026-10-29T18:24:13Z'),
+    'capacity.host-memory': _set(('m', 'memAvailableBytes'), 8 * 1024 ** 3 - 1),
     'image.stock-digest': _set(('i', 'match'), False),
     'dotnet.runtime': _set(('f', 'dotnetRuntimes'), ['10.0.11']),
 }
@@ -179,6 +194,7 @@ class RecordingExecutor(fn.Executor):
         super().__init__()
         self.host, self.effects, self.fail_effect = host, [], fail_effect
         self.cap_value, self.refuse_claim = cap_value, refuse_claim
+        self.written = {}
 
     def run(self, argv, effect, timeout=None):
         self.effects.append((effect, argv))
@@ -211,6 +227,7 @@ class RecordingExecutor(fn.Executor):
 
     def write(self, path, data, mode=0o600):
         self.effects.append(('write', path))
+        self.written[path] = data
 
     def kinds(self):
         return [effect for effect, _ in self.effects]
@@ -239,7 +256,7 @@ class PreflightChecks(unittest.TestCase):
             with self.subTest(check=check):
                 f, s, c, d, image = facts(), selection(), comment(), host_df(), dict(IMAGE)
                 mutate(f, s, c, d, image)
-                result = fn.evaluate(f, s, c, d, NOW, image)
+                result = fn.evaluate(f, s, c, d, NOW, image, s['hostMemory'])
                 bad = [(r['check'], r['status']) for r in result if r['status'] != fn.SUPPORTED]
                 if check in ('selection.valid', 'selection.operation-not-retired'):
                     # an invalid selection cannot be bound to a comment, so that row is Unknown by design
@@ -265,6 +282,12 @@ class PreflightChecks(unittest.TestCase):
                       'image.stock-digest'):
             self.assertEqual(result[check]['status'], fn.UNKNOWN, check)
 
+    def test_retired_full_identity_refuses_as_retired(self):
+        for op in fn.POLICY['retiredOperations']:
+            with self.assertRaises(fn.Refusal) as caught:
+                fn.validate_operation_id(op)
+            self.assertIn('retired identity', caught.exception.reason)
+
     def test_retired_short_prefix_refuses(self):
         for op in ('2ae4ffffffffffffffffffffffffffff', '83a08fffffffffffffffffffffffffff'):
             with self.assertRaises(fn.Refusal):
@@ -281,6 +304,37 @@ class PreflightChecks(unittest.TestCase):
                 fn.validate_host_partition(doc, NOW, max_age)
         tight = host_df(); tight['dfOutput'] = HOME_DF.replace('13590403108864', '1000')
         self.assertEqual({r['check']: r['status'] for r in rows(d=tight)}['capacity.host-partition'], fn.UNSUPPORTED)
+
+    def test_host_memory_absent_or_unbound_is_unknown_and_stale_or_low_refuses(self):
+        def status(**kw):
+            return {r['check']: r for r in fn.evaluate(facts(), kw.get('s', selection()), comment(), host_df(), NOW, IMAGE,
+                                                        kw.get('m'), kw.get('floor'), kw.get('age'))}['capacity.host-memory']
+        self.assertEqual(status(m=None)['status'], fn.UNKNOWN)
+        self.assertEqual(status(s=None, m=host_memory())['status'], fn.UNKNOWN, 'no Root floor bound')
+        self.assertEqual(status(s=None, m=host_memory(), floor=8 * fn.GIB, age=7200)['status'], fn.SUPPORTED)
+        self.assertEqual(status(m=host_memory(measured='2026-10-30T10:00:00Z'))['status'], fn.UNSUPPORTED)
+        self.assertEqual(status(m=dict(host_memory(), memAvailableBytes=10 ** 12))['status'], fn.UNSUPPORTED)
+        with self.assertRaises(fn.Refusal):
+            fn.refuse_unless_all_supported(fn.evaluate(facts(), selection(), comment(), host_df(), NOW, IMAGE, None))
+        unbound = selection(); del unbound['hostMemoryMinAvailableBytes']
+        with self.assertRaises(fn.Refusal):
+            fn.validate_selection(unbound)
+        absent = selection()
+        for key in ('hostMemory', 'hostMemoryMinAvailableBytes', 'hostMemoryMaxAgeSeconds'):
+            del absent[key]
+        fn.validate_selection(absent)  # optional input: absence is valid and reports Unknown
+
+    def test_launchers_own_witness_comment_cannot_bind_a_selection(self):
+        body = (f'fdev native claim: operation `{OP}` step `bake` claimed. Start witness. '
+                'Cooperative custody; not independent of fdev or Home.')
+        witness = {'author': 'EHotwagner', 'issueUrl': 'https://github.com/FS-GG/.github/issues/4778', 'body': body}
+        self.assertEqual(fn.check_selection(selection(), witness)[-1]['status'], fn.UNSUPPORTED)
+        other_step = dict(comment(), body=comment()['body'].replace('step=bake', 'step=acquire'))
+        self.assertEqual(fn.check_selection(selection(), other_step)[-1]['status'], fn.UNSUPPORTED)
+        self.assertEqual(fn.check_selection(selection(), comment())[-1]['status'], fn.SUPPORTED)
+        for field, value in (('author', 'someone-else'), ('issueUrl', 'https://github.com/FS-GG/.github/issues/4779')):
+            self.assertEqual(fn.check_selection(selection(), dict(comment(), **{field: value}))[-1]['status'],
+                             fn.UNSUPPORTED, field)
 
     def test_shared_codex_host_true_unless_every_exclusivity_check_passes(self):
         for check in fn.EXCLUSIVITY_CHECKS:
@@ -420,7 +474,8 @@ class Evidence(unittest.TestCase):
     def window(self, **extra):
         base = {'enteredAt': '2026-10-30T19:00:00Z', 'exitedAt': '2026-10-30T21:00:00Z',
                 'capsApplied': {'readbackOk': True}, 'capsRemoved': {'readbackOk': True},
-                'ioStatBefore': ['a'], 'ioStatAfter': ['b'], 'psiBefore': ['c'], 'psiAfter': ['d']}
+                'ioStatBefore': ['a'], 'ioStatAfter': ['b'], 'psiBefore': ['c'], 'psiAfter': ['d'],
+                'exitExclusivity': fn.check_exclusivity(facts()), 'newUncappedUnitsDuringWindow': []}
         base.update(extra)
         return base
 
@@ -472,6 +527,11 @@ class Evidence(unittest.TestCase):
                     self.home_io(iostat={'command': 'psi', 'samples': 1, 'rawSha256': 'e' * 64})):
             self.assertEqual(fn.attach_home_io(evidence, bad)['ioCorrespondence']['status'], fn.IO_NOT_ESTABLISHED)
 
+    def test_window_without_entry_is_not_established_not_a_crash(self):
+        evidence = fn.build_evidence(selection(), rows(), {'capsApplied': {'readbackOk': True}})
+        attached = fn.attach_home_io(evidence, self.home_io())
+        self.assertEqual(attached['ioCorrespondence']['status'], fn.IO_NOT_ESTABLISHED)
+
     def test_fdev_side_capture_gaps_keep_not_established(self):
         for window in (self.window(capsApplied={'readbackOk': False}), self.window(capsRemoved={'readbackOk': False}),
                        self.window(psiAfter=None)):
@@ -491,7 +551,7 @@ class LaunchControls(unittest.TestCase):
             (cg / path.lstrip('/') / 'io.max').write_text('')
         names = fn.unit_names(OP, 'bake')
         self.scope_cg = '/user.slice/user-1000.slice/user@1000.service/app.slice/' + names['launcher']
-        units = {names['launcher']: {'ActiveState': 'active', 'RuntimeMaxUSec': '2h', 'MemoryMax': '1073741824',
+        units = {names['launcher']: {'ActiveState': 'active', 'RuntimeMaxUSec': '1d', 'MemoryMax': '1073741824',
                                      'TasksMax': '128'},
                  names['guest']: {'ActiveState': 'active', 'SubState': 'exited', 'Result': 'success',
                                   'ExecMainStatus': '0'},
@@ -533,7 +593,7 @@ class LaunchControls(unittest.TestCase):
                 mutate(f, s, c, d, image)
                 ex = RecordingExecutor(self.host)
                 with self.assertRaises(fn.Refusal) as caught:
-                    fn.launch(self.host, ex, selection(), f, fn.evaluate(f, s, c, d, NOW, image), run_root='/runs',
+                    fn.launch(self.host, ex, selection(), f, fn.evaluate(f, s, c, d, NOW, image, s['hostMemory']), run_root='/runs',
                               github=FakeGitHub(), poll=0, reobserve=lambda: f)
                 self.assertEqual(caught.exception.check, check)
                 self.assertEqual(ex.effects, [])
@@ -563,19 +623,40 @@ class LaunchControls(unittest.TestCase):
         self.assertEqual(ex.kinds(), ['claim'])
 
     def test_window_entry_reread_refuses_after_claim_without_caps(self):
-        for key, value, check in (('memAvailableBytes', 20 * fn.GIB, 'memory.available'),
-                                  (('pool', 'freeBytes'), 10 * fn.GIB, 'pool.free-space')):
+        def busy_lane(later):
+            later['lanes']['lanes'][0]['busy'] = ['dotnet']
+
+        def memory(later):
+            later['memAvailableBytes'] = 20 * fn.GIB
+
+        def pool(later):
+            later['pool']['freeBytes'] = 10 * fn.GIB
+
+        def native_unit(later):
+            later['units']['native'] = ['fsgg-native-other-bake.service']
+        for change, check in ((memory, 'memory.available'), (pool, 'pool.free-space'),
+                              (busy_lane, 'exclusive.lanes-drained'), (native_unit, 'exclusive.no-other-native-unit')):
             with self.subTest(check=check):
-                later = facts()
-                if isinstance(key, tuple):
-                    later[key[0]][key[1]] = value
-                else:
-                    later[key] = value
+                later = facts(); change(later)
                 ex = RecordingExecutor(self.host)
                 with self.assertRaises(fn.Refusal) as caught:
                     self.launch(ex, reobserve=lambda: later)
                 self.assertEqual(caught.exception.check, check)
-                self.assertEqual(ex.kinds(), ['claim'])
+                self.assertEqual(ex.kinds(), ['claim', 'write'], 'no cap, slice, disk or unit effect after the claim')
+
+    def test_refusal_after_claim_writes_a_durable_record_outside_run_dir(self):
+        later = facts(); later['memAvailableBytes'] = 20 * fn.GIB
+        ex = RecordingExecutor(self.host)
+        with self.assertRaises(fn.Refusal) as caught:
+            self.launch(ex, reobserve=lambda: later)
+        path = fn.record_path(OP)
+        self.assertTrue(path.startswith(fn.POLICY['claimsDir'] + '/'))
+        self.assertFalse(path.startswith('/runs'))
+        record = json.loads(ex.written[path])
+        self.assertEqual(record['window']['firstFailure']['check'], 'memory.available')
+        self.assertEqual(record['window']['outcome'], 'refused')
+        self.assertEqual(caught.exception.window.record_path, path)
+        fn.validate_evidence(record)
 
     def test_cap_readback_mismatch_removes_caps_and_starts_nothing(self):
         ex = RecordingExecutor(self.host, cap_value='999')
@@ -596,16 +677,26 @@ class LaunchControls(unittest.TestCase):
         self.assertEqual(ex.kinds().count('io.cap-remove'), 3)
 
     def test_pre_start_cut_refuses_guest_start(self):
-        ex = RecordingExecutor(self.host)
-        original = self.host.monotonic
-        calls = iter([1000.0, 1301.0, 1301.0, 1301.0])
-        self.host.monotonic = lambda: next(calls, 1301.0)
-        with self.assertRaises(fn.Refusal) as caught:
-            self.launch(ex)
-        self.host.monotonic = original
-        self.assertEqual(caught.exception.check, 'clock.pre-start')
-        self.assertNotIn('unit.start-guest', ex.kinds())
-        self.assertEqual(ex.kinds().count('io.cap-remove'), 3)
+        for when in ('during-preparation', 'after-preparation'):
+            with self.subTest(when=when):
+                self.host.mono = 1000.0
+                ex = RecordingExecutor(self.host)
+                original = ex.run
+
+                def run(argv, effect, timeout=None, when=when):
+                    result = original(argv, effect, timeout)
+                    prepared = ex.kinds().count('disk.prepare')
+                    if effect == 'disk.prepare' and (prepared == 1 if when == 'during-preparation' else prepared == 2):
+                        self.host.mono = 1301.0
+                    return result
+                ex.run = run
+                with self.assertRaises(fn.Refusal) as caught:
+                    self.launch(ex)
+                self.assertEqual(caught.exception.check, 'clock.pre-start')
+                self.assertEqual(ex.kinds().count('disk.prepare'), 1 if when == 'during-preparation' else 2)
+                self.assertNotIn('unit.start-guest', ex.kinds())
+                self.assertEqual(ex.kinds().count('io.cap-remove'), 3)
+        self.host.mono = 1000.0
 
     def test_enclosing_bound_refuses_guest_start(self):
         ex = RecordingExecutor(self.host)
@@ -626,19 +717,285 @@ class LaunchControls(unittest.TestCase):
             fn.launch(self.host, RecordingExecutor(self.host), selection(), facts(), rows(), plan_ungated=True)
         self.assertEqual(caught.exception.check, 'launch.gate')
 
-    def test_window_exit_recovery_removes_recorded_caps(self):
+    def manifest(self):
         targets = fn.cap_targets(facts())
-        manifest = Path(self.tmp.name) / 'caps-manifest.json'
-        manifest.write_text(json.dumps({'operationId': OP, 'devices': ['254:80'], 'targets': targets,
-                                        'caps': selection()['ioCaps']}))
+        path = Path(self.tmp.name) / 'caps-manifest.json'
+        path.write_text(json.dumps({'operationId': OP, 'devices': ['254:80'], 'targets': targets,
+                                    'caps': selection()['ioCaps']}))
         (Path(self.host.cgroot) / STORE.lstrip('/') / 'io.max').write_text('254:80 rbps=1 wbps=1 riops=1 wiops=1\n')
+        return path
+
+    def test_window_exit_recovery_removes_recorded_caps_and_reverts_slices(self):
         ex = RecordingExecutor(self.host)
-        self.assertEqual(fn.window_exit(self.host, ex, manifest), {'removed': 3, 'readbackOk': True})
-        stuck = RecordingExecutor(self.host, fail_effect=None)
-        stuck.run = lambda argv, effect, timeout=None: ''
+        result = fn.window_exit(self.host, ex, self.manifest())
+        self.assertTrue(result['readbackOk'])
+        self.assertEqual([t['result'] for t in result['targets']], ['removed'] * 3)
+        self.assertEqual(ex.kinds().count('slice.revert'), 2)
+        self.assertEqual((Path(self.host.cgroot) / STORE.lstrip('/') / 'io.max').read_text(), '')
+
+    def test_window_exit_attempts_every_target_past_a_vanished_unit(self):
+        manifest = self.manifest()
+
+        class Vanished(RecordingExecutor):
+            def run(self, argv, effect, timeout=None):
+                if 'tmux-spawn-lane.scope' in argv:
+                    self.effects.append((effect, argv))
+                    raise fn.Refusal('effect.' + effect, 'Failed to set unit properties: Unit tmux-spawn-lane.scope not found.')
+                return super().run(argv, effect, timeout)
+        ex = Vanished(self.host)
+        result = fn.window_exit(self.host, ex, manifest)
+        attempted = [a[a.index('--runtime') + 1] for e, a in ex.effects if e == 'io.cap-remove']
+        self.assertEqual(attempted, ['tmux-spawn-lane.scope', 'fsgg-store.service', 'learn-qualification.service'])
+        self.assertEqual(result['targets'][0]['result'], 'already-gone')
+        self.assertEqual(result['errors'], [])
+        self.assertEqual(ex.kinds().count('slice.revert'), 2)
+        self.assertEqual((Path(self.host.cgroot) / STORE.lstrip('/') / 'io.max').read_text(), '')
+
+    def test_window_exit_records_other_errors_and_refuses_only_on_a_present_cap(self):
+        manifest = self.manifest()
+
+        class Flaky(RecordingExecutor):
+            def run(self, argv, effect, timeout=None):
+                if effect == 'io.cap-remove' and 'learn-qualification.service' in argv:
+                    self.effects.append((effect, argv)); raise fn.Refusal('effect.' + effect, 'dbus timeout')
+                if effect == 'slice.revert':
+                    self.effects.append((effect, argv)); raise fn.Refusal('effect.' + effect, 'access denied')
+                return super().run(argv, effect, timeout)
+        result = fn.window_exit(self.host, Flaky(self.host), manifest)  # learn cgroup has no cap: readback passes
+        self.assertEqual([e['unit'] for e in result['errors']], ['learn-qualification.service'])
+        self.assertEqual(len(result['sliceRevertErrors']), 2)
+
+        class StoreStuck(RecordingExecutor):
+            def run(self, argv, effect, timeout=None):
+                if effect == 'io.cap-remove' and 'fsgg-store.service' in argv:
+                    self.effects.append((effect, argv)); raise fn.Refusal('effect.' + effect, 'dbus timeout')
+                return super().run(argv, effect, timeout)
         (Path(self.host.cgroot) / STORE.lstrip('/') / 'io.max').write_text('254:80 rbps=1 wbps=1 riops=1 wiops=1\n')
-        with self.assertRaises(fn.Refusal):
+        stuck = StoreStuck(self.host)
+        with self.assertRaises(fn.Refusal) as caught:
             fn.window_exit(self.host, stuck, manifest)
+        self.assertEqual(caught.exception.check, 'io.cap-remove-readback')
+        self.assertEqual(stuck.kinds().count('io.cap-remove'), 3, 'later targets still attempted')
+        self.assertEqual(stuck.kinds().count('slice.revert'), 2)
+
+    def test_failed_cap_removal_makes_launch_refuse_with_a_window_exit_directive(self):
+        class RemoveFails(RecordingExecutor):
+            def run(self, argv, effect, timeout=None):
+                if effect == 'io.cap-remove' and 'fsgg-store.service' in argv:
+                    self.effects.append((effect, argv)); raise fn.Refusal('effect.io.cap-remove', 'dbus timeout')
+                return super().run(argv, effect, timeout)
+        ex = RemoveFails(self.host)
+        with self.assertRaises(fn.Refusal) as caught:
+            self.launch(ex)
+        self.assertEqual(caught.exception.check, 'io.cap-remove-pending')
+        self.assertIn('window-exit --manifest /runs/' + OP + '/caps-manifest.json', caught.exception.reason)
+        record = json.loads(ex.written[fn.record_path(OP)])
+        self.assertIn('window-exit', record['window']['windowExitDirective'])
+        self.assertEqual(ex.kinds().count('io.cap-remove'), 3)
+
+    def test_removal_error_on_a_stopped_unit_is_still_pending(self):
+        shutil.rmtree(Path(self.host.cgroot) / LEARN.lstrip('/'))  # not running: its runtime drop-in remains
+
+        class LearnFails(RecordingExecutor):
+            def run(self, argv, effect, timeout=None):
+                if effect == 'io.cap-remove' and 'learn-qualification.service' in argv:
+                    self.effects.append((effect, argv)); raise fn.Refusal('effect.io.cap-remove', 'dbus timeout')
+                return super().run(argv, effect, timeout)
+        with self.assertRaises(fn.Refusal) as caught:
+            self.launch(LearnFails(self.host))
+        self.assertEqual(caught.exception.check, 'io.cap-remove-pending')
+
+    def test_main_exits_non_zero_and_prints_the_directive(self):
+        refusal = fn.Refusal('io.cap-remove-pending', 'caps may remain; run: window-exit --manifest /runs/x')
+        window = mock.Mock(); window.record = {'windowExitDirective': 'window-exit --manifest /runs/x',
+                                               'firstFailure': None}
+        window.record_path = fn.record_path(OP); refusal.window = window
+        path = Path(self.tmp.name) / 'sel.json'; path.write_text(json.dumps(selection()))
+        err = io.StringIO()
+        with mock.patch.object(fn, 'observe', return_value=facts()), \
+                mock.patch.object(fn, 'evaluate', return_value=rows()), \
+                mock.patch.object(fn, 'launch', side_effect=refusal), \
+                mock.patch.object(fn, 'install_signal_exceptions'), contextlib.redirect_stderr(err):
+            code = fn.main(['launch', '--selection', str(path), '--no-github'])
+        self.assertNotEqual(code, 0)
+        report = json.loads(err.getvalue())
+        self.assertEqual(report['windowExitDirective'], 'window-exit --manifest /runs/x')
+        self.assertEqual(report['windowRecord'], fn.record_path(OP))
+
+    def test_signal_during_the_window_still_exits_and_records(self):
+        ex = RecordingExecutor(self.host)
+        original = ex.run
+
+        def run(argv, effect, timeout=None):
+            if effect == 'unit.start-guest':
+                os.kill(os.getpid(), signal.SIGTERM)
+            return original(argv, effect, timeout)
+        ex.run = run
+        previous = fn.install_signal_exceptions()
+        try:
+            with self.assertRaises(fn.Interrupted):
+                self.launch(ex)
+        finally:
+            for signum, handler in previous.items():
+                signal.signal(signum, handler)
+        self.assertEqual(ex.kinds().count('io.cap-remove'), 3)
+        self.assertEqual(ex.kinds().count('slice.revert'), 2)
+        record = json.loads(ex.written[fn.record_path(OP)])
+        self.assertEqual(record['window']['firstFailure']['check'], 'launch.signal')
+
+    def test_signals_raise_interrupted_for_term_int_and_hup(self):
+        previous = fn.install_signal_exceptions()
+        try:
+            for signum in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
+                with self.subTest(signal=signum), self.assertRaises(fn.Interrupted):
+                    os.kill(os.getpid(), signum)
+                    time.sleep(1)
+        finally:
+            for signum, handler in previous.items():
+                signal.signal(signum, handler)
+
+    def test_exit_exclusivity_and_new_lane_units_make_the_host_shared(self):
+        cases = {}
+
+        def busy(later):
+            later['lanes']['lanes'][0]['busy'] = ['dotnet']
+
+        def new_unit(later):
+            later['lanes']['lanes'].append({'cgroup': LANE + '-new', 'unit': 'new.scope', 'uid': 1000, 'busy': []})
+
+        def other_native(later):
+            later['units']['native'] = ['fsgg-native-other-x.service']
+        for name, change in (('busy', busy), ('new-unit', new_unit), ('other-native', other_native)):
+            f = facts(); later = copy.deepcopy(f); change(later); calls = []
+
+            def reobserve(f=f, later=later, calls=calls):
+                calls.append(1)
+                return f if len(calls) == 1 else later
+            ex = RecordingExecutor(self.host)
+            win = self.launch(ex, f=f, reobserve=reobserve)
+            cases[name] = win.evidence['sharedCodexHost']
+            fn.validate_evidence(win.evidence)
+            forged = copy.deepcopy(win.evidence); forged['sharedCodexHost'] = False
+            with self.assertRaises(fn.Refusal):
+                fn.validate_evidence(forged)
+        self.assertEqual(cases, {'busy': True, 'new-unit': True, 'other-native': True})
+        f = facts(); post = copy.deepcopy(f); names = fn.unit_names(OP, 'bake')
+        post['units']['native'] = [names['guest'], names['collector']]  # retained by CollectMode=inactive
+        calls = []
+        win = self.launch(RecordingExecutor(self.host), f=f,
+                          reobserve=lambda: (calls.append(1), f if len(calls) == 1 else post)[1])
+        self.assertFalse(win.evidence['sharedCodexHost'], 'own retained units do not count as other native units')
+
+    def test_scope_runtime_must_exceed_the_abnormal_path_bound(self):
+        clocks = selection()['clocks']
+        bound = fn.internal_bound(clocks, 3)
+        guest_path = clocks['usefulSeconds'] + clocks['retireSeconds'] + 60 + clocks['retireSeconds']
+        collector_path = clocks['collectorSeconds'] + 2 * clocks['collectorRetireSeconds'] + 60
+        self.assertGreater(bound, clocks['preStartSeconds'] + guest_path + collector_path)
+        self.assertGreater(fn.scope_runtime_seconds(clocks), fn.internal_bound(clocks, fn.POLICY['maxCapTargets']))
+        # abnormal path: each retire clock counts twice (the observation bound, then the bounded stop);
+        # each cap target costs one entry and one exit effect bound
+        for key, weight in (('preStartSeconds', 1), ('usefulSeconds', 1), ('retireSeconds', 2), ('collectorSeconds', 1),
+                            ('collectorRetireSeconds', 2)):
+            bigger = dict(clocks); bigger[key] += 1
+            self.assertEqual(fn.internal_bound(bigger, 3) - bound, weight, key)
+        self.assertEqual(fn.internal_bound(clocks, 4) - bound, 3 * fn.EFFECT_TIMEOUT)
+        argv = fn.launcher_scope_argv(selection(), ['x'])
+        self.assertIn(f'RuntimeMaxSec={fn.scope_runtime_seconds(clocks)}', argv)
+        name = fn.unit_names(OP, 'bake')['launcher']
+        for runtime, ok in ((f'{bound}s', False), (f'{bound + 1}s', True), ('2h', False), ('1d', True)):
+            with self.subTest(runtime=runtime):
+                self.host.units[name]['RuntimeMaxUSec'] = runtime
+                if ok:
+                    fn.check_launcher_scope(self.host, selection(), 3)
+                else:
+                    with self.assertRaises(fn.Refusal):
+                        fn.check_launcher_scope(self.host, selection(), 3)
+        self.assertEqual(fn.parse_timespan_seconds('2h 31min 40s'), 9100)
+        for bad in ('infinity', '', '5 parsecs'):
+            with self.assertRaises(fn.Refusal):
+                fn.parse_timespan_seconds(bad)
+
+    def test_executor_timeout_is_a_refusal(self):
+        with self.assertRaises(fn.Refusal) as caught:
+            fn.Executor().run([sys.executable, '-c', 'import time; time.sleep(5)'], 'probe', timeout=0.2)
+        self.assertEqual(caught.exception.check, 'effect.probe')
+
+    def test_failed_guest_is_labelled_failed(self):
+        name = fn.unit_names(OP, 'bake')['guest']
+        self.host.units[name].update({'Result': 'exit-code', 'ExecMainStatus': '1'})
+        win = self.launch(RecordingExecutor(self.host))
+        self.assertEqual(win.record['outcome'], 'guest-failed-awaiting-readback')
+
+    def test_io_stat_before_is_taken_at_window_entry(self):
+        f = facts(); entry = copy.deepcopy(f); entry['ioStat'] = ['254:80 at-entry']
+        win = self.launch(RecordingExecutor(self.host), f=f, reobserve=lambda: entry)
+        self.assertEqual(win.record['ioStatBefore'], ['254:80 at-entry'])
+
+    def test_date_bound_is_checked_before_the_collector(self):
+        dates = iter([NOW + dt.timedelta(seconds=400), NOW + dt.timedelta(seconds=8940 - 959)])
+
+        class Late(FakeGitHub):
+            def date(self):
+                return next(dates)
+        ex = RecordingExecutor(self.host)
+        with self.assertRaises(fn.Refusal) as caught:
+            self.launch(ex, github=Late())
+        self.assertEqual(caught.exception.check, 'clock.enclosing')
+        self.assertIn('unit.start-guest', ex.kinds())
+        self.assertNotIn('unit.start-collector', ex.kinds())
+        self.assertEqual(ex.kinds().count('io.cap-remove'), 3)
+
+
+class RealClaim(unittest.TestCase):
+    """The claim with the real executor on a private directory: exclusive, no-follow, race-safe."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(dir=Path.home() if os.access(Path.home(), os.W_OK) else None)
+        self.path = os.path.join(self.tmp.name, 'claims', OP)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_second_create_refuses_and_keeps_the_first(self):
+        fn.Executor().create_claim(self.path, {'n': 1})
+        with self.assertRaises(fn.Refusal) as caught:
+            fn.Executor().create_claim(self.path, {'n': 2})
+        self.assertEqual(caught.exception.check, 'claim.absent')
+        self.assertEqual(json.loads(Path(self.path).read_text()), {'n': 1})
+
+    def test_symlink_at_the_claim_path_refuses_and_is_not_followed(self):
+        os.makedirs(os.path.dirname(self.path))
+        victim = os.path.join(self.tmp.name, 'victim')
+        Path(victim).write_text('keep')
+        os.symlink(victim, self.path)
+        with self.assertRaises(fn.Refusal):
+            fn.Executor().create_claim(self.path, {'n': 1})
+        self.assertEqual(Path(victim).read_text(), 'keep')
+        os.remove(self.path); os.symlink(os.path.join(self.tmp.name, 'absent'), self.path)
+        with self.assertRaises(fn.Refusal):
+            fn.Executor().create_claim(self.path, {'n': 1})
+        self.assertFalse(os.path.exists(os.path.join(self.tmp.name, 'absent')))
+
+    def test_concurrent_claims_have_exactly_one_winner(self):
+        barrier = threading.Barrier(16)
+        outcomes = []
+
+        def contend(n):
+            barrier.wait()
+            try:
+                fn.Executor().create_claim(self.path, {'n': n}); outcomes.append(('won', n))
+            except fn.Refusal:
+                outcomes.append(('refused', n))
+        threads = [threading.Thread(target=contend, args=(n,)) for n in range(16)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(10)
+        winners = [n for result, n in outcomes if result == 'won']
+        self.assertEqual(len(outcomes), 16)
+        self.assertEqual(len(winners), 1)
+        self.assertEqual(json.loads(Path(self.path).read_text()), {'n': winners[0]})
 
 
 class DryRun(unittest.TestCase):
@@ -666,6 +1023,9 @@ class LiveProbes(unittest.TestCase):
             observed = fn.observe(host, selection())
         result = fn.evaluate(observed, selection(), None, None, host.now(), None)
         self.assertEqual({r['check'] for r in result}, set(MUTATIONS))
+        own = observed['units']['selfCgroup'].rstrip('/')
+        self.assertIn(own, observed['lanes']['exemptDeclared'], 'the launcher\'s own cgroup is always exempt')
+        self.assertNotIn(own, [lane['cgroup'] for lane in observed['lanes']['lanes']])
         self.assertIn(observed['poolWriters']['status'], ('none', 'found', 'unknown'))
 
     def test_census_finds_a_holder(self):

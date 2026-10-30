@@ -51,10 +51,12 @@ python3 -I -B fdev_native.py launch --dry-run --selection S.json
 
 # The window (M1+, under a Root selection), run inside its own bounded scope:
 systemd-run --user --scope --unit=fsgg-native-<op>-<step>-launcher.scope \
-    -p RuntimeMaxSec=<sum of step clocks + 600> -p MemoryMax=1G -p TasksMax=128 -- \
+    -p RuntimeMaxSec=<scope_runtime_seconds(clocks)> -p MemoryMax=1G -p TasksMax=128 -- \
     python3 -I -B fdev_native.py launch --selection S.json
 
-# Recovery after a crashed window: remove the recorded caps (idempotent).
+# Recovery after a crashed window (idempotent). Attempts every removal; a unit that no
+# longer exists counts as already gone; other errors are recorded per target. Reverts both
+# native slices, reads back, and refuses only if a cap is still present.
 python3 -I -B fdev_native.py window-exit --manifest /srv/v3-pool/native/runs/<op>/caps-manifest.json
 ```
 
@@ -73,13 +75,23 @@ leave `pool.no-data-writers` Unknown.
   - the stock image path, verified against the
     `noble/acquired-input-lock.json` pin;
   - read-only disks with digests and an optional NoCloud seed directory;
-  - the Home df reading and its maximum age.
+  - the Home df reading and its maximum age;
+  - optionally the Home host-memory reading, with a Root-set floor and maximum age.
 - **Home df** (`fsgg.fdev-native-home-df/1`): the raw output of
   `df -B1 --output=size,used,avail,itotal,iused,iavail` on the shared HDD partition, plus
   `measuredAt` and the citing `source` URL. It is an input and is never inferred. A reading
   older than the selection's bound refuses. This is the capacity re-read hook: the launcher
-  re-reads it, pool free space, `MemAvailable` and exclusivity at window entry, after the
-  claim.
+  re-reads it, pool free space, `MemAvailable`, host memory and exclusivity at window
+  entry, after the claim.
+- **Home host memory** (`fsgg.fdev-native-home-memory/1`, Root decision): `memTotalBytes`
+  and `memAvailableBytes` on Home, with `measuredAt` and the citing `source` URL. It mirrors
+  the df input. When it is present, admission needs `memAvailableBytes` at or above the
+  Root-set `hostMemoryMinAvailableBytes` within `hostMemoryMaxAgeSeconds`. When it is absent,
+  `capacity.host-memory` is Unknown, never Supported, so a launch refuses.
+- **Selection marker.** The Root selection comment on #4778 must carry
+  `<!-- fsgg:fdev-native-selection/v1 operation=<op> step=<step> -->`. Posts made with the same
+  account cannot be told apart by author, and the launcher's own start-witness comment never
+  carries this marker.
 
 ## Preconditions (each fails closed; Unknown is never success)
 
@@ -87,7 +99,7 @@ leave `pool.no-data-writers` Unknown.
 |---|---|
 | `selection.valid` | Schema, clocks summing within the enclosing bound, exempt sessions, attestation, stock-image lock path, Home df shape |
 | `selection.operation-not-retired` | 83a08, 69db, 2ae4 and d2f2, plus any id sharing those short prefixes, refuse |
-| `selection.root-comment-binds-operation` | The operation id appears in a Root-authored comment on #4778 |
+| `selection.root-comment-binds-operation` | A comment on #4778 by an allowed Root account carries the selection marker for this operation and step (cooperative binding) |
 | `claim.absent` | `/srv/v3-pool/native/claims/<op>` does not exist. The claim is `O_CREAT\|O_EXCL\|O_NOFOLLOW` and refuses forever. |
 | `kvm.device`, `kvm.nested` | `/dev/kvm` is a read-write character device and nested virtualisation is on |
 | `cgroup.v2-controllers`, `cgroup.cpuset-cpus`, `cgroup.user-io-delegated` | cgroup v2 with `cpuset cpu io memory pids`, CPUs 8-11 available, `io` delegated to the user manager |
@@ -102,12 +114,21 @@ leave `pool.no-data-writers` Unknown.
 | `io.caps-bound`, `io.no-stale-caps` | Root bound the caps, and no earlier window left a cap behind |
 | `services.cap-targets-resolved` | The store and LEARN units (and any discovered SC2 unit) resolve to a manager |
 | `capacity.host-partition` | The Home df input is present, consistent, fresh, and holds the need plus 64 GiB |
+| `capacity.host-memory` | The optional Home host-memory input is present, fresh and at or above the Root floor; absent or unbound is Unknown |
 | `image.stock-digest` | The stock image hashes to the lock pin |
 | `dotnet.runtime` | 10.0.12 is installed (M1 prerequisite) |
 
 Launch adds these checks:
 
-- `scope.bounded`: the front end runs in its own scope with finite limits.
+- `scope.bounded`: the front end runs in its own scope with finite limits. The scope's
+  `RuntimeMaxSec` must strictly exceed the internal bound for the abnormal path:
+  - the pre-start cut and the entry effects;
+  - guest observation (useful + retire + 60 s), then a bounded stop (retire);
+  - collector observation (collector + collector retire + 60 s), then a bounded stop;
+  - window exit.
+
+  Every systemd effect has its own 30 s bound, so the internal bounds always expire first.
+  SIGTERM, SIGINT and SIGHUP raise an exception, so window exit still runs.
 - `io.cap-readback`: kernel `io.max` equals the bound caps on every running target.
 - `clock.pre-start`: the guest starts within the pre-start cut, on fdev monotonic time.
 - `clock.enclosing`: the GitHub `Date` header minus the start witness, plus the remaining
@@ -143,15 +164,22 @@ Launch adds these checks:
        `detect-zeroes=off`;
      - a read-only `vvfat` CIDATA seed.
    - No `MemoryOOMGroup` is set.
-10. Observe the guest's terminal state, bounded by useful + retire + 60 s.
+10. Observe the guest's terminal state, bounded by useful + retire + 60 s. Check the GitHub
+    `Date` bound again before the collector starts.
 11. Run the collector unit in `fsgg-native-collect.slice`. It hashes `root.raw` and writes
     the closed packet.
-12. Window exit, on every path including failures:
-    1. remove the caps and read back their absence;
+12. Window exit, on every path after the claim (refusal, error or signal):
+    1. attempt every cap removal and read back their absence;
     2. revert the two native slices;
-    3. take the after-window `io.stat` and PSI;
+    3. take the after-window `io.stat`, PSI and exclusivity checks;
     4. list the lane units that appeared uncapped during the window;
-    5. write the evidence document.
+    5. write the durable window record to `/srv/v3-pool/native/claims/<op>.window.json`,
+       outside the run directory, together with the first failure, and a copy in the run
+       directory when it exists.
+
+    `sharedCodexHost` is false only when exclusivity passes at both entry and exit and no new
+    lane unit appeared. If a cap may remain, the launch exits non-zero
+    (`io.cap-remove-pending`) and prints the `window-exit` command to run.
 
 Retirement, deletion of the run disks, and the independent readback stay with Root and the
 readback actor, as the plan describes.
