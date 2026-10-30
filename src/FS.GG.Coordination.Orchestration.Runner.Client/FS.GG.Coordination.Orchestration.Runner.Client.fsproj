@@ -3,6 +3,7 @@
     <OutputType>Exe</OutputType><TargetFramework>net10.0</TargetFramework>
     <AssemblyName>fsgg-coord-orchestration-runner</AssemblyName><RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
     <IsPackable>false</IsPackable><RuntimeIdentifier>linux-x64</RuntimeIdentifier><SelfContained>true</SelfContained><PublishSingleFile>true</PublishSingleFile>
+    <PublishReferencesDocumentationFiles>false</PublishReferencesDocumentationFiles>
   </PropertyGroup>
   <ItemGroup><Compile Include="CompatibilityDiagnostic.fs" /></ItemGroup>
   <ItemGroup><None Include="README.md" /><Compile Include="CandidatePipeline.fs" /><Compile Include="TelemetryTurnJournal.fs" /><Compile Include="TelemetryCliPublisher.fs" /><Compile Include="TelemetryPublisherPump.fs" /><Compile Include="LearningTelemetryFacts.fs" /><Compile Include="TelemetryFactBatches.fs" /><Compile Include="TelemetryRootGuard.fs" /><Compile Include="TelemetryJournalRecovery.fs" /><Compile Include="TelemetryRunnerObserver.fs" /><Compile Include="OrdinaryAssignmentLaunchGate.fs" /><Compile Include="ExecutorRuntime.fs" /><Compile Include="FiniteCustodyInertAdapter.fs" /><Compile Include="Program.fs" /></ItemGroup>
