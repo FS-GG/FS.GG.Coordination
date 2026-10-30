@@ -47,6 +47,24 @@ class DedicatedRunnerDataControls(unittest.TestCase):
         value = target(); value['sharedCodexHost'] = True
         with self.assertRaises(ValueError): owner.validate_target_data(value)
 
+    def test_fdev_provider_requires_truthful_host_fields(self):
+        value = target(); value['provider'] = owner.FDEV_PROVIDER
+        with self.assertRaises(ValueError): owner.validate_target_data(value)
+        value['hostKind'] = owner.FDEV_HOST_KIND
+        with self.assertRaises(ValueError): owner.validate_target_data(value)
+        value['ioSharedWithHostCoTenants'] = True
+        self.assertEqual(owner.validate_target_data(value), value)
+        for field, wrong in (('ioSharedWithHostCoTenants', False), ('hostKind', 'dedicated-hardware'),
+                             ('sharedCodexHost', True)):
+            selected = dict(value); selected[field] = wrong
+            with self.assertRaises(ValueError): owner.validate_target_data(selected)
+
+    def test_host_fields_cannot_relabel_another_provider(self):
+        value = target(); value['hostKind'] = owner.FDEV_HOST_KIND; value['ioSharedWithHostCoTenants'] = True
+        with self.assertRaises(ValueError): owner.validate_target_data(value)
+        value = target(); value['ioSharedWithHostCoTenants'] = False
+        with self.assertRaises(ValueError): owner.validate_target_data(value)
+
     def test_prerelease_or_old_libc_carrier_not_relabelled(self):
         for os_value in [{'id': 'ubuntu', 'version': '26.10'}, {'id': 'ubuntu', 'version': '22.04'}, {'id': 'fedora', 'version': '45'}]:
             value = target(); value['os'] = os_value

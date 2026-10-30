@@ -46,6 +46,8 @@ USERNS_KNOB = '/proc/sys/kernel/apparmor_restrict_unprivileged_userns'
 # bar_hosted_operation.crypto_identity accepts only this OpenSSL family for the encrypted candidate.
 OPENSSL_FAMILY_PREFIX = 'OpenSSL 3.'
 OPENSSL_PACKAGE_PREFIX = '3.'
+FDEV_PROVIDER = 'fdev-kvm-qualification-v1'
+FDEV_HOST_KIND = 'fdev-agent-vm-drained-window'
 SDK_SHA512 = '51c8b999af9e8dd9998c9edc5944e19a90788862068acd38694e098889054ce8c23d4f0c5cccfa16bf187d044562359e5ee69a9f8ad0bbe913ba90311fbce25b'
 
 
@@ -82,6 +84,16 @@ def validate_target_data(target):
     require(sha(target['operatorAcceptanceSha256']), 'operator acceptance digest')
     require(target.get('dedicated') is True and target.get('disposable') is True, 'dedicated disposable target required')
     require(target.get('sharedCodexHost') is False, 'shared Codex host forbidden')
+    # Root shared-host ruling (.github#4778 comment 6527516917): a disposable nested guest on fdev
+    # qualifies only in a drained, exclusive window, and the target states its host truthfully.
+    host_kind = target.get('hostKind')
+    if host_kind is not None or target['provider'] == FDEV_PROVIDER:
+        require(host_kind == FDEV_HOST_KIND and target['provider'] == FDEV_PROVIDER,
+                'hostKind fdev-agent-vm-drained-window belongs to provider ' + FDEV_PROVIDER + ' only')
+        require(target.get('ioSharedWithHostCoTenants') is True,
+                'fdev guest disks share the host HDD with Home co-tenants; ioSharedWithHostCoTenants must be true')
+    else:
+        require('ioSharedWithHostCoTenants' not in target, 'ioSharedWithHostCoTenants is defined only with hostKind')
     require(target.get('architecture') == 'x86_64', 'x64 VM required')
     require(target.get('os') == {'id': 'ubuntu', 'version': '24.04'}, 'actual Ubuntu24.04 noble carrier required')
     resources = target.get('resources', {})
