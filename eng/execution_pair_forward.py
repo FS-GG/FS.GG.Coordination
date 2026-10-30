@@ -667,7 +667,12 @@ def readback_module() -> dict:
 def policy_join(raw: bytes, selection: dict) -> dict:
     """The one maintained complete tag-policy predicate, shared with the original route."""
     desired = strict_json((ROOT / "eng/repository-settings/release-tag-ruleset.json").read_bytes())
-    return guarded(harness_module()["pair_protection"], strict_json(raw), selection_as_pair_admission(selection), desired,
+    actual = strict_json(raw)
+    # GitHub returns ruleset bypass_actors only to callers with write access to the ruleset. A token that
+    # lacks it yields a document without the key: refuse precisely, never as a pass or a generic mismatch.
+    require(not isinstance(actual, dict) or "bypass_actors" in actual,
+            "incomplete ruleset evidence: bypass_actors is absent (GitHub returns it only to a token with administration write)")
+    return guarded(harness_module()["pair_protection"], actual, selection_as_pair_admission(selection), desired,
                    reason="tag protection policy join differs")
 
 

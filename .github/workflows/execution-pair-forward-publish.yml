@@ -9,7 +9,7 @@ run-name: "PAIR forward ${{ inputs.mode }} ${{ inputs.operation }} @ ${{ github.
 # The original 0.3.0 operation, workflow and admission are not read or changed.
 #
 # Credential isolation by job:
-#   preflight   read-only; policy-read App token only; no package, journal or release write.
+#   preflight   read-only; policy-read App token only (administration write is required for bypass_actors); no package, journal or release write.
 #   packages    ordinary-ledger App token + GitHub Packages write + NuGet Trusted Publishing;
 #               no release/tag write. Effects 1-4 of the shared protected journal.
 #   public-load read-only anonymous public package execution; no secrets at all.
@@ -87,7 +87,7 @@ jobs:
             echo "::error::ruleset App bindings are missing; complete protection evidence is unavailable"
             exit 1
           fi
-      - name: Mint a repository-scoped read-only token solely for the complete protection read
+      - name: Mint a repository-scoped token solely for the complete protection read (administration write, because GitHub returns ruleset bypass_actors only to write-access callers)
         id: policy
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
         with:
@@ -95,7 +95,7 @@ jobs:
           private-key: ${{ secrets.FSGG_DISPATCH_APP_PRIVATE_KEY }}
           owner: FS-GG
           repositories: FS.GG.Coordination
-          permission-administration: read
+          permission-administration: write
       - name: Authenticate candidate, four receivers, occupancy, policy and journal
         id: preflight
         shell: bash
@@ -314,7 +314,7 @@ jobs:
           ACTUAL_INSTALLATION_ID: ${{ steps.ledger.outputs.installation-id }}
           EXPECTED_INSTALLATION_ID: ${{ secrets.FSGG_ORDINARY_LEDGER_INSTALLATION_ID }}
         run: test -n "$EXPECTED_INSTALLATION_ID" && test "$ACTUAL_INSTALLATION_ID" = "$EXPECTED_INSTALLATION_ID"
-      - name: Mint a repository-scoped read-only token solely for the tag-protection read
+      - name: Mint a repository-scoped token solely for the tag-protection read (administration write, because bypass_actors is returned only to write-access callers)
         id: policy
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
         with:
@@ -322,7 +322,7 @@ jobs:
           private-key: ${{ secrets.FSGG_DISPATCH_APP_PRIVATE_KEY }}
           owner: FS-GG
           repositories: FS.GG.Coordination
-          permission-administration: read
+          permission-administration: write
       - name: Operate the remaining nine effects on the same protected journal
         shell: bash
         env:
