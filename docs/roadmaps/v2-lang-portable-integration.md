@@ -97,11 +97,12 @@ runtime-only qualification, public readback and fresh explicit adoption.
 The selected provider route is one opt-in Python product projected from a single Coordination-owned fixture into
 Templates. Templates owns the generic provider descriptor and product template; SDD's existing generic scaffold
 route remains the receiver unless real composition proves a generic defect. Qualification uses the production
-resolver and installed CLI in a fresh hosted Linux VM, with a dedicated non-root account, root-owned immutable
-grant, verified complete package and OCI custody, fixed rootless Podman/VFS operation, and a runtime-only view that
-hides SDK and provisioning sources. Source preparation may add the fixture projection and installed-candidate
-workflow, but it cannot create grant authority. Missing runtime isolation, UID mapping, custody, capacity or cleanup
-evidence refuses the native stage. Publication follows exact installed-candidate qualification; a fresh public
+resolver and installed CLI on fdev, the contained glibc 2.44 facility selected under FS-GG/.github#3010 (see
+[P4 facility and receiver-bound grant amendment](#p4-facility-and-receiver-bound-grant-amendment--2026-10-30)),
+with a non-root fdev account, root-owned immutable grant, verified complete package and OCI custody, fixed
+rootless Podman/VFS operation, and a runtime-only view that hides SDK and provisioning sources. Source
+preparation may add the fixture projection and installed-candidate workflow, but it cannot create grant authority.
+Missing runtime isolation, UID mapping, custody, capacity or cleanup evidence refuses the native stage. Publication follows exact installed-candidate qualification; a fresh public
 creation and its own receiver-bound grant are a separate adoption boundary. Retained workspace upgrade handling
 continues to P5.
 
@@ -381,7 +382,7 @@ proof of a release, current private facts or a usable grant.
 |---|---|---|
 | Coordination P4 release/diagnostic maintainer | Freeze the exact helper, installed qualifier, canonical package/image and receiver joins; state the selected execution owner and first bounded source milestone. | Preserve canonical installed DIAG acceptance and every earlier failed/consumed attempt; no P4 closure from source selection. |
 | Host execution/provisioning owner | Supply one currently supported enforcing outer profile with immutable total-time, resource, output and cleanup bounds; bind process custody, original reservations and independent termination/cleanup readback to the actual entrypoint. | The helper's internal timeout/process-group cleanup alone does not prove an enforcing outer profile. No current joined outer-profile proof is established here; affected execution stays held. |
-| Administrator provider-enrollment/grant owner | Verify current runtime/account/image capabilities and the exact installed CLI/receiver closure; supply the fixed-path, root-owned receiver-bound enrollment/grant through its existing protected route. | No grant from public candidate facts, synthetic declarations or historical permissions; unresolved capability/custody remains unknown. |
+| Administrator provider-enrollment/grant owner (2026-10-30: the owner authorizes; Root installs under that delegation, see the amendment below) | Verify current runtime/account/image capabilities and the exact installed CLI/receiver closure; supply the fixed-path, root-owned receiver-bound enrollment/grant through its existing protected route. | No grant from public candidate facts, synthetic declarations or historical permissions; unresolved capability/custody remains unknown. |
 | Private-facts custody owner | Retain exact host/facts/receiver/operation evidence and original cleanup uncertainty in restricted custody; return only approved hashes and conclusions. | No private raw logs, account details, credential paths or provider facts enter this public plan. |
 | Coordination publisher and credential custodian | Reconcile the original candidate and immutable publisher inputs, then independently admit existing credential exchanges and ordered publication/readback. | Both canonical installed DIAG and genuine receiver-bound P4 installed qualification/grant precede publication; source delivery and a dormant operation name supply neither. |
 | SDD/Templates receiver owners | Qualify the selected public source/receiver joins, then observe fresh public installed opt-in creation after coherent publication. | Published bytes are distinct from installation, activation and retaining upgrades; P5 retains its own scope. |
@@ -417,6 +418,49 @@ the already selected roadmap's routine source route; it is not a formal filing,
 an intake fallback or permission to create an issue through raw GitHub calls.
 No source change here activates legacy v1 admission or authorizes credentials,
 dispatch, provider enrollment, installation or publication.
+
+## P4 facility and receiver-bound grant amendment — 2026-10-30
+
+Amends the facility and grant-owner wording above under the owner's standing decision grant recorded on
+[FS-GG/.github#4648](https://github.com/FS-GG/.github/issues/4648#issuecomment-6526467018). Plan text only: no
+account, grant, profile, dispatch, run or publication is created, and P4 stays open.
+
+**What the receiver-bound grant is.** It is not a GitHub grant. It is the root-owned file
+`/etc/fsgg/portable-workspaces/python-hello-v1.json`, schema `fsgg.portable-workspace-python-enrollment/v1`,
+defined by the
+[trusted enrollment source](../../src/FS.GG.Coordination.Cli/PortableWorkspaceTrustedEnrollmentSource.fs)
+(fixed path, ownership and ACL walk, closed schema, live-system binding and the non-root effective-uid check). It
+is wrapped by `authorization.json`, which
+[`validate_provider_input.py`](../../tests/portable-workspace/trusted-provider/validate_provider_input.py)
+validates against the facts and the grant.
+
+**Facility and authorizer.**
+
+- The facility is **fdev**, the contained glibc 2.44 facility already selected under FS-GG/.github#3010, replacing
+  the earlier "fresh hosted Linux VM" wording.
+- `allowedUid` is a non-root fdev account: uid 1000, or a dedicated account kept for hygiene.
+- The owner is the named authorizer in `authorizedBy`. Root installs the file under the owner's standing delegation,
+  and the wrapper cites that delegation. This replaces the earlier "Administrator grant owner" wording.
+- The grant is genuine only when it is built solely from the genuine candidate-facts output. Its SHA-256
+  (`grantSha256`) is recorded publicly.
+
+**Order.** No grant exists before its inputs exist.
+
+1. A fresh receiver commit and tree plus candidate facts, from the `candidate-facts` phase.
+2. An enforcing outer profile (FS-GG/.github#4650).
+3. The grant: `sudo install` with `root:root`, mode 0755 directories and a mode 0644 file, verified with `stat`,
+   `getfacl` and `sha256sum` equal to `grantSha256`.
+4. The run, with independent cleanup readback.
+5. Publication and adoption.
+
+**Checks before running.**
+
+- Podman storage on fdev defaults to overlay while this plan fixes VFS. The production policy passes
+  `--storage-driver=vfs` and a generated `storage.conf` with `driver = "vfs"`, so the VFS requirement is the
+  code's own; the host default is not changed or relied on.
+- On Arch, `/usr/sbin` and `/sbin` are symlinks to `/usr/bin`. The grant binds the literal `/usr/bin/git`,
+  `/usr/bin/tar` and `/usr/bin/podman` paths and their SHA-256, which must be measured on fdev after the last
+  package update and before the grant is installed.
 
 ## C2 source qualification
 
