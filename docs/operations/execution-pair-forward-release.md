@@ -100,10 +100,10 @@ byte. They are not part of the journal content identity.
 
 | Job | May | May not |
 |---|---|---|
-| `preflight` | read candidate, receivers, occupancy, policy (administration **read** App token), journal destination | any write |
+| `preflight` | read candidate, receivers, occupancy, policy (administration **write** App token: GitHub returns ruleset `bypass_actors` only to write-access callers; a read token yields an incomplete document that is refused), journal destination | any write |
 | `packages` | ledger App token, GitHub Packages write, NuGet Trusted Publishing; effects 1–4 | tag, release, contents write |
 | `public-load` | anonymous public package restore/build/load, no secrets | any credential or write |
-| `finalize` | ledger App token, contents write, policy read; effects 5–13 | package or NuGet credential |
+| `finalize` | ledger App token, contents write, policy read (same administration-write App token as preflight); effects 5–13 | package or NuGet credential |
 
 `finalize` starts only from a journal whose package window is verified and only
 with the successful `public-load` job and receipt artifact of the same run. A

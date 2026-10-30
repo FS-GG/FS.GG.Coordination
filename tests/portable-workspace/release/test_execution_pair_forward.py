@@ -805,6 +805,29 @@ def policy_controls(tmp):
         mutate(actual)
         must_refuse('policy ' + label, F.policy_join, F.canonical(actual), world.selection)
     must_refuse('policy not json', F.policy_join, b'not-json', world.selection)
+    # Token-permission causal control (Coordination#1026): a read-only App token receives the ruleset without
+    # bypass_actors. That document must be refused with a precise, actionable reason, never passed.
+    read_token_view = dict(desired, id=F.RULESET_ID)
+    read_token_view.pop('bypass_actors', None)
+    try:
+        F.policy_join(F.canonical(read_token_view), world.selection)
+    except F.Refused as error:
+        assert 'incomplete ruleset evidence: bypass_actors is absent' in str(error) and 'administration write' in str(error), str(error)
+    else:
+        raise AssertionError('a ruleset without bypass_actors was accepted')
+    count('policy-read-token-view-refused')
+    # The write-token view of the same ruleset (bypass_actors present and empty) passes the same predicate.
+    write_token_view = dict(read_token_view, bypass_actors=[])
+    assert F.policy_join(F.canonical(write_token_view), world.selection)['rulesetId'] == F.RULESET_ID
+    count('policy-write-token-view-accepted')
+    # An explicitly non-empty bypass list is still refused for its own reason (not conflated with absence).
+    try:
+        F.policy_join(F.canonical(dict(read_token_view, bypass_actors=[{'actor_id': 1, 'actor_type': 'Integration', 'bypass_mode': 'always'}])), world.selection)
+    except F.Refused as error:
+        assert 'bypass actors are present' in str(error), str(error)
+    else:
+        raise AssertionError('bypass actors accepted')
+    count('policy-bypass-present-distinct')
     wrong = copy.deepcopy(world.selection)
     wrong['tagProtection']['policySha256'] = 'a' * 64
     must_refuse('policy hash pin', F.policy_join, good, wrong)
@@ -1623,7 +1646,10 @@ def workflow_findings(text):
         findings.append('stage-order')
     if "needs.packages.result == 'skipped'" not in jobs.get('public-load', '') or "needs.preflight.outputs.plan == 'packages'" not in jobs.get('packages', ''):
         findings.append('resume-plan-gating')
-    if 'permission-administration: read' not in jobs.get('preflight', '') or 'permission-administration: write' in text:
+    # GitHub returns ruleset bypass_actors only to write-access callers: every policy-read mint (preflight and
+    # finalize) must be administration write, and no mint may hold the weaker read that yields an incomplete document.
+    if ('permission-administration: write' not in jobs.get('preflight', '') or 'permission-administration: write' not in jobs.get('finalize', '')
+            or 'permission-administration: read' in text or text.count('permission-administration:') != 2):
         findings.append('policy-token-scope')
     return findings
 
@@ -1648,7 +1674,9 @@ def workflow_controls():
         'stage-order': lambda t: t.replace('    needs: [preflight, public-load]\n', '    needs: preflight\n', 1),
         'python-not-hermetic': lambda t: t.replace('python3 -I -B eng/execution-pair-forward.py public-load', 'python3 eng/execution-pair-forward.py public-load', 1),
         'resume-plan-gating': lambda t: t.replace("needs.preflight.outputs.plan == 'packages' && github.ref", "github.ref", 1),
-        'policy-token-scope': lambda t: t.replace('permission-administration: read', 'permission-administration: write', 1),
+        'policy-token-scope': lambda t: t.replace('permission-administration: write', 'permission-administration: read', 1),
+        'policy-token-scope:finalize': lambda t: t[::-1].replace('permission-administration: write'[::-1], 'permission-administration: read'[::-1], 1)[::-1],
+        'policy-token-scope:extra-mint': lambda t: t.replace('permission-administration: write', 'permission-administration: write\n          permission-administration: write', 1),
         'permissions:preflight': lambda t: t.replace('      packages: read\n    env:\n      PYTHONOPTIMIZE', '      packages: write\n    env:\n      PYTHONOPTIMIZE', 1),
     }
     for expected, mutate in mutations.items():
