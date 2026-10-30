@@ -550,13 +550,14 @@ def version_controls():
 
 def committed_state_controls():
     a = F.load_admission()
-    assert F.effective_state(a) == 'disabled' and a['selection'] is None and a['enabled'] is False
-    assert all(v is None for v in a['liveEffects'].values())
+    # The committed admission may carry a reviewable selection (state `selected`) but is never enabled and holds no live-effect evidence.
+    assert a['enabled'] is False and all(v is None for v in a['liveEffects'].values())
+    assert F.effective_state(a) == ('disabled' if a['selection'] is None else 'selected')
     # The shared bound-intent fence is pinned by the engine file itself (FS-GG/.github#4805); the route stays dormant.
     fence = a['sharedHelper']['boundIntentFence']
     assert fence == {'evidenceSha256': a['sharedHelper']['files']['scripts/release_successor_execution.py'],
                      'reference': 'FS-GG/.github#4805 @ ' + a['sharedHelper']['commit']}
-    assert a['sharedHelper']['commit'] == '641072f56a40b384eb4ae611877a51ecb0685cd7' and F.effective_state(a) == 'disabled'
+    assert a['sharedHelper']['commit'] == '641072f56a40b384eb4ae611877a51ecb0685cd7' and F.effective_state(a) in ('disabled', 'selected')
     assert engine().execution.BOUND_INTENT_FENCE == 1, 'pinned engine lacks the bound-intent fence capability marker'
     assert a['original'] == {'version': '0.3.0', 'operation': F.ORIGINAL_OPERATION, 'tag': 'execution/v0.3.0', 'retained': True}
     assert len(F.EFFECT_IDS) == 13 == len(set(F.EFFECT_IDS)) and list(F.EFFECT_IDS) == a['effects']
@@ -1786,7 +1787,16 @@ def cli_controls(tmp):
         extra = ['--admission', str(admission)] if admission else []
         return subprocess.run([sys.executable, *flags, str(cli), *args, *extra], cwd=ROOT, env={**env, **(env_extra or {})}, capture_output=True, text=True, timeout=120)
 
+    # The refusal controls below must hold whatever selection the committed admission carries: they run against a
+    # copy with the selection removed, while `state` reports the committed file's own state.
+    disabled = F.load_admission()
+    disabled.update(enabled=False, selection=None, liveEffects={key: None for key in F.LIVE_EFFECT_KEYS})
+    disabled_path = Path(tmp) / 'disabled-admission.json'
+    disabled_path.write_text(json.dumps(disabled))
+    assert F.effective_state(F.validate_admission(json.loads(disabled_path.read_text()))) == 'disabled'
     r = call('state')
+    assert r.returncode == 0 and r.stdout.strip() == F.effective_state(F.load_admission())
+    r = call('state', admission=disabled_path)
     assert r.returncode == 0 and r.stdout.strip() == 'disabled'
     optimized = call('state', flags=('-O',))
     assert optimized.returncode == 1 and 'optimize=0' in optimized.stderr
@@ -1794,7 +1804,7 @@ def cli_controls(tmp):
     assert sys.flags.optimize == 0
     for command in ('preflight', 'packages', 'public-load', 'finalize', 'bind'):
         work = Path(tmp) / ('work-' + command)
-        r = call(command, '--workdir', str(work))
+        r = call(command, '--workdir', str(work), admission=disabled_path)
         assert r.returncode == 1 and 'refused' in r.stderr and 'disabled' in r.stderr, (command, r.stderr)
         assert not any(work.glob('*')) if work.exists() else True, 'a disabled route created state'
         count('cli-disabled-refusals')
@@ -2088,7 +2098,7 @@ def closure_controls():
     plain = subprocess.run([sys.executable, 'eng/execution-pair-forward.py', 'state'], cwd=scratch, env=clean_env, capture_output=True, text=True)
     assert 'SHADOW-RAN' in plain.stdout, 'control: plain python3 lets a module in eng/ shadow the standard library'
     hermetic = subprocess.run([sys.executable, '-I', '-B', 'eng/execution-pair-forward.py', 'state'], cwd=scratch, env=clean_env, capture_output=True, text=True)
-    assert hermetic.stdout.strip() == 'disabled' and 'SHADOW' not in hermetic.stdout, hermetic.stderr
+    assert hermetic.stdout.strip() in ('disabled', 'selected') and 'SHADOW' not in hermetic.stdout, hermetic.stderr
     (scratch / 'json.py').write_text('print("ROOT-SHADOW-RAN")\n')
     inline = subprocess.run([sys.executable, '-I', '-B', '-'], input='import json\nprint("inline-ok")\n', cwd=scratch, env=clean_env, capture_output=True, text=True)
     assert inline.stdout.strip() == 'inline-ok'
