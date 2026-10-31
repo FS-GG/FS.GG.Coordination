@@ -17,3 +17,7 @@ artifacts/
 TestResults/
 .tmp/
 nuget-cache/
+
+# Python bytecode written by repository controls must not dirty a candidate source checkout.
+__pycache__/
+*.pyc
