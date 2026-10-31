@@ -99,12 +99,13 @@ Templates. Templates owns the generic provider descriptor and product template; 
 route remains the receiver unless real composition proves a generic defect. Qualification uses the production
 resolver and installed CLI on fdev, the contained glibc 2.44 facility selected under FS-GG/.github#3010 (see
 [P4 facility and receiver-bound grant amendment](#p4-facility-and-receiver-bound-grant-amendment--2026-10-30)),
-with a non-root fdev account, root-owned immutable grant, verified complete package and OCI custody, fixed
-rootless Podman/VFS operation, and a runtime-only view that hides SDK and provisioning sources. Source
-preparation may add the fixture projection and installed-candidate workflow, but it cannot create grant authority.
-Missing runtime isolation, UID mapping, custody, capacity or cleanup evidence refuses the native stage. Publication follows exact installed-candidate qualification; a fresh public
-creation and its own receiver-bound grant are a separate adoption boundary. Retained workspace upgrade handling
-continues to P5.
+with a dedicated non-root executor account, a root-owned read-only grant (a cooperative control inside fdev, not
+tamper-proof against fdev root), verified complete package and OCI custody, fixed rootless Podman/VFS operation,
+and a runtime-only view that hides SDK and provisioning sources. Source preparation may add the fixture projection
+and installed-candidate workflow, but it cannot create grant authority. Missing runtime isolation, UID mapping,
+custody, capacity or cleanup evidence refuses the native stage. Publication follows exact installed-candidate
+qualification; a fresh public creation and its own receiver-bound grant are a separate adoption boundary.
+Retained workspace upgrade handling continues to P5.
 
 ## P1 evidence
 
@@ -382,7 +383,7 @@ proof of a release, current private facts or a usable grant.
 |---|---|---|
 | Coordination P4 release/diagnostic maintainer | Freeze the exact helper, installed qualifier, canonical package/image and receiver joins; state the selected execution owner and first bounded source milestone. | Preserve canonical installed DIAG acceptance and every earlier failed/consumed attempt; no P4 closure from source selection. |
 | Host execution/provisioning owner | Supply one currently supported enforcing outer profile with immutable total-time, resource, output and cleanup bounds; bind process custody, original reservations and independent termination/cleanup readback to the actual entrypoint. | The helper's internal timeout/process-group cleanup alone does not prove an enforcing outer profile. No current joined outer-profile proof is established here; affected execution stays held. |
-| Administrator provider-enrollment/grant owner (2026-10-30: the owner authorizes; Root installs under that delegation, see the amendment below) | Verify current runtime/account/image capabilities and the exact installed CLI/receiver closure; supply the fixed-path, root-owned receiver-bound enrollment/grant through its existing protected route. | No grant from public candidate facts, synthetic declarations or historical permissions; unresolved capability/custody remains unknown. |
+| Administrator provider-enrollment/grant owner (2026-10-30: Root/fdev decides under the repository owner's standing delegation and installs the grant as a separately admitted protected effect; see the amendment below) | Verify current runtime/account/image capabilities and the exact installed CLI/receiver closure; supply the fixed-path, root-owned receiver-bound enrollment/grant through its existing protected route. | No grant from public candidate facts, synthetic declarations or historical permissions; unresolved capability/custody remains unknown. |
 | Private-facts custody owner | Retain exact host/facts/receiver/operation evidence and original cleanup uncertainty in restricted custody; return only approved hashes and conclusions. | No private raw logs, account details, credential paths or provider facts enter this public plan. |
 | Coordination publisher and credential custodian | Reconcile the original candidate and immutable publisher inputs, then independently admit existing credential exchanges and ordered publication/readback. | Both canonical installed DIAG and genuine receiver-bound P4 installed qualification/grant precede publication; source delivery and a dormant operation name supply neither. |
 | SDD/Templates receiver owners | Qualify the selected public source/receiver joins, then observe fresh public installed opt-in creation after coherent publication. | Published bytes are distinct from installation, activation and retaining upgrades; P5 retains its own scope. |
@@ -421,9 +422,14 @@ dispatch, provider enrollment, installation or publication.
 
 ## P4 facility and receiver-bound grant amendment — 2026-10-30
 
-Amends the facility and grant-owner wording above under the owner's standing decision grant recorded on
-[FS-GG/.github#4648](https://github.com/FS-GG/.github/issues/4648#issuecomment-6526467018). Plan text only: no
-account, grant, profile, dispatch, run or publication is created, and P4 stays open.
+Amends the facility, account and grant wording above. Root/fdev decided it on
+[FS-GG/.github#4648](https://github.com/FS-GG/.github/issues/4648#issuecomment-6526467018) and refined it in the
+[follow-up decisions](https://github.com/FS-GG/.github/issues/4648#issuecomment-6533030372) of the same day, under
+the repository owner's standing delegation recorded on
+[FS-GG/.github#3010](https://github.com/FS-GG/.github/issues/3010#issuecomment-6518626059). Both comments are
+posted from the owner's GitHub login, so the login is not evidence of who decided; the decider is Root/fdev, and
+the delegation is the owner's. Plan text only: no account, grant, profile, dispatch, run or publication is created,
+and P4 stays open.
 
 **What the receiver-bound grant is.** It is not a GitHub grant. It is the root-owned file
 `/etc/fsgg/portable-workspaces/python-hello-v1.json`, schema `fsgg.portable-workspace-python-enrollment/v1`,
@@ -432,35 +438,72 @@ defined by the
 (fixed path, ownership and ACL walk, closed schema, live-system binding and the non-root effective-uid check). It
 is wrapped by `authorization.json`, which
 [`validate_provider_input.py`](../../tests/portable-workspace/trusted-provider/validate_provider_input.py)
-validates against the facts and the grant.
+validates against the facts and the grant. The wrapper must carry `nativeExecutionAuthorized: true`; the candidate
+facts it is checked against carry `false`. In fdev, file modes and `sudo` are cooperative hygiene rather than a
+security boundary
+([native-chain re-host plan, section 1](https://github.com/FS-GG/.github/blob/main/docs/coordination/2026-10-30-native-chain-rehost-fdev.md)),
+so "root-owned" here is a check the code makes and a custody control, not tamper-proofing against fdev root.
 
-**Facility and authorizer.**
+**Facility and executor account.**
 
 - The facility is **fdev**, the contained glibc 2.44 facility already selected under FS-GG/.github#3010, replacing
   the earlier "fresh hosted Linux VM" wording.
-- `allowedUid` is a non-root fdev account: uid 1000, or a dedicated account kept for hygiene.
-- The owner is the named authorizer in `authorizedBy`. Root installs the file under the owner's standing delegation,
-  and the wrapper cites that delegation. This replaces the earlier "Administrator grant owner" wording.
-- The grant is genuine only when it is built solely from the genuine candidate-facts output. Its SHA-256
-  (`grantSha256`) is recorded publicly.
+- The executor is a dedicated account, not uid 1000: `p4executor`, uid 32001, with a subuid and subgid range of at
+  least 65536 starting at 2000000 that overlaps no other range. Its groups are its own name only. The account,
+  `/srv/p4-receiver`, `/p4` (mode 0700, owned by the account) and `/etc/fsgg/portable-workspaces` come from Home's
+  fdev image definition, the way `fsgg-learn-qual` does, because fdev's `/etc/passwd`, `subuid` and `subgid` live on
+  the rebuilt root disk. This is the Home image request
+  [FS-GG/.github#5078](https://github.com/FS-GG/.github/issues/5078).
+- `account_plan` in
+  [`provider_runtime.py`](../../tests/portable-workspace/trusted-provider/provider_runtime.py) refuses an account
+  whose name, uid or gid already exists, or whose mapping collides, so the account cannot be added to a running
+  system with this tooling.
+
+**Where the grant comes from.** The grant is built from the genuine candidate-facts output **plus** the
+private-facts overlay, which `provider_runtime.py private-facts` produces from the account's measured capability.
+`collect` writes neither `allowedUid` nor `executables`, and the validator requires both: the grant must equal the
+facts on `allowedUid` and on `executables`. The grantor chooses six fields, which are recorded as grantor inputs
+and are not facts: `grantId`, `workflowRevision`, `fenceGeneration`, `observedAt`, `authorizedBy` and
+`authorizedAt`. The SHA-256 of the overlay and of the grant (`grantSha256`) are both recorded publicly.
+
+**Authority.**
+
+- Installing the grant is a separately admitted protected effect. The standing delegation creates no credentials,
+  protected approvals or runtime capabilities, and it does not renew original clocks.
+- The delegation is cited in the `authorizedBy` text of the wrapper. The validator checks only that the field is a
+  non-empty string; it does not verify the delegation, so the citation is a record for readers, not a control.
+- Root/fdev decides; Root installs only after the admission above.
 
 **Order.** No grant exists before its inputs exist.
 
 1. A fresh receiver commit and tree plus candidate facts, from the `candidate-facts` phase.
-2. An enforcing outer profile (FS-GG/.github#4650).
-3. The grant: `sudo install` with `root:root`, mode 0755 directories and a mode 0644 file, verified with `stat`,
-   `getfacl` and `sha256sum` equal to `grantSha256`.
+2. An enforcing outer profile ([FS-GG/.github#4650](https://github.com/FS-GG/.github/issues/4650)), including
+   hiding the SDKs from the account.
+3. The private-facts overlay, measured on the executor account, then the grant: `sudo install` with `root:root`,
+   mode 0755 directories and a mode 0644 file, verified with `stat`, `getfacl` and `sha256sum` equal to
+   `grantSha256`.
 4. The run, with independent cleanup readback.
 5. Publication and adoption.
+
+**Open items at this amendment.**
+
+- The executor account does not exist yet; it waits on the Home image request above.
+- The canonical 0.2.1 preparation artifact has expired (14-day retention). A fresh `callable-cli-release-prepare` is
+  needed. Root dispatches it only when #4650's enforcing profile is near ready, then runs stage-inputs and
+  candidate-facts promptly. If the fresh archive is byte-identical to the expired one, no re-pin is needed;
+  otherwise the publisher pin is re-pinned with a recorded reason, after review.
+- #4650's enforcing profile is not ready.
 
 **Checks before running.**
 
 - Podman storage on fdev defaults to overlay while this plan fixes VFS. The production policy passes
   `--storage-driver=vfs` and a generated `storage.conf` with `driver = "vfs"`, so the VFS requirement is the
   code's own; the host default is not changed or relied on.
-- On Arch, `/usr/sbin` and `/sbin` are symlinks to `/usr/bin`. The grant binds the literal `/usr/bin/git`,
-  `/usr/bin/tar` and `/usr/bin/podman` paths and their SHA-256, which must be measured on fdev after the last
-  package update and before the grant is installed.
+- On Arch, `/usr/sbin`, `/sbin` and `/bin` are symlinks to `usr/bin`, so the identity holds. The grant binds the
+  literal `/usr/bin/git`, `/usr/bin/tar` and `/usr/bin/podman` paths and their SHA-256, which must be measured on
+  fdev after the last package update and before the grant is installed.
+- **Freeze.** No system package updates from that re-measure until the run completes, since an update would
+  change the bound hashes.
 
 ## C2 source qualification
 
