@@ -195,9 +195,11 @@ class RecordingExecutor(fn.Executor):
         self.host, self.effects, self.fail_effect = host, [], fail_effect
         self.cap_value, self.refuse_claim = cap_value, refuse_claim
         self.written = {}
+        self.timeouts = []
 
     def run(self, argv, effect, timeout=None):
         self.effects.append((effect, argv))
+        self.timeouts.append((effect, timeout))
         if effect == self.fail_effect:
             raise fn.Refusal('effect.' + effect, 'simulated failure')
         if effect in ('io.cap-apply', 'io.cap-remove'):
@@ -384,7 +386,10 @@ class Builders(unittest.TestCase):
         argv = fn.launcher_scope_argv(selection(), ['python3', 'fdev_native.py', 'launch'])
         self.assertEqual(argv[:3], ['systemd-run', '--user', '--scope'])
         props = [argv[i + 1] for i, a in enumerate(argv) if a == '-p']
-        self.assertEqual([p.split('=')[0] for p in props], ['RuntimeMaxSec', 'MemoryMax', 'TasksMax'])
+        self.assertEqual([p.split('=')[0] for p in props], ['RuntimeMaxSec', 'TimeoutStopSec', 'MemoryMax', 'TasksMax'])
+        clocks = selection()['clocks']
+        self.assertIn(f'TimeoutStopSec={fn.scope_stop_seconds(clocks)}', props)
+        self.assertGreater(fn.scope_stop_seconds(clocks), fn.exit_bound(clocks, fn.POLICY['maxCapTargets']))
         self.assertIn(f'--unit=fsgg-native-{OP}-bake-launcher.scope', argv)
 
     def test_caps_never_touch_exempt_sessions_slices_or_launcher(self):
@@ -526,6 +531,14 @@ class Evidence(unittest.TestCase):
                     self.home_io(controls={'scheduledWriterStopped': False, 'interactiveWorkloadAbsent': True}),
                     self.home_io(iostat={'command': 'psi', 'samples': 1, 'rawSha256': 'e' * 64})):
             self.assertEqual(fn.attach_home_io(evidence, bad)['ioCorrespondence']['status'], fn.IO_NOT_ESTABLISHED)
+
+    def test_missing_exit_exclusivity_alone_makes_the_host_shared(self):
+        window = self.window(); del window['exitExclusivity']
+        self.assertEqual(window['newUncappedUnitsDuringWindow'], [])
+        self.assertTrue(fn.window_shared(rows(), window))
+        self.assertFalse(fn.window_shared(rows(), self.window()))
+        busy = facts(); busy['lanes']['lanes'][0]['busy'] = ['dotnet']
+        self.assertTrue(fn.window_shared(rows(), self.window(exitExclusivity=fn.check_exclusivity(busy))))
 
     def test_window_without_entry_is_not_established_not_a_crash(self):
         evidence = fn.build_evidence(selection(), rows(), {'capsApplied': {'readbackOk': True}})
@@ -847,9 +860,15 @@ class LaunchControls(unittest.TestCase):
         previous = fn.install_signal_exceptions()
         try:
             for signum in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
+                fn.SIGNALS['raise'] = True  # one-shot: re-arm for each signal
                 with self.subTest(signal=signum), self.assertRaises(fn.Interrupted):
                     os.kill(os.getpid(), signum)
                     time.sleep(1)
+            fn.SIGNALS['raise'] = True
+            with self.assertRaises(fn.Interrupted):
+                os.kill(os.getpid(), signal.SIGTERM); time.sleep(1)
+            os.kill(os.getpid(), signal.SIGTERM); time.sleep(0.2)  # disarmed by the first: recorded only
+            self.assertEqual(fn.SIGNALS['pending'], [int(signal.SIGTERM)])
         finally:
             for signum, handler in previous.items():
                 signal.signal(signum, handler)
@@ -893,17 +912,19 @@ class LaunchControls(unittest.TestCase):
         collector_path = clocks['collectorSeconds'] + 2 * clocks['collectorRetireSeconds'] + 60
         self.assertGreater(bound, clocks['preStartSeconds'] + guest_path + collector_path)
         self.assertGreater(fn.scope_runtime_seconds(clocks), fn.internal_bound(clocks, fn.POLICY['maxCapTargets']))
-        # abnormal path: each retire clock counts twice (the observation bound, then the bounded stop);
-        # each cap target costs one entry and one exit effect bound
-        for key, weight in (('preStartSeconds', 1), ('usefulSeconds', 1), ('retireSeconds', 2), ('collectorSeconds', 1),
-                            ('collectorRetireSeconds', 2)):
+        # abnormal path: each retire clock counts three times (the observation bound, the bounded stop on
+        # the bound, and the bounded stop on window exit); each cap target costs one entry and one exit effect
+        for key, weight in (('preStartSeconds', 1), ('usefulSeconds', 1), ('retireSeconds', 3), ('collectorSeconds', 1),
+                            ('collectorRetireSeconds', 3)):
             bigger = dict(clocks); bigger[key] += 1
             self.assertEqual(fn.internal_bound(bigger, 3) - bound, weight, key)
         self.assertEqual(fn.internal_bound(clocks, 4) - bound, 3 * fn.EFFECT_TIMEOUT)
         argv = fn.launcher_scope_argv(selection(), ['x'])
         self.assertIn(f'RuntimeMaxSec={fn.scope_runtime_seconds(clocks)}', argv)
         name = fn.unit_names(OP, 'bake')['launcher']
-        for runtime, ok in ((f'{bound}s', False), (f'{bound + 1}s', True), ('2h', False), ('1d', True)):
+        need = fn.scope_runtime_seconds(clocks)
+        for runtime, ok in ((f'{bound + 1}s', False), (f'{need - 1}s', False), (f'{need}s', True), ('2h', False),
+                            ('1d', True)):
             with self.subTest(runtime=runtime):
                 self.host.units[name]['RuntimeMaxUSec'] = runtime
                 if ok:
@@ -945,6 +966,224 @@ class LaunchControls(unittest.TestCase):
         self.assertIn('unit.start-guest', ex.kinds())
         self.assertNotIn('unit.start-collector', ex.kinds())
         self.assertEqual(ex.kinds().count('io.cap-remove'), 3)
+
+
+class ExitPathControls(unittest.TestCase):
+    """R1-R3 and the exit shield: a started unit is stopped before caps go; signals cannot escape."""
+    setUp, tearDown = LaunchControls.setUp, LaunchControls.tearDown
+    launch, manifest = LaunchControls.launch, LaunchControls.manifest
+
+    def running_guest(self):
+        name = fn.unit_names(OP, 'bake')['guest']
+        self.host.units[name] = {'ActiveState': 'active', 'SubState': 'running'}
+        return name
+
+    def assert_stopped_before_caps(self, ex, unit):
+        kinds = ex.kinds()
+        stops = [i for i, (e, a) in enumerate(ex.effects) if e == 'unit.stop-on-exit' and unit in a]
+        self.assertEqual(len(stops), 1)
+        self.assertLess(stops[0], min(i for i, k in enumerate(kinds) if k == 'io.cap-remove'))
+        stop_timeout = [t for e, t in ex.timeouts if e == 'unit.stop-on-exit'][0]
+        return stop_timeout
+
+    def test_interrupt_while_observing_the_guest_stops_it_before_caps(self):
+        guest = self.running_guest()
+        stopped = {'ActiveState': 'failed', 'SubState': 'failed', 'Result': 'signal'}
+
+        class StopMakesTerminal(RecordingExecutor):
+            def run(inner, argv, effect, timeout=None):
+                result = super().run(argv, effect, timeout)
+                if effect == 'unit.stop-on-exit':
+                    self.host.units[guest] = stopped
+                return result
+        ex = StopMakesTerminal(self.host)
+        with mock.patch.object(fn.Window, 'observe_terminal', side_effect=fn.Interrupted(signal.SIGTERM)):
+            with self.assertRaises(fn.Interrupted):
+                self.launch(ex)
+        timeout = self.assert_stopped_before_caps(ex, guest)
+        self.assertEqual(timeout, selection()['clocks']['retireSeconds'] + fn.EFFECT_TIMEOUT)
+        record = json.loads(ex.written[fn.record_path(OP)])['window']
+        self.assertTrue(record['guestStartAttempted'])
+        self.assertEqual(record['outcome'], 'failed-awaiting-readback')
+        self.assertTrue(record['guestStopOnExit']['terminal'])
+
+    def test_unit_show_failure_while_observing_stops_the_guest(self):
+        guest = self.running_guest()
+        original = self.host.run
+
+        def run(argv, timeout=30):
+            if 'show' in argv and guest in argv:
+                return None, 'timed out'
+            return original(argv, timeout)
+        self.host.run = run
+        ex = RecordingExecutor(self.host)
+        with self.assertRaises(fn.Refusal) as caught:
+            self.launch(ex)
+        self.assertEqual(caught.exception.check, 'unit.show')
+        self.assert_stopped_before_caps(ex, guest)
+        record = json.loads(ex.written[fn.record_path(OP)])['window']
+        self.assertEqual(record['outcome'], 'unknown-awaiting-readback', 'state unreadable after the stop')
+        self.assertTrue(record['unitMayStillRun'])
+
+    def test_start_timeout_still_stops_the_guest(self):
+        guest = self.running_guest()
+        ex = RecordingExecutor(self.host, fail_effect='unit.start-guest')
+        with self.assertRaises(fn.Refusal):
+            self.launch(ex)
+        self.assert_stopped_before_caps(ex, guest)
+
+    def test_interrupt_while_observing_the_collector_stops_it(self):
+        collector = fn.unit_names(OP, 'bake')['collector']
+        self.host.units[collector] = {'ActiveState': 'active', 'SubState': 'running'}
+        real = fn.Window.observe_terminal
+
+        def observe(win, unit, bound, stop):
+            if unit == collector:
+                raise fn.Interrupted(signal.SIGTERM)
+            return real(win, unit, bound, stop)
+        ex = RecordingExecutor(self.host)
+        with mock.patch.object(fn.Window, 'observe_terminal', observe):
+            with self.assertRaises(fn.Interrupted):
+                self.launch(ex)
+        timeout = self.assert_stopped_before_caps(ex, collector)
+        self.assertEqual(timeout, selection()['clocks']['collectorRetireSeconds'] + fn.EFFECT_TIMEOUT)
+        guest = fn.unit_names(OP, 'bake')['guest']
+        self.assertFalse(any(e == 'unit.stop-on-exit' and guest in a for e, a in ex.effects), 'guest observed terminal')
+
+    def test_failed_stop_on_exit_marks_the_outcome_unknown(self):
+        self.running_guest()
+        ex = RecordingExecutor(self.host, fail_effect='unit.stop-on-exit')
+        with mock.patch.object(fn.Window, 'observe_terminal', side_effect=fn.Interrupted(signal.SIGTERM)):
+            with self.assertRaises(fn.Interrupted):
+                self.launch(ex)
+        record = json.loads(ex.written[fn.record_path(OP)])['window']
+        self.assertEqual(record['outcome'], 'unknown-awaiting-readback')
+        self.assertFalse(record['guestStopOnExit']['stopped'])
+        self.assertEqual(ex.kinds().count('io.cap-remove'), 3, 'caps are still removed')
+
+    def test_window_exit_refuses_when_a_stopped_unit_may_keep_its_drop_in(self):
+        manifest = self.manifest()
+        shutil.rmtree(Path(self.host.cgroot) / STORE.lstrip('/'))
+
+        class StoreBus(RecordingExecutor):
+            def run(self, argv, effect, timeout=None):
+                if effect == 'io.cap-remove' and 'fsgg-store.service' in argv:
+                    self.effects.append((effect, argv)); raise fn.Refusal('effect.io.cap-remove', 'timed out after 30s')
+                return super().run(argv, effect, timeout)
+        ex = StoreBus(self.host)
+        with self.assertRaises(fn.Refusal) as caught:
+            fn.window_exit(self.host, ex, manifest)
+        self.assertEqual(caught.exception.check, 'io.cap-remove-readback')
+        self.assertEqual([r['unit'] for r in caught.exception.result['unconfirmed']], ['fsgg-store.service'])
+        self.assertEqual(ex.kinds().count('slice.revert'), 2)
+
+    def test_signal_during_the_claim_is_raised_inside_the_window(self):
+        ex = RecordingExecutor(self.host)
+        original = ex.create_claim
+
+        def claim(path, payload):
+            original(path, payload)
+            os.kill(os.getpid(), signal.SIGTERM); time.sleep(0.2)  # lands between claim and try
+        ex.create_claim = claim
+        previous = fn.install_signal_exceptions()
+        try:
+            with self.assertRaises(fn.Interrupted):
+                self.launch(ex)
+        finally:
+            for signum, handler in previous.items():
+                signal.signal(signum, handler)
+        record = json.loads(ex.written[fn.record_path(OP)])['window']
+        self.assertEqual(record['firstFailure']['check'], 'launch.signal')
+        self.assertNotIn('io.cap-apply', ex.kinds())
+
+    def test_signal_during_window_exit_is_recorded_and_exit_completes(self):
+        ex = RecordingExecutor(self.host)
+        original = ex.run
+
+        def run(argv, effect, timeout=None):
+            if effect == 'io.cap-remove':
+                os.kill(os.getpid(), signal.SIGTERM); time.sleep(0.05)
+            return original(argv, effect, timeout)
+        ex.run = run
+        previous = fn.install_signal_exceptions()
+        try:
+            win = self.launch(ex)
+        finally:
+            for signum, handler in previous.items():
+                signal.signal(signum, handler)
+        self.assertEqual(ex.kinds().count('io.cap-remove'), 3)
+        self.assertEqual(ex.kinds().count('slice.revert'), 2)
+        self.assertEqual(win.record['signalsDuringExit'], [int(signal.SIGTERM)] * 3)
+
+    def test_signal_replacing_a_refusal_keeps_the_refusal(self):
+        ex = RecordingExecutor(self.host)
+        error = fn.Interrupted(signal.SIGTERM)
+        error.__context__ = fn.Refusal('image.stock-digest', 'differs')
+        with mock.patch.object(fn, '_window_body', side_effect=error):
+            with self.assertRaises(fn.Interrupted):
+                self.launch(ex)
+        record = json.loads(ex.written[fn.record_path(OP)])['window']
+        self.assertEqual(record['firstFailure']['replaced']['check'], 'image.stock-digest')
+
+    def test_removals_and_reverts_are_effect_bounded(self):
+        ex = RecordingExecutor(self.host)
+        self.launch(ex)
+        bounded = [t for e, t in ex.timeouts if e in ('io.cap-remove', 'io.cap-apply', 'slice.revert', 'slice.properties')]
+        self.assertEqual(len(bounded), 10)
+        self.assertEqual(set(bounded), {fn.EFFECT_TIMEOUT})
+
+    def test_failed_exit_observation_counts_as_shared(self):
+        f = facts(); calls = []
+
+        def reobserve():
+            calls.append(1)
+            if len(calls) == 1:
+                return f
+            raise OSError('cgroup tree unreadable')
+        win = self.launch(RecordingExecutor(self.host), f=f, reobserve=reobserve)
+        self.assertIn('exitObservationError', win.record)
+        self.assertTrue(win.evidence['sharedCodexHost'])
+        fn.validate_evidence(win.evidence)
+
+    def test_main_wires_signal_exceptions_before_launch(self):
+        seen = {}
+
+        def fake_launch(*args, **kwargs):
+            seen['handler'] = signal.getsignal(signal.SIGTERM)
+            seen['armed'] = fn.SIGNALS['raise']
+            raise fn.Refusal('probe', 'stop here')
+        path = Path(self.tmp.name) / 'sel.json'; path.write_text(json.dumps(selection()))
+        saved = {s: signal.getsignal(s) for s in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP)}
+        try:
+            with mock.patch.object(fn, 'observe', return_value=facts()), \
+                    mock.patch.object(fn, 'evaluate', return_value=rows()), \
+                    mock.patch.object(fn, 'launch', side_effect=fake_launch), contextlib.redirect_stderr(io.StringIO()):
+                fn.main(['launch', '--selection', str(path), '--no-github'])
+        finally:
+            for signum, handler in saved.items():
+                signal.signal(signum, handler)
+        self.assertIs(seen['handler'], fn._on_signal)
+        self.assertTrue(seen['armed'])
+
+    def test_main_reports_an_interrupted_window_with_its_record(self):
+        error = fn.Interrupted(signal.SIGTERM)
+        window = mock.Mock(); window.record = {'firstFailure': {'check': 'launch.signal'}, 'outcome': 'refused'}
+        window.record_path = fn.record_path(OP); error.window = window
+        path = Path(self.tmp.name) / 'sel.json'; path.write_text(json.dumps(selection()))
+        err = io.StringIO()
+        saved = {s: signal.getsignal(s) for s in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP)}
+        try:
+            with mock.patch.object(fn, 'observe', return_value=facts()), \
+                    mock.patch.object(fn, 'evaluate', return_value=rows()), \
+                    mock.patch.object(fn, 'launch', side_effect=error), contextlib.redirect_stderr(err):
+                code = fn.main(['launch', '--selection', str(path), '--no-github'])
+        finally:
+            for signum, handler in saved.items():
+                signal.signal(signum, handler)
+        self.assertEqual(code, 128 + int(signal.SIGTERM))
+        report = json.loads(err.getvalue())
+        self.assertEqual(report['interrupted'], 'SIGTERM')
+        self.assertEqual(report['windowRecord'], fn.record_path(OP))
 
 
 class RealClaim(unittest.TestCase):

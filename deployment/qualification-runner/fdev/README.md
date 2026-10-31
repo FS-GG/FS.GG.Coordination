@@ -51,12 +51,14 @@ python3 -I -B fdev_native.py launch --dry-run --selection S.json
 
 # The window (M1+, under a Root selection), run inside its own bounded scope:
 systemd-run --user --scope --unit=fsgg-native-<op>-<step>-launcher.scope \
-    -p RuntimeMaxSec=<scope_runtime_seconds(clocks)> -p MemoryMax=1G -p TasksMax=128 -- \
+    -p RuntimeMaxSec=<scope_runtime_seconds(clocks)> -p TimeoutStopSec=<scope_stop_seconds(clocks)> \
+    -p MemoryMax=1G -p TasksMax=128 -- \
     python3 -I -B fdev_native.py launch --selection S.json
 
 # Recovery after a crashed window (idempotent). Attempts every removal; a unit that no
 # longer exists counts as already gone; other errors are recorded per target. Reverts both
-# native slices, reads back, and refuses only if a cap is still present.
+# native slices, reads back, and refuses under the same rule as launch: a cap still present,
+# or a removal error on a stopped unit (absent cgroup) whose runtime drop-in may remain.
 python3 -I -B fdev_native.py window-exit --manifest /srv/v3-pool/native/runs/<op>/caps-manifest.json
 ```
 
@@ -128,7 +130,15 @@ Launch adds these checks:
   - window exit.
 
   Every systemd effect has its own 30 s bound, so the internal bounds always expire first.
-  SIGTERM, SIGINT and SIGHUP raise an exception, so window exit still runs.
+  The scope must use `scope_runtime_seconds(clocks)`, and its `TimeoutStopSec`
+  (`scope_stop_seconds`) covers window exit after a SIGTERM.
+- **Signals.** SIGTERM, SIGINT and SIGHUP raise `Interrupted` once per arming. The handler
+  disarms itself as it raises, so no second exception can land in an `except` body or the exit
+  path.
+  - The handler is disarmed from the claim until inside the `try`. A signal during the claim is
+    recorded, then raised there.
+  - A `finally` disarms it before window exit, and signals during exit are recorded.
+  - `main` reports an interrupted window with its record path and exits 128 + signal.
 - `io.cap-readback`: kernel `io.max` equals the bound caps on every running target.
 - `clock.pre-start`: the guest starts within the pre-start cut, on fdev monotonic time.
 - `clock.enclosing`: the GitHub `Date` header minus the start witness, plus the remaining
@@ -169,11 +179,15 @@ Launch adds these checks:
 11. Run the collector unit in `fsgg-native-collect.slice`. It hashes `root.raw` and writes
     the closed packet.
 12. Window exit, on every path after the claim (refusal, error or signal):
-    1. attempt every cap removal and read back their absence;
-    2. revert the two native slices;
-    3. take the after-window `io.stat`, PSI and exclusivity checks;
-    4. list the lane units that appeared uncapped during the window;
-    5. write the durable window record to `/srv/v3-pool/native/claims/<op>.window.json`,
+    1. if a guest or collector start was attempted but its terminal state was not observed,
+       stop it (bounded by retire + 30 s) and read its state back, before anything else. The
+       outcome is `failed-awaiting-readback`, or `unknown-awaiting-readback` with
+       `unitMayStillRun` when the stop cannot be confirmed;
+    2. attempt every cap removal and read back their absence;
+    3. revert the two native slices;
+    4. take the after-window `io.stat`, PSI and exclusivity checks;
+    5. list the lane units that appeared uncapped during the window;
+    6. write the durable window record to `/srv/v3-pool/native/claims/<op>.window.json`,
        outside the run directory, together with the first failure, and a copy in the run
        directory when it exists.
 

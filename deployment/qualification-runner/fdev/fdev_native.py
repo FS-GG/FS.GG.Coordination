@@ -123,12 +123,14 @@ SIGNALS = {'raise': True, 'pending': []}
 
 def _on_signal(signum, _frame):
     if SIGNALS['raise']:
+        SIGNALS['raise'] = False  # one-shot: disarm before raising, so no second exception can land in exit
         raise Interrupted(signum)
-    SIGNALS['pending'].append(signal.Signals(signum).name)  # during window exit: record, do not abort
+    SIGNALS['pending'].append(int(signum))  # disarmed (claim or window exit): record, do not abort
 
 
 def install_signal_exceptions():
-    """SIGTERM (scope RuntimeMaxSec or stop), SIGINT and SIGHUP raise Interrupted."""
+    """SIGTERM (scope RuntimeMaxSec or stop), SIGINT and SIGHUP raise Interrupted, once per arming."""
+    SIGNALS['raise'], SIGNALS['pending'] = True, []
     return {s: signal.signal(s, _on_signal) for s in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP)}
 
 
@@ -883,6 +885,7 @@ def launcher_scope_argv(selection, argv_tail):
     runtime = scope_runtime_seconds(selection['clocks'])
     name = unit_names(selection['operationId'], selection['step'])['launcher']
     return ['systemd-run', '--user', '--scope', f'--unit={name}', '-p', f'RuntimeMaxSec={runtime}',
+            '-p', f'TimeoutStopSec={scope_stop_seconds(selection["clocks"])}',
             '-p', f'MemoryMax={POLICY["launcherScope"]["MemoryMax"]}', '-p',
             f'TasksMax={POLICY["launcherScope"]["TasksMax"]}', '--'] + argv_tail
 
@@ -1193,12 +1196,23 @@ def internal_bound(clocks, n_targets):
     guest = clocks['usefulSeconds'] + clocks['retireSeconds'] + 60 + clocks['retireSeconds'] + EFFECT_TIMEOUT
     collector = (clocks['collectorSeconds'] + clocks['collectorRetireSeconds'] + 60 + clocks['collectorRetireSeconds']
                  + EFFECT_TIMEOUT)
-    exit_ = (n_targets + 6) * EFFECT_TIMEOUT
-    return entry + guest + collector + exit_
+    return entry + guest + collector + exit_bound(clocks, n_targets)
+
+
+def exit_bound(clocks, n_targets):
+    """Window exit: a bounded stop (and readback) of a guest and a collector not yet observed
+    terminal, then every cap removal, both slice reverts and the record writes."""
+    stops = clocks['retireSeconds'] + clocks['collectorRetireSeconds'] + 4 * EFFECT_TIMEOUT
+    return stops + (n_targets + 6) * EFFECT_TIMEOUT
 
 
 def scope_runtime_seconds(clocks):
     return internal_bound(clocks, POLICY['maxCapTargets']) + SCOPE_MARGIN_SECONDS
+
+
+def scope_stop_seconds(clocks):
+    """TimeoutStopSec for the launcher scope: after SIGTERM the window exit still completes."""
+    return exit_bound(clocks, POLICY['maxCapTargets']) + SCOPE_MARGIN_SECONDS
 
 
 def check_launcher_scope(host, selection, n_targets):
@@ -1213,9 +1227,9 @@ def check_launcher_scope(host, selection, n_targets):
     for key in ('RuntimeMaxUSec', 'MemoryMax', 'TasksMax'):
         require(props.get(key) not in (None, '', 'infinity'), 'scope.bounded', f'{name} has no finite {key}')
     runtime = parse_timespan_seconds(props['RuntimeMaxUSec'])
-    needed = internal_bound(selection['clocks'], n_targets)
-    require(runtime > needed, 'scope.bounded',
-            f'{name} RuntimeMaxSec {runtime:.0f}s does not exceed the internal bound {needed}s')
+    needed = scope_runtime_seconds(selection['clocks'])
+    require(runtime >= needed and runtime > internal_bound(selection['clocks'], n_targets), 'scope.bounded',
+            f'{name} RuntimeMaxSec {runtime:.0f}s is below the required {needed}s')
     return props
 
 
@@ -1241,8 +1255,12 @@ def remove_caps_all(host, executor, targets, devices, uid):
         results.append(entry)
     failures = [] if isinstance(executor, PlanOnly) else readback_removed(host, targets, devices)
     errors = [r for r in results if r['result'] == 'error']
-    return {'targets': results, 'errors': errors, 'failures': failures, 'readbackOk': not failures,
-            'pending': bool(failures or errors), 'at': utc_text(host.now())}
+    # A removal error on a target whose cgroup is absent (a stopped unit) may leave its runtime
+    # drop-in, which would cap it at its next start; the kernel cannot read that back.
+    unconfirmed = [] if isinstance(executor, PlanOnly) else [
+        r for r in errors if not (host.cgroot / r['cgroup'].lstrip('/')).is_dir()]
+    return {'targets': results, 'errors': errors, 'failures': failures, 'unconfirmed': unconfirmed,
+            'readbackOk': not failures, 'pending': bool(failures or unconfirmed), 'at': utc_text(host.now())}
 
 
 def revert_slices(executor):
@@ -1363,63 +1381,27 @@ def launch(host, executor, selection, facts, rows, run_root=None, github=None, p
     win = Window(host, executor, selection, facts, rows, targets, run_root, poll)
     clocks = selection['clocks']
     observe_now = reobserve or (lambda: observe(host, selection))
-    executor.create_claim(f'{POLICY["claimsDir"]}/{win.op}', {
-        'operationId': win.op, 'step': win.step, 'claimedAt': utc_text(host.now()),
-        'bootId': _try(lambda: host.read('/proc/sys/kernel/random/boot_id').strip()), 'launcherPid': os.getpid()})
+    # Disarmed from the claim until inside the try: a signal here is recorded, then raised in the try.
+    SIGNALS['raise'], SIGNALS['pending'] = False, []
+    try:
+        executor.create_claim(f'{POLICY["claimsDir"]}/{win.op}', {
+            'operationId': win.op, 'step': win.step, 'claimedAt': utc_text(host.now()),
+            'bootId': _try(lambda: host.read('/proc/sys/kernel/random/boot_id').strip()), 'launcherPid': os.getpid()})
+    except BaseException:
+        SIGNALS['raise'] = True  # no claim was made: nothing to exit
+        raise
     claim_mono = host.monotonic()
     win.record['outcome'] = 'refused'
     first = None
     try:
-        start_witness = github.post_start_witness(win.op, win.step) if github else None
-        win.record['startWitness'] = utc_text(start_witness) if start_witness else None
-        entry_facts = facts
-        if not isinstance(executor, PlanOnly):
-            # Capacity and exclusivity re-read hook at window entry, after the claim.
-            entry_facts = observe_now()
-            again = evaluate(entry_facts, selection, None, selection['hostPartition'], host.now(),
-                             host_mem=selection.get('hostMemory'))
-            refuse_unless_all_supported([r for r in again if r['check'] in ENTRY_RECHECKS])
-        executor.mkdir(win.run_dir, 0o700)
-        win.record['enteredAt'] = utc_text(host.now())
-        win.record['ioStatBefore'] = entry_facts.get('ioStat')
-        win.record['psiBefore'] = entry_facts.get('ioPressure')
-        win.apply_caps()
-        win.record['slicesSet'] = True
-        for argv in slice_argv():
-            executor.run(argv, 'slice.properties', timeout=EFFECT_TIMEOUT)
-        if not (facts.get('commitRoot') or {}).get('exists'):
-            executor.mkdir(POLICY['commitRoot'], 0o700)
-        image_path = selection['image']['path']
-        expected = lock_image_sha(NOBLE_LOCK)
-        if not isinstance(executor, PlanOnly):
-            actual, _size = sha256_file(image_path)
-            require(actual == expected, 'image.stock-digest', f'{image_path} sha256 {actual} != lock pin {expected}')
-            for disk in selection.get('readOnlyDisks', []):
-                got, _ = sha256_file(disk['path'])
-                require(got == disk['sha256'], 'disk.digest', f'{disk["path"]} sha256 differs from the selection')
-        win.record['image'] = {'path': image_path, 'sha256': expected}
-        for argv in disk_prep_argv(win.run_dir, image_path):
-            remaining = clocks['preStartSeconds'] - (host.monotonic() - claim_mono)
-            require(remaining > 0, 'clock.pre-start', 'pre-start cut exhausted during disk preparation')
-            executor.run(argv, 'disk.prepare', timeout=remaining)
-        guest_uuid = str(uuidlib.uuid4())
-        win.record['guestUuid'] = guest_uuid
-        if not isinstance(executor, PlanOnly):
-            check_pre_start(claim_mono, host.monotonic(), clocks)
-            if github:
-                reserve = clocks['usefulSeconds'] + clocks['retireSeconds'] + clocks['collectorSeconds'] + clocks[
-                    'collectorRetireSeconds']
-                check_enclosing(start_witness, github.date(), clocks, reserve)
-        executor.run(guest_unit_argv(selection, win.run_dir, guest_uuid), 'unit.start-guest', timeout=EFFECT_TIMEOUT)
-        win.record['guest'] = win.observe_terminal(win.names['guest'], clocks['usefulSeconds'] + clocks[
-            'retireSeconds'] + 60, clocks['retireSeconds'])
-        if github and not isinstance(executor, PlanOnly):
-            check_enclosing(start_witness, github.date(), clocks,
-                            clocks['collectorSeconds'] + clocks['collectorRetireSeconds'])
-        executor.run(collector_unit_argv(selection, win.run_dir), 'unit.start-collector', timeout=EFFECT_TIMEOUT)
-        win.record['collector'] = win.observe_terminal(win.names['collector'], clocks['collectorSeconds'] + clocks[
-            'collectorRetireSeconds'] + 60, clocks['collectorRetireSeconds'])
-        win.record['outcome'] = guest_outcome(win.record['guest']) if not isinstance(executor, PlanOnly) else 'planned'
+        try:
+            SIGNALS['raise'] = True
+            if SIGNALS['pending']:
+                SIGNALS['raise'] = False
+                raise Interrupted(SIGNALS['pending'].pop(0))
+            _window_body(win, host, executor, selection, facts, github, clocks, claim_mono, observe_now)
+        finally:
+            SIGNALS['raise'] = False  # exit shield: no signal can raise from here until launch returns
     except Refusal as refusal:
         first = refusal
         win.record['firstFailure'] = {'check': refusal.check, 'reason': refusal.reason}
@@ -1427,10 +1409,101 @@ def launch(host, executor, selection, facts, rows, run_root=None, github=None, p
         first = error
         check = 'launch.signal' if isinstance(error, Interrupted) else 'launch.unexpected'
         win.record['firstFailure'] = {'check': check, 'reason': repr(error)}
-    if first is not None and 'guest' in win.record:
-        win.record['outcome'] = 'failed-awaiting-readback'
-    SIGNALS['raise'] = False  # window exit is not interrupted; further signals are recorded
+        if isinstance(error.__context__, Refusal):  # a signal that replaced a refusal keeps the refusal
+            win.record['firstFailure']['replaced'] = {'check': error.__context__.check,
+                                                      'reason': error.__context__.reason}
+    return _window_exit_path(win, host, executor, selection, rows, clocks, observe_now, first)
+
+
+def _window_body(win, host, executor, selection, facts, github, clocks, claim_mono, observe_now):
+    start_witness = github.post_start_witness(win.op, win.step) if github else None
+    win.record['startWitness'] = utc_text(start_witness) if start_witness else None
+    entry_facts = facts
+    if not isinstance(executor, PlanOnly):
+        # Capacity and exclusivity re-read hook at window entry, after the claim.
+        entry_facts = observe_now()
+        again = evaluate(entry_facts, selection, None, selection['hostPartition'], host.now(),
+                         host_mem=selection.get('hostMemory'))
+        refuse_unless_all_supported([r for r in again if r['check'] in ENTRY_RECHECKS])
+    executor.mkdir(win.run_dir, 0o700)
+    win.record['enteredAt'] = utc_text(host.now())
+    win.record['ioStatBefore'] = entry_facts.get('ioStat')
+    win.record['psiBefore'] = entry_facts.get('ioPressure')
+    win.apply_caps()
+    win.record['slicesSet'] = True
+    for argv in slice_argv():
+        executor.run(argv, 'slice.properties', timeout=EFFECT_TIMEOUT)
+    if not (facts.get('commitRoot') or {}).get('exists'):
+        executor.mkdir(POLICY['commitRoot'], 0o700)
+    image_path = selection['image']['path']
+    expected = lock_image_sha(NOBLE_LOCK)
+    if not isinstance(executor, PlanOnly):
+        actual, _size = sha256_file(image_path)
+        require(actual == expected, 'image.stock-digest', f'{image_path} sha256 {actual} != lock pin {expected}')
+        for disk in selection.get('readOnlyDisks', []):
+            got, _ = sha256_file(disk['path'])
+            require(got == disk['sha256'], 'disk.digest', f'{disk["path"]} sha256 differs from the selection')
+    win.record['image'] = {'path': image_path, 'sha256': expected}
+    for argv in disk_prep_argv(win.run_dir, image_path):
+        remaining = clocks['preStartSeconds'] - (host.monotonic() - claim_mono)
+        require(remaining > 0, 'clock.pre-start', 'pre-start cut exhausted during disk preparation')
+        executor.run(argv, 'disk.prepare', timeout=remaining)
+    guest_uuid = str(uuidlib.uuid4())
+    win.record['guestUuid'] = guest_uuid
+    if not isinstance(executor, PlanOnly):
+        check_pre_start(claim_mono, host.monotonic(), clocks)
+        if github:
+            reserve = clocks['usefulSeconds'] + clocks['retireSeconds'] + clocks['collectorSeconds'] + clocks[
+                'collectorRetireSeconds']
+            check_enclosing(start_witness, github.date(), clocks, reserve)
+    win.record['guestStartAttempted'] = True  # before the call: a timeout may leave it running
+    executor.run(guest_unit_argv(selection, win.run_dir, guest_uuid), 'unit.start-guest', timeout=EFFECT_TIMEOUT)
+    win.record['guest'] = win.observe_terminal(win.names['guest'], clocks['usefulSeconds'] + clocks[
+        'retireSeconds'] + 60, clocks['retireSeconds'])
+    if github and not isinstance(executor, PlanOnly):
+        check_enclosing(start_witness, github.date(), clocks,
+                        clocks['collectorSeconds'] + clocks['collectorRetireSeconds'])
+    win.record['collectorStartAttempted'] = True
+    executor.run(collector_unit_argv(selection, win.run_dir), 'unit.start-collector', timeout=EFFECT_TIMEOUT)
+    win.record['collector'] = win.observe_terminal(win.names['collector'], clocks['collectorSeconds'] + clocks[
+        'collectorRetireSeconds'] + 60, clocks['collectorRetireSeconds'])
+    win.record['outcome'] = guest_outcome(win.record['guest']) if not isinstance(executor, PlanOnly) else 'planned'
+
+
+def stop_unobserved_units(win, executor, clocks):
+    """A guest or collector whose start was attempted but whose terminal state was never observed
+    may still run: stop it (bounded) before the caps and slices are removed underneath it."""
+    if isinstance(executor, PlanOnly):
+        return True
+    all_terminal = True
+    for kind, retire in (('collector', clocks['collectorRetireSeconds']), ('guest', clocks['retireSeconds'])):
+        if not win.record.get(f'{kind}StartAttempted') or kind in win.record:
+            continue
+        unit, entry = win.names[kind], {}
+        try:
+            executor.run(['sudo', '-n', 'systemctl', 'stop', unit], 'unit.stop-on-exit', timeout=retire + EFFECT_TIMEOUT)
+            entry['stopped'] = True
+        except Exception as error:
+            entry.update(stopped=False, error=error.reason if isinstance(error, Refusal) else repr(error))
+        try:
+            props = unit_show(win.host, unit)
+            entry.update(state={k: props.get(k) for k in ('ActiveState', 'SubState', 'Result', 'ExecMainStatus')},
+                         terminal=terminal(props))
+        except Exception as error:
+            entry.update(terminal=False, showError=error.reason if isinstance(error, Refusal) else repr(error))
+        win.record[f'{kind}StopOnExit'] = entry
+        all_terminal &= entry['terminal']
+    return all_terminal
+
+
+def _window_exit_path(win, host, executor, selection, rows, clocks, observe_now, first):
     try:
+        if win.record.get('guestStartAttempted') or win.record.get('collectorStartAttempted'):
+            stopped = stop_unobserved_units(win, executor, clocks)
+            if first is not None:
+                win.record['outcome'] = 'failed-awaiting-readback' if stopped else 'unknown-awaiting-readback'
+                if not stopped:
+                    win.record['unitMayStillRun'] = True
         if win.record.get('capsPending') is not None:
             win.remove_caps()
         if win.record.get('slicesSet'):
@@ -1467,7 +1540,7 @@ def launch(host, executor, selection, facts, rows, run_root=None, github=None, p
             except Exception as error:
                 win.record['runDirWriteError'] = repr(error)
     finally:
-        SIGNALS['raise'] = True
+        SIGNALS['raise'] = False  # stays disarmed until re-armed; later signals are recorded for main
     if win.record.get('capsPending'):
         pending = Refusal('io.cap-remove-pending',
                           f'caps may remain ({len(win.record["capsRemoved"]["errors"])} errors, '
@@ -1476,8 +1549,7 @@ def launch(host, executor, selection, facts, rows, run_root=None, github=None, p
         pending.window = win
         raise pending from first
     if first is not None:
-        if isinstance(first, Refusal):
-            first.window = win
+        first.window = win
         raise first
     return win
 
@@ -1495,15 +1567,18 @@ def dry_run(host, selection, facts, rows):
 
 def window_exit(host, executor, manifest_path):
     """Recovery after a crashed window. Attempts every removal (an absent unit is already gone),
-    reverts both native slices, reads back, and refuses only if a cap is still present."""
+    reverts both native slices, reads back, and refuses under the same pending rule as launch: a
+    cap still present, or a removal error on a stopped unit whose drop-in may remain."""
     manifest = load_json(manifest_path)
     validate_operation_id(manifest.get('operationId'))
     removal = remove_caps_all(host, executor, manifest['targets'], manifest['devices'], os.getuid())
     result = {'operationId': manifest['operationId'], 'targets': removal['targets'], 'errors': removal['errors'],
               'sliceRevertErrors': revert_slices(executor), 'failures': removal['failures'],
               'readbackOk': removal['readbackOk']}
-    if not removal['readbackOk']:
-        refusal = Refusal('io.cap-remove-readback', f'caps still present: {removal["failures"]}')
+    result['unconfirmed'] = removal['unconfirmed']
+    if removal['pending']:
+        refusal = Refusal('io.cap-remove-readback', f'caps still present: {removal["failures"]}; removal '
+                          f'unconfirmed on stopped units: {[r["unit"] for r in removal["unconfirmed"]]}')
         refusal.result = result
         raise refusal
     return result
@@ -1670,6 +1745,14 @@ def main(argv=None):
         if args.command == 'collect':
             print(json.dumps(collect(host, args.run_dir, args.guest_unit, args.operation, args.export_dir), indent=1))
             return 0
+    except Interrupted as interrupted:
+        window = getattr(interrupted, 'window', None)
+        report = {'interrupted': signal.Signals(interrupted.signum).name}
+        if window is not None:
+            report.update(windowRecord=getattr(window, 'record_path', None), outcome=window.record.get('outcome'),
+                          firstFailure=window.record.get('firstFailure'))
+        print(json.dumps(report, indent=1), file=sys.stderr)
+        return 128 + int(interrupted.signum)
     except Refusal as refusal:
         report = {'refused': {'check': refusal.check, 'reason': refusal.reason}}
         window = getattr(refusal, 'window', None)
