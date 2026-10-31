@@ -128,6 +128,14 @@ def _on_signal(signum, _frame):
     SIGNALS['pending'].append(int(signum))  # disarmed (claim or window exit): record, do not abort
 
 
+def recorded_signals(snapshot, pending):
+    """Signals recorded during window exit plus any recorded after launch returned, counted once.
+    The window record holds a snapshot of the pending list taken at exit; later arrivals extend it."""
+    snapshot, pending = list(snapshot), list(pending)
+    extra = pending[len(snapshot):] if pending[:len(snapshot)] == snapshot else pending
+    return snapshot + extra
+
+
 def install_signal_exceptions():
     """SIGTERM (scope RuntimeMaxSec or stop), SIGINT and SIGHUP raise Interrupted, once per arming."""
     SIGNALS['raise'], SIGNALS['pending'] = True, []
@@ -1095,8 +1103,16 @@ class Executor:
             fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
         except FileExistsError:
             raise Refusal('claim.absent', f'{path} exists; an existing claim refuses forever') from None
-        with os.fdopen(fd, 'w') as stream:
-            json.dump(payload, stream, sort_keys=True); stream.write('\n')
+        try:
+            with os.fdopen(fd, 'w') as stream:
+                json.dump(payload, stream, sort_keys=True); stream.write('\n')
+                stream.flush(); os.fsync(stream.fileno())
+        except Exception as error:
+            # The claim file exists, so it refuses forever; the caller must leave a durable record of it.
+            partial = Refusal('claim.partial', f'{path} was created but its payload write failed: {error!r}; '
+                                               'the claim stands and refuses forever')
+            partial.claim_created = True
+            raise partial from error
 
     def mkdir(self, path, mode):
         os.makedirs(os.path.dirname(path), mode=0o700, exist_ok=True)
@@ -1387,9 +1403,23 @@ def launch(host, executor, selection, facts, rows, run_root=None, github=None, p
         executor.create_claim(f'{POLICY["claimsDir"]}/{win.op}', {
             'operationId': win.op, 'step': win.step, 'claimedAt': utc_text(host.now()),
             'bootId': _try(lambda: host.read('/proc/sys/kernel/random/boot_id').strip()), 'launcherPid': os.getpid()})
-    except BaseException:
-        SIGNALS['raise'] = True  # no claim was made: nothing to exit
-        raise
+    except BaseException as error:
+        # Stay disarmed through the record write: a signal here is recorded, never raised into the write.
+        if getattr(error, 'claim_created', False):  # a partial claim exists: record it durably, nothing else
+            win.record.update(outcome='refused-claim-partial', exitedAt=utc_text(host.now()),
+                              firstFailure={'check': getattr(error, 'check', 'launch.unexpected'),
+                                            'reason': getattr(error, 'reason', repr(error))})
+            win.evidence = build_evidence(selection, rows, win.record)
+            try:
+                executor.write(record_path(win.op), json.dumps(win.evidence, indent=1, sort_keys=True))
+                win.record_path = record_path(win.op)
+            except Exception as write_error:
+                win.record_path = None
+                win.record['recordWriteError'] = repr(write_error)
+            win.record['signalsDuringRecord'] = list(SIGNALS['pending'])
+            error.window = win
+        SIGNALS['raise'] = True
+        raise  # a clean refusal (existing claim) changes nothing
     claim_mono = host.monotonic()
     win.record['outcome'] = 'refused'
     first = None
@@ -1731,6 +1761,12 @@ def main(argv=None):
             install_signal_exceptions()
             win = launch(host, executor, selection, facts, rows, github=GitHub(executor, host))
             print(json.dumps(win.evidence, indent=1, sort_keys=True))
+            late = recorded_signals(win.record.get('signalsDuringExit') or [], SIGNALS['pending'])
+            if late:  # a stop request arrived during window exit: the window ran, but not undisturbed
+                print(json.dumps({'signalsDuringExit': [signal.Signals(s).name for s in late],
+                                  'windowRecord': getattr(win, 'record_path', None),
+                                  'outcome': win.record.get('outcome')}, indent=1), file=sys.stderr)
+                return 128 + int(late[0])
             return 0
         if args.command == 'window-exit':
             print(json.dumps(window_exit(host, Executor(), args.manifest), indent=1)); return 0
@@ -1760,6 +1796,8 @@ def main(argv=None):
             report['windowRecord'] = getattr(window, 'record_path', None)
             report['windowExitDirective'] = window.record.get('windowExitDirective')
             report['firstFailure'] = window.record.get('firstFailure')
+            if window.record.get('recordWriteError'):
+                report['recordWriteError'] = window.record['recordWriteError']
         if getattr(refusal, 'result', None) is not None:
             report['windowExit'] = refusal.result
         print(json.dumps(report, indent=1), file=sys.stderr)
