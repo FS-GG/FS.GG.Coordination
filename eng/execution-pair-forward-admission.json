@@ -1,7 +1,7 @@
 {
   "schema": "fsgg.coordination.execution-pair-forward-admission/1",
   "profile": "execution-pair-forward",
-  "enabled": false,
+  "enabled": true,
   "proposedVersion": "0.3.1",
   "original": {
     "version": "0.3.0",
@@ -65,12 +65,32 @@
     }
   },
   "liveEffects": {
-    "environment": null,
-    "ledgerApp": null,
-    "nugetTrustedPublishing": null,
-    "occupancyFence": null,
-    "oldWriterFence": null,
-    "operationAdmission": null
+    "environment": {
+      "name": "execution-pair-forward",
+      "evidenceSha256": "d3fe5e03831117454366a5471d3cfb5d2fbf80a0d680db72311a03fcf94e8ca6",
+      "reference": "FS-GG/FS.GG.Coordination environment execution-pair-forward: required reviewer EHotwagner, branch policy main only; readback command in the PR body (#1026)"
+    },
+    "ledgerApp": {
+      "evidenceSha256": "71fa3b302c868ec4b2c2e253293d00ee7e9f91979c1be53c001debecf7f5205b",
+      "reference": "Ordinary ledger App 4882140 is a bypass actor in Authority rulesets 24802693 and 21872113; environment secret names present, values not read"
+    },
+    "nugetTrustedPublishing": {
+      "user": "Paradigma11",
+      "evidenceSha256": "ba5c707cf9be40fe966c08807779994e20ca3f30ea9d73e26ce31ca334c05640",
+      "reference": "OWNER-REPORTED, NOT DIRECTLY INSPECTED: Atlas github/nuget-trusted-publishing-policy-scope, owner readout 2026-10-28; user Paradigma11, environment execution-pair-forward"
+    },
+    "occupancyFence": {
+      "evidenceSha256": "e656ce8052e9012bb9486809404e9080616ff8a625b139d91d4bcf16600df172",
+      "reference": "Preflight run 41157391217 receipt (artifact 13026216326): 0.3.1 cells, tag, release absent. An observation re-checked at genesis, not an exclusive lock"
+    },
+    "oldWriterFence": {
+      "evidenceSha256": "1d4e8e535691572fb6e1951455238ffc7e1faa6d64934855a070f52b62c6d55a",
+      "reference": "Original 0.3.0 admission enabled:false, recovery off; callable-cli-release-publish NuGet policy covers only FS.GG.Coordination.Cli (owner-reported, Atlas)"
+    },
+    "operationAdmission": {
+      "evidenceSha256": "e0bdeb66db470eb946c386448f0e7e8b98539af0572b96d26842465049464deb",
+      "reference": "FS-GG/FS.GG.Coordination#1026 comment 6537473128 (Root decisions 2026-10-31): one mode=publish for publish-execution-pair-forward-0.3.1-248cc92b9a15"
+    }
   },
   "selection": {
     "candidate": {
