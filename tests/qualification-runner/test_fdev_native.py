@@ -221,6 +221,10 @@ class RecordingExecutor(fn.Executor):
 
     def create_claim(self, path, payload):
         self.effects.append(('claim', path))
+        if self.refuse_claim == 'partial':
+            partial = fn.Refusal('claim.partial', f'{path} was created but its payload write failed')
+            partial.claim_created = True
+            raise partial
         if self.refuse_claim:
             raise fn.Refusal('claim.absent', f'{path} exists; an existing claim refuses forever')
 
@@ -634,6 +638,69 @@ class LaunchControls(unittest.TestCase):
             self.launch(ex)
         self.assertEqual(caught.exception.check, 'claim.absent')
         self.assertEqual(ex.kinds(), ['claim'])
+
+    def test_partial_claim_leaves_a_durable_record_and_nothing_else(self):
+        ex = RecordingExecutor(self.host, refuse_claim='partial')
+        with self.assertRaises(fn.Refusal) as caught:
+            self.launch(ex)
+        self.assertEqual(caught.exception.check, 'claim.partial')
+        self.assertEqual(ex.kinds(), ['claim', 'write'])
+        self.assertEqual(caught.exception.window.record_path, fn.record_path(OP))
+        record = json.loads(ex.written[fn.record_path(OP)])
+        self.assertEqual(record['window']['outcome'], 'refused-claim-partial')
+        self.assertEqual(record['window']['firstFailure']['check'], 'claim.partial')
+        fn.validate_evidence(record)
+
+    def test_clean_claim_refusal_writes_no_record(self):
+        ex = RecordingExecutor(self.host, refuse_claim=True)
+        with self.assertRaises(fn.Refusal) as caught:
+            self.launch(ex)
+        self.assertEqual(caught.exception.check, 'claim.absent')
+        self.assertEqual(ex.written, {})
+        self.assertIsNone(getattr(caught.exception, 'window', None))
+
+    def test_main_exits_non_zero_when_signals_arrived_during_exit(self):
+        path = Path(self.tmp.name) / 'sel.json'; path.write_text(json.dumps(selection()))
+        for recorded, expected in (([int(signal.SIGTERM)], 128 + int(signal.SIGTERM)), ([], 0)):
+            with self.subTest(recorded=recorded):
+                win = mock.Mock(); win.evidence = {'schema': 'x'}; win.record_path = fn.record_path(OP)
+                win.record = {'signalsDuringExit': recorded, 'outcome': 'completed-awaiting-readback'}
+                err = io.StringIO()
+                saved = {s: signal.getsignal(s) for s in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP)}
+                try:
+                    with mock.patch.object(fn, 'observe', return_value=facts()), \
+                            mock.patch.object(fn, 'evaluate', return_value=rows()), \
+                            mock.patch.object(fn, 'launch', return_value=win), contextlib.redirect_stderr(err), \
+                            contextlib.redirect_stdout(io.StringIO()):
+                        code = fn.main(['launch', '--selection', str(path), '--no-github'])
+                finally:
+                    for signum, handler in saved.items():
+                        signal.signal(signum, handler)
+                self.assertEqual(code, expected)
+                if recorded:
+                    report = json.loads(err.getvalue())
+                    self.assertEqual(report['signalsDuringExit'], ['SIGTERM'])
+                    self.assertEqual(report['windowRecord'], fn.record_path(OP))
+
+    def test_main_exits_non_zero_when_a_signal_is_recorded_after_launch_returns(self):
+        path = Path(self.tmp.name) / 'sel.json'; path.write_text(json.dumps(selection()))
+        win = mock.Mock(); win.evidence = {'schema': 'x'}; win.record_path = fn.record_path(OP)
+        win.record = {'signalsDuringExit': [], 'outcome': 'completed-awaiting-readback'}
+
+        def fake_launch(*args, **kwargs):
+            fn.SIGNALS['pending'].append(int(signal.SIGHUP))  # disarmed after exit: recorded, not raised
+            return win
+        saved = {s: signal.getsignal(s) for s in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP)}
+        try:
+            with mock.patch.object(fn, 'observe', return_value=facts()), \
+                    mock.patch.object(fn, 'evaluate', return_value=rows()), \
+                    mock.patch.object(fn, 'launch', side_effect=fake_launch), \
+                    contextlib.redirect_stderr(io.StringIO()), contextlib.redirect_stdout(io.StringIO()):
+                code = fn.main(['launch', '--selection', str(path), '--no-github'])
+        finally:
+            for signum, handler in saved.items():
+                signal.signal(signum, handler)
+        self.assertEqual(code, 128 + int(signal.SIGHUP))
 
     def test_window_entry_reread_refuses_after_claim_without_caps(self):
         def busy_lane(later):
@@ -1215,6 +1282,17 @@ class RealClaim(unittest.TestCase):
         with self.assertRaises(fn.Refusal):
             fn.Executor().create_claim(self.path, {'n': 1})
         self.assertFalse(os.path.exists(os.path.join(self.tmp.name, 'absent')))
+
+    def test_partial_payload_write_is_a_refusing_claim_flagged_for_a_record(self):
+        with mock.patch.object(fn.json, 'dump', side_effect=OSError('No space left on device')):
+            with self.assertRaises(fn.Refusal) as caught:
+                fn.Executor().create_claim(self.path, {'n': 1})
+        self.assertEqual(caught.exception.check, 'claim.partial')
+        self.assertTrue(caught.exception.claim_created)
+        self.assertTrue(os.path.lexists(self.path))
+        with self.assertRaises(fn.Refusal) as again:
+            fn.Executor().create_claim(self.path, {'n': 2})
+        self.assertEqual(again.exception.check, 'claim.absent')
 
     def test_concurrent_claims_have_exactly_one_winner(self):
         barrier = threading.Barrier(16)
