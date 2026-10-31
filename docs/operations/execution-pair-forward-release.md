@@ -79,6 +79,24 @@ at A from candidate preparation through the receiver run.
 `enabled` is refused unless all of that is present. Root establishes those facts;
 this route never creates them.
 
+## Consumed operations
+
+The route returns to `disabled` after a published operation. Its selection, live-effect
+evidence and `enabled` flag are removed from the committed admission; the durable record is
+the Authority journal, the tag, the release and the readback assets named here. A
+consumed journal id is never reused and a new operation needs a new selection.
+
+| Version | Operation | Source A | Publisher B2 | Run | Journal |
+|---|---|---|---|---|---|
+| 0.3.1 | `publish-execution-pair-forward-0.3.1-248cc92b9a15` | `248cc92b9a156ee65331b43d2778a7c9969d68a2` | `595561191142efe968e900c03cec94719b050826` | 41174010005 (attempt 1) | `execution-pair-0.3.1-248cc92b9a15-01`, generation 27, thirteen effects verified |
+
+For 0.3.1: candidate run 41151871317 and artifact 13023287606; four-receiver run 41152245969;
+tag `execution/v0.3.1` on A; release 429755763 (not latest) with six assets; public-load receipt
+sha256 `44465b9ebe531249973815a948da5ea5d965f500e28a0075d5954de9cd85c7c7`; readback posted on
+FS-GG/FS.GG.Coordination#1026. The readback establishes publication and byte equality only, not
+consumer adoption, rollback or Linux containment acceptance. The two forward S1 receiver branches
+were qualification heads on the original receiver commits and are superseded by adoption PRs.
+
 ## Thirteen ordered durable effects
 
 The protected ordered-effect journal engine is the unchanged shared helper pinned
