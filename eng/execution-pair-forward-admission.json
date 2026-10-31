@@ -1,7 +1,7 @@
 {
   "schema": "fsgg.coordination.execution-pair-forward-admission/1",
   "profile": "execution-pair-forward",
-  "enabled": true,
+  "enabled": false,
   "proposedVersion": "0.3.1",
   "original": {
     "version": "0.3.0",
@@ -65,120 +65,12 @@
     }
   },
   "liveEffects": {
-    "environment": {
-      "name": "execution-pair-forward",
-      "evidenceSha256": "d3fe5e03831117454366a5471d3cfb5d2fbf80a0d680db72311a03fcf94e8ca6",
-      "reference": "FS-GG/FS.GG.Coordination environment execution-pair-forward: required reviewer EHotwagner, branch policy main only; readback command in the PR body (#1026)"
-    },
-    "ledgerApp": {
-      "evidenceSha256": "71fa3b302c868ec4b2c2e253293d00ee7e9f91979c1be53c001debecf7f5205b",
-      "reference": "Ordinary ledger App 4882140 is a bypass actor in Authority rulesets 24802693 and 21872113; environment secret names present, values not read"
-    },
-    "nugetTrustedPublishing": {
-      "user": "Paradigma11",
-      "evidenceSha256": "ba5c707cf9be40fe966c08807779994e20ca3f30ea9d73e26ce31ca334c05640",
-      "reference": "OWNER-REPORTED, NOT DIRECTLY INSPECTED: Atlas github/nuget-trusted-publishing-policy-scope, owner readout 2026-10-28; user Paradigma11, environment execution-pair-forward"
-    },
-    "occupancyFence": {
-      "evidenceSha256": "e656ce8052e9012bb9486809404e9080616ff8a625b139d91d4bcf16600df172",
-      "reference": "Preflight run 41157391217 receipt (artifact 13026216326): 0.3.1 cells, tag, release absent. An observation re-checked at genesis, not an exclusive lock"
-    },
-    "oldWriterFence": {
-      "evidenceSha256": "1d4e8e535691572fb6e1951455238ffc7e1faa6d64934855a070f52b62c6d55a",
-      "reference": "Original 0.3.0 admission enabled:false, recovery off; callable-cli-release-publish NuGet policy covers only FS.GG.Coordination.Cli (owner-reported, Atlas)"
-    },
-    "operationAdmission": {
-      "evidenceSha256": "e0bdeb66db470eb946c386448f0e7e8b98539af0572b96d26842465049464deb",
-      "reference": "FS-GG/FS.GG.Coordination#1026 comment 6537473128 (Root decisions 2026-10-31): one mode=publish for publish-execution-pair-forward-0.3.1-248cc92b9a15"
-    }
+    "environment": null,
+    "ledgerApp": null,
+    "nugetTrustedPublishing": null,
+    "occupancyFence": null,
+    "oldWriterFence": null,
+    "operationAdmission": null
   },
-  "selection": {
-    "candidate": {
-      "archiveSha256": "94621d79223c80cc55b890434923995fd2155f6f4100710e74390d599bae85ba",
-      "artifactId": 13023287606,
-      "jobId": 124390004615,
-      "manifestSha256": "995b88595e8593d6d65530a6d2fffb68e3d39818b87b56084e9e3aaa6bf8cf99",
-      "packages": {
-        "FS.GG.Execution.Contracts": "0046fc0c671111e660f2c8c9629b6beb96576beaa1b8a71c91ac5295cdd20406",
-        "FS.GG.Execution.Processes": "d9c206e656dd2b29c37831b08a60ef510aabefd736f01e4a68de87a1b88f1993"
-      },
-      "runId": 41151871317
-    },
-    "consumerQualification": {
-      "cases": {
-        "fsquint-rollback": {
-          "archiveSha256": "3f55d018217e7743146a4647797543b6151d72efdb5bbcb80f5468afa2251b2b",
-          "artifactId": 13023418081,
-          "jobId": 124391359461,
-          "observationSha256": "6362e22752b2cc712108711cb73acd6901a6004625fea1aaa26b216182247191",
-          "sourceClosureSha256": "f3e7859111e115d02009e72df07c15ce729b45befc7d8a9f2e046fc704fab61b"
-        },
-        "fsquint-s1": {
-          "archiveSha256": "f9e9c4f1b7d062937cfa6ef5e867812e48c044a7510a741d53ef2d47a267d23d",
-          "artifactId": 13023871419,
-          "jobId": 124391359320,
-          "observationSha256": "5d422d8b1b0e480514e428fdb65d0d28906b69eedfc591ea3b3e40f4e3839f9b",
-          "sourceClosureSha256": "7f865bf6c6e6f8a02ff7bffc6ee97b7725f3fc7a7c982589195c91ffaa7b7cc6"
-        },
-        "sdd-rollback": {
-          "archiveSha256": "af61c49b62875230a402b0b567891971fb9258ee83197d236757f604c7a8f995",
-          "artifactId": 13023602977,
-          "jobId": 124391359311,
-          "observationSha256": "0c5830b3198530a1a681009835ca0b9aa3ff9ba324644fba9d073bcfad402d27",
-          "sourceClosureSha256": "5ad647ae4b2dee142a9d40dcc9bb5d8587e9a99fa137f92a17febc54f3216cba"
-        },
-        "sdd-s1": {
-          "archiveSha256": "31f0d0889ed73db9e6eeb2c39bc0ada3d932e941f5e7311970ae0474e70e66e1",
-          "artifactId": 13023438287,
-          "jobId": 124391359395,
-          "observationSha256": "63704e3f437f3b04d42c2757649e29693e4cc7241443821a65fc6f8d9fc7c140",
-          "sourceClosureSha256": "3688e70d5c23e0b8a26fadc7ea7a6373b0a740a50b3211c448f465067cff33ae"
-        }
-      },
-      "executor": "248cc92b9a156ee65331b43d2778a7c9969d68a2",
-      "runId": 41152245969,
-      "workflowSha256": "622cdae6bb074b68634952c83a08f488e80b0512133f63ce275f5c6c3b1b4c68"
-    },
-    "journal": {
-      "id": "execution-pair-0.3.1-248cc92b9a15-01"
-    },
-    "namespaceEntitlement": {
-      "accepted": true,
-      "evidenceSha256": "ba5c707cf9be40fe966c08807779994e20ca3f30ea9d73e26ce31ca334c05640",
-      "githubRepository": "FS-GG/FS.GG.Coordination",
-      "nugetUser": "Paradigma11",
-      "packageIds": [
-        "FS.GG.Execution.Contracts",
-        "FS.GG.Execution.Processes"
-      ],
-      "publisherWorkflow": ".github/workflows/execution-pair-forward-publish.yml"
-    },
-    "operation": "publish-execution-pair-forward-0.3.1-248cc92b9a15",
-    "operator": "EHotwagner",
-    "receiverSources": {
-      "fsquint-s1": {
-        "commit": "c57a4817e95ac99b89b53222cee2e182471a3795",
-        "coreLocks": {
-          "eng/Qualification/packages.lock.json": "b5bfa61543a05cc3000b2cb2ff78cae75bcaff82904f713ea5ae5d63e13660dd",
-          "examples/AutomataProviders/packages.lock.json": "1aa7ab8affbbc8f27c85aa29f2cc30178b6326d7c20f788ce248226282c31636",
-          "examples/AutomataReplay/packages.lock.json": "05de5013ea3fc0a0c1ba33e9c530725a92c80562de351bade404540bab2cfae5",
-          "examples/BoundedQueue/packages.lock.json": "150bb813c456fb7338faea0f830b5fdafb30c9c4e8da764578e2983580173845",
-          "src/FsQuint.Tooling/packages.lock.json": "107f02469e212582b467902125ef0254df38dc136184918758c5490283d050a8",
-          "src/FsQuint/packages.lock.json": "b5bfa61543a05cc3000b2cb2ff78cae75bcaff82904f713ea5ae5d63e13660dd",
-          "tests/FsQuint.Tests/packages.lock.json": "3eb7ebe55fe615362373a3c870f4b7267619565d3904fa837cad1dd98c337d32"
-        }
-      },
-      "sdd-s1": {
-        "commit": "1bbb1e915148c6748c1f7c8174d14ad6b455e5a6"
-      }
-    },
-    "source": "248cc92b9a156ee65331b43d2778a7c9969d68a2",
-    "tag": "execution/v0.3.1",
-    "tagProtection": {
-      "policySha256": "5182bb35a6dd682cef84ac9ce4210cfd09f38b7410d8c9cf9bae42866bcb81da",
-      "rulesetId": 21633398
-    },
-    "tree": "2ce56631735aa46ebefb18937ff9dc1c7067ef82",
-    "version": "0.3.1"
-  }
+  "selection": null
 }
