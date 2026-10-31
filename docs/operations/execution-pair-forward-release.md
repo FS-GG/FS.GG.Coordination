@@ -83,7 +83,7 @@ this route never creates them.
 
 The route returns to `disabled` after a published operation. Its selection, live-effect
 evidence and `enabled` flag are removed from the committed admission; the durable record is
-the Authority journal, the signed tag, the release and the readback assets named here. A
+the Authority journal, the tag, the release and the readback assets named here. A
 consumed journal id is never reused and a new operation needs a new selection.
 
 | Version | Operation | Source A | Publisher B2 | Run | Journal |

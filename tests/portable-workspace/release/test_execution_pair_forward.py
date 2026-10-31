@@ -1748,33 +1748,60 @@ def release_script_controls(tmp):
         r = check('execution-pair', version)
         assert r.returncode != 0, 'the original profile must not accept a forward version'
         count('release-script-original-unchanged')
+    # The candidate preparation below must not depend on which component tags are published: `prepare` refuses when
+    # `execution/v<version>` already exists in the checkout. Use the first forward version above every local tag
+    # (the maintained select-version rule, never a hard-coded one), and prove the tag guard separately in a tagless fixture.
+    tags = subprocess.run(['git', 'tag', '--list', 'execution/v*'], cwd=ROOT, check=True, capture_output=True, text=True).stdout.split()
+    version = F.select_version('0.3.1', [], tags)
+    assert F.forward_version_allowed(version) and f'execution/v{version}' not in tags
+    count('release-script-version-above-local-tags')
+    fixture = Path(tmp) / 'tag-fixture'
+    subprocess.run(['git', 'init', '-q', str(fixture)], check=True, capture_output=True)
+    subprocess.run(['git', '-C', str(fixture), 'fetch', '-q', '--no-tags', '--depth', '1', str(ROOT), 'HEAD'], check=True, capture_output=True)
+    subprocess.run(['git', '-C', str(fixture), 'checkout', '-q', '--detach', 'FETCH_HEAD'], check=True, capture_output=True)
+    assert subprocess.run(['git', '-C', str(fixture), 'rev-parse', 'HEAD'], check=True, capture_output=True, text=True).stdout.strip() == head
+    assert not subprocess.run(['git', '-C', str(fixture), 'tag', '--list'], check=True, capture_output=True, text=True).stdout.strip()
+
+    def fixture_prepare(name):
+        return subprocess.run([dotnet, 'fsi', 'eng/callable-cli-release.fsx', 'prepare', '--profile', 'execution-pair-forward', '--version', version,
+                               '--source', head, '--output', str(Path(tmp) / name)], cwd=fixture, env=env, capture_output=True, text=True, timeout=600)
+    # Causal pair on the same clean fixture: with no tag the collision guard is not what stops this unrestored checkout,
+    # and with the published-tag shape `execution/v<version>` it is the first and only thing that refuses, before any output exists.
+    untagged = fixture_prepare('fixture-untagged')
+    assert 'pair component tag already exists' not in untagged.stderr, untagged.stderr[-1000:]
+    count('release-script-untagged-not-refused-by-tag-guard')
+    subprocess.run(['git', '-C', str(fixture), 'tag', f'execution/v{version}'], check=True, capture_output=True)
+    collided = fixture_prepare('fixture-tagged')
+    assert collided.returncode != 0 and 'pair component tag already exists' in collided.stderr, collided.stderr[-1000:]
+    assert not (Path(tmp) / 'fixture-tagged').exists(), 'a refused collision must create no output'
+    count('release-script-existing-tag-collision-refused')
     dirty = subprocess.run(['git', 'status', '--porcelain'], cwd=ROOT, capture_output=True, text=True).stdout.strip()
     if dirty:
         assert not os.environ.get('FSGG_REQUIRE_CLEAN_CANDIDATE'), 'the protected gate requires a clean committed candidate'
         COUNTS['candidate-build-skipped-dirty-tree'] = 1
         return
     output = Path(tmp) / 'forward-candidate'
-    run = lambda command: subprocess.run([dotnet, 'fsi', 'eng/callable-cli-release.fsx', command, '--profile', 'execution-pair-forward', '--version', '0.3.1',
+    run = lambda command: subprocess.run([dotnet, 'fsi', 'eng/callable-cli-release.fsx', command, '--profile', 'execution-pair-forward', '--version', version,
                                           '--source', head, '--output', str(output)], cwd=ROOT, env=env, capture_output=True, text=True, timeout=900)
     prepared = run('prepare')
     assert prepared.returncode == 0 and 'EXECUTION_PAIR_RELEASE_PREPARED' in prepared.stdout, prepared.stderr[-2000:]
     assert run('verify').returncode == 0
     manifest = json.loads((output / F.ASSET_NAMES['manifest']).read_bytes())
-    assert manifest['profile'] == 'execution-pair' and manifest['version'] == '0.3.1' and manifest['tag'] == 'execution/v0.3.1' and manifest['sourceCommit'] == head
+    assert manifest['profile'] == 'execution-pair' and manifest['version'] == version and manifest['tag'] == f'execution/v{version}' and manifest['sourceCommit'] == head
     # The real candidate satisfies the consumer-side authentication unchanged.
-    selection = {'version': '0.3.1', 'tag': 'execution/v0.3.1', 'source': head, 'tree': manifest['sourceTree'],
+    selection = {'version': version, 'tag': f'execution/v{version}', 'source': head, 'tree': manifest['sourceTree'],
                  'candidate': {'manifestSha256': sha((output / F.ASSET_NAMES['manifest']).read_bytes()), 'packages': {r['packageId']: r['sha256'] for r in manifest['packages']}}}
     real = F.Candidate(output, selection)
     assert set(real.payloads) == set(IDS)
     for id in IDS:
-        with zipfile.ZipFile(output / f'{id}.0.3.1.nupkg') as z:
+        with zipfile.ZipFile(output / f'{id}.{version}.nupkg') as z:
             nuspec = z.read(id + '.nuspec').decode()
-        assert '<version>0.3.1</version>' in nuspec
+        assert f'<version>{version}</version>' in nuspec
         if id == IDS[1]:
-            assert f'id="{IDS[0]}" version="0.3.1"' in nuspec, 'coherent Contracts dependency'
+            assert f'id="{IDS[0]}" version="{version}"' in nuspec, 'coherent Contracts dependency'
     # Reproducible: a second preparation of the same source and version has identical bytes.
     second = Path(tmp) / 'forward-candidate-2'
-    again = subprocess.run([dotnet, 'fsi', 'eng/callable-cli-release.fsx', 'prepare', '--profile', 'execution-pair-forward', '--version', '0.3.1',
+    again = subprocess.run([dotnet, 'fsi', 'eng/callable-cli-release.fsx', 'prepare', '--profile', 'execution-pair-forward', '--version', version,
                             '--source', head, '--output', str(second)], cwd=ROOT, env=env, capture_output=True, text=True, timeout=900)
     assert again.returncode == 0 and all((output / p.name).read_bytes() == p.read_bytes() for p in second.iterdir())
     # A different forward version yields different bytes under the same source.
