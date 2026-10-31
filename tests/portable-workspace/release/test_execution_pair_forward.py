@@ -550,14 +550,24 @@ def version_controls():
 
 def committed_state_controls():
     a = F.load_admission()
-    # The committed admission may carry a reviewable selection (state `selected`) but is never enabled and holds no live-effect evidence.
-    assert a['enabled'] is False and all(v is None for v in a['liveEffects'].values())
-    assert F.effective_state(a) == ('disabled' if a['selection'] is None else 'selected')
+    # The committed admission is `disabled`, a reviewable `selected` selection with no live-effect evidence, or `enabled`
+    # for one admitted operation, which needs a complete selection, all six live-effect entries and the bound-intent fence.
+    state = F.effective_state(a)
+    assert state in ('disabled', 'selected', 'enabled')
+    if state == 'enabled':
+        assert a['enabled'] is True and a['selection'] is not None and all(v is not None for v in a['liveEffects'].values())
+        assert a['sharedHelper']['boundIntentFence'] is not None and a['liveEffects']['environment']['name'] == F.ENVIRONMENT
+        assert a['liveEffects']['nugetTrustedPublishing']['user'] == a['selection']['namespaceEntitlement']['nugetUser']
+        assert all(0 < len(v['reference']) <= 200 for v in a['liveEffects'].values())
+        assert 'OWNER-REPORTED, NOT DIRECTLY INSPECTED' in a['liveEffects']['nugetTrustedPublishing']['reference']
+    else:
+        assert a['enabled'] is False and all(v is None for v in a['liveEffects'].values())
+        assert state == ('disabled' if a['selection'] is None else 'selected')
     # The shared bound-intent fence is pinned by the engine file itself (FS-GG/.github#4805); the route stays dormant.
     fence = a['sharedHelper']['boundIntentFence']
     assert fence == {'evidenceSha256': a['sharedHelper']['files']['scripts/release_successor_execution.py'],
                      'reference': 'FS-GG/.github#4805 @ ' + a['sharedHelper']['commit']}
-    assert a['sharedHelper']['commit'] == '641072f56a40b384eb4ae611877a51ecb0685cd7' and F.effective_state(a) in ('disabled', 'selected')
+    assert a['sharedHelper']['commit'] == '641072f56a40b384eb4ae611877a51ecb0685cd7' and F.effective_state(a) in ('disabled', 'selected', 'enabled')
     assert engine().execution.BOUND_INTENT_FENCE == 1, 'pinned engine lacks the bound-intent fence capability marker'
     assert a['original'] == {'version': '0.3.0', 'operation': F.ORIGINAL_OPERATION, 'tag': 'execution/v0.3.0', 'retained': True}
     assert len(F.EFFECT_IDS) == 13 == len(set(F.EFFECT_IDS)) and list(F.EFFECT_IDS) == a['effects']
@@ -2098,7 +2108,7 @@ def closure_controls():
     plain = subprocess.run([sys.executable, 'eng/execution-pair-forward.py', 'state'], cwd=scratch, env=clean_env, capture_output=True, text=True)
     assert 'SHADOW-RAN' in plain.stdout, 'control: plain python3 lets a module in eng/ shadow the standard library'
     hermetic = subprocess.run([sys.executable, '-I', '-B', 'eng/execution-pair-forward.py', 'state'], cwd=scratch, env=clean_env, capture_output=True, text=True)
-    assert hermetic.stdout.strip() in ('disabled', 'selected') and 'SHADOW' not in hermetic.stdout, hermetic.stderr
+    assert hermetic.stdout.strip() in ('disabled', 'selected', 'enabled') and 'SHADOW' not in hermetic.stdout, hermetic.stderr
     (scratch / 'json.py').write_text('print("ROOT-SHADOW-RAN")\n')
     inline = subprocess.run([sys.executable, '-I', '-B', '-'], input='import json\nprint("inline-ok")\n', cwd=scratch, env=clean_env, capture_output=True, text=True)
     assert inline.stdout.strip() == 'inline-ok'
