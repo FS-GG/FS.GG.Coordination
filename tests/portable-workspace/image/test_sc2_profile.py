@@ -44,11 +44,26 @@ SC2 = load('sc2_profile_controls', ROOT / 'eng/portable_workspace_sc2.py')
 COMMON = load('sc2_shared_archive_fixtures', ROOT / 'tests/portable-workspace/image/test_common_arch_inputs.py')
 TEST_EXPORT_NAME = 'synthetic-sc2'
 TEST_LOCAL_TAG = 'localhost/synthetic-sc2:source'
+# start + 3720 != (start + 3600) + 120 and start + 420 != (start + 300) + 120.
+KNOWN_BAD_FULL_STARTS = (389.65010060668595, 380.40982592624584, 439.0850892035573)
 TEST_BASE_IMAGE = 'mcr.microsoft.com/dotnet/sdk@sha256:' + 'a' * 64
 
 
 def digest(value):
     return hashlib.sha256(value).hexdigest()
+
+
+def lifetime_clock(start, work):
+    """Original-lifetime fields derived exactly as the production selection does.
+
+    The controller requires workEnd == start + work and totalEnd == workEnd +
+    RETIRE_SECONDS in float arithmetic. IEEE addition is not associative, so a
+    fixture that writes start + (work + RETIRE_SECONDS) disagrees at about 0.55%
+    of monotonic starts (for example 389.65010060668595). Always derive totalEnd
+    from workEnd, never from a literal total.
+    """
+    work_end = start + work
+    return {'start': start, 'workEnd': work_end, 'totalEnd': work_end + SC2.RETIRE_SECONDS}
 
 
 def toml_document(value):
@@ -89,7 +104,7 @@ class Sc2Profile(unittest.TestCase):
     def tearDown(self):
         self.temporary.cleanup()
 
-    def fixture(self, *, reserved=False):
+    def fixture(self, *, reserved=False, clock_start=None):
         """Actual check-inputs contract with synthetic product and local Git only.
 
         No source fixture from the private product, no native engine execution.
@@ -161,12 +176,12 @@ class Sc2Profile(unittest.TestCase):
         write(disposition, SC2.canonical({'sharedHostReservedMemoryBytes': 12 * 1024**3,
                                         'sharedHostReservedCpu': 6, 'sharedHostReservedDiskBytes': 0,
                                         'unquantifiedResourceConflicts': []}))
-        now = time.monotonic()
+        now = time.monotonic() if clock_start is None else clock_start
         selection = {'operationId': 'synthetic-operation', **sources,
                      'allocation': {'path': str(allocation), 'identity': SC2.directory_pin(allocation)},
                      **stores, 'support': support, 'licenseAccepted': True,
                      'clock': {'bootId': Path('/proc/sys/kernel/random/boot_id').read_text().strip(),
-                               'start': now, 'workEnd': now + 3600, 'totalEnd': now + 3720},
+                               **lifetime_clock(now, SC2.WORK_SECONDS)},
                      'admission': {name: {'path': str(target), 'sha256': digest(target.read_bytes())}
                                    for name, target in (('topology', topology), ('resourceDisposition', disposition))},
                      'resourceDomain': {'relation': 'shared-host-reservations-outside-enclosing-cgroup',
@@ -237,6 +252,32 @@ class Sc2Profile(unittest.TestCase):
             (Path(args.image_source) / 'hidden-untracked').write_bytes(b'must refuse')
             with self.assertRaisesRegex(RuntimeError, 'dirty'):
                 SC2.main(args, IMAGE.__dict__)
+
+    def test_original_lifetime_accepts_monotonic_starts_where_float_sums_disagree(self):
+        # Deterministic known-bad starts: start + 3720 != (start + 3600) + 120.
+        # The wall-clock-dependent monotonic origin used to hit these by chance.
+        for start in KNOWN_BAD_FULL_STARTS:
+            with self.subTest(start=start):
+                self.assertNotEqual(start + 3720, (start + SC2.WORK_SECONDS) + SC2.RETIRE_SECONDS)
+                self.assertEqual(lifetime_clock(start, SC2.WORK_SECONDS)['totalEnd'],
+                                 (start + SC2.WORK_SECONDS) + SC2.RETIRE_SECONDS)
+                outer, self.root = self.root, Path(tempfile.mkdtemp(dir=self.root))
+                try:
+                    self.root.chmod(0o700)
+                    args, selection, home = self.fixture(clock_start=start)
+                    self.assertEqual(selection['clock']['start'], start)
+                    with patch.object(Path, 'home', return_value=home):
+                        self.assertFalse(SC2.main(args, IMAGE.__dict__)['nativeExecutionEnabled'])
+                finally:
+                    self.root = outer
+
+    def test_original_lifetime_still_refuses_a_shifted_total(self):
+        args, selection, home = self.fixture(clock_start=KNOWN_BAD_FULL_STARTS[0])
+        selection['clock']['totalEnd'] += 1.0
+        self.rebind_selection(args, selection)
+        with patch.object(Path, 'home', return_value=home), \
+             self.assertRaisesRegex(RuntimeError, 'original lifetime mismatch'):
+            SC2.main(args, IMAGE.__dict__)
 
     def test_current_source_rejects_embedded_origin_credentials_shallow_and_active_hooks(self):
         args, selection, home = self.fixture()
@@ -588,7 +629,7 @@ class Sc2Profile(unittest.TestCase):
         selection = {'operationId': name, 'helper': {'revision': 'a' * 40},
                      'product': {'revision': 'b' * 40},
                      'clock': {'bootId': Path('/proc/sys/kernel/random/boot_id').read_text().strip(),
-                               'start': now, 'workEnd': now + work, 'totalEnd': now + work + 120}}
+                               **lifetime_clock(now, work)}}
         # This fixture directly supplies the explicitly injected owner contract;
         # it does not bypass or claim actual selected-input/native admission.
         checked = {'state': state, 'selection': selection, 'inputSha256': 'c' * 64,

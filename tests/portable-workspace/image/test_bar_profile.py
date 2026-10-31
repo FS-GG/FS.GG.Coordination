@@ -57,8 +57,8 @@ class BarProfile(unittest.TestCase):
                 change = patch.object(module, key, value)
                 change.start(); self.addCleanup(change.stop)
 
-    def fixture(self):
-        args, selection, home = self.base.fixture()
+    def fixture(self, *, clock_start=None):
+        args, selection, home = self.base.fixture(clock_start=clock_start)
         helper, product = Path(args.source), Path(args.image_source)
         (helper / 'eng/portable_workspace_bar.py').write_bytes((ROOT / 'eng/portable_workspace_bar.py').read_bytes())
         (helper / 'eng/portable_workspace_bar.py').chmod(0o600)
@@ -314,6 +314,32 @@ class BarProfile(unittest.TestCase):
             self.base.rebind_selection(args, selection)
             with self.assertRaisesRegex(RuntimeError, 'helper pin set'):
                 BAR.main(args, IMAGE.__dict__)
+
+    def test_original_purpose_lifetime_accepts_starts_where_float_sums_disagree(self):
+        # Regression for FS-GG/FS.GG.Coordination#1088: the fixture used a literal
+        # start + 3720 total, which differs from (start + 3600) + 120 at about
+        # 0.55% of monotonic starts, so the check flaked on the runner's uptime.
+        # These starts are deterministic known-bad values.
+        for start in FIXTURE.KNOWN_BAD_FULL_STARTS:
+            with self.subTest(start=start):
+                self.assertNotEqual(start + 3720, (start + BAR.WORK_SECONDS) + BAR.RETIRE_SECONDS)
+                outer = self.root
+                self.base.root = self.root = Path(FIXTURE.tempfile.mkdtemp(dir=outer)); self.root.chmod(0o700)
+                try:
+                    args, selection, home = self.fixture(clock_start=start)
+                    self.assertEqual(selection['clock']['start'], start)
+                    with patch.object(Path, 'home', return_value=home):
+                        self.assertFalse(BAR.main(args, IMAGE.__dict__)['nativeExecutionEnabled'])
+                finally:
+                    self.base.root = self.root = outer
+
+    def test_original_purpose_lifetime_still_refuses_a_shifted_total(self):
+        args, selection, home = self.fixture(clock_start=FIXTURE.KNOWN_BAD_FULL_STARTS[0])
+        selection['clock']['totalEnd'] += 1.0
+        self.base.rebind_selection(args, selection)
+        with patch.object(Path, 'home', return_value=home), \
+             self.assertRaisesRegex(RuntimeError, 'original purpose lifetime mismatch'):
+            BAR.main(args, IMAGE.__dict__)
 
     def test_wrong_product_and_arbitrary_selection_extensions_refuse(self):
         args, selection, home = self.fixture()
