@@ -211,7 +211,7 @@
     {
       "kind": "workflow",
       "path": ".github/workflows/portable-workspace-image-qualification.yml",
-      "sha256": "9da964d7733e327f3ec69920b7ae24ec3ecebfab830cbfcf04b88ac04a80ac07",
+      "sha256": "bba4063d5a003b5ac63ce0ec7eb1796dd7b1b4dcc981866a93df4bcec3eda69e",
       "externalReferences": [
         "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
         "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"

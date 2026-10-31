@@ -232,6 +232,18 @@ admission or native execution follows from this source.
 The Templates owner's actual native callers (public repositories) are unrouted: each would
 need its own private-repository dispatch caller. Ordinary PR jobs stay hosted.
 
+## Provider `fdev-kvm-qualification-v1` (fdev nested guest, drained window)
+
+Root's [shared-host ruling](https://github.com/FS-GG/.github/issues/4778#issuecomment-6527516917)
+admits a disposable nested guest on fdev **only during a drained, exclusive window**. A target for
+this provider must state `hostKind: fdev-agent-vm-drained-window` and
+`ioSharedWithHostCoTenants: true`. `validate_target_data` refuses these fields on any other
+provider. `sharedCodexHost` keeps its meaning and is `false` only when the launcher's exclusivity
+checks pass. The launcher, its read-only preflight and the evidence schema are in [`fdev/`](fdev/README.md).
+Evidence from this provider never claims independence from fdev or Home. Its storage I/O
+correspondence stays not established unless Home-observed window evidence is supplied. This
+provider row is source only; no window, guest or image identity is accepted by it.
+
 ## Teardown and retirement
 
 Home owns the `home-kvm-qualification-v1` provider candidate; its actual
