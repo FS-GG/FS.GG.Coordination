@@ -140,7 +140,9 @@ Launch adds these checks:
   - A `finally` disarms it before window exit, and signals during exit are recorded.
   - `main` reports an interrupted window with its record path and exits 128 + signal. A window
     that completed while signals were recorded during its exit (or after it) also exits 128 +
-    the first signal, with the record path, never 0.
+    the first signal, with the record path, never 0. That code is the same as an interrupted
+    window's; only the stderr report tells them apart (`signalsDuringExit` for a completed window,
+    `interrupted` for one stopped by the signal).
 - **Partial claim.** If the claim file is created but its payload write fails, it still refuses
   forever. The launch writes the durable window record (`refused-claim-partial`) and changes
   nothing else. A clean refusal of an existing claim writes nothing.

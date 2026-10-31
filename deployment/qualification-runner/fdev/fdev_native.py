@@ -128,6 +128,14 @@ def _on_signal(signum, _frame):
     SIGNALS['pending'].append(int(signum))  # disarmed (claim or window exit): record, do not abort
 
 
+def recorded_signals(snapshot, pending):
+    """Signals recorded during window exit plus any recorded after launch returned, counted once.
+    The window record holds a snapshot of the pending list taken at exit; later arrivals extend it."""
+    snapshot, pending = list(snapshot), list(pending)
+    extra = pending[len(snapshot):] if pending[:len(snapshot)] == snapshot else pending
+    return snapshot + extra
+
+
 def install_signal_exceptions():
     """SIGTERM (scope RuntimeMaxSec or stop), SIGINT and SIGHUP raise Interrupted, once per arming."""
     SIGNALS['raise'], SIGNALS['pending'] = True, []
@@ -1396,7 +1404,7 @@ def launch(host, executor, selection, facts, rows, run_root=None, github=None, p
             'operationId': win.op, 'step': win.step, 'claimedAt': utc_text(host.now()),
             'bootId': _try(lambda: host.read('/proc/sys/kernel/random/boot_id').strip()), 'launcherPid': os.getpid()})
     except BaseException as error:
-        SIGNALS['raise'] = True
+        # Stay disarmed through the record write: a signal here is recorded, never raised into the write.
         if getattr(error, 'claim_created', False):  # a partial claim exists: record it durably, nothing else
             win.record.update(outcome='refused-claim-partial', exitedAt=utc_text(host.now()),
                               firstFailure={'check': getattr(error, 'check', 'launch.unexpected'),
@@ -1408,7 +1416,9 @@ def launch(host, executor, selection, facts, rows, run_root=None, github=None, p
             except Exception as write_error:
                 win.record_path = None
                 win.record['recordWriteError'] = repr(write_error)
+            win.record['signalsDuringRecord'] = list(SIGNALS['pending'])
             error.window = win
+        SIGNALS['raise'] = True
         raise  # a clean refusal (existing claim) changes nothing
     claim_mono = host.monotonic()
     win.record['outcome'] = 'refused'
@@ -1751,7 +1761,7 @@ def main(argv=None):
             install_signal_exceptions()
             win = launch(host, executor, selection, facts, rows, github=GitHub(executor, host))
             print(json.dumps(win.evidence, indent=1, sort_keys=True))
-            late = list(win.record.get('signalsDuringExit') or []) + list(SIGNALS['pending'])
+            late = recorded_signals(win.record.get('signalsDuringExit') or [], SIGNALS['pending'])
             if late:  # a stop request arrived during window exit: the window ran, but not undisturbed
                 print(json.dumps({'signalsDuringExit': [signal.Signals(s).name for s in late],
                                   'windowRecord': getattr(win, 'record_path', None),
@@ -1786,6 +1796,8 @@ def main(argv=None):
             report['windowRecord'] = getattr(window, 'record_path', None)
             report['windowExitDirective'] = window.record.get('windowExitDirective')
             report['firstFailure'] = window.record.get('firstFailure')
+            if window.record.get('recordWriteError'):
+                report['recordWriteError'] = window.record['recordWriteError']
         if getattr(refusal, 'result', None) is not None:
             report['windowExit'] = refusal.result
         print(json.dumps(report, indent=1), file=sys.stderr)
