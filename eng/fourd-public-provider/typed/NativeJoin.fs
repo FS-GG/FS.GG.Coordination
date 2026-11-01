@@ -94,7 +94,7 @@ module NativeJoin =
         let provenance = hashFile provenanceHash (str request "provenancePath") |> parse
         closed ["schema";"sourceSha";"sourceTree";"bindingSha256";"files";"sdkVersion";"runtimeVersion";"hostSha256"] provenance
         require (str provenance "schema" = "fsgg.fourd.native-runtime-provenance/1" && str provenance "sourceSha" = source && str provenance "sourceTree" = tree && str provenance "bindingSha256" = bindingHash && fileMap (provenance.GetProperty "files") = expectedFiles) "native-runtime-provenance-refused"
-        require (str provenance "sdkVersion"="10.0.400" && str provenance "runtimeVersion"=Environment.Version.ToString()) "native-runtime-version-refused"
+        require (str provenance "sdkVersion"="10.0.403" && str provenance "runtimeVersion"=Environment.Version.ToString()) "native-runtime-version-refused"
         hashFile (str provenance "hostSha256") (str request "hostPath") |> ignore
         { Identity=identity [source;tree;bindingHash;provenanceHash]; SourceSha=source; SourceTree=tree; Binding=bindingHash; Provenance=provenanceHash; Files=expectedFiles }
 

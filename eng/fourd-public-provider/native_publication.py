@@ -150,7 +150,7 @@ def verify_candidate(archive, manifest_raw, *, source=None, tree=None, archive_s
     installed_profile, _ = runtime_installation.profile()
     require(provenance["schema"] == "fsgg.fourd.native-runtime-provenance/1"
             and all(provenance[key] == producer[key] for key in ("sourceSha", "sourceTree", "bindingSha256", "files"))
-            and provenance["sdkVersion"] == "10.0.400"
+            and provenance["sdkVersion"] == "10.0.403"
             and provenance["runtimeVersion"] == installed_profile['runtimeVersion']
             and provenance["hostSha256"] == installed_profile['files']['dotnet']['sha256'], "runtime provenance differs")
     return manifest

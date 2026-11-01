@@ -50,7 +50,7 @@ def publication_fields(raw, p):
          and set(release)=={'releaseObserved','publicationObserved','releaseId','assetId','authorId','tag','name','bytes','sha256'}
          and release['releaseObserved'] is True and release['publicationObserved'] is True,
          'published producer identity required')
-    need(value['runtime']=={'sdkVersion':'10.0.400','runtimeVersion':p['runtimeVersion'],
+    need(value['runtime']=={'sdkVersion':'10.0.403','runtimeVersion':p['runtimeVersion'],
                            'hostSha256':p['files']['dotnet']['sha256']}, 'published runtime profile differs')
     need(release['bytes']==producer['bytes'] and release['sha256']==producer['sha256']
          and all(type(release[k]) is int and release[k]>0 for k in ('releaseId','assetId','authorId')),
@@ -78,9 +78,9 @@ def profile():
     raw=PROFILE_PATH.read_bytes();p=json.loads(raw)
     need(set(p)=={'schema','sdkVersions','runtimeVersions','runtimeVersion','archives','files'}
          and p['schema']=='fsgg.fourd.native-runtime-profile/1'
-         and p['sdkVersions']==['10.0.400','10.0.401'] and p['runtimeVersion']=='10.0.13'
-         and p['runtimeVersions']==['10.0.11','10.0.12','10.0.13'], 'closed fixed runtime profile differs')
-    need(len(p['archives'])==3, 'three fixed archives required')
+         and p['sdkVersions']==['10.0.403'] and p['runtimeVersion']=='10.0.14'
+         and p['runtimeVersions']==['10.0.14'], 'closed fixed runtime profile differs')
+    need(len(p['archives'])==1, 'one fixed archive required')
     for a in p['archives']:
         need(set(a)=={'name','url','bytes','sha512','files','directories','unpackedBytes'}
              and re.fullmatch(r'dotnet-(sdk|runtime)-10\.0\.[0-9]+-linux-x64\.tar\.gz',a['name'])

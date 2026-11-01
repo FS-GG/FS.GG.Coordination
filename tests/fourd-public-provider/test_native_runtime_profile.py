@@ -31,7 +31,7 @@ class RuntimeProfileControls(unittest.TestCase):
     def setUp(self):
         self.temporary=tempfile.TemporaryDirectory(prefix='native-runtime-fixture-',dir='/tmp');self.addCleanup(self.temporary.cleanup)
         self.root=Path(self.temporary.name);self.archives=self.root/'archives';self.archives.mkdir(mode=0o700)
-        self.profile=dict(schema='fsgg.fourd.native-runtime-profile/1',sdkVersions=['10.0.400','10.0.401'],runtimeVersions=['10.0.11','10.0.12','10.0.13'],runtimeVersion='10.0.13',archives=[],files={})
+        self.profile=dict(schema='fsgg.fourd.native-runtime-profile/1',sdkVersions=['10.0.400','10.0.401'],runtimeVersions=['10.0.11','10.0.12','10.0.13'],runtimeVersion='10.0.14',archives=[],files={})
         sets=[{'dotnet':b'oldhost400','sdk/10.0.400/.version':b'sdk400','sdk/10.0.400/FSharp/fsc.dll':b'fsc400','shared/Microsoft.NETCore.App/10.0.11/core':b'core11','host/fxr/10.0.11/fxr':b'fxr11','empty':b''},
               {'dotnet':b'oldhost401','sdk/10.0.401/.version':b'sdk401','sdk/10.0.401/FSharp/fsc.dll':b'fsc401','shared/Microsoft.NETCore.App/10.0.12/core':b'core12','host/fxr/10.0.12/fxr':b'fxr12'},
               {'dotnet':b'exacthost13','shared/Microsoft.NETCore.App/10.0.13/core':b'core13','host/fxr/10.0.13/fxr':b'fxr13'}]
@@ -82,10 +82,11 @@ class RuntimeProfileControls(unittest.TestCase):
         self.stage()
         with self.assertRaisesRegex(runtime.Refused,'deadline'):runtime.verify(self.output,self.profile,self.profile_sha,time.monotonic()-1)
         with self.assertRaisesRegex(runtime.Refused,'provenance'):runtime.verify(self.output,self.profile,'0'*64,time.monotonic()+10)
-    def test_shipped_profile_is_exact_official_400_401_13(self):
-        p,digest=runtime.profile();self.assertEqual(['10.0.400','10.0.401'],p['sdkVersions']);self.assertEqual('10.0.13',p['runtimeVersion'])
-        self.assertEqual('8b3d902364f618e31e029d4eba077d52c141dd641e375f4555715604806e44b6',p['files']['dotnet']['sha256'])
-        self.assertEqual(3,len(p['archives']));self.assertEqual(64,len(digest))
+    def test_shipped_profile_is_exact_official_403_14(self):
+        p,digest=runtime.profile();self.assertEqual(['10.0.403'],p['sdkVersions']);self.assertEqual('10.0.14',p['runtimeVersion'])
+        self.assertEqual(['10.0.14'],p['runtimeVersions'])
+        self.assertEqual('634efbf2414144d140d6f59d167342c8b3b53b4c34346ed786dd0470ddc9a3cb',p['files']['dotnet']['sha256'])
+        self.assertEqual(1,len(p['archives']));self.assertEqual('dotnet-sdk-10.0.403-linux-x64.tar.gz',p['archives'][0]['name']);self.assertEqual(64,len(digest))
 
     def test_actual_host_path_is_constructed_only_from_verified_stage(self):
         facts=self.stage()
@@ -93,7 +94,7 @@ class RuntimeProfileControls(unittest.TestCase):
                       provenanceSha256='5'*64,files={n:'6'*64 for n in runtime.RUNTIME_NAMES},adapterFiles={n:'7'*64 for n in runtime.ADAPTERS})
         release=dict(releaseObserved=True,publicationObserved=True,releaseId=1,assetId=2,authorId=3,
                      tag='fourd-native-producer-'+'1'*40,name='fourd-native-producer-linux-x64.tar',bytes=123,sha256='3'*64)
-        value=dict(producer=producer,publication=release,runtime=dict(sdkVersion='10.0.400',runtimeVersion='10.0.13',
+        value=dict(producer=producer,publication=release,runtime=dict(sdkVersion='10.0.403',runtimeVersion='10.0.14',
                    hostSha256=facts['hostSha256']),adoptionSelected=False)
         actual=runtime.adoption_from_publication(json.dumps(value),facts,self.profile)
         self.assertEqual(str(self.output/'dotnet'),actual['hostPath'])
