@@ -1,13 +1,13 @@
 # fdev P4 executor account
 
 `provision-fdev.sh` creates the dedicated P4 executor on fdev. The account is fixed by the
-[P4 amendment](../../docs/roadmaps/v2-lang-portable-integration.md#p4-trusted-resolver-source-preparation)
+[P4 amendment](../../docs/roadmaps/v2-lang-portable-integration.md#p4-facility-and-receiver-bound-grant-amendment--2026-10-30)
 of the portable-integration plan. Root/fdev made fdev, not Home's image definition, the source of the account in
 [FS-GG/.github#4730 decision 7](https://github.com/FS-GG/.github/issues/4730#issuecomment-6551301543). That
 replaces the Home image request [FS-GG/.github#5078](https://github.com/FS-GG/.github/issues/5078).
 
 ```sh
-sudo deployment/p4-executor/provision-fdev.sh --evidence DIR   # provision (idempotent), then read back
+sudo deployment/p4-executor/provision-fdev.sh --evidence DIR   # provision a fresh host, or no-op; then read back
 sudo deployment/p4-executor/provision-fdev.sh --check          # read back only; changes nothing
 ```
 
@@ -40,8 +40,8 @@ document recorded as evidence:
 - **`preflight`**, before anything is created. `account_plan` must pass on the live `/etc/passwd`,
   `/etc/subuid` and `/etc/subgid`. This is the only point at which it can pass on the live files, because it
   refuses an existing name, uid or gid.
-- **`collisions`**, before subordinate rows are written. `account_plan` must pass with only `p4executor`'s own
-  rows removed.
+- **`collisions`**, when the account already exists. `account_plan` must pass with only `p4executor`'s own rows
+  removed.
 - **`readback`**, after provisioning:
   - On the live files, `account_plan` now refuses, because the identity exists. With only the account's own
     rows removed, it still passes, so the result collides with nothing else.
@@ -56,8 +56,16 @@ document recorded as evidence:
     predicate: not a link, owned by root, not writable by group or others, and no extended ACL.
   - No grant file exists.
 
-Partial or conflicting state is refused, never repaired. That covers an existing group, uid or gid without the
-account, a different subordinate row, a link where a directory belongs, and an extended ACL.
+The script refuses rather than repairs, and every check runs before the first change. Exactly two states pass:
+
+- **fresh:** no account, group, uid, gid or subordinate row exists, `account_plan` passes, and no account-owned
+  path exists. Everything is created, and only newly created paths are `chown`ed.
+- **provisioned:** everything is already exactly as planned, and the run changes nothing. That covers the
+  account's uid, gid, home, shell, sole group and locked password, both subordinate rows, and every directory's
+  owner and mode.
+
+Anything else is refused without a change: a partial or drifted account, a wrong or foreign-owned directory, a
+link where a directory belongs, a non-empty `/srv/p4-receiver`, or an extended ACL.
 
 ## What it never does
 

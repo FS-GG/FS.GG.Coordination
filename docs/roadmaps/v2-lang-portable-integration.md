@@ -428,8 +428,9 @@ Amends the facility, account and grant wording above. Root/fdev decided it on
 the repository owner's standing delegation recorded on
 [FS-GG/.github#3010](https://github.com/FS-GG/.github/issues/3010#issuecomment-6518626059). Both comments are
 posted from the owner's GitHub login, so the login is not evidence of who decided; the decider is Root/fdev, and
-the delegation is the owner's. Plan text only: no account, grant, profile, dispatch, run or publication is created,
-and P4 stays open.
+the delegation is the owner's. This amendment was plan text only. The executor account has since been provisioned on
+fdev under [FS-GG/.github#4730 decision 7](https://github.com/FS-GG/.github/issues/4730#issuecomment-6551301543)
+(see the account bullet below). No grant, profile, dispatch, run or publication exists, and P4 stays open.
 
 **What the receiver-bound grant is.** It is not a GitHub grant. It is the root-owned file
 `/etc/fsgg/portable-workspaces/python-hello-v1.json`, schema `fsgg.portable-workspace-python-enrollment/v1`,

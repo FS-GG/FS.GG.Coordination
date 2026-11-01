@@ -42,6 +42,7 @@ SCHEMA = "fsgg.fdev-p4executor-provisioning-readback/1"
 
 
 def load_runtime():
+    sys.dont_write_bytecode = True  # never leave root-owned __pycache__ in the checkout
     path = Path(__file__).resolve().parents[2] / "tests/portable-workspace/trusted-provider/provider_runtime.py"
     spec = importlib.util.spec_from_file_location("provider_runtime", path)
     module = importlib.util.module_from_spec(spec)
