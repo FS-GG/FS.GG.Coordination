@@ -135,7 +135,10 @@ python3 -I -B fdev_native.py prepare-bake --request request.json --out <fresh di
   - every inode time at 2024-01-01T00:00:00Z, with directories 0755 and files 0644 or 0755 as in git.
 
   The same tree, operation, builder uid/gid and e2fsprogs version give the same bytes. The manifest
-  records the builder and the mke2fs version.
+  records the builder and the mke2fs version. Preparation refuses e2fsprogs older than 1.47.1, which
+  added `SOURCE_DATE_EPOCH`: 1.47.0, as on the Ubuntu 24.04 hosted runner, stamps the atime and ctime
+  of every copied inode with the build time. CI on that runner therefore checks the refusal, and the
+  image tests run where 1.47.1+ is installed (fdev has 1.47.4).
 - **`sharedCodexHost`.** TARGET states `false`, which the shared validator requires. That is only
   the *expected* value at window entry: `--expect-exclusive-window` acknowledges it, and a `true` value
   refuses before any disk is built. The launcher must rebuild the control image from its own entry

@@ -1233,12 +1233,24 @@ def build_ext4(executor, src, out, label, op, timeout=1800):
     return {'label': label, 'path': str(out), 'sha256': digest, 'bytes': length, 'fsUuid': fs_uuid, 'inodes': inodes}
 
 
+# e2fsprogs added SOURCE_DATE_EPOCH in 1.47.1 (release notes). 1.47.0 stamps the atime and ctime of
+# every inode copied by -d with the build time, so its images differ between builds.
+REPRODUCIBLE_MKE2FS = (1, 47, 1)
+
+
 def mke2fs_version():
     done = subprocess.run(['mke2fs', '-V'], capture_output=True, timeout=30, check=False, stdin=subprocess.DEVNULL)
     text = (done.stdout + done.stderr).decode('utf-8', 'replace')
-    match = re.search(r'mke2fs (\S+)', text)
+    match = re.search(r'mke2fs (\d+)\.(\d+)(?:\.(\d+))?', text)
     require(match is not None, 'bake.mke2fs', 'mke2fs -V reported no version')
-    return match.group(1)
+    return '.'.join(g for g in match.groups() if g is not None)
+
+
+def require_reproducible_mke2fs(version):
+    parts = tuple(int(p) for p in version.split('.')) + (0,) * (3 - len(version.split('.')))
+    require(parts >= REPRODUCIBLE_MKE2FS, 'bake.mke2fs',
+            f'mke2fs {version} predates SOURCE_DATE_EPOCH (1.47.1); its -d images are not reproducible')
+    return version
 
 
 def _runner_module():
@@ -1267,7 +1279,7 @@ def prepare_bake(request_raw, out_dir, sources, shared, inputs_dir=None, executo
             population = _runner_module().validate_population(lock, str(inputs_dir))
         except ValueError as error:
             raise Refusal('bake.inputs-population', str(error)) from None
-    version = mke2fs_version()
+    version = require_reproducible_mke2fs(mke2fs_version())
     os.mkdir(out, 0o700)
     seed = seed_files(request)
     write_tree(out / 'seed', {name: (data, 0o644) for name, data in seed.items()})

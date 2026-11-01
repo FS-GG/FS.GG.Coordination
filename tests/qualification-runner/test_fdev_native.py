@@ -1643,7 +1643,30 @@ class BakeControl(unittest.TestCase):
         self.assertNotIn('poweroff', text.replace('powers the guest off', ''))
 
 
-@unittest.skipUnless(shutil.which('mke2fs'), 'mke2fs (e2fsprogs) not installed')
+def reproducible_mke2fs():
+    try:
+        fn.require_reproducible_mke2fs(fn.mke2fs_version())
+        return True
+    except (fn.Refusal, OSError):
+        return False
+
+
+class BakeMke2fsVersion(unittest.TestCase):
+    def test_e2fsprogs_before_source_date_epoch_refuses_before_anything_is_written(self):
+        for old in ('1.47.0', '1.46.5', '1.47'):
+            with self.subTest(old), self.assertRaises(fn.Refusal):
+                fn.require_reproducible_mke2fs(old)
+        for good in ('1.47.1', '1.47.4', '1.48'):
+            self.assertEqual(fn.require_reproducible_mke2fs(good), good)
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(fn, 'mke2fs_version', return_value='1.47.0'):
+            with self.assertRaises(fn.Refusal) as caught:
+                fn.prepare_bake(fn.canonical_json(bake_request()), str(Path(tmp) / 'out'), fake_sources(), False)
+            self.assertEqual(caught.exception.check, 'bake.mke2fs')
+            self.assertFalse((Path(tmp) / 'out').exists())
+
+
+@unittest.skipUnless(shutil.which('mke2fs') and reproducible_mke2fs(),
+                     'mke2fs 1.47.1+ (SOURCE_DATE_EPOCH) not installed')
 class BakeImages(unittest.TestCase):
     def prepare(self, tmp, name, sources=None, inputs=None):
         raw = fn.canonical_json(bake_request())
