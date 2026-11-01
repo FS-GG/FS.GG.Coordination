@@ -69,7 +69,7 @@ leave `pool.no-data-writers` Unknown.
 ## Inputs
 
 - **Selection** (`fsgg.fdev-native-window-selection/1`), bound by Root for each window:
-  - operation id and step, plus the Root comment on #4778 that names the operation;
+  - operation id and step, plus the Root comment on #1102 that names the operation;
   - clocks (pre-start, useful, retire, collector, collector retire, enclosing);
   - `ioCaps` as `rbps`, `wbps`, `riops` and `wiops` (no default is guessed);
   - `exemptCgroups`: the Root session and the readback actor;
@@ -90,10 +90,115 @@ leave `pool.no-data-writers` Unknown.
   the df input. When it is present, admission needs `memAvailableBytes` at or above the
   Root-set `hostMemoryMinAvailableBytes` within `hostMemoryMaxAgeSeconds`. When it is absent,
   `capacity.host-memory` is Unknown, never Supported, so a launch refuses.
-- **Selection marker.** The Root selection comment on #4778 must carry
+- **Selection marker.** The Root selection comment on #1102 must carry
   `<!-- fsgg:fdev-native-selection/v1 operation=<op> step=<step> -->`. Posts made with the same
   account cannot be told apart by author, and the launcher's own start-witness comment never
   carries this marker.
+
+## M1 bake inputs (seed, control and input disks)
+
+These are the M0-deferred bake inputs ([FS.GG.Coordination#1102](https://github.com/FS-GG/FS.GG.Coordination/issues/1102)).
+Preparing them writes only into a fresh output directory. It selects, claims and starts nothing.
+
+```sh
+# A fresh canonical request. The guest UUID is chosen here, once.
+python3 -I -B fdev_native.py bake-request --operation <op> --source-revision <40-hex> > request.json
+# Seed, control image and (with --inputs) input image, plus bake-inputs.json.
+python3 -I -B fdev_native.py prepare-bake --request request.json --out <fresh dir> \
+    [--inputs <acquired population>] --expect-exclusive-window
+```
+
+- **Request** (`fsgg.fdev-native-bake-request/1`): exactly `operationId`, `step`,
+  `sourceRevision` and a random `guestUuid`, as canonical JSON. The sha256 of those exact bytes is
+  TARGET's `operatorAcceptanceSha256`. Root accepts the bake by citing that digest.
+- **Seed** (`seed/`, attached by QEMU `vvfat` with label `CIDATA`):
+  - `meta-data` holds a fresh instance id;
+  - `user-data` installs and updates no package, so the dpkg inventory stays the locked one;
+  - its `bootcmd` masks `apt-daily`, `apt-daily-upgrade` and `unattended-upgrades`;
+  - its `runcmd` mounts the control disk read-only by label, copies `bake.sh` to `/run` and runs it;
+  - `power_state` powers the guest off whatever the bake did.
+- **Control disk** (`control.ext4`, label `fsgg-control`) contains three things:
+  - `TARGET.json`;
+  - `fsgg-image-build-selection.json`, bound to TARGET's exact bytes and the guest UUID;
+  - `source/`, the Coordination files the guest uses, read from git at `sourceRevision`, never from the
+    working tree.
+
+  The Coordination source lives here, not on the input disk, because `validate_population` refuses
+  any file the lock does not pin.
+- **Input disk** (`inputs.ext4`, label `fsgg-inputs`): exactly the acquired population. It is checked
+  against the lock on the control disk before anything is written. Its modes and times are then
+  normalized in place; only metadata changes.
+- **Reproducibility.** Both images are built with `mke2fs -d` under these fixed settings:
+  - a cleared environment and no host `mke2fs.conf`;
+  - a fixed feature list and no journal;
+  - a filesystem UUID and hash seed derived from the operation and label;
+  - every inode time at 2024-01-01T00:00:00Z, with directories 0755 and files 0644 or 0755 as in git.
+
+  The same tree, operation, builder uid/gid and e2fsprogs version give the same bytes. The manifest
+  records the builder and the mke2fs version. Preparation refuses e2fsprogs older than 1.47.1, which
+  added `SOURCE_DATE_EPOCH`: 1.47.0, as on the Ubuntu 24.04 hosted runner, stamps the atime and ctime
+  of every copied inode with the build time. CI on that runner therefore checks the refusal, and the
+  image tests run where 1.47.1+ is installed (fdev has 1.47.4).
+- **`sharedCodexHost`.** TARGET states `false`, which the shared validator requires. That is only
+  the *expected* value at window entry: `--expect-exclusive-window` acknowledges it, and a `true` value
+  refuses before any disk is built. The launcher must rebuild the control image from its own entry
+  exclusivity rows and match the bound digest before the guest starts.
+- **`bake.sh`** runs in the guest as root:
+  - it mounts the input disk read-only at `/mnt/fsgg-qualification-inputs`;
+  - it installs the selection root-only, mode 0600, on tmpfs;
+  - it runs `provision-image.sh --apply` from the control disk's source subset;
+  - it then removes the selection and unmounts.
+
+  Its only result is one serial-console line, `FSGG-BAKE-RESULT/1 stage=<stage> status=<n>`. The first
+  failure is kept. A missing line is a failed bake.
+- **Launcher.** A selection may carry `guestUuid`. The launcher passes it to `-uuid` instead of a fresh
+  one, and the window record shows `guestUuidSource`. `bake-inputs.json` carries a `selectionFragment`
+  (`guestUuid`, `readOnlyDisks`, `seedDir`) for Root to copy into the selection.
+
+## M1 window rulings and the Commit (Root, [#1102 comment 6556672289](https://github.com/FS-GG/FS.GG.Coordination/issues/1102#issuecomment-6556672289))
+
+- **Posting target.** Selection comments, the start witness and comment reads use
+  FS.GG.Coordination#1102. The plan's issue .github#4778 is closed.
+- **Accepted Home Unknowns.** A selection may carry `rootAcceptedUnknowns`:
+  - `checks`: a subset of `capacity.host-partition` and `capacity.host-memory`;
+  - `ruling`: a URL to a comment on #1102.
+
+  Those rows stay **Unknown**, never Supported. Each carries `rootRuling`, plus fdev's own reading
+  (pool free bytes and inodes, or `MemAvailable`). Admission skips them; it never skips an
+  Unsupported row or any other check. The evidence records the ruling.
+- **I/O correspondence** stays `not-established`. Its `trackedBy` field is `FS-GG/.github#5187`.
+- **Bake binding.** A selection may carry `bake`, filled from `prepare-bake`'s `selectionFragment`.
+  It binds:
+  - the request and its digest;
+  - the control digest;
+  - the seed digests;
+  - the admitted acquisition `custody.json`;
+  - the builder uid, gid and mke2fs version.
+
+  In the window, before disk preparation, the launcher refuses unless all of the following hold:
+  - the request, seed and custody are unchanged;
+  - it runs as the bound builder uid/gid with the bound mke2fs (file ownership enters the digest);
+  - the control image it **rebuilds from its own entry exclusivity rows** matches the bound digest.
+
+  TARGET's `sharedCodexHost: false` therefore follows from this window's checks.
+- **Reproducible trees** also drop `user.*` extended attributes. Any other attribute (an ACL or a
+  security label) refuses.
+- **Bake result.** `bake.sh` checks two things before mounting anything:
+  - the apt units are masked;
+  - the DMI `product_uuid` equals TARGET's `systemUuid`. A casing-only difference reports `uuid-case`.
+
+  The masks persist into the qualified image, so runner guests never run apt timers. The serial line
+  is `FSGG-BAKE-RESULT/1 nonce=<request digest> stage=<first failing stage, or complete> status=<n>`.
+- **Collector.** It runs with `--export-dir /srv/bulk/native-chain` and `--nonce`. The bake qualifies
+  only when the guest unit's result is `success` with status 0 **and** exactly one distinct marker
+  carries this nonce with `complete 0`. A foreign nonce, conflicting markers or no marker do not
+  qualify.
+- **The M1 Commit.** A qualifying bake is exported with `cp --sparse=always`, fsynced and re-hashed.
+  Its closed packet (canonical JSON) is then fsynced into `/srv/bulk/native-chain/<op>/`, and its
+  directory is fsynced too. The collector prints the packet's sha256, which Root posts on #1102. A
+  failed bake is neither exported nor committed; its packet stays in the run directory.
+
+Still owed: the retirement helper with the four-check readback, and observe-only resume.
 
 ## Preconditions (each fails closed; Unknown is never success)
 
@@ -101,7 +206,7 @@ leave `pool.no-data-writers` Unknown.
 |---|---|
 | `selection.valid` | Schema, clocks summing within the enclosing bound, exempt sessions, attestation, stock-image lock path, Home df shape |
 | `selection.operation-not-retired` | 83a08, 69db, 2ae4 and d2f2, plus any id sharing those short prefixes, refuse |
-| `selection.root-comment-binds-operation` | A comment on #4778 by an allowed Root account carries the selection marker for this operation and step (cooperative binding) |
+| `selection.root-comment-binds-operation` | A comment on #1102 by an allowed Root account carries the selection marker for this operation and step (cooperative binding) |
 | `claim.absent` | `/srv/v3-pool/native/claims/<op>` does not exist. The claim is `O_CREAT\|O_EXCL\|O_NOFOLLOW` and refuses forever. |
 | `kvm.device`, `kvm.nested` | `/dev/kvm` is a read-write character device and nested virtualisation is on |
 | `cgroup.v2-controllers`, `cgroup.cpuset-cpus`, `cgroup.user-io-delegated` | cgroup v2 with `cpuset cpu io memory pids`, CPUs 8-11 available, `io` delegated to the user manager |
@@ -153,7 +258,7 @@ Launch adds these checks:
 
 ## Window effects, in order
 
-1. Create the claim, then post the start witness comment on #4778.
+1. Create the claim, then post the start witness comment on #1102.
 2. Re-read capacity and exclusivity.
 3. Create the run directory, then write the caps manifest.
 4. Apply `io.max` caps through `systemctl set-property --runtime`.
@@ -165,27 +270,47 @@ Launch adds these checks:
      `sudo -n systemctl --user --machine=<user>@.host`. System units use `sudo -n systemctl`.
 5. Set the slice properties: `fsgg-native.slice` `AllowedCPUs=8-11 MemoryMin=18G
    MemoryMax=19G TasksMax=512`, and `fsgg-native-collect.slice` `MemoryMax=1G`.
-6. Verify the stock image and the read-only disk digests.
-7. Prepare `root.raw`: `fallocate` it in full, then `qemu-img convert -n --target-is-zero`
+6. For a bake selection, check the bound bake inputs (`verify_bake_inputs`) and refuse on any
+   difference. It gets this window's entry rows and runs after the caps and slices, before any
+   disk is prepared. It checks, in order:
+   - the request and its binding;
+   - the seed files;
+   - the acquisition custody record at `/srv/v3-pool/native/inputs/<op>/custody.json`, which must
+     be this operation's, for the control disk's lock, with the lock's population;
+   - the builder uid, gid and mke2fs version;
+   - the control image, rebuilt from the entry rows and matched to the bound digest.
+
+   A refusal starts no guest and goes straight to window exit.
+7. Verify the stock image, and re-hash every read-only disk against the selection.
+8. Prepare `root.raw`: `fallocate` it in full, then `qemu-img convert -n --target-is-zero`
    into it.
-8. Check the pre-start cut and the enclosing bound.
-9. Start the guest: a `systemd-run` transient system service in `fsgg-native.slice`, run as
-   developer.
-   - Unit properties: `Type=exec`, `ExitType=cgroup`, `RemainAfterExit=yes`, `Restart=no`,
-     `CollectMode=inactive`, `OOMPolicy=kill`, `KillMode=control-group`,
-     `RuntimeMaxSec=<useful>`, `TimeoutStopSec=<retire>`, `MemoryMax`, `TasksMax`.
-   - `ExecStop` sends QMP `system_powerdown`, then waits for `$MAINPID`.
-   - QEMU options:
-     - `-nic none`, `-mem-prealloc`, a fresh `-uuid`;
-     - every disk with `cache.direct`, `aio=native`, `discard=ignore` and
-       `detect-zeroes=off`;
-     - a read-only `vvfat` CIDATA seed.
-   - No `MemoryOOMGroup` is set.
-10. Observe the guest's terminal state, bounded by useful + retire + 60 s. Check the GitHub
+9. Check the pre-start cut and the enclosing bound.
+10. Start the guest: a `systemd-run` transient system service in `fsgg-native.slice`, run as
+    developer.
+    - Unit properties: `Type=exec`, `ExitType=cgroup`, `RemainAfterExit=yes`, `Restart=no`,
+      `CollectMode=inactive`, `OOMPolicy=kill`, `KillMode=control-group`,
+      `RuntimeMaxSec=<useful>`, `TimeoutStopSec=<retire>`, `MemoryMax`, `TasksMax`.
+    - `ExecStop` sends QMP `system_powerdown`, then waits for `$MAINPID`.
+    - QEMU options:
+      - `-nic none`, `-mem-prealloc`, a fresh `-uuid`;
+      - every disk with `cache.direct`, `aio=native`, `discard=ignore` and
+        `detect-zeroes=off`;
+      - a read-only `vvfat` CIDATA seed.
+    - No `MemoryOOMGroup` is set.
+11. Observe the guest's terminal state, bounded by useful + retire + 60 s. Check the GitHub
     `Date` bound again before the collector starts.
-11. Run the collector unit in `fsgg-native-collect.slice`. It hashes `root.raw` and writes
-    the closed packet.
-12. Window exit, on every path after the claim (refusal, error or signal):
+12. Run the collector unit in `fsgg-native-collect.slice`, with `--export-dir /srv/bulk/native-chain`
+    and the bake nonce. It hashes `root.raw` and reads the whole serial log; a log over 64 MiB is
+    refused, never truncated. It then joins the marker with the guest unit's result.
+    - **Qualifying:** it exports into a new `<op>/`, fsyncing the directory entries and the copy, and
+      re-hashes the copy. It writes the closed packet to the run directory and then commits it to
+      `/srv/bulk/native-chain/<op>/`, fsyncing file and directory. It exits 0.
+    - **Otherwise, or if the export fails:** the packet records why and stays in the run directory.
+      Nothing is committed, and the collector exits 4.
+
+    The window outcome is `completed-awaiting-readback` only when the guest succeeded **and** the
+    collector exited 0. Otherwise it is `guest-failed-…` or `collector-refused-awaiting-readback`.
+13. Window exit, on every path after the claim (refusal, error or signal):
     1. if a guest or collector start was attempted but its terminal state was not observed,
        stop it (bounded by retire + 30 s) and read its state back, before anything else. The
        outcome is `failed-awaiting-readback`, or `unknown-awaiting-readback` with

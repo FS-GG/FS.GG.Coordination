@@ -3,7 +3,9 @@
 
 Owning plan: .github docs/coordination/2026-10-30-native-chain-rehost-fdev.md (M0).
 Root rulings: #4778 comments 6522829725 (decisions 1-6), 6526677331 (storage I/O),
-6527516917 (io.max scope and shared-host ruling), 6530390005 (Home capacity fact).
+6527516917 (io.max scope and shared-host ruling), 6530390005 (Home capacity fact);
+FS.GG.Coordination#1102 comment 6556672289 (M1: posting target, accepted Home Unknowns,
+I/O split to .github#5187, the M1 Commit).
 
 Custody is cooperative (fdev is the only security zone, #4778 comment 6519522997):
 claims, hashes, clocks and readbacks detect accidents and keep the record coherent.
@@ -21,6 +23,8 @@ Subcommands
   census             read-only open-file census of one mount (run under sudo -n)
   qmp-powerdown      guest unit ExecStop: QMP system_powerdown, then wait for MAINPID
   collect            collector unit body: observe guest exit, hash outputs, closed packet
+  bake-request       print a fresh canonical M1 bake request (chooses the guest UUID once)
+  prepare-bake       write the NoCloud seed, control image and optional input image (M1 bake inputs)
 
 No subcommand selects an operation, clock, claim or credential. M0 merges source only.
 """
@@ -30,6 +34,7 @@ import argparse
 import datetime as dt
 import email.utils
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -56,7 +61,11 @@ POLICY = {
     'hostKind': 'fdev-agent-vm-drained-window',
     'ioSharedWithHostCoTenants': True,
     'provider': 'fdev-kvm-qualification-v1',
-    'owningIssue': 'FS-GG/.github#4778',
+    # Root ruling (Coordination#1102 comment 6556672289): selections, the start witness and the
+    # result post go to the M1 Delivery; the plan's issue .github#4778 is closed.
+    'owningIssue': 'FS-GG/FS.GG.Coordination#1102',
+    'postingRepo': 'FS-GG/FS.GG.Coordination', 'postingIssue': 1102,
+    'ioCorrespondenceTrackedBy': 'FS-GG/.github#5187',
     'rootCommentAuthors': ('EHotwagner',),
     'retiredOperations': ('83a08ef2b158471bbec61133da3b21ed', '69db1fff629c4048981886544c7f8aa6',
                           '2ae4d697a81344a697c0d6448945168f', 'd2f2171d7c5d55aacdc560a09e19b46a'),
@@ -64,6 +73,7 @@ POLICY = {
     'poolMount': '/srv/v3-pool', 'poolLabel': 'systemadmin-v3',
     'claimsDir': '/srv/v3-pool/native/claims', 'runsDir': '/srv/v3-pool/native/runs',
     'commitRoot': '/srv/bulk/native-chain',
+    'inputsDir': '/srv/v3-pool/native/inputs',  # admitted acquisitions: <inputsDir>/<op>/custody.json
     # HDD-backed fdev filesystems (Home evidence, #4778 comment 6526677331); resolved to
     # whole-disk major:minor at runtime, never assumed from a device name.
     'hddMounts': ('/srv/v3-pool', '/srv/bulk', '/srv/sc2-reserved',
@@ -90,7 +100,7 @@ POLICY = {
     'launcherScope': {'MemoryMax': '1G', 'TasksMax': '128'},
     'systemdMinVersion': 250,
     'dotnetRuntime': '10.0.12',
-    'tools': ('qemu-system-x86_64', 'qemu-img', 'systemd-run', 'systemctl', 'fallocate', 'sudo', 'gh'),
+    'tools': ('qemu-system-x86_64', 'qemu-img', 'systemd-run', 'systemctl', 'fallocate', 'sudo', 'gh', 'mke2fs', 'git'),
     'postingAllowanceSeconds': 300,
     'maxCapTargets': 64,
 }
@@ -100,6 +110,10 @@ NOBLE_LOCK = 'deployment/qualification-runner/noble/acquired-input-lock.json'
 OP_PATTERN = re.compile(r'[0-9a-f]{32}')
 STEP_PATTERN = re.compile(r'[a-z][a-z0-9-]{0,23}')
 SHA_PATTERN = re.compile(r'[0-9a-f]{64}')
+# Only these Home-supplied inputs may be Unknown, and only under a cited Root ruling. The row stays
+# Unknown (never Supported) and carries fdev's own reading beside it.
+ACCEPTABLE_UNKNOWNS = ('capacity.host-partition', 'capacity.host-memory')
+RULING_PREFIX = 'https://github.com/FS-GG/FS.GG.Coordination/issues/1102#issuecomment-'
 
 
 class Refusal(Exception):
@@ -245,18 +259,90 @@ def validate_selection(sel, caps=True, operation=True):
         require(isinstance(disk.get('path'), str) and disk['path'].startswith('/') and isinstance(
             disk.get('sha256'), str) and SHA_PATTERN.fullmatch(disk['sha256']) is not None,
             'selection.valid', 'each read-only disk needs an absolute path and sha256')
+    if sel.get('guestUuid') is not None:  # from the bake request; TARGET and the build selection carry it too
+        validate_guest_uuid(sel['guestUuid'], 'selection.valid')
     seed = sel.get('seedDir')
     require(seed is None or (isinstance(seed, str) and seed.startswith('/')), 'selection.valid',
             'seedDir must be absolute or absent')
-    validate_host_partition(sel.get('hostPartition'), None)
-    require(type(sel.get('hostPartitionMaxAgeSeconds')) is int and 0 < sel['hostPartitionMaxAgeSeconds'] <= 86400,
-            'selection.valid', 'hostPartitionMaxAgeSeconds bound required')
+    accepted = accepted_unknowns(sel)
+    if sel.get('hostPartition') is not None or 'capacity.host-partition' not in accepted:
+        validate_host_partition(sel.get('hostPartition'), None)
+        require(type(sel.get('hostPartitionMaxAgeSeconds')) is int and 0 < sel['hostPartitionMaxAgeSeconds'] <= 86400,
+                'selection.valid', 'hostPartitionMaxAgeSeconds bound required')
+    if sel.get('bake') is not None:
+        validate_bake_binding(sel)
     if sel.get('hostMemory') is not None:  # optional; when present Root must bind the floor and age
         validate_host_memory(sel['hostMemory'], None, None)
         require(type(sel.get('hostMemoryMinAvailableBytes')) is int and sel['hostMemoryMinAvailableBytes'] > 0
                 and type(sel.get('hostMemoryMaxAgeSeconds')) is int and 0 < sel['hostMemoryMaxAgeSeconds'] <= 86400,
                 'selection.valid', 'hostMemory needs a Root-set hostMemoryMinAvailableBytes and hostMemoryMaxAgeSeconds')
     return sel
+
+
+def accepted_unknowns(sel):
+    """The Home inputs Root accepted as Unknown for this selection, with the ruling cited."""
+    ruling = (sel or {}).get('rootAcceptedUnknowns')
+    if ruling is None:
+        return ()
+    require(isinstance(ruling, dict) and set(ruling) == {'checks', 'ruling'}, 'selection.valid',
+            'rootAcceptedUnknowns needs exactly checks and ruling')
+    checks = ruling['checks']
+    require(isinstance(checks, list) and checks and len(set(checks)) == len(checks)
+            and set(checks) <= set(ACCEPTABLE_UNKNOWNS), 'selection.valid',
+            f'rootAcceptedUnknowns.checks must be a non-empty subset of {ACCEPTABLE_UNKNOWNS}')
+    require(isinstance(ruling['ruling'], str) and ruling['ruling'].startswith(RULING_PREFIX)
+            and ruling['ruling'][len(RULING_PREFIX):].isdigit(), 'selection.valid',
+            f'rootAcceptedUnknowns.ruling must cite a comment {RULING_PREFIX}<id>')
+    return tuple(checks)
+
+
+def custody_path(op):
+    return f'{POLICY["inputsDir"]}/{op}/custody.json'
+
+
+def check_custody(custody_doc, op, lock_bytes):
+    """The admitted acquisition record is this operation's, for the exact lock on the control disk,
+    and its population is the lock's population (N8)."""
+    lock = json.loads(lock_bytes)
+    require(custody_doc.get('operationId') == op, 'bake.inputs-custody', 'the custody record names another operation')
+    require(custody_doc.get('lockSha256') == hashlib.sha256(lock_bytes).hexdigest(), 'bake.inputs-custody',
+            'the custody record was acquired under another lock')
+    population = custody_doc.get('population') or {}
+    require(population.get('allMatchLock') is True and population.get('files') == len(lock['files'])
+            and population.get('bytes') == sum(r['bytes'] for r in lock['files']), 'bake.inputs-custody',
+            'the custody population differs from the lock population')
+    return population
+
+
+def validate_bake_binding(sel):
+    bake = sel['bake']
+    keys = {'request', 'requestSha256', 'controlSha256', 'seedSha256', 'inputsCustody', 'builder'}
+    require(isinstance(bake, dict) and set(bake) == keys, 'selection.valid', f'bake needs exactly {sorted(keys)}')
+    require(isinstance(bake['request'], str) and bake['request'].startswith('/'), 'selection.valid',
+            'bake.request must be an absolute path')
+    for key in ('requestSha256', 'controlSha256'):
+        require(isinstance(bake[key], str) and SHA_PATTERN.fullmatch(bake[key]) is not None, 'selection.valid',
+                f'bake.{key} sha256 required')
+    seed = bake['seedSha256']
+    require(isinstance(seed, dict) and set(seed) == {'meta-data', 'user-data'} and all(
+        isinstance(v, str) and SHA_PATTERN.fullmatch(v) for v in seed.values()), 'selection.valid',
+        'bake.seedSha256 needs meta-data and user-data digests')
+    custody = bake['inputsCustody']  # None until bound; the window refuses an unbound custody record
+    if isinstance(custody, dict):
+        require(custody.get('path') == custody_path(sel['operationId']), 'selection.valid',
+                f'bake.inputsCustody must be the admitted record {custody_path(sel["operationId"])}')
+    require(custody is None or isinstance(custody, dict) and set(custody) == {'path', 'sha256'} and str(custody['path']).startswith('/')
+            and SHA_PATTERN.fullmatch(str(custody['sha256'])) is not None, 'selection.valid',
+            'bake.inputsCustody needs an absolute path and sha256 (the admitted acquisition record)')
+    builder = bake['builder']
+    require(isinstance(builder, dict) and set(builder) == {'uid', 'gid', 'mke2fs'} and type(builder['uid']) is int
+            and type(builder['gid']) is int and isinstance(builder['mke2fs'], str), 'selection.valid',
+            'bake.builder needs the uid, gid and mke2fs version the bound images were built with')
+    require(sel.get('guestUuid') is not None and sel.get('seedDir'), 'selection.valid',
+            'a bake selection binds guestUuid and seedDir')
+    require(bake['controlSha256'] in [d['sha256'] for d in sel.get('readOnlyDisks', [])], 'selection.valid',
+            'bake.controlSha256 must be one of the read-only disks')
+    return bake
 
 
 # ---------------------------------------------------------------------------
@@ -609,16 +695,16 @@ def check_selection(selection, comment):
     if comment is None:
         rows.append(row('selection.root-comment-binds-operation', UNKNOWN, None, 'Root selection comment not read'))
     else:
-        # Cooperative binding: an allowed Root account's comment on #4778 carrying the selection
+        # Cooperative binding: an allowed Root account's comment on the posting issue carrying the selection
         # marker. Posts made with the same account are indistinguishable, so the marker (which the
         # launcher's own start-witness comment never contains) is what separates a selection.
         marker = selection_marker(selection['operationId'], selection['step'])
         ok = (comment.get('author') in POLICY['rootCommentAuthors']
-              and comment.get('issueUrl', '').endswith('/FS-GG/.github/issues/4778')
+              and comment.get('issueUrl', '').endswith(f'/{POLICY["postingRepo"]}/issues/{POLICY["postingIssue"]}')
               and marker in comment.get('body', ''))
         rows.append(row('selection.root-comment-binds-operation', SUPPORTED if ok else UNSUPPORTED,
                         {'author': comment.get('author'), 'issueUrl': comment.get('issueUrl')},
-                        '' if ok else f'no comment by an allowed Root account on #4778 carries {marker}'))
+                        '' if ok else f'no comment by an allowed Root account on {POLICY["owningIssue"]} carries {marker}'))
     return rows
 
 
@@ -700,7 +786,14 @@ def evaluate(facts, selection=None, comment=None, host_df=None, now=None, image=
                     [{k: s.get(k) for k in ('role', 'unit', 'present')} for s in services],
                     f'unresolved {unresolved_services}' if unresolved_services else
                     'present units are capped; absent ones get a runtime drop-in that applies at start'))
-    if host_df is None:
+    accepted = accepted_unknowns(selection) if selection is not None else ()
+    ruling = (selection or {}).get('rootAcceptedUnknowns', {}).get('ruling')
+    fdev_pool = {'fdevPoolFreeBytes': pool.get('freeBytes'), 'fdevPoolFreeInodes': pool.get('freeInodes')}
+    if host_df is None and 'capacity.host-partition' in accepted:
+        rows.append(dict(row('capacity.host-partition', UNKNOWN, fdev_pool,
+                             'Home df not supplied; Root accepted this Unknown. fdev\'s own reading is recorded'),
+                         rootRuling=ruling))
+    elif host_df is None:
         rows.append(row('capacity.host-partition', UNKNOWN, None, 'Home df reading not supplied (input, never guessed)'))
     else:
         try:
@@ -712,7 +805,11 @@ def evaluate(facts, selection=None, comment=None, host_df=None, now=None, image=
             rows.append(row('capacity.host-partition', UNSUPPORTED, None, refusal.reason))
     floor = (selection or {}).get('hostMemoryMinAvailableBytes', mem_floor)
     max_age = (selection or {}).get('hostMemoryMaxAgeSeconds', mem_max_age)
-    if host_mem is None:
+    if host_mem is None and 'capacity.host-memory' in accepted:
+        rows.append(dict(row('capacity.host-memory', UNKNOWN, {'fdevMemAvailableBytes': facts.get('memAvailableBytes')},
+                             'Home host memory not supplied; Root accepted this Unknown. fdev\'s own reading is recorded'),
+                         rootRuling=ruling))
+    elif host_mem is None:
         rows.append(row('capacity.host-memory', UNKNOWN, None, 'Home host-memory reading not supplied; never inferred'))
     elif floor is None:
         rows.append(row('capacity.host-memory', UNKNOWN, None, 'no Root-set host MemAvailable floor bound'))
@@ -777,8 +874,11 @@ def _cpu_set(text):
     return result
 
 
-def refuse_unless_all_supported(rows):
+def refuse_unless_all_supported(rows, accepted=()):
+    """Every row Supported, except an Unknown Root accepted by ruling (never an Unsupported)."""
     for r in rows:
+        if r['status'] == UNKNOWN and r['check'] in accepted and r.get('rootRuling'):
+            continue
         require(r['status'] == SUPPORTED, r['check'], f'{r["status"]}: {r["reason"] or r["observed"]}')
 
 
@@ -952,8 +1052,11 @@ def collector_unit_argv(selection, run_dir):
             f'--slice={POLICY["collectSlice"]["name"]}', f'--uid={os.getuid()}', f'--gid={os.getgid()}', '--no-block']
     for prop in props:
         argv += ['-p', prop]
-    return argv + ['--', sys.executable, '-I', '-B', str(Path(__file__).resolve()), 'collect', '--run-dir', run_dir,
-                   '--guest-unit', names['guest'], '--operation', op]
+    tail = ['--', sys.executable, '-I', '-B', str(Path(__file__).resolve()), 'collect', '--run-dir', run_dir,
+            '--guest-unit', names['guest'], '--operation', op, '--export-dir', POLICY['commitRoot']]
+    if selection.get('bake'):  # the bake's serial marker must carry this operation's nonce (the request digest)
+        tail += ['--nonce', selection['bake']['requestSha256']]
+    return argv + tail
 
 
 def disk_prep_argv(run_dir, image_path):
@@ -972,15 +1075,411 @@ def lock_image_sha(lock_relpath):
 
 def build_target(selection, rows, guest_uuid, operator_acceptance_sha256):
     """TARGET.json for the guest (fsgg.dedicated-qualification-target/1), stated truthfully."""
+    return target_document(selection, shared_codex_host(rows), guest_uuid, operator_acceptance_sha256)
+
+
+def target_document(selection, shared, guest_uuid, operator_acceptance_sha256):
     op = selection['operationId']
     return {'schema': 'fsgg.dedicated-qualification-target/1', 'baselineId': 'ubuntu2404-linux-x64-v1',
             'provider': POLICY['provider'], 'providerInstanceId': f'{POLICY["provider"]}/{op}/{selection["step"]}',
             'providerImageId': f'{POLICY["provider"]}/{op}', 'systemUuid': guest_uuid,
             'operatorAcceptanceSha256': operator_acceptance_sha256, 'dedicated': True, 'disposable': True,
-            'sharedCodexHost': shared_codex_host(rows), 'hostKind': POLICY['hostKind'],
+            'sharedCodexHost': bool(shared), 'hostKind': POLICY['hostKind'],
             'ioSharedWithHostCoTenants': True, 'architecture': 'x86_64', 'os': {'id': 'ubuntu', 'version': '24.04'},
             'resources': {'vcpu': POLICY['guest']['vcpu'], 'memoryBytes': POLICY['guest']['memoryBytes'],
                           'diskBytes': POLICY['guest']['rootDiskBytes']}}
+
+
+# ---------------------------------------------------------------------------
+# M1 bake inputs: the NoCloud seed, the control disk and the input disk (owning plan, "M1 bake
+# layout"). The documents and trees are pure. Both ext4 images are built reproducibly with
+# `mke2fs -d`: fixed filesystem UUID and hash seed per operation, fixed inode times and modes, no
+# host mke2fs.conf and a cleared environment. An image digest is therefore a function of its tree,
+# the operation, the builder uid/gid and the e2fsprogs version, so Root can bind an expected control
+# digest and the launcher can rebuild it in the window from its entry rows and compare.
+# ---------------------------------------------------------------------------
+BAKE_REQUEST_SCHEMA = 'fsgg.fdev-native-bake-request/1'
+BAKE_INPUTS_SCHEMA = 'fsgg.fdev-native-bake-inputs/1'
+BAKE = {
+    'inputsLabel': 'fsgg-inputs', 'controlLabel': 'fsgg-control',
+    'inputsMount': '/mnt/fsgg-qualification-inputs', 'controlMount': '/mnt/control',
+    'bakeScript': 'deployment/qualification-runner/fdev/bake.sh',
+    # Every Coordination path the guest uses, taken from git at the pinned revision. The input disk
+    # carries only the acquired population: validate_population refuses any extra file there.
+    'sourcePaths': ('deployment/qualification-runner/90-fsgg-qualification.conf',
+                    'deployment/qualification-runner/fdev/bake.sh',
+                    'deployment/qualification-runner/guest-boot.sh',
+                    'deployment/qualification-runner/noble-apt.sh',
+                    NOBLE_LOCK,
+                    'deployment/qualification-runner/provision-image.sh',
+                    'deployment/qualification-runner/run-jit-runner.sh',
+                    'deployment/qualification-runner/runner.sources.list',
+                    'deployment/qualification-runner/runner.sudoers',
+                    'eng/dedicated_qualification_runner.py'),
+    'aptUnits': ('apt-daily.timer', 'apt-daily-upgrade.timer', 'apt-daily.service', 'apt-daily-upgrade.service',
+                 'unattended-upgrades.service'),
+    'epoch': 1704067200,  # 2024-01-01T00:00:00Z, every inode time in both images
+    'features': 'extent,huge_file,flex_bg,64bit,dir_nlink,extra_isize,metadata_csum,^has_journal',
+    'slackBytes': 128 * 1024 ** 2,
+    'resultMarker': 'FSGG-BAKE-RESULT/1',
+}
+FS_NAMESPACE = uuidlib.UUID('5d1c0b7e-2f43-4c0a-9a57-6b0d3c1e8f21')
+REVISION_PATTERN = re.compile(r'[0-9a-f]{40}')
+
+
+def canonical_json(doc):
+    return (json.dumps(doc, sort_keys=True, separators=(',', ':')) + '\n').encode()
+
+
+def validate_guest_uuid(value, check):
+    try:
+        parsed = uuidlib.UUID(value) if isinstance(value, str) else None
+    except ValueError:
+        parsed = None
+    require(parsed is not None and str(parsed) == value and parsed.version == 4, check,
+            'guestUuid must be a lowercase canonical random (version 4) UUID')
+    return value
+
+
+def validate_bake_request(doc):
+    keys = {'schema', 'operationId', 'step', 'sourceRevision', 'guestUuid'}
+    require(isinstance(doc, dict) and doc.get('schema') == BAKE_REQUEST_SCHEMA and set(doc) == keys, 'bake.request',
+            f'{BAKE_REQUEST_SCHEMA} with exactly {sorted(keys)} required')
+    validate_operation_id(doc['operationId'])
+    require(isinstance(doc['step'], str) and STEP_PATTERN.fullmatch(doc['step']) is not None, 'bake.request',
+            'step name [a-z][a-z0-9-]{0,23} required')
+    require(isinstance(doc['sourceRevision'], str) and REVISION_PATTERN.fullmatch(doc['sourceRevision']) is not None,
+            'bake.request', 'full 40-hex sourceRevision required')
+    validate_guest_uuid(doc['guestUuid'], 'bake.request')
+    return doc
+
+
+def new_bake_request(op, step, source_revision):
+    """A fresh request: the guest UUID is chosen here, once, and travels in TARGET, the build
+    selection and the launcher's -uuid, which verify-image-target cross-checks."""
+    return validate_bake_request({'schema': BAKE_REQUEST_SCHEMA, 'operationId': op, 'step': step,
+                                  'sourceRevision': source_revision, 'guestUuid': str(uuidlib.uuid4())})
+
+
+def bake_request_digest(raw):
+    """Parse the exact request bytes Root accepts. Their sha256 is TARGET's operatorAcceptanceSha256."""
+    require(isinstance(raw, bytes) and len(raw) <= 4096, 'bake.request', 'request of at most 4096 bytes required')
+    try:
+        doc = json.loads(raw)
+    except ValueError as error:
+        raise Refusal('bake.request', f'request is not JSON: {error}') from None
+    validate_bake_request(doc)
+    require(raw == canonical_json(doc), 'bake.request', 'request bytes must be canonical JSON (sorted, compact, one newline)')
+    return doc, hashlib.sha256(raw).hexdigest()
+
+
+def seed_files(request):
+    """NoCloud meta-data and user-data. No package is installed or updated, so the dpkg inventory
+    stays the locked one; apt timers are masked at boot; the bake runs from the control disk;
+    cloud-init powers the guest off afterwards whatever the bake did."""
+    op, control = request['operationId'], BAKE['controlMount']
+    mask = ', '.join(['systemctl', 'mask', '--now', *BAKE['aptUnits']])
+    user = ['#cloud-config',
+            f'# fdev native M1 bake seed for operation {op}. Installs nothing; the guest has no network.',
+            'package_update: false',
+            'package_upgrade: false',
+            'package_reboot_if_required: false',
+            'bootcmd:',
+            f'  - [{mask}]',
+            'runcmd:',
+            f'  - [mkdir, -p, {control}]',
+            f'  - [mount, -o, "ro,nodev,nosuid", "LABEL={BAKE["controlLabel"]}", {control}]',
+            f'  - [install, -m, "0700", {control}/source/{BAKE["bakeScript"]}, /run/fsgg-bake.sh]',
+            '  - [/bin/bash, /run/fsgg-bake.sh]',
+            'power_state:',
+            '  mode: poweroff',
+            '  condition: true',
+            '  timeout: 30',
+            f'  message: fsgg native bake {op} finished']
+    meta = f'instance-id: fsgg-bake-{op}\nlocal-hostname: fsgg-bake\n'
+    return {'meta-data': meta.encode(), 'user-data': ('\n'.join(user) + '\n').encode()}
+
+
+def image_build_selection(target_bytes, target):
+    """fsgg.dedicated-image-build-selection/1, bound to the exact TARGET bytes (verify-image-target)."""
+    return {'schema': 'fsgg.dedicated-image-build-selection/1', 'baselineId': target['baselineId'],
+            'operation': 'build-dedicated-image', 'providerInstanceId': target['providerInstanceId'],
+            'systemUuid': target['systemUuid'], 'targetSha256': hashlib.sha256(target_bytes).hexdigest()}
+
+
+def control_files(request, acceptance_sha256, shared, sources):
+    """The control disk tree: TARGET.json, the build selection and the source subset."""
+    require(not shared, 'bake.target', 'sharedCodexHost would be true; the shared validator refuses such a '
+            'target, so no bake can use this control disk')
+    require(set(sources) == set(BAKE['sourcePaths']), 'bake.source',
+            f'source subset must be exactly {sorted(BAKE["sourcePaths"])}')
+    target = target_document(request, shared, request['guestUuid'], acceptance_sha256)
+    target_bytes = canonical_json(target)
+    files = {'TARGET.json': (target_bytes, 0o644),
+             'fsgg-image-build-selection.json': (canonical_json(image_build_selection(target_bytes, target)), 0o644)}
+    for path, (data, mode) in sources.items():
+        files['source/' + path] = (data, mode)
+    return files, target
+
+
+def source_files(repo, revision, paths=None):
+    """Read each source path from git at the exact revision (never the working tree)."""
+    paths = tuple(paths or BAKE['sourcePaths'])
+    require(isinstance(revision, str) and REVISION_PATTERN.fullmatch(revision) is not None, 'bake.source',
+            'full 40-hex revision required')
+    git = ['git', '-c', 'core.fsmonitor=false', '-C', str(repo)]
+    listing = subprocess.run(git + ['ls-tree', '-z', '--full-tree', revision, '--', *paths], capture_output=True,
+                             timeout=60, check=False, stdin=subprocess.DEVNULL)
+    require(listing.returncode == 0, 'bake.source', f'git ls-tree {revision} failed: {listing.stderr[-500:]!r}')
+    entries = {}
+    for item in listing.stdout.split(b'\0'):
+        if item:
+            meta, path = item.split(b'\t', 1)
+            mode, kind, obj = meta.decode().split()
+            require(kind == 'blob' and mode in ('100644', '100755'), 'bake.source',
+                    f'{path.decode()} is {kind} {mode}, not a regular file')
+            entries[path.decode()] = (mode, obj)
+    missing = sorted(set(paths) - set(entries))
+    require(not missing, 'bake.source', f'missing at {revision}: {missing}')
+    files = {}
+    for path, (mode, obj) in sorted(entries.items()):
+        blob = subprocess.run(git + ['cat-file', 'blob', obj], capture_output=True, timeout=60, check=False,
+                              stdin=subprocess.DEVNULL)
+        require(blob.returncode == 0, 'bake.source', f'git cat-file {obj} failed')
+        files[path] = (blob.stdout, 0o755 if mode == '100755' else 0o644)
+    return files
+
+
+def _relative_ok(rel):
+    parts = rel.split('/')
+    require(isinstance(rel, str) and rel and not rel.startswith('/') and '\\' not in rel
+            and all(p not in ('', '.', '..') for p in parts), 'bake.tree', f'unsafe path {rel!r}')
+
+
+def normalize_tree(root, modes=None):
+    """Fix every mode and inode time so the image digest depends only on content and names.
+    Directories 0755; files 0644 unless `modes` says otherwise. Links and special files refuse."""
+    modes, epoch = modes or {}, BAKE['epoch']
+    root = Path(root)
+    for dirpath, dirs, files in os.walk(root, topdown=False):
+        for name in files + dirs:
+            path = Path(dirpath) / name
+            st = os.lstat(path)
+            rel = str(path.relative_to(root))
+            strip_xattrs(path, rel)
+            if stat.S_ISDIR(st.st_mode):
+                os.chmod(path, 0o755)
+            else:
+                require(stat.S_ISREG(st.st_mode), 'bake.tree', f'{rel} is not a regular file or directory')
+                os.chmod(path, modes.get(rel, 0o644))
+            os.utime(path, (epoch, epoch), follow_symlinks=False)
+    strip_xattrs(root, '.')
+    os.chmod(root, 0o755)
+    os.utime(root, (epoch, epoch), follow_symlinks=False)
+
+
+def strip_xattrs(path, rel):
+    """mke2fs -d copies extended attributes, so they would enter the digest. user.* ones are removed;
+    any other (an ACL, a security label) refuses, because an unprivileged builder cannot remove it."""
+    names = os.listxattr(path, follow_symlinks=False)
+    for name in names:
+        if name.startswith('user.'):
+            os.removexattr(path, name, follow_symlinks=False)
+    left = os.listxattr(path, follow_symlinks=False)
+    require(not left, 'bake.tree', f'{rel} carries extended attributes {left}; images would not be reproducible')
+
+
+def write_tree(root, files):
+    """Create a fresh tree from {relative path: (bytes, mode)}, then normalize it."""
+    root = Path(root)
+    os.mkdir(root, 0o700)
+    for rel in sorted(files):
+        _relative_ok(rel)
+        path = root / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+        with os.fdopen(fd, 'wb') as stream:
+            stream.write(files[rel][0])
+    normalize_tree(root, {rel: mode for rel, (_data, mode) in files.items()})
+
+
+def tree_footprint(root):
+    """Bytes in 4 KiB blocks, plus one block per inode, and the inode count, for sizing the image."""
+    blocks, entries = 1, 1
+    for dirpath, dirs, files in os.walk(root):
+        entries += len(dirs) + len(files)
+        blocks += len(dirs) + len(files)
+        for name in files:
+            blocks += -(-os.lstat(os.path.join(dirpath, name)).st_size // 4096)
+    return blocks * 4096, entries
+
+
+def fs_identity(op, label):
+    return str(uuidlib.uuid5(FS_NAMESPACE, f'{op}/{label}')), str(uuidlib.uuid5(FS_NAMESPACE, f'{op}/{label}/hash-seed'))
+
+
+def ext4_argv(src, out, label, fs_uuid, hash_seed, inodes):
+    epoch = BAKE['epoch']
+    return ['env', '-i', 'PATH=/usr/sbin:/usr/bin:/sbin:/bin', 'LC_ALL=C', 'MKE2FS_CONFIG=/dev/null',
+            f'SOURCE_DATE_EPOCH={epoch}', f'E2FSPROGS_FAKE_TIME={epoch}',
+            'mke2fs', '-q', '-F', '-t', 'ext4', '-O', BAKE['features'], '-L', label, '-U', fs_uuid,
+            '-E', f'root_owner=0:0,hash_seed={hash_seed},lazy_itable_init=0,nodiscard',
+            '-b', '4096', '-I', '256', '-N', str(inodes), '-m', '0', '-d', str(src), str(out)]
+
+
+def build_ext4(executor, src, out, label, op, timeout=1800):
+    """A read-only guest disk: a fresh sparse file sized from the tree, then mke2fs -d into it."""
+    footprint, entries = tree_footprint(src)
+    size = -(-(footprint + BAKE['slackBytes']) // 1024 ** 2) * 1024 ** 2
+    fd = os.open(out, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    try:
+        os.ftruncate(fd, size)
+    finally:
+        os.close(fd)
+    fs_uuid, hash_seed = fs_identity(op, label)
+    inodes = entries + 64
+    executor.run(ext4_argv(src, out, label, fs_uuid, hash_seed, inodes), 'bake.mke2fs', timeout=timeout)
+    os.chmod(out, 0o400)
+    digest, length = sha256_file(out)
+    return {'label': label, 'path': str(out), 'sha256': digest, 'bytes': length, 'fsUuid': fs_uuid, 'inodes': inodes}
+
+
+# e2fsprogs added SOURCE_DATE_EPOCH in 1.47.1 (release notes). 1.47.0 stamps the atime and ctime of
+# every inode copied by -d with the build time, so its images differ between builds.
+REPRODUCIBLE_MKE2FS = (1, 47, 1)
+
+
+def mke2fs_version():
+    done = subprocess.run(['mke2fs', '-V'], capture_output=True, timeout=30, check=False, stdin=subprocess.DEVNULL)
+    text = (done.stdout + done.stderr).decode('utf-8', 'replace')
+    match = re.search(r'mke2fs (\d+)\.(\d+)(?:\.(\d+))?', text)
+    require(match is not None, 'bake.mke2fs', 'mke2fs -V reported no version')
+    return '.'.join(g for g in match.groups() if g is not None)
+
+
+def require_reproducible_mke2fs(version):
+    parts = tuple(int(p) for p in version.split('.')) + (0,) * (3 - len(version.split('.')))
+    require(parts >= REPRODUCIBLE_MKE2FS, 'bake.mke2fs',
+            f'mke2fs {version} predates SOURCE_DATE_EPOCH (1.47.1); its -d images are not reproducible')
+    return version
+
+
+def _runner_module():
+    spec = importlib.util.spec_from_file_location('dedicated_qualification_runner',
+                                                  REPO / 'eng/dedicated_qualification_runner.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def verify_bake_inputs(executor, selection, entry_rows, run_dir, repo=REPO):
+    """In the window, before the guest starts: the bound request, seed and acquisition custody are
+    unchanged, and the control image rebuilt from the entry exclusivity rows matches its bound digest.
+    sharedCodexHost in TARGET therefore follows from this window's own checks, not from preparation."""
+    bake = selection['bake']
+    fd = os.open(bake['request'], os.O_RDONLY | os.O_NOFOLLOW)
+    with os.fdopen(fd, 'rb') as stream:
+        raw = stream.read(4097)
+    request, acceptance = bake_request_digest(raw)
+    require(acceptance == bake['requestSha256'], 'bake.request-digest', 'the request differs from the bound digest')
+    require((request['operationId'], request['step'], request['guestUuid']) ==
+            (selection['operationId'], selection['step'], selection.get('guestUuid')), 'bake.request-binding',
+            'the request names another operation, step or guest UUID')
+    expected = seed_files(request)
+    names = sorted(os.listdir(selection['seedDir']))
+    require(names == sorted(expected), 'bake.seed', f'seed directory holds {names}, not exactly {sorted(expected)}')
+    for name, data in expected.items():
+        got, _ = sha256_file(os.path.join(selection['seedDir'], name))
+        require(got == bake['seedSha256'][name] == hashlib.sha256(data).hexdigest(), 'bake.seed',
+                f'seed {name} differs from the request-derived and bound digest')
+    custody = bake.get('inputsCustody')
+    require(custody is not None, 'bake.inputs-custody', 'the admitted acquisition custody record is not bound')
+    require(sha256_file(custody['path'])[0] == custody['sha256'], 'bake.inputs-custody',
+            'the acquisition custody record changed since it was bound')
+    builder = bake['builder']
+    require((os.getuid(), os.getgid()) == (builder['uid'], builder['gid']), 'bake.builder',
+            f'rebuild runs as {os.getuid()}:{os.getgid()}, the bound images were built as '
+            f'{builder["uid"]}:{builder["gid"]}; file ownership enters the digest')
+    version = require_reproducible_mke2fs(mke2fs_version())
+    require(version == builder['mke2fs'], 'bake.builder', f'mke2fs {version} differs from the bound {builder["mke2fs"]}')
+    sources = source_files(repo, request['sourceRevision'])
+    require(custody['path'] == custody_path(selection['operationId']), 'bake.inputs-custody',
+            'the custody record is not the admitted one for this operation')
+    check_custody(load_json(custody['path']), selection['operationId'], sources[NOBLE_LOCK][0])
+    files, _target = control_files(request, acceptance, shared_codex_host(entry_rows), sources)
+    tree = Path(run_dir) / 'control-rebuild-tree'
+    write_tree(tree, files)
+    disk = build_ext4(executor, tree, Path(run_dir) / 'control-rebuild.ext4', BAKE['controlLabel'],
+                      request['operationId'], timeout=EFFECT_TIMEOUT * 4)
+    require(disk['sha256'] == bake['controlSha256'], 'bake.control-digest',
+            f'the control image rebuilt in the window ({disk["sha256"]}) differs from the bound digest')
+    return {'requestSha256': acceptance, 'controlSha256': disk['sha256'], 'seedChecked': True,
+            'inputsCustodySha256': custody['sha256'], 'sharedCodexHost': False}
+
+
+def prepare_bake(request_raw, out_dir, sources, shared, inputs_dir=None, executor=None, inputs_custody=None):
+    """Write the seed, control image and (given an acquired population) input image into a fresh
+    directory, plus the bake-inputs manifest. Selects and starts nothing."""
+    request, acceptance = bake_request_digest(request_raw)
+    executor = executor or Executor()
+    out = Path(out_dir)
+    require(out.is_absolute(), 'bake.out', 'absolute output directory required')
+    require(not os.path.lexists(out), 'bake.out', f'{out} exists; preparation writes a fresh directory only')
+    files, target = control_files(request, acceptance, shared, sources)
+    population = None
+    if inputs_dir is not None:
+        # The population is checked against the lock that travels on the control disk, before any
+        # metadata is normalized, so the input disk can only carry the bytes that lock pins.
+        lock = json.loads(sources[NOBLE_LOCK][0])
+        try:
+            population = _runner_module().validate_population(lock, str(inputs_dir))
+        except ValueError as error:
+            raise Refusal('bake.inputs-population', str(error)) from None
+    custody = None
+    if inputs_custody is not None:
+        custody = {'path': str(inputs_custody), 'sha256': sha256_file(inputs_custody)[0]}
+        counted = check_custody(load_json(inputs_custody), request['operationId'], sources[NOBLE_LOCK][0])
+        if inputs_dir is not None:  # the input disk is built from exactly the admitted population
+            require(os.path.realpath(inputs_dir) == os.path.realpath(os.path.join(os.path.dirname(inputs_custody),
+                                                                                    'population')), 'bake.inputs-custody',
+                    'the input population is not the one the custody record names')
+            require((population['files'], population['bytes']) == (counted['files'], counted['bytes']),
+                    'bake.inputs-custody', 'the input population differs from the custody record')
+    version = require_reproducible_mke2fs(mke2fs_version())
+    os.mkdir(out, 0o700)
+    durable_write(str(out / 'request.json'), request_raw)
+    seed = seed_files(request)
+    write_tree(out / 'seed', {name: (data, 0o644) for name, data in seed.items()})
+    write_tree(out / 'control-tree', files)
+    disks = []
+    if inputs_dir is not None:
+        normalize_tree(inputs_dir)
+        disks.append(build_ext4(executor, inputs_dir, out / 'inputs.ext4', BAKE['inputsLabel'], request['operationId']))
+    disks.append(build_ext4(executor, out / 'control-tree', out / 'control.ext4', BAKE['controlLabel'],
+                            request['operationId']))
+    manifest = {
+        'schema': BAKE_INPUTS_SCHEMA, 'operationId': request['operationId'], 'step': request['step'],
+        'sourceRevision': request['sourceRevision'], 'guestUuid': request['guestUuid'],
+        'operatorAcceptanceSha256': acceptance,
+        'target': {'sha256': hashlib.sha256(canonical_json(target)).hexdigest(), 'sharedCodexHost': False,
+                   'sharedCodexHostBasis': 'expected at window entry: the launcher must rebuild this control '
+                                           'image from its entry exclusivity rows and match this digest'},
+        'builder': {'mke2fs': version, 'uid': os.getuid(), 'gid': os.getgid(), 'epoch': BAKE['epoch']},
+        'seed': {'dir': str(out / 'seed'), 'files': {n: hashlib.sha256(d).hexdigest() for n, d in sorted(seed.items())}},
+        'disks': disks, 'inputsPopulation': population,
+        'selectionFragment': {
+            'guestUuid': request['guestUuid'], 'seedDir': str(out / 'seed'),
+            'readOnlyDisks': [{'path': d['path'], 'sha256': d['sha256']} for d in disks],
+            'bake': {'request': str(out / 'request.json'), 'requestSha256': acceptance,
+                     'controlSha256': disks[-1]['sha256'],
+                     'seedSha256': {n: hashlib.sha256(d).hexdigest() for n, d in sorted(seed.items())},
+                     'inputsCustody': custody,
+                     'builder': {'uid': os.getuid(), 'gid': os.getgid(), 'mke2fs': version}}},
+        'custody': 'cooperative', 'independence': {'fromFdev': False, 'fromHome': False}}
+    fd = os.open(out / 'bake-inputs.json', os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(fd, 'wb') as stream:
+        stream.write(canonical_json(manifest))
+    return manifest
 
 
 # ---------------------------------------------------------------------------
@@ -1030,6 +1529,7 @@ def io_correspondence(window, home_io):
             reasons.append(refusal.reason)
     status = IO_CAPTURED if not reasons else IO_NOT_ESTABLISHED
     return {'status': status, 'reasons': reasons, 'acceptedByRoot': False,
+            'trackedBy': POLICY['ioCorrespondenceTrackedBy'],
             'homeEvidence': (home_io or {}).get('source') if status == IO_CAPTURED else None,
             'note': 'guest PSI or timing alone is never accepted; Root decides satisfaction from captured evidence'}
 
@@ -1040,6 +1540,7 @@ def build_evidence(selection, rows, window, home_io=None):
             'sharedCodexHost': window_shared(rows, window), 'ioSharedWithHostCoTenants': True,
             'independence': {'fromFdev': False, 'fromHome': False},
             'custody': 'cooperative', 'tamperProof': False,
+            'rootAcceptedUnknowns': selection.get('rootAcceptedUnknowns'),
             'preflight': rows, 'window': window, 'ioCorrespondence': io_correspondence(window, home_io)}
 
 
@@ -1057,6 +1558,9 @@ def validate_evidence(doc):
     require(isinstance(doc.get('window'), dict), 'evidence.window', 'window record required')
     require(doc.get('sharedCodexHost') is window_shared(rows, doc['window']), 'evidence.shared-codex-host',
             'sharedCodexHost must follow from the entry and exit exclusivity checks and new lane units')
+    ruling = doc.get('rootAcceptedUnknowns')
+    if ruling is not None:
+        accepted_unknowns({'rootAcceptedUnknowns': ruling})
     io = doc.get('ioCorrespondence', {})
     require(io.get('status') in (IO_NOT_ESTABLISHED, IO_CAPTURED), 'evidence.io-correspondence',
             'status is not-established or window-evidence-captured-awaiting-root; never established by fdev')
@@ -1117,6 +1621,7 @@ class Executor:
     def mkdir(self, path, mode):
         os.makedirs(os.path.dirname(path), mode=0o700, exist_ok=True)
         os.mkdir(path, mode)
+        fsync_dir(os.path.dirname(path))  # the new entry (the run directory, the commit root) is durable
 
     def write(self, path, data, mode=0o600):
         fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, mode)
@@ -1365,7 +1870,15 @@ class Window:
             time.sleep(self.poll)
 
 
-def guest_outcome(guest):
+def guest_outcome(guest, collector=None):
+    """The window is complete only if the guest succeeded and, when a collector ran, it qualified the
+    result (exit 0). The collector exits 4 for a bake that does not qualify (N7)."""
+    if collector is not None and not (collector.get('Result') == 'success' and collector.get('ExecMainStatus') == '0'):
+        return 'collector-refused-awaiting-readback'
+    return _guest_outcome(guest)
+
+
+def _guest_outcome(guest):
     ok = (guest.get('Result') == 'success' and guest.get('ExecMainStatus') == '0'
           and not guest.get('boundExceeded'))
     return 'completed-awaiting-readback' if ok else 'guest-failed-awaiting-readback'
@@ -1385,8 +1898,9 @@ def launch(host, executor, selection, facts, rows, run_root=None, github=None, p
     After the claim, every path (refusal, error, signal) runs window exit, writes the durable
     window record, and raises io.cap-remove-pending with a window-exit directive if a cap may remain."""
     require(not plan_ungated or isinstance(executor, PlanOnly), 'launch.gate', 'only a dry run may plan ungated')
+    accepted = accepted_unknowns(selection)
     if not plan_ungated:
-        refuse_unless_all_supported(rows)
+        refuse_unless_all_supported(rows, accepted)
         require(not shared_codex_host(rows), 'exclusive.window',
                 'sharedCodexHost would be true; the window is not exclusive')
     targets = cap_targets(facts)
@@ -1452,9 +1966,10 @@ def _window_body(win, host, executor, selection, facts, github, clocks, claim_mo
     if not isinstance(executor, PlanOnly):
         # Capacity and exclusivity re-read hook at window entry, after the claim.
         entry_facts = observe_now()
-        again = evaluate(entry_facts, selection, None, selection['hostPartition'], host.now(),
+        again = evaluate(entry_facts, selection, None, selection.get('hostPartition'), host.now(),
                          host_mem=selection.get('hostMemory'))
-        refuse_unless_all_supported([r for r in again if r['check'] in ENTRY_RECHECKS])
+        refuse_unless_all_supported([r for r in again if r['check'] in ENTRY_RECHECKS], accepted_unknowns(selection))
+        win.record['entryRows'] = [r for r in again if r['check'] in ENTRY_RECHECKS]
     executor.mkdir(win.run_dir, 0o700)
     win.record['enteredAt'] = utc_text(host.now())
     win.record['ioStatBefore'] = entry_facts.get('ioStat')
@@ -1465,6 +1980,11 @@ def _window_body(win, host, executor, selection, facts, github, clocks, claim_mo
         executor.run(argv, 'slice.properties', timeout=EFFECT_TIMEOUT)
     if not (facts.get('commitRoot') or {}).get('exists'):
         executor.mkdir(POLICY['commitRoot'], 0o700)
+    if selection.get('bake'):
+        if isinstance(executor, PlanOnly):
+            executor.plan.append({'effect': 'bake.verify-inputs', 'controlSha256': selection['bake']['controlSha256']})
+        else:
+            win.record['bakeInputs'] = verify_bake_inputs(executor, selection, win.record['entryRows'], win.run_dir)
     image_path = selection['image']['path']
     expected = lock_image_sha(NOBLE_LOCK)
     if not isinstance(executor, PlanOnly):
@@ -1478,8 +1998,9 @@ def _window_body(win, host, executor, selection, facts, github, clocks, claim_mo
         remaining = clocks['preStartSeconds'] - (host.monotonic() - claim_mono)
         require(remaining > 0, 'clock.pre-start', 'pre-start cut exhausted during disk preparation')
         executor.run(argv, 'disk.prepare', timeout=remaining)
-    guest_uuid = str(uuidlib.uuid4())
+    guest_uuid = selection.get('guestUuid') or str(uuidlib.uuid4())
     win.record['guestUuid'] = guest_uuid
+    win.record['guestUuidSource'] = 'selection' if selection.get('guestUuid') else 'fresh'
     if not isinstance(executor, PlanOnly):
         check_pre_start(claim_mono, host.monotonic(), clocks)
         if github:
@@ -1497,7 +2018,8 @@ def _window_body(win, host, executor, selection, facts, github, clocks, claim_mo
     executor.run(collector_unit_argv(selection, win.run_dir), 'unit.start-collector', timeout=EFFECT_TIMEOUT)
     win.record['collector'] = win.observe_terminal(win.names['collector'], clocks['collectorSeconds'] + clocks[
         'collectorRetireSeconds'] + 60, clocks['collectorRetireSeconds'])
-    win.record['outcome'] = guest_outcome(win.record['guest']) if not isinstance(executor, PlanOnly) else 'planned'
+    win.record['outcome'] = (guest_outcome(win.record['guest'], win.record['collector'])
+                             if not isinstance(executor, PlanOnly) else 'planned')
 
 
 def stop_unobserved_units(win, executor, clocks):
@@ -1587,11 +2109,14 @@ def _window_exit_path(win, host, executor, selection, rows, clocks, observe_now,
 def dry_run(host, selection, facts, rows):
     """Preflight verdict plus the exact effect plan. Performs and writes nothing."""
     validate_selection(selection)
+    accepted = accepted_unknowns(selection)
+    admitted = [r['check'] for r in rows if r['status'] == UNKNOWN and r['check'] in accepted and r.get('rootRuling')]
     refusing = [{'check': r['check'], 'status': r['status'], 'reason': r['reason']}
-                for r in rows if r['status'] != SUPPORTED]
+                for r in rows if r['status'] != SUPPORTED and r['check'] not in admitted]
     plan = PlanOnly()
     win = launch(host, plan, selection, facts, rows, plan_ungated=True)
     return {'schema': 'fsgg.fdev-native-dry-run/1', 'changesMade': False, 'wouldRefuse': refusing,
+            'rootAcceptedUnknowns': admitted,
             'sharedCodexHost': shared_codex_host(rows), 'plan': plan.plan, 'evidencePreview': win.evidence}
 
 
@@ -1636,7 +2161,73 @@ def qmp_powerdown(sock_path, wait_pid, timeout=None):
     return 0
 
 
-def collect(host, run_dir, guest_unit, op, export_dir=None):
+MARKER_PATTERN = re.compile(r'FSGG-BAKE-RESULT/1 nonce=(\S+) stage=(\S+) status=(\d+)')
+
+
+def bake_marker(serial_text, nonce):
+    """Read the bake's result from the guest serial log. Only lines with this operation's nonce count;
+    a foreign nonce or two different results are refusals. The marker alone never qualifies a bake:
+    the collector joins it with the host-side unit result and the root-disk hash."""
+    found = MARKER_PATTERN.findall(serial_text or '')
+    own = sorted({(stage, int(status)) for got, stage, status in found if got == nonce})
+    early = sorted({(stage, int(status)) for got, stage, status in found if got == 'unknown'})
+    foreign = sorted({got for got, _stage, _status in found if got not in (nonce, 'unknown')})
+    result = {'nonce': nonce, 'markers': len(found), 'distinct': [list(m) for m in own], 'foreignNonces': foreign,
+              'earlyFailures': [list(m) for m in early]}
+    if early:  # bake.sh failed before it could read the nonce (identity, control mount, TARGET)
+        stage, status = early[0]
+        result.update(ok=False, stage=stage, status=status,
+                      reason=f'bake failed before reading its nonce, at {stage} with {status}')
+    elif foreign:
+        result.update(ok=False, reason='a marker carries another nonce')
+    elif not own:
+        result.update(ok=False, reason='no marker for this operation: the bake did not report')
+    elif len(own) > 1:
+        result.update(ok=False, reason='conflicting markers for this operation')
+    else:
+        stage, status = own[0]
+        result.update(stage=stage, status=status, ok=stage == 'complete' and status == 0,
+                      reason='' if stage == 'complete' and status == 0 else f'bake failed at {stage} with {status}')
+    return result
+
+
+def fsync_dir(path):
+    dfd = os.open(path, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(dfd)
+    finally:
+        os.close(dfd)
+
+
+def durable_write(path, data):
+    """Create a new file, fsync it, then fsync its directory (the M1 Commit, Root ruling on #1102)."""
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(fd, 'wb') as stream:
+        stream.write(data); stream.flush(); os.fsync(stream.fileno())
+    fsync_dir(os.path.dirname(path))
+
+
+SERIAL_CAP = 64 * 1024 ** 2
+
+
+def read_serial(path):
+    """The whole guest serial log, or an explicit refusal when it exceeds the cap (N4): a marker
+    beyond a truncated read could hide a conflicting result."""
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    except FileNotFoundError:
+        return '', {'bytes': 0, 'present': False}
+    with os.fdopen(fd, 'rb') as stream:
+        size = os.fstat(stream.fileno()).st_size
+        if size > SERIAL_CAP:
+            return None, {'bytes': size, 'present': True, 'truncated': True}
+        return stream.read(SERIAL_CAP + 1).decode('utf-8', 'replace'), {'bytes': size, 'present': True}
+
+
+def collect(host, run_dir, guest_unit, op, export_dir=None, nonce=None, copy=None):
+    """Observe the guest's exit, hash root.raw and join the bake marker. Only a qualifying bake is
+    exported and committed: the closed packet is fsynced into <export_dir>/<op>/ and its sha256 is
+    printed for Root to post on the owning issue. A failed bake keeps its packet in the run directory."""
     props = unit_show(host, guest_unit)
     require(terminal(props), 'collect.guest-exit', f'{guest_unit} is {props.get("ActiveState")}/{props.get("SubState")}')
     cg = props.get('ControlGroup')
@@ -1645,23 +2236,57 @@ def collect(host, run_dir, guest_unit, op, export_dir=None):
     root = f'{run_dir}/root.raw'
     digest, size = sha256_file(root)
     st = os.stat(root)
+    serial, serial_facts = read_serial(f'{run_dir}/serial.log')
+    if serial is None:
+        marker = {'ok': False, 'reason': f'serial log exceeds {SERIAL_CAP} bytes; refused rather than truncated'}
+    elif nonce:
+        marker = bake_marker(serial, nonce)
+    else:
+        marker = {'ok': False, 'reason': 'no nonce bound: not a bake'}
+    marker['serial'] = serial_facts
+    unit_ok = props.get('Result') == 'success' and props.get('ExecMainStatus') == '0'
     packet = {'schema': 'fsgg.fdev-native-result-packet/1', 'operationId': op, 'guestUnit': guest_unit,
               'unit': {k: props.get(k) for k in ('ActiveState', 'SubState', 'Result', 'ExecMainStatus')},
               'root': {'sha256': digest, 'bytes': size, 'device': st.st_dev, 'inode': st.st_ino,
                        'allocatedBytes': st.st_blocks * 512},
+              'bake': marker, 'qualifying': bool(unit_ok and marker.get('ok')),
               'custody': 'cooperative', 'independence': {'fromFdev': False, 'fromHome': False}}
-    if export_dir:
-        target = f'{export_dir}/{op}/qualified-root.raw'
-        os.makedirs(os.path.dirname(target), mode=0o700, exist_ok=False)
-        subprocess.run(['cp', '--sparse=always', root, target], check=True, timeout=3600)
-        copy_digest, _ = sha256_file(target)
-        require(copy_digest == digest, 'collect.export', 'export copy digest differs from the source')
-        packet['export'] = {'path': target, 'sha256': copy_digest}
-    body = json.dumps(packet, indent=1, sort_keys=True)
-    fd = os.open(f'{run_dir}/result-packet.json', os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
-    with os.fdopen(fd, 'w') as stream:
-        stream.write(body)
-    return packet
+    if export_dir and packet['qualifying']:
+        try:
+            packet['export'] = export_root(root, export_dir, op, digest, size, copy)
+        except Exception as error:  # N6: a failed export is recorded in the packet, never left silent
+            packet['qualifying'] = False
+            packet['exportFailure'] = error.reason if isinstance(error, Refusal) else repr(error)
+    body = canonical_json(packet)
+    packet_sha = hashlib.sha256(body).hexdigest()
+    durable_write(f'{run_dir}/result-packet.json', body)
+    if packet['qualifying']:
+        durable_write(f'{export_dir}/{op}/result-packet.json', body)
+    return {'packet': packet, 'packetSha256': packet_sha,
+            'committed': f'{export_dir}/{op}/result-packet.json' if packet['qualifying'] else None}
+
+
+def export_root(root, export_dir, op, digest, size, copy=None):
+    """Copy root.raw into a new <export_dir>/<op>/, make the directory entries and the copy durable,
+    and re-hash the copy. An existing operation directory refuses: an export is never overwritten."""
+    target_dir = f'{export_dir}/{op}'
+    target = f'{target_dir}/qualified-root.raw'
+    try:
+        os.makedirs(target_dir, mode=0o700, exist_ok=False)
+    except FileExistsError:
+        raise Refusal('collect.export', f'{target_dir} already exists; an export is never overwritten') from None
+    fsync_dir(export_dir)
+    (copy or (lambda a, b: subprocess.run(['cp', '--sparse=always', a, b], check=True, timeout=3600)))(root, target)
+    fd = os.open(target, os.O_RDONLY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+    # The <op>/ entry for the copy is made durable by the packet's commit, which fsyncs that directory.
+    copy_digest, copy_size = sha256_file(target)
+    require(copy_digest == digest and copy_size == size, 'collect.export', 'export copy differs from the source')
+    return {'path': target, 'sha256': copy_digest, 'bytes': copy_size, 'allocatedBytes': os.stat(target).st_blocks * 512,
+            'providerImageId': f'{POLICY["provider"]}/{op}'}
 
 
 # ---------------------------------------------------------------------------
@@ -1672,7 +2297,8 @@ class GitHub:
         self.ex, self.host = executor, host
 
     def post_start_witness(self, op, step):
-        out = self.ex.run(['gh', 'api', '-X', 'POST', 'repos/FS-GG/.github/issues/4778/comments', '-f',
+        out = self.ex.run(['gh', 'api', '-X', 'POST',
+                           f'repos/{POLICY["postingRepo"]}/issues/{POLICY["postingIssue"]}/comments', '-f',
                            f'body=fdev native claim: operation `{op}` step `{step}` claimed. Start witness. '
                            'Cooperative custody; not independent of fdev or Home.'], 'github.start-witness', timeout=60)
         return parse_utc(json.loads(out)['created_at'], 'clock.start-witness')
@@ -1685,7 +2311,7 @@ class GitHub:
         return parse_http_date(match.group(1))
 
     def comment(self, comment_id):
-        rc, out = self.host.run(['gh', 'api', f'repos/FS-GG/.github/issues/comments/{comment_id}'], timeout=60)
+        rc, out = self.host.run(['gh', 'api', f'repos/{POLICY["postingRepo"]}/issues/comments/{comment_id}'], timeout=60)
         if rc != 0:
             return None
         doc = json.loads(out)
@@ -1718,13 +2344,23 @@ def main(argv=None):
         p.add_argument('--no-github', action='store_true', help='skip reading the Root selection comment')
         if name == 'launch':
             p.add_argument('--dry-run', action='store_true')
+    p = sub.add_parser('bake-request', help='print a fresh canonical bake request (chooses the guest UUID)')
+    p.add_argument('--operation', required=True); p.add_argument('--step', default='bake')
+    p.add_argument('--source-revision', required=True)
+    p = sub.add_parser('prepare-bake', help='write the seed, control image and optional input image; starts nothing')
+    p.add_argument('--request', required=True); p.add_argument('--out', required=True)
+    p.add_argument('--inputs', help='an acquired, verified noble population (normalized in place, metadata only)')
+    p.add_argument('--repo', default=str(REPO), help='git checkout holding the request sourceRevision')
+    p.add_argument('--inputs-custody', help='the admitted acquisition custody record to bind (custody.json)')
+    p.add_argument('--expect-exclusive-window', action='store_true', required=True,
+                   help='TARGET states sharedCodexHost false; the launcher must re-derive it at window entry')
     p = sub.add_parser('window-exit'); p.add_argument('--manifest', required=True)
     p = sub.add_parser('attach-home-io'); p.add_argument('--evidence', required=True); p.add_argument('--home-io', required=True)
     p = sub.add_parser('validate-evidence'); p.add_argument('evidence')
     p = sub.add_parser('census'); p.add_argument('--mount', required=True)
     p = sub.add_parser('qmp-powerdown'); p.add_argument('--socket', required=True); p.add_argument('--wait-pid', type=int)
     p = sub.add_parser('collect'); p.add_argument('--run-dir', required=True); p.add_argument('--guest-unit', required=True)
-    p.add_argument('--operation', required=True); p.add_argument('--export-dir')
+    p.add_argument('--operation', required=True); p.add_argument('--export-dir'); p.add_argument('--nonce')
     args = parser.parse_args(argv)
     host = LiveHost()
     try:
@@ -1768,6 +2404,19 @@ def main(argv=None):
                                   'outcome': win.record.get('outcome')}, indent=1), file=sys.stderr)
                 return 128 + int(late[0])
             return 0
+        if args.command == 'bake-request':
+            sys.stdout.buffer.write(canonical_json(new_bake_request(args.operation, args.step, args.source_revision)))
+            return 0
+        if args.command == 'prepare-bake':
+            fd = os.open(args.request, os.O_RDONLY | os.O_NOFOLLOW)
+            with os.fdopen(fd, 'rb') as stream:
+                raw = stream.read(4097)
+            request, _ = bake_request_digest(raw)
+            sources = source_files(args.repo, request['sourceRevision'])
+            manifest = prepare_bake(raw, os.path.abspath(args.out), sources, shared=False, inputs_dir=args.inputs,
+                                    inputs_custody=args.inputs_custody)
+            print(json.dumps(manifest, indent=1, sort_keys=True))
+            return 0
         if args.command == 'window-exit':
             print(json.dumps(window_exit(host, Executor(), args.manifest), indent=1)); return 0
         if args.command == 'attach-home-io':
@@ -1779,8 +2428,9 @@ def main(argv=None):
         if args.command == 'qmp-powerdown':
             return qmp_powerdown(args.socket, args.wait_pid)
         if args.command == 'collect':
-            print(json.dumps(collect(host, args.run_dir, args.guest_unit, args.operation, args.export_dir), indent=1))
-            return 0
+            result = collect(host, args.run_dir, args.guest_unit, args.operation, args.export_dir, args.nonce)
+            print(json.dumps(result, indent=1, sort_keys=True))
+            return 0 if result['packet']['qualifying'] else 4
     except Interrupted as interrupted:
         window = getattr(interrupted, 'window', None)
         report = {'interrupted': signal.Signals(interrupted.signum).name}
