@@ -1665,6 +1665,127 @@ class BakeMke2fsVersion(unittest.TestCase):
             self.assertFalse((Path(tmp) / 'out').exists())
 
 
+STUBS = {
+    'id': 'echo 0\n',
+    'mountpoint': 'exit 0\n',
+    'sync': 'exit 0\n',
+    'mount': 'printf "%s\\n" "$*" >> "$BAKE_LOG/mount"\nexit "${MOUNT_RC:-0}"\n',
+    'umount': 'printf "%s\\n" "$*" >> "$BAKE_LOG/umount"\nexit "${UMOUNT_RC:-0}"\n',
+    # install -d DIR, or install -m MODE [-o U -g G] [--] SRC DST: ownership is not changed in the test
+    'install': ('mode=0644; dir=0; args=()\nwhile (($#)); do case $1 in -d) dir=1;; -m) mode=$2; shift;;'
+                ' -o|-g) shift;; --) ;; *) args+=("$1");; esac; shift; done\n'
+                'if ((dir)); then mkdir -p "${args[@]}"; exit; fi\n'
+                'cp -- "${args[0]}" "${args[1]}" && chmod "$mode" "${args[1]}"\n'),
+}
+PROVISION = ('#!/usr/bin/env bash\n'
+             'printf "%s\\n" "$*" > "$BAKE_LOG/provision"\n'
+             'stat -c %a "$SELECTION" > "$BAKE_LOG/selection-mode"\n'
+             'exit "${PROVISION_RC:-0}"\n')
+
+
+def run_bake(tmp, text=None, provision=True, **env):
+    """Run bake.sh with its three paths redirected into tmp and system tools stubbed on PATH."""
+    tmp = Path(tmp)
+    text = text if text is not None else (ROOT / fn.BAKE['bakeScript']).read_text()
+    paths = {'bake_control': tmp / 'control', 'bake_inputs': tmp / 'inputs',
+             'bake_selection': tmp / 'run/fsgg-image-build-selection.json'}
+    defaults = {'bake_control': '/mnt/control', 'bake_inputs': '/mnt/fsgg-qualification-inputs',
+                'bake_selection': '/run/fsgg-image-build-selection.json'}
+    for name, value in paths.items():
+        line = f'{name}={defaults[name]}\n'
+        assert text.count(line) == 1, line
+        text = text.replace(line, f'{name}={value}\n')
+    for d in ('bin', 'log', 'run', 'control/source/deployment/qualification-runner/noble'):
+        (tmp / d).mkdir(parents=True, exist_ok=True)
+    for name, body in STUBS.items():
+        (tmp / 'bin' / name).write_text('#!/usr/bin/env bash\n' + body); os.chmod(tmp / 'bin' / name, 0o755)
+    (tmp / 'control/fsgg-image-build-selection.json').write_text('{}\n')
+    script = tmp / 'control/source/deployment/qualification-runner/provision-image.sh'
+    if provision:
+        script.write_text(PROVISION)
+    (tmp / 'bake.sh').write_text(text)
+    environ = {'PATH': f'{tmp / "bin"}:/usr/bin:/bin', 'BAKE_LOG': str(tmp / 'log'),
+               'SELECTION': str(paths['bake_selection']), **{k: str(v) for k, v in env.items()}}
+    done = subprocess.run(['bash', str(tmp / 'bake.sh')], capture_output=True, text=True, env=environ, timeout=30)
+    log = {f.name: f.read_text() for f in (tmp / 'log').iterdir()}
+    return done, log, paths
+
+
+class BakeScriptBehaviour(unittest.TestCase):
+    """bake.sh is the only success signal of a ~2.5 h window, so its outcomes are exercised, not grepped."""
+
+    def outcome(self, **kw):
+        with tempfile.TemporaryDirectory() as tmp:
+            done, log, paths = run_bake(tmp, **kw)
+            markers = re.findall(r'^FSGG-BAKE-RESULT/1 stage=(\S+) status=(\d+)$', done.stdout, re.M)
+            return done.returncode, markers, log, paths['bake_selection'].exists()
+
+    def assert_outcome(self, expected_stage, expected_status, **kw):
+        code, markers, log, selection_left = self.outcome(**kw)
+        self.assertEqual(markers, [(expected_stage, str(expected_status))])
+        self.assertEqual(code, expected_status)
+        self.assertFalse(selection_left, 'the selection never survives the bake')
+        return log
+
+    def test_success_reports_status_zero_with_a_read_only_input_mount(self):
+        log = self.assert_outcome('provision', 0)
+        mount = log['mount'].split()
+        self.assertEqual(mount[:2], ['-o', 'ro,nodev,nosuid'])
+        self.assertEqual(mount[2], 'LABEL=fsgg-inputs')
+        self.assertEqual(log['selection-mode'].strip(), '600', 'provision sees a 0600 selection')
+        self.assertTrue(log['provision'].startswith('--apply '))
+        self.assertTrue(log['provision'].split()[2].endswith('/noble/acquired-input-lock.json'))
+        self.assertIn('umount', log)
+
+    def test_failures_keep_the_first_status_and_stage(self):
+        self.assert_outcome('provision', 3, PROVISION_RC=3)
+        self.assert_outcome('provision', 5, UMOUNT_RC=1)
+        self.assert_outcome('provision', 3, PROVISION_RC=3, UMOUNT_RC=1)
+        log = self.assert_outcome('inputs-mount', 2, MOUNT_RC=32)
+        self.assertNotIn('provision', log, 'nothing is provisioned without the input mount')
+        self.assert_outcome('provision', 127, provision=False)
+
+    def test_the_oracle_kills_the_review_mutants(self):
+        text = (ROOT / fn.BAKE['bakeScript']).read_text()
+        mutants = {
+            'provision failure ignored': ('"$bake_inputs" || bake_first $?', '"$bake_inputs" || true'),
+            'final report dropped': ('bake_report provision "$bake_status"\n', ''),
+            'input mount read-write': ('mount -o ro,nodev,nosuid', 'mount -o rw,nodev,nosuid'),
+            'selection kept': ('rm -f -- "$bake_selection"\n[[', ':\n[['),
+        }
+        for name, (old, new) in mutants.items():
+            with self.subTest(name):
+                self.assertEqual(text.count(old), 1, old)
+                with tempfile.TemporaryDirectory() as tmp:
+                    ok_done, ok_log, _ = run_bake(tmp, text.replace(old, new))
+                with tempfile.TemporaryDirectory() as tmp:
+                    bad_done, _, bad_paths = run_bake(tmp, text.replace(old, new), PROVISION_RC=3)
+                killed = ('stage=provision status=0' not in ok_done.stdout
+                          or 'stage=provision status=3' not in bad_done.stdout
+                          or ok_log.get('mount', '').split()[:2] != ['-o', 'ro,nodev,nosuid']
+                          or bad_paths['bake_selection'].exists())
+                self.assertTrue(killed, f'mutant survived: {name}')
+
+
+class BakeImageArgv(unittest.TestCase):
+    def test_images_are_built_without_host_config_and_left_read_only(self):
+        class Recorder(fn.Executor):
+            def __init__(self):
+                super().__init__(); self.argv = None
+
+            def run(self, argv, effect, timeout=None):
+                self.argv = argv; return ''
+        with tempfile.TemporaryDirectory() as tmp:
+            src = Path(tmp) / 'tree'; fn.write_tree(src, {'a': (b'x', 0o644)})
+            ex = Recorder()
+            disk = fn.build_ext4(ex, src, Path(tmp) / 'img', 'fsgg-control', OP)
+            self.assertEqual(stat.S_IMODE(os.stat(Path(tmp) / 'img').st_mode), 0o400)
+            self.assertEqual(ex.argv[:2], ['env', '-i'])
+            self.assertIn('MKE2FS_CONFIG=/dev/null', ex.argv)
+            self.assertIn(f'SOURCE_DATE_EPOCH={fn.BAKE["epoch"]}', ex.argv)
+            self.assertEqual(ex.argv[ex.argv.index('-U') + 1], fn.fs_identity(OP, 'fsgg-control')[0])
+            self.assertEqual(disk['label'], 'fsgg-control')
+
 @unittest.skipUnless(shutil.which('mke2fs') and reproducible_mke2fs(),
                      'mke2fs 1.47.1+ (SOURCE_DATE_EPOCH) not installed')
 class BakeImages(unittest.TestCase):
