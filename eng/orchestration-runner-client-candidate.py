@@ -29,8 +29,8 @@ REPOSITORY = "FS-GG/FS.GG.Coordination"
 PROJECT = "src/FS.GG.Coordination.Orchestration.Runner.Client/FS.GG.Coordination.Orchestration.Runner.Client.fsproj"
 LOCK = "src/FS.GG.Coordination.Orchestration.Runner.Client/packages.lock.json"
 WORKFLOW = ".github/workflows/orchestration-runner-client-candidate.yml"
-SDK = "10.0.400"
-RUNTIME = "10.0.11"
+SDK = "10.0.403"
+RUNTIME = "10.0.14"
 FSC_SHA256 = "3e82a7fb4fb386f645b538dd56b73e02eb77d12f453915c5ae029421343d5d18"
 RID = "linux-x64"
 PAYLOAD = "fsgg-coord-orchestration-runner"
@@ -439,7 +439,7 @@ def validate_workflow(repo: Path) -> None:
     for trigger in ("push", "pull_request", "schedule", "repository_dispatch"):
         require(not re.search(rf"^  {trigger}:\s*$", text, re.MULTILINE), "ORC-WORKFLOW", f"forbidden trigger {trigger}")
     for exact in (
-        "permissions:\n  contents: read", "dotnet-version: 10.0.400",
+        "permissions:\n  contents: read", "dotnet-version: 10.0.403",
         "if: github.ref == 'refs/heads/main'",
         "ref: ${{ github.sha }}",
         "EXPECTED_SHA: ${{ inputs.expected_sha }}",

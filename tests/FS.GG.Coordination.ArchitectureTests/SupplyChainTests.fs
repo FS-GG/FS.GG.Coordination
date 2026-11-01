@@ -55,7 +55,7 @@ let ``repository SDK selection matches the exact candidate supply-chain pin`` ()
     let implementation =
         File.ReadAllText(Path.Combine(root, "eng/supply-chain-candidate.fsx"))
 
-    Assert.Equal("10.0.400", sdkVersion)
+    Assert.Equal("10.0.403", sdkVersion)
     Assert.Equal("disable", rollForward)
     Assert.Contains($"let pinnedDotnetSdkVersion = \"{sdkVersion}\"", implementation)
     Assert.Contains("Environment.SetEnvironmentVariable(\"DOTNET_ROLL_FORWARD\", null)", implementation)

@@ -14,7 +14,7 @@ Release candidate compilation also disables PDB/debug-symbol emission. F#'s PE w
 CodeView/debug region from the original absolute PDB path before `PathMap` rewrites the visible
 path; different-length worker roots therefore produced identical logical PDB identities but
 different PE padding. Removing that unused candidate debug record eliminates the ambient root-length
-input. Preparation fails closed unless it observes .NET SDK 10.0.400, .NET runtime 10.0.11, and the
+input. Preparation fails closed unless it observes .NET SDK 10.0.403, .NET runtime 10.0.14, and the
 pinned SHA-256 of that SDK's `fsc.dll`; provenance records all three values plus the no-debug policy.
 Ignored project-local `bin`/`obj` state in the original checkout is therefore absent before SDK
 evaluation. The manifest, SBOM,
