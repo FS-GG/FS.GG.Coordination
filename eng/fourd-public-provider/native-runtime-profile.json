@@ -1,76 +1,47 @@
 {
   "archives": [
     {
-      "bytes": 240133692,
+      "bytes": 240199984,
       "directories": 724,
       "files": 4907,
-      "name": "dotnet-sdk-10.0.400-linux-x64.tar.gz",
-      "sha512": "1033977dd837150e0814cf0c5d5b17ceb63925fda7ba2158b47258a4bd7c048cf82eac3bc1166f3146f53124a3f5fba09db1de1260d2ce96399860303b404b48",
-      "unpackedBytes": 640105059,
-      "url": "https://builds.dotnet.microsoft.com/dotnet/Sdk/10.0.400/dotnet-sdk-10.0.400-linux-x64.tar.gz"
-    },
-    {
-      "bytes": 240059572,
-      "directories": 724,
-      "files": 4907,
-      "name": "dotnet-sdk-10.0.401-linux-x64.tar.gz",
-      "sha512": "51c8b999af9e8dd9998c9edc5944e19a90788862068acd38694e098889054ce8c23d4f0c5cccfa16bf187d044562359e5ee69a9f8ad0bbe913ba90311fbce25b",
-      "unpackedBytes": 640148071,
-      "url": "https://builds.dotnet.microsoft.com/dotnet/Sdk/10.0.401/dotnet-sdk-10.0.401-linux-x64.tar.gz"
-    },
-    {
-      "bytes": 36648012,
-      "directories": 7,
-      "files": 193,
-      "name": "dotnet-runtime-10.0.13-linux-x64.tar.gz",
-      "sha512": "9574d95364110409416735e7842796f8d614c21d74cb25d204a3e4cfd11b2c05efdf19ca89b8069650a04f64add2705967dcb04b8665a36d7a3f30a5d8c05afe",
-      "unpackedBytes": 82761704,
-      "url": "https://builds.dotnet.microsoft.com/dotnet/Runtime/10.0.13/dotnet-runtime-10.0.13-linux-x64.tar.gz"
+      "name": "dotnet-sdk-10.0.403-linux-x64.tar.gz",
+      "sha512": "b7b3d8461cf98b07d2552ce9199702fa3ad010ac2671a5f8cd5136f7534e50f6855ba7bbb02b11494563f1d04156276a31cda1103b900e5eecd0d9473dc7b9c5",
+      "unpackedBytes": 640471685,
+      "url": "https://builds.dotnet.microsoft.com/dotnet/Sdk/10.0.403/dotnet-sdk-10.0.403-linux-x64.tar.gz"
     }
   ],
   "files": {
     "dotnet": {
       "bytes": 71744,
-      "sha256": "8b3d902364f618e31e029d4eba077d52c141dd641e375f4555715604806e44b6"
+      "sha256": "634efbf2414144d140d6f59d167342c8b3b53b4c34346ed786dd0470ddc9a3cb"
     },
-    "host/fxr/10.0.13/libhostfxr.so": {
+    "host/fxr/10.0.14/libhostfxr.so": {
       "bytes": 326888,
-      "sha256": "03147defc576e5a50a0f52b628d8b98a75fea83e1572956fcd48b5353c4657e5"
+      "sha256": "3e39d88afa3670798842aafb156893cd49fa817f604949addfabffae2925367e"
     },
-    "sdk/10.0.400/.version": {
+    "sdk/10.0.403/.version": {
       "bytes": 98,
-      "sha256": "955e36eae3fbe1c3d1e71c492a63ef604c21ac39048d0048aa0e409b53a94bc5"
+      "sha256": "3f81b895e9a392d4d4b5a3cfb22199e258371881fdc38f083a34cb4b8bf7083f"
     },
-    "sdk/10.0.400/FSharp/fsc.dll": {
+    "sdk/10.0.403/FSharp/fsc.dll": {
       "bytes": 97064,
-      "sha256": "3e82a7fb4fb386f645b538dd56b73e02eb77d12f453915c5ae029421343d5d18"
+      "sha256": "b5c905fb71bb111a47dd695c911d3e62479ed6cdb43fc17b58dcd17d4a86b1a7"
     },
-    "sdk/10.0.401/.version": {
-      "bytes": 98,
-      "sha256": "496179aced13abd185f027a1ce8519cc57aa194a5538c51226c0c12e63a4a5ba"
-    },
-    "sdk/10.0.401/FSharp/fsc.dll": {
-      "bytes": 97104,
-      "sha256": "2bd6190eafa94f47739538467f5a7cd52de233a627789c69f07959d7578e4d6b"
-    },
-    "shared/Microsoft.NETCore.App/10.0.13/libcoreclr.so": {
+    "shared/Microsoft.NETCore.App/10.0.14/libcoreclr.so": {
       "bytes": 7114024,
-      "sha256": "2d4d3f0b2698a74f186329510d93785e55d10934cb9ebe6e3edca6b24c624402"
+      "sha256": "843b66a2b33a570537c779283b27f7c1f3ff5394e5a72436bf181c885d4cdfff"
     },
-    "shared/Microsoft.NETCore.App/10.0.13/libhostpolicy.so": {
+    "shared/Microsoft.NETCore.App/10.0.14/libhostpolicy.so": {
       "bytes": 313416,
-      "sha256": "95061f94c2d2a95e668e02b97d53c4edb86665fa6e47e4877ceb28c63c9e35da"
+      "sha256": "bf7db236025e002775497199c04c31202445c24126b39b8bf3822680bda4d1b0"
     }
   },
-  "runtimeVersion": "10.0.13",
+  "runtimeVersion": "10.0.14",
   "runtimeVersions": [
-    "10.0.11",
-    "10.0.12",
-    "10.0.13"
+    "10.0.14"
   ],
   "schema": "fsgg.fourd.native-runtime-profile/1",
   "sdkVersions": [
-    "10.0.400",
-    "10.0.401"
+    "10.0.403"
   ]
 }
