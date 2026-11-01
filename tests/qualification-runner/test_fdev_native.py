@@ -575,7 +575,8 @@ class LaunchControls(unittest.TestCase):
                                      'TasksMax': '128'},
                  names['guest']: {'ActiveState': 'active', 'SubState': 'exited', 'Result': 'success',
                                   'ExecMainStatus': '0'},
-                 names['collector']: {'ActiveState': 'active', 'SubState': 'exited', 'Result': 'success'}}
+                 names['collector']: {'ActiveState': 'active', 'SubState': 'exited', 'Result': 'success',
+                                      'ExecMainStatus': '0'}}
         self.host = FakeHost(cg, units, self.scope_cg)
         self.lock = mock.patch.object(fn, 'lock_image_sha', return_value=hashlib.sha256(b'image').hexdigest())
         self.digest = mock.patch.object(fn, 'sha256_file', return_value=(hashlib.sha256(b'image').hexdigest(), 5))
@@ -1666,8 +1667,8 @@ class BakeMke2fsVersion(unittest.TestCase):
 
 
 STUBS = {
-    'id': 'echo 0\n',
-    'mountpoint': 'exit 0\n',
+    'id': 'echo "${BAKE_UID:-0}"\n',
+    'mountpoint': 'exit "${MOUNTPOINT_RC:-0}"\n',
     'sync': 'exit 0\n',
     'systemctl': '[[ $1 == is-enabled ]] || exit 9\necho "${APT_STATE:-masked}"\n',
     'mount': 'printf "%s\\n" "$*" >> "$BAKE_LOG/mount"\nexit "${MOUNT_RC:-0}"\n',
@@ -1687,7 +1688,7 @@ PROVISION = ('#!/usr/bin/env bash\n'
 NONCE = 'e' * 64
 
 
-def run_bake(tmp, text=None, provision=True, dmi_uuid=GUEST_UUID, **env):
+def run_bake(tmp, text=None, provision=True, dmi_uuid=GUEST_UUID, nonce=NONCE, target=None, **env):
     """Run bake.sh with its four paths redirected into tmp and system tools stubbed on PATH."""
     tmp = Path(tmp)
     text = text if text is not None else (ROOT / fn.BAKE['bakeScript']).read_text()
@@ -1705,7 +1706,8 @@ def run_bake(tmp, text=None, provision=True, dmi_uuid=GUEST_UUID, **env):
     for name, body in STUBS.items():
         (tmp / 'bin' / name).write_text('#!/usr/bin/env bash\n' + body); os.chmod(tmp / 'bin' / name, 0o755)
     (tmp / 'control/fsgg-image-build-selection.json').write_text('{}\n')
-    (tmp / 'control/TARGET.json').write_text(json.dumps({'operatorAcceptanceSha256': NONCE, 'systemUuid': GUEST_UUID}))
+    (tmp / 'control/TARGET.json').write_text(json.dumps(
+        target if target is not None else {'operatorAcceptanceSha256': nonce, 'systemUuid': GUEST_UUID}))
     (tmp / 'product_uuid').write_text(dmi_uuid + '\n')
     script = tmp / 'control/source/deployment/qualification-runner/provision-image.sh'
     if provision:
@@ -1999,8 +2001,28 @@ class CollectorCommit(unittest.TestCase):
         self.assertEqual(argv[argv.index('--nonce') + 1], NONCE)
 
 
-def bake_selection(tmp, **overrides):
-    """A bake selection over real files: request, seed and custody record (no images built)."""
+REAL_LOCK = json.loads((ROOT / fn.NOBLE_LOCK).read_text())
+REAL_LOCK_BYTES = json.dumps(REAL_LOCK).encode()  # the bytes fake_sources(REAL_LOCK) puts on the control disk
+
+
+def custody_doc(lock_bytes=REAL_LOCK_BYTES, op=OP, **overrides):
+    lock = json.loads(lock_bytes)
+    doc = {'operationId': op, 'lockSha256': hashlib.sha256(lock_bytes).hexdigest(),
+           'population': {'files': len(lock['files']), 'bytes': sum(r['bytes'] for r in lock['files']),
+                          'allMatchLock': True}}
+    doc.update(overrides)
+    return doc
+
+
+@contextlib.contextmanager
+def inputs_root(tmp):
+    with mock.patch.dict(fn.POLICY, {'inputsDir': str(Path(tmp) / 'inputs')}):
+        yield
+
+
+def bake_selection(tmp, custody=None, **overrides):
+    """A bake selection over real files: request, seed and the admitted custody record (no images).
+    The custody record sits at <inputsDir>/<op>/custody.json; use it inside inputs_root(tmp)."""
     tmp = Path(tmp)
     raw = fn.canonical_json(bake_request())
     (tmp / 'request.json').write_bytes(raw)
@@ -2008,34 +2030,40 @@ def bake_selection(tmp, **overrides):
     (tmp / 'seed').mkdir()
     for name, data in seed.items():
         (tmp / 'seed' / name).write_bytes(data)
-    (tmp / 'custody.json').write_text('{"operationId": "%s"}\n' % OP)
-    s = dict(selection(), guestUuid=GUEST_UUID, seedDir=str(tmp / 'seed'),
-             readOnlyDisks=[{'path': str(tmp / 'control.ext4'), 'sha256': 'c' * 64}])
+    custody_file = tmp / 'inputs' / OP / 'custody.json'
+    custody_file.parent.mkdir(parents=True)
+    custody_file.write_text(json.dumps(custody or custody_doc()))
+    s = dict(selection(), guestUuid=GUEST_UUID, seedDir=str(tmp / 'seed'))
     s['bake'] = {'request': str(tmp / 'request.json'), 'requestSha256': hashlib.sha256(raw).hexdigest(),
                  'controlSha256': 'c' * 64,
                  'seedSha256': {n: hashlib.sha256(d).hexdigest() for n, d in seed.items()},
-                 'inputsCustody': {'path': str(tmp / 'custody.json'),
-                                   'sha256': hashlib.sha256((tmp / 'custody.json').read_bytes()).hexdigest()},
+                 'inputsCustody': {'path': str(custody_file),
+                                   'sha256': hashlib.sha256(custody_file.read_bytes()).hexdigest()},
                  'builder': {'uid': os.getuid(), 'gid': os.getgid(), 'mke2fs': '1.47.4'}}
     s['bake'].update(overrides)
+    s['readOnlyDisks'] = [{'path': str(tmp / 'control.ext4'), 'sha256': s['bake']['controlSha256']}]
     return s
 
 
 class InWindowBakeChecks(unittest.TestCase):
-    def refusal(self, s, tmp, setup=None):
+    def refusal(self, s, tmp, setup=None, **patches):
         if setup:
             setup(Path(tmp))
-        fn.validate_selection(s)
-        with self.assertRaises(fn.Refusal) as caught:
-            fn.verify_bake_inputs(fn.Executor(), s, rows(), tmp)
+        with inputs_root(tmp), contextlib.ExitStack() as stack:
+            for name, value in patches.items():
+                stack.enter_context(mock.patch.object(fn, name, **value))
+            fn.validate_selection(s)
+            with self.assertRaises(fn.Refusal) as caught:
+                fn.verify_bake_inputs(fn.Executor(), s, rows(), tmp)
         return caught.exception.check
 
     def test_each_bound_input_that_changed_refuses_before_any_image_is_built(self):
+        custody = lambda t: t / 'inputs' / OP / 'custody.json'
         cases = {
             'bake.request-digest': (lambda t: {'requestSha256': 'd' * 64}, None),
             'bake.seed': (lambda t: {}, lambda t: (t / 'seed/user-data').write_bytes(b'#cloud-config\n')),
             'bake.seed ': (lambda t: {}, lambda t: (t / 'seed/extra').write_bytes(b'x')),
-            'bake.inputs-custody': (lambda t: {}, lambda t: (t / 'custody.json').write_text('{}\n')),
+            'bake.inputs-custody': (lambda t: {}, lambda t: custody(t).write_text('{}\n')),
             'bake.builder': (lambda t: {'builder': {'uid': os.getuid() + 1, 'gid': os.getgid(), 'mke2fs': '1.47.4'}}, None),
         }
         for expected, (overrides, setup) in cases.items():
@@ -2049,32 +2077,69 @@ class InWindowBakeChecks(unittest.TestCase):
             s = dict(bake_selection(tmp), guestUuid=str(uuidlib.uuid4()))
             self.assertEqual(self.refusal(s, tmp), 'bake.request-binding')
 
-    def test_dry_run_plans_the_check_and_validation_requires_the_bound_disk(self):
+    def test_the_bound_mke2fs_version_must_be_the_rebuilding_one(self):
         with tempfile.TemporaryDirectory() as tmp:
+            s = bake_selection(tmp)
+            self.assertEqual(self.refusal(s, tmp, mke2fs_version={'return_value': '1.47.9'}), 'bake.builder')
+
+    def test_the_custody_record_must_be_this_operations_for_this_lock_and_population(self):
+        patches = {'mke2fs_version': {'return_value': '1.47.4'},
+                   'source_files': {'return_value': fake_sources(REAL_LOCK)}}
+        # Same file count and bytes, one different pin: only the lock digest can tell them apart.
+        rows_ = [dict(r) for r in REAL_LOCK['files']]; rows_[0]['sha256'] = '0' * 64
+        other_lock = json.dumps(dict(REAL_LOCK, files=rows_)).encode()
+        for name, doc in (('other operation', custody_doc(op='f' * 32)), ('other lock', custody_doc(other_lock)),
+                          ('population differs', custody_doc(population={'files': 1, 'bytes': 1, 'allMatchLock': True})),
+                          ('population unverified', custody_doc(population=dict(custody_doc()['population'],
+                                                                                allMatchLock=False)))):
+            with self.subTest(name), tempfile.TemporaryDirectory() as tmp:
+                self.assertEqual(self.refusal(bake_selection(tmp, custody=doc), tmp, **patches), 'bake.inputs-custody')
+        with tempfile.TemporaryDirectory() as tmp, inputs_root(tmp):
+            s = bake_selection(tmp)
+            s['bake']['inputsCustody'] = dict(s['bake']['inputsCustody'], path='/elsewhere/custody.json')
+            with self.assertRaises(fn.Refusal):
+                fn.validate_selection(s)
+
+    def test_prepare_refuses_an_input_population_other_than_the_custody_record_names(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            lock = population(Path(tmp) / 'pop')
+            lock_bytes = json.dumps(lock).encode()
+            record = Path(tmp) / 'inputs' / OP / 'custody.json'; record.parent.mkdir(parents=True)
+            record.write_text(json.dumps(custody_doc(lock_bytes)))
+            with self.assertRaises(fn.Refusal) as caught:
+                fn.prepare_bake(fn.canonical_json(bake_request()), str(Path(tmp) / 'out'), fake_sources(lock), False,
+                                inputs_dir=str(Path(tmp) / 'pop'), inputs_custody=str(record))
+            self.assertEqual(caught.exception.check, 'bake.inputs-custody')
+            self.assertFalse((Path(tmp) / 'out').exists())
+
+    def test_dry_run_plans_the_check_and_validation_requires_the_bound_disk(self):
+        with tempfile.TemporaryDirectory() as tmp, inputs_root(tmp):
             s = bake_selection(tmp)
             plan = fn.dry_run(FakeHost(tmp, {}, ROOT_SESSION), s, facts(), rows())['plan']
             self.assertIn('bake.verify-inputs', [p['effect'] for p in plan])
-        with tempfile.TemporaryDirectory() as tmp, self.assertRaises(fn.Refusal):
-            fn.validate_selection(bake_selection(tmp, controlSha256='9' * 64))
+            s['readOnlyDisks'] = [{'path': '/x', 'sha256': '9' * 64}]
+            with self.assertRaises(fn.Refusal):
+                fn.validate_selection(s)
 
     @unittest.skipUnless(shutil.which('mke2fs') and shutil.which('git') and reproducible_mke2fs(),
                          'mke2fs 1.47.1+ and git required')
     def test_the_window_rebuilds_the_bound_control_image_from_its_entry_rows(self):
-        with tempfile.TemporaryDirectory() as tmp:
+        with tempfile.TemporaryDirectory() as tmp, inputs_root(tmp):
             repo = Path(tmp) / 'repo'; repo.mkdir()
             env = dict(os.environ, GIT_AUTHOR_NAME='t', GIT_AUTHOR_EMAIL='t@t', GIT_COMMITTER_NAME='t',
                        GIT_COMMITTER_EMAIL='t@t', GIT_CONFIG_NOSYSTEM='1', HOME=tmp)
             git = lambda *a: subprocess.run(['git', '-C', str(repo), *a], check=True, capture_output=True, env=env)
             git('init', '-q')
-            for rel, (data, mode) in fake_sources().items():
+            for rel, (data, mode) in fake_sources(REAL_LOCK).items():
                 (repo / rel).parent.mkdir(parents=True, exist_ok=True)
                 (repo / rel).write_bytes(data); os.chmod(repo / rel, mode)
             git('add', '-A'); git('commit', '-q', '-m', 'x')
             revision = git('rev-parse', 'HEAD').stdout.decode().strip()
             raw = fn.canonical_json(bake_request(sourceRevision=revision))
-            (Path(tmp) / 'custody.json').write_text('{}\n')
+            record = Path(tmp) / 'inputs' / OP / 'custody.json'; record.parent.mkdir(parents=True)
+            record.write_text(json.dumps(custody_doc()))
             manifest = fn.prepare_bake(raw, str(Path(tmp) / 'out'), fn.source_files(repo, revision), False,
-                                       inputs_custody=str(Path(tmp) / 'custody.json'))
+                                       inputs_custody=str(record))
             s = dict(selection(), **manifest['selectionFragment'])
             fn.validate_selection(s)
             run = Path(tmp) / 'run'; run.mkdir()
@@ -2102,6 +2167,221 @@ class TreeXattrs(unittest.TestCase):
             with self.assertRaises(fn.Refusal) as caught:
                 fn.normalize_tree(tmp)
             self.assertEqual(caught.exception.check, 'bake.tree')
+
+
+# ---------------------------------------------------------------------------
+# Review of #1117 at 3fa77bd0 (Root REQUEST_CHANGES): B1 and N1-N9.
+# ---------------------------------------------------------------------------
+IMAGE_SHA = hashlib.sha256(b'image').hexdigest()  # what LaunchControls' patched sha256_file returns
+
+
+class RuledAndBakeLaunch(unittest.TestCase):
+    """B1: the real launch path with a recording executor, over LaunchControls' fake host."""
+    setUp, tearDown = LaunchControls.setUp, LaunchControls.tearDown
+
+    def run_launch(self, sel, f=None, r=None, verify=None):
+        f = f or facts()
+        r = r if r is not None else fn.evaluate(f, sel, comment(), sel.get('hostPartition'), NOW,
+                                                {'path': 'x', 'match': True}, sel.get('hostMemory'))
+        ex = RecordingExecutor(self.host)
+        with contextlib.ExitStack() as stack:
+            if verify is not None:
+                stack.enter_context(mock.patch.object(fn, 'verify_bake_inputs', side_effect=verify))
+            try:
+                win = fn.launch(self.host, ex, sel, f, r, run_root='/runs', github=FakeGitHub(), poll=0,
+                                reobserve=lambda: f)
+            except fn.Refusal as refusal:
+                win = refusal.window
+        return win, ex
+
+    def test_a_ruled_selection_is_admitted_at_launch_and_at_window_entry(self):
+        win, ex = self.run_launch(ruled_selection())
+        self.assertEqual(win.record.get('firstFailure'), None)
+        self.assertEqual(win.record['outcome'], 'completed-awaiting-readback')
+        entry = {r['check']: r for r in win.record['entryRows']}
+        for check in fn.ACCEPTABLE_UNKNOWNS:
+            self.assertEqual((entry[check]['status'], entry[check]['rootRuling']), (fn.UNKNOWN, RULING))
+        self.assertIn('unit.start-guest', ex.kinds())
+        self.assertTrue(fn.validate_evidence(win.evidence))
+
+    def test_without_the_ruling_the_same_launch_refuses_before_any_effect(self):
+        s = ruled_selection(); s.pop('rootAcceptedUnknowns')
+        ex = RecordingExecutor(self.host)
+        r = fn.evaluate(facts(), s, comment(), None, NOW, {'path': 'x', 'match': True})
+        with self.assertRaises(fn.Refusal) as caught:
+            fn.launch(self.host, ex, s, facts(), r, run_root='/runs', github=FakeGitHub(), poll=0)
+        self.assertEqual(caught.exception.check, 'selection.valid', 'without the ruling the Home df is required')
+        self.assertEqual(ex.kinds(), [])
+
+    def test_bake_verification_gets_the_entry_rows_after_the_caps_and_before_disk_preparation(self):
+        seen = {}
+
+        def verify(executor, selection_, entry_rows, run_dir):
+            seen.update(rows=entry_rows, kinds=list(executor.kinds()), run_dir=run_dir)
+            return {'controlSha256': IMAGE_SHA}
+        with tempfile.TemporaryDirectory() as tmp, inputs_root(tmp):
+            sel = bake_selection(tmp, controlSha256=IMAGE_SHA)
+            win, ex = self.run_launch(sel, r=rows(), verify=verify)
+        self.assertIs(seen['rows'], win.record['entryRows'], 'the window entry rows, not the preflight rows')
+        self.assertIn('io.cap-apply', seen['kinds'])
+        self.assertIn('slice.properties', seen['kinds'])
+        self.assertNotIn('disk.prepare', seen['kinds'])
+        self.assertIn('disk.prepare', ex.kinds())
+        self.assertEqual(seen['run_dir'], f'/runs/{OP}')
+        self.assertEqual(win.record['bakeInputs'], {'controlSha256': IMAGE_SHA})
+
+    def test_a_bake_verification_refusal_starts_no_guest_and_removes_the_caps(self):
+        with tempfile.TemporaryDirectory() as tmp, inputs_root(tmp):
+            sel = bake_selection(tmp, controlSha256=IMAGE_SHA)
+            win, ex = self.run_launch(sel, r=rows(), verify=fn.Refusal('bake.control-digest', 'differs'))
+        self.assertEqual(win.record['firstFailure']['check'], 'bake.control-digest')
+        kinds = ex.kinds()
+        for absent in ('disk.prepare', 'unit.start-guest', 'unit.start-collector'):
+            self.assertNotIn(absent, kinds)
+        self.assertIn('io.cap-remove', kinds)
+        self.assertIn('slice.revert', kinds)
+
+    def test_a_read_only_disk_whose_bytes_changed_refuses_before_the_guest(self):
+        sel = dict(selection(), readOnlyDisks=[{'path': '/srv/v3-pool/x/control.ext4', 'sha256': 'd' * 64}])
+        win, ex = self.run_launch(sel, r=rows())
+        self.assertEqual(win.record['firstFailure']['check'], 'disk.digest')
+        self.assertNotIn('unit.start-guest', ex.kinds())
+
+    def test_the_window_outcome_follows_the_collector_verdict(self):
+        names = fn.unit_names(OP, 'bake')
+        self.host.units[names['collector']] = {'ActiveState': 'failed', 'SubState': 'failed', 'Result': 'exit-code',
+                                               'ExecMainStatus': '4'}
+        win, _ = self.run_launch(selection(), r=rows())
+        self.assertEqual(win.record['outcome'], 'collector-refused-awaiting-readback')
+
+
+class AdmissionForgery(unittest.TestCase):
+    def test_an_unsupported_row_is_never_skipped_even_with_a_ruling(self):
+        forged = [dict(fn.row('capacity.host-partition', fn.UNSUPPORTED, None, 'stale'), rootRuling=RULING)]
+        with self.assertRaises(fn.Refusal):
+            fn.refuse_unless_all_supported(forged, fn.ACCEPTABLE_UNKNOWNS)
+
+
+def fsync_paths():
+    """Patch os.fsync so each call records the path of its descriptor (N1/N3)."""
+    calls, real = [], os.fsync
+
+    def record(fd):
+        calls.append(os.path.realpath(os.readlink(f'/proc/self/fd/{fd}')))
+        return real(fd)
+    return calls, mock.patch.object(os, 'fsync', side_effect=record)
+
+
+class CommitDurability(unittest.TestCase):
+    run_collect = CollectorCommit.run_collect
+    QUALIFYING = f'FSGG-BAKE-RESULT/1 nonce={NONCE} stage=complete status=0\n'
+
+    def test_every_new_entry_and_file_of_the_commit_is_fsynced(self):
+        calls, patch = fsync_paths()
+        with patch:
+            out, run_dir, export = self.run_collect(self.QUALIFYING)
+        op_dir = os.path.realpath(export / OP)
+        expected = {os.path.realpath(export), op_dir, os.path.join(op_dir, 'qualified-root.raw'),
+                    os.path.join(op_dir, 'result-packet.json'), os.path.realpath(run_dir),
+                    os.path.join(os.path.realpath(run_dir), 'result-packet.json')}
+        self.assertEqual(expected - set(calls), set())
+        self.assertTrue(out['packet']['qualifying'])
+
+    def test_executor_mkdir_makes_the_new_directory_durable(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            calls, patch = fsync_paths()
+            with patch:
+                fn.Executor().mkdir(f'{tmp}/native-chain', 0o700)
+            self.assertIn(os.path.realpath(tmp), calls)
+
+    def test_a_unit_with_a_nonzero_status_never_qualifies(self):
+        out, _, export = self.run_collect(self.QUALIFYING, result='success', status='1')
+        self.assertFalse(out['packet']['qualifying'])
+        self.assertFalse((export / OP).exists())
+
+    def test_an_existing_export_is_never_overwritten_and_the_failure_is_recorded(self):
+        tmp = tempfile.mkdtemp(); self.addCleanup(shutil.rmtree, tmp)
+        run_dir, export = Path(tmp) / 'run', Path(tmp) / 'native-chain'
+        run_dir.mkdir(); (export / OP).mkdir(parents=True)
+        (export / OP / 'keep').write_text('earlier')
+        (run_dir / 'root.raw').write_bytes(b'image'); (run_dir / 'serial.log').write_text(self.QUALIFYING)
+        host = FakeHost(tmp, {'g.service': {'ActiveState': 'inactive', 'SubState': 'dead', 'Result': 'success',
+                                            'ExecMainStatus': '0', 'ControlGroup': ''}}, ROOT_SESSION)
+        out = fn.collect(host, str(run_dir), 'g.service', OP, str(export), NONCE, copy=shutil.copyfile)
+        self.assertFalse(out['packet']['qualifying'])
+        self.assertIn('already exists', out['packet']['exportFailure'])
+        self.assertEqual(sorted(p.name for p in (export / OP).iterdir()), ['keep'])
+        self.assertTrue((run_dir / 'result-packet.json').exists())
+
+    def test_a_failed_copy_is_recorded_in_the_run_directory_packet(self):
+        def broken(a, b):
+            raise OSError('disk full')
+        tmp = tempfile.mkdtemp(); self.addCleanup(shutil.rmtree, tmp)
+        run_dir, export = Path(tmp) / 'run', Path(tmp) / 'native-chain'
+        run_dir.mkdir(); export.mkdir()
+        (run_dir / 'root.raw').write_bytes(b'image'); (run_dir / 'serial.log').write_text(self.QUALIFYING)
+        host = FakeHost(tmp, {'g.service': {'ActiveState': 'inactive', 'SubState': 'dead', 'Result': 'success',
+                                            'ExecMainStatus': '0', 'ControlGroup': ''}}, ROOT_SESSION)
+        out = fn.collect(host, str(run_dir), 'g.service', OP, str(export), NONCE, copy=broken)
+        packet = json.loads((run_dir / 'result-packet.json').read_text())
+        self.assertFalse(packet['qualifying'])
+        self.assertIn('disk full', packet['exportFailure'])
+        self.assertIsNone(out['committed'])
+        self.assertFalse((export / OP / 'result-packet.json').exists())
+
+    def test_an_oversized_serial_log_refuses_rather_than_truncating(self):
+        with mock.patch.object(fn, 'SERIAL_CAP', 64):
+            out, _, export = self.run_collect('x' * 100 + self.QUALIFYING)
+        self.assertFalse(out['packet']['qualifying'])
+        self.assertIn('refused rather than truncated', out['packet']['bake']['reason'])
+        self.assertTrue(out['packet']['bake']['serial']['truncated'])
+
+    def test_the_collector_cli_exits_zero_only_for_a_qualifying_bake(self):
+        for qualifying, code in ((True, 0), (False, 4)):
+            with self.subTest(qualifying), mock.patch.object(fn, 'collect', return_value={
+                    'packet': {'qualifying': qualifying}, 'packetSha256': 'x', 'committed': None}), \
+                    contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(fn.main(['collect', '--run-dir', '/r', '--guest-unit', 'g', '--operation', OP,
+                                          '--nonce', NONCE]), code)
+
+
+class MarkerStages(unittest.TestCase):
+    def test_a_zero_status_needs_the_complete_stage(self):
+        self.assertFalse(fn.bake_marker(f'FSGG-BAKE-RESULT/1 nonce={NONCE} stage=provision status=0\n', NONCE)['ok'])
+
+    def test_failures_before_the_nonce_surface_their_stage(self):
+        got = fn.bake_marker('FSGG-BAKE-RESULT/1 nonce=unknown stage=control-mount status=2\n', NONCE)
+        self.assertEqual((got['ok'], got['stage'], got['status']), (False, 'control-mount', 2))
+        self.assertEqual(got['foreignNonces'], [])
+
+
+class BakeEarlyFailures(unittest.TestCase):
+    def early(self, **kw):
+        with tempfile.TemporaryDirectory() as tmp:
+            done, log, paths = run_bake(tmp, **kw)
+            return (re.findall(r'^FSGG-BAKE-RESULT/1 nonce=(\S+) stage=(\S+) status=(\d+)$', done.stdout, re.M),
+                    done.returncode, log, paths['bake_selection'].exists())
+
+    def test_identity_control_mount_and_target_failures_report_their_stage_with_nonce_unknown(self):
+        for stage, kw in (('identity', {'BAKE_UID': '1000'}), ('control-mount', {'MOUNTPOINT_RC': '1'}),
+                          ('target', {'nonce': 'not-a-digest'}), ('target', {'nonce': 'E' * 64}),
+                          ('target', {'target': {'systemUuid': GUEST_UUID}})):
+            with self.subTest(stage, **{k: str(v)[:12] for k, v in kw.items()}):
+                markers, code, log, left = self.early(**kw)
+                self.assertEqual(markers, [('unknown', stage, '2')])
+                self.assertEqual(code, 2)
+                self.assertNotIn('mount', log)
+                self.assertFalse(left)
+                got = fn.bake_marker(f'FSGG-BAKE-RESULT/1 nonce=unknown stage={stage} status=2\n', NONCE)
+                self.assertEqual(got['stage'], stage)
+
+
+class AptUnitsAgree(unittest.TestCase):
+    def test_bake_sh_checks_exactly_the_units_the_seed_masks(self):
+        text = (ROOT / fn.BAKE['bakeScript']).read_text()
+        block = re.search(r'^bake_apt_units=\(([^)]*)\)', text, re.M)
+        self.assertIsNotNone(block)
+        self.assertEqual(tuple(block.group(1).split()), fn.BAKE['aptUnits'])
 
 if __name__ == '__main__':
     unittest.main(verbosity=1)

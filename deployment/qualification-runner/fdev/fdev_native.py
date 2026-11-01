@@ -73,6 +73,7 @@ POLICY = {
     'poolMount': '/srv/v3-pool', 'poolLabel': 'systemadmin-v3',
     'claimsDir': '/srv/v3-pool/native/claims', 'runsDir': '/srv/v3-pool/native/runs',
     'commitRoot': '/srv/bulk/native-chain',
+    'inputsDir': '/srv/v3-pool/native/inputs',  # admitted acquisitions: <inputsDir>/<op>/custody.json
     # HDD-backed fdev filesystems (Home evidence, #4778 comment 6526677331); resolved to
     # whole-disk major:minor at runtime, never assumed from a device name.
     'hddMounts': ('/srv/v3-pool', '/srv/bulk', '/srv/sc2-reserved',
@@ -295,6 +296,24 @@ def accepted_unknowns(sel):
     return tuple(checks)
 
 
+def custody_path(op):
+    return f'{POLICY["inputsDir"]}/{op}/custody.json'
+
+
+def check_custody(custody_doc, op, lock_bytes):
+    """The admitted acquisition record is this operation's, for the exact lock on the control disk,
+    and its population is the lock's population (N8)."""
+    lock = json.loads(lock_bytes)
+    require(custody_doc.get('operationId') == op, 'bake.inputs-custody', 'the custody record names another operation')
+    require(custody_doc.get('lockSha256') == hashlib.sha256(lock_bytes).hexdigest(), 'bake.inputs-custody',
+            'the custody record was acquired under another lock')
+    population = custody_doc.get('population') or {}
+    require(population.get('allMatchLock') is True and population.get('files') == len(lock['files'])
+            and population.get('bytes') == sum(r['bytes'] for r in lock['files']), 'bake.inputs-custody',
+            'the custody population differs from the lock population')
+    return population
+
+
 def validate_bake_binding(sel):
     bake = sel['bake']
     keys = {'request', 'requestSha256', 'controlSha256', 'seedSha256', 'inputsCustody', 'builder'}
@@ -309,6 +328,9 @@ def validate_bake_binding(sel):
         isinstance(v, str) and SHA_PATTERN.fullmatch(v) for v in seed.values()), 'selection.valid',
         'bake.seedSha256 needs meta-data and user-data digests')
     custody = bake['inputsCustody']  # None until bound; the window refuses an unbound custody record
+    if isinstance(custody, dict):
+        require(custody.get('path') == custody_path(sel['operationId']), 'selection.valid',
+                f'bake.inputsCustody must be the admitted record {custody_path(sel["operationId"])}')
     require(custody is None or isinstance(custody, dict) and set(custody) == {'path', 'sha256'} and str(custody['path']).startswith('/')
             and SHA_PATTERN.fullmatch(str(custody['sha256'])) is not None, 'selection.valid',
             'bake.inputsCustody needs an absolute path and sha256 (the admitted acquisition record)')
@@ -1380,8 +1402,11 @@ def verify_bake_inputs(executor, selection, entry_rows, run_dir, repo=REPO):
             f'{builder["uid"]}:{builder["gid"]}; file ownership enters the digest')
     version = require_reproducible_mke2fs(mke2fs_version())
     require(version == builder['mke2fs'], 'bake.builder', f'mke2fs {version} differs from the bound {builder["mke2fs"]}')
-    files, _target = control_files(request, acceptance, shared_codex_host(entry_rows),
-                                   source_files(repo, request['sourceRevision']))
+    sources = source_files(repo, request['sourceRevision'])
+    require(custody['path'] == custody_path(selection['operationId']), 'bake.inputs-custody',
+            'the custody record is not the admitted one for this operation')
+    check_custody(load_json(custody['path']), selection['operationId'], sources[NOBLE_LOCK][0])
+    files, _target = control_files(request, acceptance, shared_codex_host(entry_rows), sources)
     tree = Path(run_dir) / 'control-rebuild-tree'
     write_tree(tree, files)
     disk = build_ext4(executor, tree, Path(run_dir) / 'control-rebuild.ext4', BAKE['controlLabel'],
@@ -1413,6 +1438,13 @@ def prepare_bake(request_raw, out_dir, sources, shared, inputs_dir=None, executo
     custody = None
     if inputs_custody is not None:
         custody = {'path': str(inputs_custody), 'sha256': sha256_file(inputs_custody)[0]}
+        counted = check_custody(load_json(inputs_custody), request['operationId'], sources[NOBLE_LOCK][0])
+        if inputs_dir is not None:  # the input disk is built from exactly the admitted population
+            require(os.path.realpath(inputs_dir) == os.path.realpath(os.path.join(os.path.dirname(inputs_custody),
+                                                                                    'population')), 'bake.inputs-custody',
+                    'the input population is not the one the custody record names')
+            require((population['files'], population['bytes']) == (counted['files'], counted['bytes']),
+                    'bake.inputs-custody', 'the input population differs from the custody record')
     version = require_reproducible_mke2fs(mke2fs_version())
     os.mkdir(out, 0o700)
     durable_write(str(out / 'request.json'), request_raw)
@@ -1589,6 +1621,7 @@ class Executor:
     def mkdir(self, path, mode):
         os.makedirs(os.path.dirname(path), mode=0o700, exist_ok=True)
         os.mkdir(path, mode)
+        fsync_dir(os.path.dirname(path))  # the new entry (the run directory, the commit root) is durable
 
     def write(self, path, data, mode=0o600):
         fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, mode)
@@ -1837,7 +1870,15 @@ class Window:
             time.sleep(self.poll)
 
 
-def guest_outcome(guest):
+def guest_outcome(guest, collector=None):
+    """The window is complete only if the guest succeeded and, when a collector ran, it qualified the
+    result (exit 0). The collector exits 4 for a bake that does not qualify (N7)."""
+    if collector is not None and not (collector.get('Result') == 'success' and collector.get('ExecMainStatus') == '0'):
+        return 'collector-refused-awaiting-readback'
+    return _guest_outcome(guest)
+
+
+def _guest_outcome(guest):
     ok = (guest.get('Result') == 'success' and guest.get('ExecMainStatus') == '0'
           and not guest.get('boundExceeded'))
     return 'completed-awaiting-readback' if ok else 'guest-failed-awaiting-readback'
@@ -1977,7 +2018,8 @@ def _window_body(win, host, executor, selection, facts, github, clocks, claim_mo
     executor.run(collector_unit_argv(selection, win.run_dir), 'unit.start-collector', timeout=EFFECT_TIMEOUT)
     win.record['collector'] = win.observe_terminal(win.names['collector'], clocks['collectorSeconds'] + clocks[
         'collectorRetireSeconds'] + 60, clocks['collectorRetireSeconds'])
-    win.record['outcome'] = guest_outcome(win.record['guest']) if not isinstance(executor, PlanOnly) else 'planned'
+    win.record['outcome'] = (guest_outcome(win.record['guest'], win.record['collector'])
+                             if not isinstance(executor, PlanOnly) else 'planned')
 
 
 def stop_unobserved_units(win, executor, clocks):
@@ -2128,9 +2170,15 @@ def bake_marker(serial_text, nonce):
     the collector joins it with the host-side unit result and the root-disk hash."""
     found = MARKER_PATTERN.findall(serial_text or '')
     own = sorted({(stage, int(status)) for got, stage, status in found if got == nonce})
-    foreign = sorted({got for got, _stage, _status in found if got != nonce})
-    result = {'nonce': nonce, 'markers': len(found), 'distinct': [list(m) for m in own], 'foreignNonces': foreign}
-    if foreign:
+    early = sorted({(stage, int(status)) for got, stage, status in found if got == 'unknown'})
+    foreign = sorted({got for got, _stage, _status in found if got not in (nonce, 'unknown')})
+    result = {'nonce': nonce, 'markers': len(found), 'distinct': [list(m) for m in own], 'foreignNonces': foreign,
+              'earlyFailures': [list(m) for m in early]}
+    if early:  # bake.sh failed before it could read the nonce (identity, control mount, TARGET)
+        stage, status = early[0]
+        result.update(ok=False, stage=stage, status=status,
+                      reason=f'bake failed before reading its nonce, at {stage} with {status}')
+    elif foreign:
         result.update(ok=False, reason='a marker carries another nonce')
     elif not own:
         result.update(ok=False, reason='no marker for this operation: the bake did not report')
@@ -2143,16 +2191,37 @@ def bake_marker(serial_text, nonce):
     return result
 
 
+def fsync_dir(path):
+    dfd = os.open(path, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(dfd)
+    finally:
+        os.close(dfd)
+
+
 def durable_write(path, data):
     """Create a new file, fsync it, then fsync its directory (the M1 Commit, Root ruling on #1102)."""
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
     with os.fdopen(fd, 'wb') as stream:
         stream.write(data); stream.flush(); os.fsync(stream.fileno())
-    dfd = os.open(os.path.dirname(path), os.O_RDONLY | os.O_DIRECTORY)
+    fsync_dir(os.path.dirname(path))
+
+
+SERIAL_CAP = 64 * 1024 ** 2
+
+
+def read_serial(path):
+    """The whole guest serial log, or an explicit refusal when it exceeds the cap (N4): a marker
+    beyond a truncated read could hide a conflicting result."""
     try:
-        os.fsync(dfd)
-    finally:
-        os.close(dfd)
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    except FileNotFoundError:
+        return '', {'bytes': 0, 'present': False}
+    with os.fdopen(fd, 'rb') as stream:
+        size = os.fstat(stream.fileno()).st_size
+        if size > SERIAL_CAP:
+            return None, {'bytes': size, 'present': True, 'truncated': True}
+        return stream.read(SERIAL_CAP + 1).decode('utf-8', 'replace'), {'bytes': size, 'present': True}
 
 
 def collect(host, run_dir, guest_unit, op, export_dir=None, nonce=None, copy=None):
@@ -2167,8 +2236,14 @@ def collect(host, run_dir, guest_unit, op, export_dir=None, nonce=None, copy=Non
     root = f'{run_dir}/root.raw'
     digest, size = sha256_file(root)
     st = os.stat(root)
-    serial = _try(lambda: host.read(f'{run_dir}/serial.log', 16 * 1024 ** 2), '')
-    marker = bake_marker(serial, nonce) if nonce else {'ok': False, 'reason': 'no nonce bound: not a bake'}
+    serial, serial_facts = read_serial(f'{run_dir}/serial.log')
+    if serial is None:
+        marker = {'ok': False, 'reason': f'serial log exceeds {SERIAL_CAP} bytes; refused rather than truncated'}
+    elif nonce:
+        marker = bake_marker(serial, nonce)
+    else:
+        marker = {'ok': False, 'reason': 'no nonce bound: not a bake'}
+    marker['serial'] = serial_facts
     unit_ok = props.get('Result') == 'success' and props.get('ExecMainStatus') == '0'
     packet = {'schema': 'fsgg.fdev-native-result-packet/1', 'operationId': op, 'guestUnit': guest_unit,
               'unit': {k: props.get(k) for k in ('ActiveState', 'SubState', 'Result', 'ExecMainStatus')},
@@ -2177,27 +2252,41 @@ def collect(host, run_dir, guest_unit, op, export_dir=None, nonce=None, copy=Non
               'bake': marker, 'qualifying': bool(unit_ok and marker.get('ok')),
               'custody': 'cooperative', 'independence': {'fromFdev': False, 'fromHome': False}}
     if export_dir and packet['qualifying']:
-        target_dir = f'{export_dir}/{op}'
-        target = f'{target_dir}/qualified-root.raw'
-        os.makedirs(target_dir, mode=0o700, exist_ok=False)
-        (copy or (lambda a, b: subprocess.run(['cp', '--sparse=always', a, b], check=True, timeout=3600)))(root, target)
-        fd = os.open(target, os.O_RDONLY)
         try:
-            os.fsync(fd)
-        finally:
-            os.close(fd)
-        copy_digest, copy_size = sha256_file(target)
-        require(copy_digest == digest and copy_size == size, 'collect.export', 'export copy differs from the source')
-        packet['export'] = {'path': target, 'sha256': copy_digest, 'bytes': copy_size,
-                            'allocatedBytes': os.stat(target).st_blocks * 512,
-                            'providerImageId': f'{POLICY["provider"]}/{op}'}
+            packet['export'] = export_root(root, export_dir, op, digest, size, copy)
+        except Exception as error:  # N6: a failed export is recorded in the packet, never left silent
+            packet['qualifying'] = False
+            packet['exportFailure'] = error.reason if isinstance(error, Refusal) else repr(error)
     body = canonical_json(packet)
     packet_sha = hashlib.sha256(body).hexdigest()
     durable_write(f'{run_dir}/result-packet.json', body)
-    if 'export' in packet:
+    if packet['qualifying']:
         durable_write(f'{export_dir}/{op}/result-packet.json', body)
     return {'packet': packet, 'packetSha256': packet_sha,
-            'committed': f'{export_dir}/{op}/result-packet.json' if 'export' in packet else None}
+            'committed': f'{export_dir}/{op}/result-packet.json' if packet['qualifying'] else None}
+
+
+def export_root(root, export_dir, op, digest, size, copy=None):
+    """Copy root.raw into a new <export_dir>/<op>/, make the directory entries and the copy durable,
+    and re-hash the copy. An existing operation directory refuses: an export is never overwritten."""
+    target_dir = f'{export_dir}/{op}'
+    target = f'{target_dir}/qualified-root.raw'
+    try:
+        os.makedirs(target_dir, mode=0o700, exist_ok=False)
+    except FileExistsError:
+        raise Refusal('collect.export', f'{target_dir} already exists; an export is never overwritten') from None
+    fsync_dir(export_dir)
+    (copy or (lambda a, b: subprocess.run(['cp', '--sparse=always', a, b], check=True, timeout=3600)))(root, target)
+    fd = os.open(target, os.O_RDONLY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+    # The <op>/ entry for the copy is made durable by the packet's commit, which fsyncs that directory.
+    copy_digest, copy_size = sha256_file(target)
+    require(copy_digest == digest and copy_size == size, 'collect.export', 'export copy differs from the source')
+    return {'path': target, 'sha256': copy_digest, 'bytes': copy_size, 'allocatedBytes': os.stat(target).st_blocks * 512,
+            'providerImageId': f'{POLICY["provider"]}/{op}'}
 
 
 # ---------------------------------------------------------------------------

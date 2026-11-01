@@ -270,27 +270,47 @@ Launch adds these checks:
      `sudo -n systemctl --user --machine=<user>@.host`. System units use `sudo -n systemctl`.
 5. Set the slice properties: `fsgg-native.slice` `AllowedCPUs=8-11 MemoryMin=18G
    MemoryMax=19G TasksMax=512`, and `fsgg-native-collect.slice` `MemoryMax=1G`.
-6. Verify the stock image and the read-only disk digests.
-7. Prepare `root.raw`: `fallocate` it in full, then `qemu-img convert -n --target-is-zero`
+6. For a bake selection, check the bound bake inputs (`verify_bake_inputs`) and refuse on any
+   difference. It gets this window's entry rows and runs after the caps and slices, before any
+   disk is prepared. It checks, in order:
+   - the request and its binding;
+   - the seed files;
+   - the acquisition custody record at `/srv/v3-pool/native/inputs/<op>/custody.json`, which must
+     be this operation's, for the control disk's lock, with the lock's population;
+   - the builder uid, gid and mke2fs version;
+   - the control image, rebuilt from the entry rows and matched to the bound digest.
+
+   A refusal starts no guest and goes straight to window exit.
+7. Verify the stock image, and re-hash every read-only disk against the selection.
+8. Prepare `root.raw`: `fallocate` it in full, then `qemu-img convert -n --target-is-zero`
    into it.
-8. Check the pre-start cut and the enclosing bound.
-9. Start the guest: a `systemd-run` transient system service in `fsgg-native.slice`, run as
-   developer.
-   - Unit properties: `Type=exec`, `ExitType=cgroup`, `RemainAfterExit=yes`, `Restart=no`,
-     `CollectMode=inactive`, `OOMPolicy=kill`, `KillMode=control-group`,
-     `RuntimeMaxSec=<useful>`, `TimeoutStopSec=<retire>`, `MemoryMax`, `TasksMax`.
-   - `ExecStop` sends QMP `system_powerdown`, then waits for `$MAINPID`.
-   - QEMU options:
-     - `-nic none`, `-mem-prealloc`, a fresh `-uuid`;
-     - every disk with `cache.direct`, `aio=native`, `discard=ignore` and
-       `detect-zeroes=off`;
-     - a read-only `vvfat` CIDATA seed.
-   - No `MemoryOOMGroup` is set.
-10. Observe the guest's terminal state, bounded by useful + retire + 60 s. Check the GitHub
+9. Check the pre-start cut and the enclosing bound.
+10. Start the guest: a `systemd-run` transient system service in `fsgg-native.slice`, run as
+    developer.
+    - Unit properties: `Type=exec`, `ExitType=cgroup`, `RemainAfterExit=yes`, `Restart=no`,
+      `CollectMode=inactive`, `OOMPolicy=kill`, `KillMode=control-group`,
+      `RuntimeMaxSec=<useful>`, `TimeoutStopSec=<retire>`, `MemoryMax`, `TasksMax`.
+    - `ExecStop` sends QMP `system_powerdown`, then waits for `$MAINPID`.
+    - QEMU options:
+      - `-nic none`, `-mem-prealloc`, a fresh `-uuid`;
+      - every disk with `cache.direct`, `aio=native`, `discard=ignore` and
+        `detect-zeroes=off`;
+      - a read-only `vvfat` CIDATA seed.
+    - No `MemoryOOMGroup` is set.
+11. Observe the guest's terminal state, bounded by useful + retire + 60 s. Check the GitHub
     `Date` bound again before the collector starts.
-11. Run the collector unit in `fsgg-native-collect.slice`. It hashes `root.raw` and writes
-    the closed packet.
-12. Window exit, on every path after the claim (refusal, error or signal):
+12. Run the collector unit in `fsgg-native-collect.slice`, with `--export-dir /srv/bulk/native-chain`
+    and the bake nonce. It hashes `root.raw` and reads the whole serial log; a log over 64 MiB is
+    refused, never truncated. It then joins the marker with the guest unit's result.
+    - **Qualifying:** it exports into a new `<op>/`, fsyncing the directory entries and the copy, and
+      re-hashes the copy. It writes the closed packet to the run directory and then commits it to
+      `/srv/bulk/native-chain/<op>/`, fsyncing file and directory. It exits 0.
+    - **Otherwise, or if the export fails:** the packet records why and stays in the run directory.
+      Nothing is committed, and the collector exits 4.
+
+    The window outcome is `completed-awaiting-readback` only when the guest succeeded **and** the
+    collector exited 0. Otherwise it is `guest-failed-…` or `collector-refused-awaiting-readback`.
+13. Window exit, on every path after the claim (refusal, error or signal):
     1. if a guest or collector start was attempted but its terminal state was not observed,
        stop it (bounded by retire + 30 s) and read its state back, before anything else. The
        outcome is `failed-awaiting-readback`, or `unknown-awaiting-readback` with

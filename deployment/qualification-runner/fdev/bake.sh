@@ -10,8 +10,9 @@
 #
 # The result reaches the host only as one serial-console line carrying the operation's nonce (the
 # request digest, TARGET's operatorAcceptanceSha256), the stage of the first failure (or "complete")
-# and its status. The collector trusts it only together with host-side evidence; a missing, foreign
-# or conflicting line is a failed bake, never a success.
+# and its status. Failures before the nonce is read (identity, control mount, TARGET) report
+# nonce=unknown with their stage. The collector trusts a line only together with host-side evidence;
+# a missing, foreign or conflicting line is a failed bake, never a success.
 set -uo pipefail
 bake_control=/mnt/control
 bake_inputs=/mnt/fsgg-qualification-inputs
@@ -54,7 +55,7 @@ bake_target_field() {
 
 [[ $(id -u) == 0 ]] || bake_fail identity 2
 mountpoint -q "$bake_control" || bake_fail control-mount 2
-bake_nonce=$(bake_target_field operatorAcceptanceSha256) || bake_fail target 2
+bake_nonce=$(bake_target_field operatorAcceptanceSha256) || { bake_nonce=unknown; bake_fail target 2; }
 [[ $bake_nonce =~ ^[0-9a-f]{64}$ ]] || { bake_nonce=unknown; bake_fail target 2; }
 for bake_unit in "${bake_apt_units[@]}"; do
   [[ $(systemctl is-enabled "$bake_unit" 2>/dev/null) == masked ]] || bake_fail apt-mask 2
