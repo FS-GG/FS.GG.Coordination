@@ -450,14 +450,19 @@ so "root-owned" here is a check the code makes and a custody control, not tamper
   the earlier "fresh hosted Linux VM" wording.
 - The executor is a dedicated account, not uid 1000: `p4executor`, uid 32001, with a subuid and subgid range of at
   least 65536 starting at 2000000 that overlaps no other range. Its groups are its own name only. The account,
-  `/srv/p4-receiver`, `/p4` (mode 0700, owned by the account) and `/etc/fsgg/portable-workspaces` come from Home's
-  fdev image definition, the way `fsgg-learn-qual` does, because fdev's `/etc/passwd`, `subuid` and `subgid` live on
-  the rebuilt root disk. This is the Home image request
-  [FS-GG/.github#5078](https://github.com/FS-GG/.github/issues/5078).
+  `/srv/p4-receiver`, `/p4` (mode 0700, owned by the account) and `/etc/fsgg/portable-workspaces` come from the
+  idempotent fdev provisioning script
+  [`deployment/p4-executor/provision-fdev.sh`](../../deployment/p4-executor/provision-fdev.sh), run by Root on fdev.
+  This replaces Home's image definition and the Home image request
+  [FS-GG/.github#5078](https://github.com/FS-GG/.github/issues/5078), by Root/fdev
+  [decision 7 on FS-GG/.github#4730](https://github.com/FS-GG/.github/issues/4730#issuecomment-6551301543), because
+  Home is unavailable. fdev's `/etc/passwd`, `subuid`, `subgid`, `/p4` and `/srv` live on the root disk, so the
+  script is re-run, with a fresh readback, after any root-disk rebuild.
 - `account_plan` in
   [`provider_runtime.py`](../../tests/portable-workspace/trusted-provider/provider_runtime.py) refuses an account
-  whose name, uid or gid already exists, or whose mapping collides, so the account cannot be added to a running
-  system with this tooling.
+  whose name, uid or gid already exists, or whose mapping collides. The script therefore runs it as a preflight on
+  the live files before creating anything. Its readback runs it again with only the account's own rows removed,
+  and applies `capability()`'s groups and directory predicates.
 
 **Where the grant comes from.** The grant is built from the genuine candidate-facts output **plus** the
 private-facts overlay, which `provider_runtime.py private-facts` produces from the account's measured capability.
@@ -487,7 +492,9 @@ and are not facts: `grantId`, `workflowRevision`, `fenceGeneration`, `observedAt
 
 **Open items at this amendment.**
 
-- The executor account does not exist yet; it waits on the Home image request above.
+- The executor account does not exist yet; it waits on the Home image request above. *Superseded 2026-11-01:* fdev
+  provisioned it with the script above, and the readback is recorded on
+  [FS-GG/.github#5078](https://github.com/FS-GG/.github/issues/5078).
 - The canonical 0.2.1 preparation artifact has expired (14-day retention). A fresh `callable-cli-release-prepare` is
   needed. Root dispatches it only when #4650's enforcing profile is near ready, then runs stage-inputs and
   candidate-facts promptly. If the fresh archive is byte-identical to the expired one, no re-pin is needed;
