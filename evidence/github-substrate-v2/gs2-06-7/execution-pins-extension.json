@@ -5,7 +5,7 @@
     {
       "kind": "action",
       "path": ".github/actions/coordination-setup/action.yml",
-      "sha256": "9a279b92a9f7f0f0590c6eece4fa9da7e0fddecadc02a49165a6ae9830371b2b",
+      "sha256": "c4e3f34e396f75aa956f0bfd5fec281ecb081f5c79ecf325e3a04b1bb2a2d51f",
       "externalReferences": [
         "actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68"
       ],
@@ -14,7 +14,7 @@
     {
       "kind": "workflow",
       "path": ".github/workflows/optimistic-parallel-validation.yml",
-      "sha256": "262bea60a23615cc0ba5cb00f11466b5a480d9b5b7f01e20605a266612cce4af",
+      "sha256": "b6368ac8ea0e5b793a42963e694974d7ec84e38038b264c1fedcb934e6f59dda",
       "externalReferences": [
         "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
         "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
@@ -49,7 +49,7 @@
     {
       "kind": "workflow",
       "path": ".github/workflows/orchestration-host-candidate.yml",
-      "sha256": "81d23b9d6640bb1f247b6f6096a68692ca4c126e2a20987d2af5ac635279f54d",
+      "sha256": "24880ad2263d03d9ac73e82a4313654a4f8d5049be7e9d0e8cec2d55f79faee8",
       "externalReferences": [
         "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
         "actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68",
@@ -61,7 +61,7 @@
     {
       "kind": "workflow",
       "path": ".github/workflows/orchestration-runner-client-candidate.yml",
-      "sha256": "60000d6d65d18d60c53d4c597004dbedd35162e080071f0da300d50c3cb80532",
+      "sha256": "29e4ada63f2688e51ee7881cab84e669dbc94d4cfc772478147a1c48ed78b1cb",
       "externalReferences": [
         "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
         "actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68",
@@ -73,7 +73,7 @@
     {
       "kind": "workflow",
       "path": ".github/workflows/orchestration-container-bundle.yml",
-      "sha256": "317bce9140dfeeaa8b53be91dc7bb871000237bbd6d3894603dbe0728ae1ded5",
+      "sha256": "6d61f8558539f04986e183ac6fa9c2192a8ca4c68c49e329e0a115977db7b0e6",
       "externalReferences": [
         "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
         "actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68",
@@ -221,7 +221,7 @@
     {
       "kind": "workflow",
       "path": ".github/workflows/portable-workspace-executor-qualification.yml",
-      "sha256": "4039003e4ffdee61b39d4907b75388fe301b2f58156d31ba1ac73be7c85f95b8",
+      "sha256": "fdbd9deb04830d8a50dd6538ce9fe4979d0fdcc1897e700a2b2dfe5d046ee804",
       "externalReferences": [
         "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
         "actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68",
@@ -232,7 +232,7 @@
     {
       "kind": "workflow",
       "path": ".github/workflows/portable-workspace-python-provider-qualification.yml",
-      "sha256": "04df921ac74fbee4cead995e8cac17911d19cc7014163eb9c8b3dd5dbecb558e",
+      "sha256": "c6160c16ce8e2537b87d55858ff5f17e1420b6591358666330d0bbbd2e9a4558",
       "externalReferences": [
         "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
         "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",

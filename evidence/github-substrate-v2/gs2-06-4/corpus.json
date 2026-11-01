@@ -10,7 +10,7 @@
   "workflows": [
     {
       "path": ".github/workflows/bootstrap-qualification.yml",
-      "sha256": "8026543406cd471a866004717c24b0e5347cb79ae6285c395d3e9c9bc101475c",
+      "sha256": "880f4ec6f232e86ee253181dce7744cfbb6d8eb0aabd70406f2f4e437dc0d542",
       "references": [
         { "kind": "action", "repository": "actions/checkout", "path": null, "revision": "3d3c42e5aac5ba805825da76410c181273ba90b1" },
         { "kind": "action", "repository": "actions/download-artifact", "path": null, "revision": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c" },
@@ -20,7 +20,7 @@
     },
     {
       "path": ".github/workflows/candidate-supply-chain.yml",
-      "sha256": "8d53077154e42e838170171bb54988988bcf0617176146ae33d49b12df74bf82",
+      "sha256": "1b5d43c55cfa4a4ded5794dd16c27d1447260fd8b9a5cbafef8c55c601f608a0",
       "references": [
         { "kind": "action", "repository": "actions/checkout", "path": null, "revision": "3d3c42e5aac5ba805825da76410c181273ba90b1" },
         { "kind": "action", "repository": "actions/setup-dotnet", "path": null, "revision": "a98b56852c35b8e3190ac28c8c2271da59106c68" },
