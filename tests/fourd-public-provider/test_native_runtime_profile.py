@@ -31,7 +31,7 @@ class RuntimeProfileControls(unittest.TestCase):
     def setUp(self):
         self.temporary=tempfile.TemporaryDirectory(prefix='native-runtime-fixture-',dir='/tmp');self.addCleanup(self.temporary.cleanup)
         self.root=Path(self.temporary.name);self.archives=self.root/'archives';self.archives.mkdir(mode=0o700)
-        self.profile=dict(schema='fsgg.fourd.native-runtime-profile/1',sdkVersions=['10.0.400','10.0.401'],runtimeVersions=['10.0.11','10.0.12','10.0.13'],runtimeVersion='10.0.13',archives=[],files={})
+        self.profile=dict(schema='fsgg.fourd.native-runtime-profile/1',sdkVersions=['10.0.400','10.0.401'],runtimeVersions=['10.0.11','10.0.12','10.0.13'],runtimeVersion='10.0.14',archives=[],files={})
         sets=[{'dotnet':b'oldhost400','sdk/10.0.400/.version':b'sdk400','sdk/10.0.400/FSharp/fsc.dll':b'fsc400','shared/Microsoft.NETCore.App/10.0.11/core':b'core11','host/fxr/10.0.11/fxr':b'fxr11','empty':b''},
               {'dotnet':b'oldhost401','sdk/10.0.401/.version':b'sdk401','sdk/10.0.401/FSharp/fsc.dll':b'fsc401','shared/Microsoft.NETCore.App/10.0.12/core':b'core12','host/fxr/10.0.12/fxr':b'fxr12'},
               {'dotnet':b'exacthost13','shared/Microsoft.NETCore.App/10.0.13/core':b'core13','host/fxr/10.0.13/fxr':b'fxr13'}]
@@ -94,7 +94,7 @@ class RuntimeProfileControls(unittest.TestCase):
                       provenanceSha256='5'*64,files={n:'6'*64 for n in runtime.RUNTIME_NAMES},adapterFiles={n:'7'*64 for n in runtime.ADAPTERS})
         release=dict(releaseObserved=True,publicationObserved=True,releaseId=1,assetId=2,authorId=3,
                      tag='fourd-native-producer-'+'1'*40,name='fourd-native-producer-linux-x64.tar',bytes=123,sha256='3'*64)
-        value=dict(producer=producer,publication=release,runtime=dict(sdkVersion='10.0.403',runtimeVersion='10.0.13',
+        value=dict(producer=producer,publication=release,runtime=dict(sdkVersion='10.0.403',runtimeVersion='10.0.14',
                    hostSha256=facts['hostSha256']),adoptionSelected=False)
         actual=runtime.adoption_from_publication(json.dumps(value),facts,self.profile)
         self.assertEqual(str(self.output/'dotnet'),actual['hostPath'])
