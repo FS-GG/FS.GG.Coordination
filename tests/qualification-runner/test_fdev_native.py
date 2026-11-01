@@ -59,7 +59,7 @@ def host_memory(measured='2026-10-30T18:30:00Z', avail=12 * 1024 ** 3):
 
 def selection():
     return {'schema': 'fsgg.fdev-native-window-selection/1', 'operationId': OP, 'step': 'bake',
-            'rootSelection': {'issue': 'FS-GG/.github#4778', 'commentId': 1},
+            'rootSelection': {'issue': 'FS-GG/FS.GG.Coordination#1102', 'commentId': 1},
             'clocks': {'preStartSeconds': 300, 'usefulSeconds': 4800, 'retireSeconds': 600, 'collectorSeconds': 900,
                        'collectorRetireSeconds': 60, 'enclosingSeconds': 8940},
             'ioCaps': {'rbps': 20_000_000, 'wbps': 10_000_000, 'riops': 200, 'wiops': 100},
@@ -71,7 +71,7 @@ def selection():
 
 
 def comment():
-    return {'author': 'EHotwagner', 'issueUrl': 'https://github.com/FS-GG/.github/issues/4778',
+    return {'author': 'EHotwagner', 'issueUrl': 'https://github.com/FS-GG/FS.GG.Coordination/issues/1102',
             'body': f'Root selects operation {OP} for the bake step.\n'
                     f'<!-- fsgg:fdev-native-selection/v1 operation={OP} step=bake -->'}
 
@@ -336,7 +336,7 @@ class PreflightChecks(unittest.TestCase):
     def test_launchers_own_witness_comment_cannot_bind_a_selection(self):
         body = (f'fdev native claim: operation `{OP}` step `bake` claimed. Start witness. '
                 'Cooperative custody; not independent of fdev or Home.')
-        witness = {'author': 'EHotwagner', 'issueUrl': 'https://github.com/FS-GG/.github/issues/4778', 'body': body}
+        witness = {'author': 'EHotwagner', 'issueUrl': 'https://github.com/FS-GG/FS.GG.Coordination/issues/1102', 'body': body}
         self.assertEqual(fn.check_selection(selection(), witness)[-1]['status'], fn.UNSUPPORTED)
         other_step = dict(comment(), body=comment()['body'].replace('step=bake', 'step=acquire'))
         self.assertEqual(fn.check_selection(selection(), other_step)[-1]['status'], fn.UNSUPPORTED)
@@ -1669,6 +1669,7 @@ STUBS = {
     'id': 'echo 0\n',
     'mountpoint': 'exit 0\n',
     'sync': 'exit 0\n',
+    'systemctl': '[[ $1 == is-enabled ]] || exit 9\necho "${APT_STATE:-masked}"\n',
     'mount': 'printf "%s\\n" "$*" >> "$BAKE_LOG/mount"\nexit "${MOUNT_RC:-0}"\n',
     'umount': 'printf "%s\\n" "$*" >> "$BAKE_LOG/umount"\nexit "${UMOUNT_RC:-0}"\n',
     # install -d DIR, or install -m MODE [-o U -g G] [--] SRC DST: ownership is not changed in the test
@@ -1683,14 +1684,18 @@ PROVISION = ('#!/usr/bin/env bash\n'
              'exit "${PROVISION_RC:-0}"\n')
 
 
-def run_bake(tmp, text=None, provision=True, **env):
-    """Run bake.sh with its three paths redirected into tmp and system tools stubbed on PATH."""
+NONCE = 'e' * 64
+
+
+def run_bake(tmp, text=None, provision=True, dmi_uuid=GUEST_UUID, **env):
+    """Run bake.sh with its four paths redirected into tmp and system tools stubbed on PATH."""
     tmp = Path(tmp)
     text = text if text is not None else (ROOT / fn.BAKE['bakeScript']).read_text()
     paths = {'bake_control': tmp / 'control', 'bake_inputs': tmp / 'inputs',
-             'bake_selection': tmp / 'run/fsgg-image-build-selection.json'}
+             'bake_selection': tmp / 'run/fsgg-image-build-selection.json', 'bake_uuid_file': tmp / 'product_uuid'}
     defaults = {'bake_control': '/mnt/control', 'bake_inputs': '/mnt/fsgg-qualification-inputs',
-                'bake_selection': '/run/fsgg-image-build-selection.json'}
+                'bake_selection': '/run/fsgg-image-build-selection.json',
+                'bake_uuid_file': '/sys/class/dmi/id/product_uuid'}
     for name, value in paths.items():
         line = f'{name}={defaults[name]}\n'
         assert text.count(line) == 1, line
@@ -1700,11 +1705,13 @@ def run_bake(tmp, text=None, provision=True, **env):
     for name, body in STUBS.items():
         (tmp / 'bin' / name).write_text('#!/usr/bin/env bash\n' + body); os.chmod(tmp / 'bin' / name, 0o755)
     (tmp / 'control/fsgg-image-build-selection.json').write_text('{}\n')
+    (tmp / 'control/TARGET.json').write_text(json.dumps({'operatorAcceptanceSha256': NONCE, 'systemUuid': GUEST_UUID}))
+    (tmp / 'product_uuid').write_text(dmi_uuid + '\n')
     script = tmp / 'control/source/deployment/qualification-runner/provision-image.sh'
     if provision:
         script.write_text(PROVISION)
     (tmp / 'bake.sh').write_text(text)
-    environ = {'PATH': f'{tmp / "bin"}:/usr/bin:/bin', 'BAKE_LOG': str(tmp / 'log'),
+    environ = {'PATH': f'{tmp / "bin"}:{os.path.dirname(sys.executable)}:/usr/bin:/bin', 'BAKE_LOG': str(tmp / 'log'),
                'SELECTION': str(paths['bake_selection']), **{k: str(v) for k, v in env.items()}}
     done = subprocess.run(['bash', str(tmp / 'bake.sh')], capture_output=True, text=True, env=environ, timeout=30)
     log = {f.name: f.read_text() for f in (tmp / 'log').iterdir()}
@@ -1717,7 +1724,7 @@ class BakeScriptBehaviour(unittest.TestCase):
     def outcome(self, **kw):
         with tempfile.TemporaryDirectory() as tmp:
             done, log, paths = run_bake(tmp, **kw)
-            markers = re.findall(r'^FSGG-BAKE-RESULT/1 stage=(\S+) status=(\d+)$', done.stdout, re.M)
+            markers = re.findall(rf'^FSGG-BAKE-RESULT/1 nonce={NONCE} stage=(\S+) status=(\d+)$', done.stdout, re.M)
             return done.returncode, markers, log, paths['bake_selection'].exists()
 
     def assert_outcome(self, expected_stage, expected_status, **kw):
@@ -1728,7 +1735,7 @@ class BakeScriptBehaviour(unittest.TestCase):
         return log
 
     def test_success_reports_status_zero_with_a_read_only_input_mount(self):
-        log = self.assert_outcome('provision', 0)
+        log = self.assert_outcome('complete', 0)
         mount = log['mount'].split()
         self.assertEqual(mount[:2], ['-o', 'ro,nodev,nosuid'])
         self.assertEqual(mount[2], 'LABEL=fsgg-inputs')
@@ -1739,17 +1746,25 @@ class BakeScriptBehaviour(unittest.TestCase):
 
     def test_failures_keep_the_first_status_and_stage(self):
         self.assert_outcome('provision', 3, PROVISION_RC=3)
-        self.assert_outcome('provision', 5, UMOUNT_RC=1)
+        self.assert_outcome('inputs-umount', 5, UMOUNT_RC=1)
         self.assert_outcome('provision', 3, PROVISION_RC=3, UMOUNT_RC=1)
         log = self.assert_outcome('inputs-mount', 2, MOUNT_RC=32)
         self.assertNotIn('provision', log, 'nothing is provisioned without the input mount')
         self.assert_outcome('provision', 127, provision=False)
 
+    def test_preconditions_refuse_before_any_mount(self):
+        for stage, kw in (('apt-mask', {'APT_STATE': 'enabled'}), ('uuid-case', {'dmi_uuid': GUEST_UUID.upper()}),
+                          ('uuid', {'dmi_uuid': str(uuidlib.uuid4())})):
+            with self.subTest(stage):
+                log = self.assert_outcome(stage, 2, **kw)
+                self.assertNotIn('mount', log)
+                self.assertNotIn('provision', log)
+
     def test_the_oracle_kills_the_review_mutants(self):
         text = (ROOT / fn.BAKE['bakeScript']).read_text()
         mutants = {
-            'provision failure ignored': ('"$bake_inputs" || bake_first $?', '"$bake_inputs" || true'),
-            'final report dropped': ('bake_report provision "$bake_status"\n', ''),
+            'provision failure ignored': ('|| bake_first provision $?', '|| true'),
+            'final report dropped': ('bake_report "$bake_stage" "$bake_status"\n', ''),
             'input mount read-write': ('mount -o ro,nodev,nosuid', 'mount -o rw,nodev,nosuid'),
             'selection kept': ('rm -f -- "$bake_selection"\n[[', ':\n[['),
         }
@@ -1760,7 +1775,7 @@ class BakeScriptBehaviour(unittest.TestCase):
                     ok_done, ok_log, _ = run_bake(tmp, text.replace(old, new))
                 with tempfile.TemporaryDirectory() as tmp:
                     bad_done, _, bad_paths = run_bake(tmp, text.replace(old, new), PROVISION_RC=3)
-                killed = ('stage=provision status=0' not in ok_done.stdout
+                killed = ('stage=complete status=0' not in ok_done.stdout
                           or 'stage=provision status=3' not in bad_done.stdout
                           or ok_log.get('mount', '').split()[:2] != ['-o', 'ro,nodev,nosuid']
                           or bad_paths['bake_selection'].exists())
@@ -1851,6 +1866,242 @@ class GuestUuidFromSelection(unittest.TestCase):
                          'fresh')
         with self.assertRaises(fn.Refusal):
             fn.validate_selection(dict(selection(), guestUuid='not-a-uuid'))
+
+
+# ---------------------------------------------------------------------------
+# S2 (#1102): Root rulings of comment 6556672289 and review findings F3, F4, F5, F8.
+# ---------------------------------------------------------------------------
+RULING = 'https://github.com/FS-GG/FS.GG.Coordination/issues/1102#issuecomment-6556672289'
+
+
+def ruled_selection():
+    s = selection()
+    for key in ('hostPartition', 'hostPartitionMaxAgeSeconds', 'hostMemory', 'hostMemoryMinAvailableBytes',
+                'hostMemoryMaxAgeSeconds'):
+        s.pop(key)
+    s['rootAcceptedUnknowns'] = {'checks': ['capacity.host-partition', 'capacity.host-memory'], 'ruling': RULING}
+    return s
+
+
+class PostingTarget(unittest.TestCase):
+    def test_selection_witness_and_comment_reads_use_the_delivery_not_the_closed_plan_issue(self):
+        self.assertEqual(fn.POLICY['owningIssue'], 'FS-GG/FS.GG.Coordination#1102')
+        with self.assertRaises(fn.Refusal):
+            fn.validate_selection(dict(selection(), rootSelection={'issue': 'FS-GG/.github#4778', 'commentId': 1}))
+        old = dict(comment(), issueUrl='https://github.com/FS-GG/.github/issues/4778')
+        got = {r['check']: r['status'] for r in fn.check_selection(selection(), old)}
+        self.assertEqual(got['selection.root-comment-binds-operation'], fn.UNSUPPORTED)
+        ex = mock.Mock(); ex.run.return_value = json.dumps({'created_at': '2026-11-01T10:00:00Z'})
+        fn.GitHub(ex, None).post_start_witness(OP, 'bake')
+        self.assertIn('repos/FS-GG/FS.GG.Coordination/issues/1102/comments', ex.run.call_args[0][0])
+        host = mock.Mock(); host.run.return_value = (0, json.dumps({
+            'user': {'login': 'EHotwagner'}, 'issue_url': 'https://api.github.com/repos/FS-GG/FS.GG.Coordination/issues/1102',
+            'body': 'x'}))
+        self.assertTrue(fn.GitHub(None, host).comment(5)['issueUrl'].endswith('/FS-GG/FS.GG.Coordination/issues/1102'))
+        self.assertIn('repos/FS-GG/FS.GG.Coordination/issues/comments/5', host.run.call_args[0][0])
+
+
+class AcceptedHomeUnknowns(unittest.TestCase):
+    def test_home_inputs_stay_unknown_with_fdev_readings_and_are_admitted_only_under_the_ruling(self):
+        s = ruled_selection()
+        fn.validate_selection(s)
+        result = fn.evaluate(facts(), s, comment(), None, NOW, {'path': 'x', 'match': True})
+        by = {r['check']: r for r in result}
+        for check in fn.ACCEPTABLE_UNKNOWNS:
+            self.assertEqual(by[check]['status'], fn.UNKNOWN, 'never reported as Supported')
+            self.assertEqual(by[check]['rootRuling'], RULING)
+        self.assertIn('fdevPoolFreeBytes', by['capacity.host-partition']['observed'])
+        self.assertEqual(by['capacity.host-memory']['observed'], {'fdevMemAvailableBytes': facts()['memAvailableBytes']})
+        fn.refuse_unless_all_supported(result, fn.accepted_unknowns(s))
+        with self.assertRaises(fn.Refusal):
+            fn.refuse_unless_all_supported(result)
+        dry = fn.dry_run(FakeHost(tempfile.gettempdir(), {}, ROOT_SESSION), s, facts(), result)
+        self.assertEqual(sorted(dry['rootAcceptedUnknowns']), sorted(fn.ACCEPTABLE_UNKNOWNS))
+        self.assertNotIn('capacity.host-partition', [r['check'] for r in dry['wouldRefuse']])
+        self.assertEqual(dry['evidencePreview']['rootAcceptedUnknowns'], s['rootAcceptedUnknowns'])
+        self.assertEqual(dry['evidencePreview']['ioCorrespondence']['trackedBy'], 'FS-GG/.github#5187')
+
+    def test_the_ruling_cannot_admit_anything_else(self):
+        f = facts(); f['memAvailableBytes'] = 1
+        s = ruled_selection()
+        rows_ = fn.evaluate(f, s, comment(), None, NOW, {'path': 'x', 'match': True})
+        with self.assertRaises(fn.Refusal) as caught:
+            fn.refuse_unless_all_supported(rows_, fn.accepted_unknowns(s))
+        self.assertEqual(caught.exception.check, 'memory.available')
+        for bad in ({'checks': ['memory.available'], 'ruling': RULING},
+                    {'checks': ['capacity.host-memory'], 'ruling': 'https://github.com/FS-GG/.github/issues/4778#issuecomment-1'},
+                    {'checks': [], 'ruling': RULING}):
+            with self.subTest(bad), self.assertRaises(fn.Refusal):
+                fn.validate_selection(dict(ruled_selection(), rootAcceptedUnknowns=bad))
+        no_ruling = ruled_selection(); no_ruling.pop('rootAcceptedUnknowns')
+        with self.assertRaises(fn.Refusal):
+            fn.validate_selection(no_ruling)
+        forged = fn.evaluate(facts(), ruled_selection(), comment(), None, NOW, {'path': 'x', 'match': True})
+        for r in forged:
+            r.pop('rootRuling', None)
+        with self.assertRaises(fn.Refusal):
+            fn.refuse_unless_all_supported(forged, fn.ACCEPTABLE_UNKNOWNS)
+
+
+class BakeMarker(unittest.TestCase):
+    def test_only_one_consistent_marker_with_this_nonce_and_complete_zero_is_ok(self):
+        line = lambda nonce, stage, status: f'FSGG-BAKE-RESULT/1 nonce={nonce} stage={stage} status={status}\n'
+        ok = line(NONCE, 'complete', 0)
+        self.assertTrue(fn.bake_marker('boot\n' + ok + ok, NONCE)['ok'], 'console echo duplicates are one result')
+        cases = {'absent': 'boot\n', 'failed': line(NONCE, 'provision', 3),
+                 'umount': line(NONCE, 'inputs-umount', 5), 'conflicting': ok + line(NONCE, 'provision', 3),
+                 'foreign nonce': ok + line('f' * 64, 'complete', 0), 'replayed other op': line('f' * 64, 'complete', 0)}
+        for name, text in cases.items():
+            with self.subTest(name):
+                self.assertFalse(fn.bake_marker(text, NONCE)['ok'])
+        self.assertEqual(fn.bake_marker(line(NONCE, 'inputs-umount', 5), NONCE)['stage'], 'inputs-umount')
+
+
+class CollectorCommit(unittest.TestCase):
+    def run_collect(self, serial, result='success', status='0'):
+        tmp = tempfile.mkdtemp(); self.addCleanup(shutil.rmtree, tmp)
+        run_dir, export = Path(tmp) / 'run', Path(tmp) / 'native-chain'
+        run_dir.mkdir(); export.mkdir(mode=0o700)
+        (run_dir / 'root.raw').write_bytes(b'\0' * 4096 + b'image')
+        (run_dir / 'serial.log').write_text(serial)
+        host = FakeHost(tmp, {'g.service': {'ActiveState': 'inactive', 'SubState': 'dead', 'Result': result,
+                                            'ExecMainStatus': status, 'ControlGroup': ''}}, ROOT_SESSION)
+        out = fn.collect(host, str(run_dir), 'g.service', OP, str(export), NONCE, copy=shutil.copyfile)
+        return out, run_dir, export
+
+    def test_a_qualifying_bake_is_exported_and_its_closed_packet_committed(self):
+        out, run_dir, export = self.run_collect(f'FSGG-BAKE-RESULT/1 nonce={NONCE} stage=complete status=0\n')
+        packet = out['packet']
+        self.assertTrue(packet['qualifying'])
+        committed = export / OP / 'result-packet.json'
+        self.assertEqual(out['committed'], str(committed))
+        self.assertEqual(hashlib.sha256(committed.read_bytes()).hexdigest(), out['packetSha256'])
+        self.assertEqual(committed.read_bytes(), (run_dir / 'result-packet.json').read_bytes())
+        self.assertEqual(packet['export']['sha256'], packet['root']['sha256'])
+        self.assertEqual(packet['export']['providerImageId'], f'fdev-kvm-qualification-v1/{OP}')
+
+    def test_a_failed_or_unconfirmed_bake_is_neither_exported_nor_committed(self):
+        for name, kw in (('marker failure', {'serial': f'FSGG-BAKE-RESULT/1 nonce={NONCE} stage=provision status=3\n'}),
+                         ('no marker', {'serial': ''}),
+                         ('unit failed', {'serial': f'FSGG-BAKE-RESULT/1 nonce={NONCE} stage=complete status=0\n',
+                                          'result': 'timeout', 'status': '1'})):
+            with self.subTest(name):
+                out, run_dir, export = self.run_collect(**kw)
+                self.assertFalse(out['packet']['qualifying'])
+                self.assertIsNone(out['committed'])
+                self.assertFalse((export / OP).exists())
+                self.assertTrue((run_dir / 'result-packet.json').exists())
+
+    def test_collector_unit_exports_to_the_commit_root_with_the_nonce(self):
+        s = dict(selection(), bake={'requestSha256': NONCE})
+        argv = fn.collector_unit_argv(s, '/r')
+        self.assertEqual(argv[argv.index('--export-dir') + 1], '/srv/bulk/native-chain')
+        self.assertEqual(argv[argv.index('--nonce') + 1], NONCE)
+
+
+def bake_selection(tmp, **overrides):
+    """A bake selection over real files: request, seed and custody record (no images built)."""
+    tmp = Path(tmp)
+    raw = fn.canonical_json(bake_request())
+    (tmp / 'request.json').write_bytes(raw)
+    seed = fn.seed_files(bake_request())
+    (tmp / 'seed').mkdir()
+    for name, data in seed.items():
+        (tmp / 'seed' / name).write_bytes(data)
+    (tmp / 'custody.json').write_text('{"operationId": "%s"}\n' % OP)
+    s = dict(selection(), guestUuid=GUEST_UUID, seedDir=str(tmp / 'seed'),
+             readOnlyDisks=[{'path': str(tmp / 'control.ext4'), 'sha256': 'c' * 64}])
+    s['bake'] = {'request': str(tmp / 'request.json'), 'requestSha256': hashlib.sha256(raw).hexdigest(),
+                 'controlSha256': 'c' * 64,
+                 'seedSha256': {n: hashlib.sha256(d).hexdigest() for n, d in seed.items()},
+                 'inputsCustody': {'path': str(tmp / 'custody.json'),
+                                   'sha256': hashlib.sha256((tmp / 'custody.json').read_bytes()).hexdigest()},
+                 'builder': {'uid': os.getuid(), 'gid': os.getgid(), 'mke2fs': '1.47.4'}}
+    s['bake'].update(overrides)
+    return s
+
+
+class InWindowBakeChecks(unittest.TestCase):
+    def refusal(self, s, tmp, setup=None):
+        if setup:
+            setup(Path(tmp))
+        fn.validate_selection(s)
+        with self.assertRaises(fn.Refusal) as caught:
+            fn.verify_bake_inputs(fn.Executor(), s, rows(), tmp)
+        return caught.exception.check
+
+    def test_each_bound_input_that_changed_refuses_before_any_image_is_built(self):
+        cases = {
+            'bake.request-digest': (lambda t: {'requestSha256': 'd' * 64}, None),
+            'bake.seed': (lambda t: {}, lambda t: (t / 'seed/user-data').write_bytes(b'#cloud-config\n')),
+            'bake.seed ': (lambda t: {}, lambda t: (t / 'seed/extra').write_bytes(b'x')),
+            'bake.inputs-custody': (lambda t: {}, lambda t: (t / 'custody.json').write_text('{}\n')),
+            'bake.builder': (lambda t: {'builder': {'uid': os.getuid() + 1, 'gid': os.getgid(), 'mke2fs': '1.47.4'}}, None),
+        }
+        for expected, (overrides, setup) in cases.items():
+            with self.subTest(expected), tempfile.TemporaryDirectory() as tmp:
+                s = bake_selection(tmp, **overrides(Path(tmp)))
+                self.assertEqual(self.refusal(s, tmp, setup), expected.strip())
+        with tempfile.TemporaryDirectory() as tmp:
+            s = bake_selection(tmp, inputsCustody=None)
+            self.assertEqual(self.refusal(s, tmp), 'bake.inputs-custody')
+        with tempfile.TemporaryDirectory() as tmp:
+            s = dict(bake_selection(tmp), guestUuid=str(uuidlib.uuid4()))
+            self.assertEqual(self.refusal(s, tmp), 'bake.request-binding')
+
+    def test_dry_run_plans_the_check_and_validation_requires_the_bound_disk(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            s = bake_selection(tmp)
+            plan = fn.dry_run(FakeHost(tmp, {}, ROOT_SESSION), s, facts(), rows())['plan']
+            self.assertIn('bake.verify-inputs', [p['effect'] for p in plan])
+        with tempfile.TemporaryDirectory() as tmp, self.assertRaises(fn.Refusal):
+            fn.validate_selection(bake_selection(tmp, controlSha256='9' * 64))
+
+    @unittest.skipUnless(shutil.which('mke2fs') and shutil.which('git') and reproducible_mke2fs(),
+                         'mke2fs 1.47.1+ and git required')
+    def test_the_window_rebuilds_the_bound_control_image_from_its_entry_rows(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / 'repo'; repo.mkdir()
+            env = dict(os.environ, GIT_AUTHOR_NAME='t', GIT_AUTHOR_EMAIL='t@t', GIT_COMMITTER_NAME='t',
+                       GIT_COMMITTER_EMAIL='t@t', GIT_CONFIG_NOSYSTEM='1', HOME=tmp)
+            git = lambda *a: subprocess.run(['git', '-C', str(repo), *a], check=True, capture_output=True, env=env)
+            git('init', '-q')
+            for rel, (data, mode) in fake_sources().items():
+                (repo / rel).parent.mkdir(parents=True, exist_ok=True)
+                (repo / rel).write_bytes(data); os.chmod(repo / rel, mode)
+            git('add', '-A'); git('commit', '-q', '-m', 'x')
+            revision = git('rev-parse', 'HEAD').stdout.decode().strip()
+            raw = fn.canonical_json(bake_request(sourceRevision=revision))
+            (Path(tmp) / 'custody.json').write_text('{}\n')
+            manifest = fn.prepare_bake(raw, str(Path(tmp) / 'out'), fn.source_files(repo, revision), False,
+                                       inputs_custody=str(Path(tmp) / 'custody.json'))
+            s = dict(selection(), **manifest['selectionFragment'])
+            fn.validate_selection(s)
+            run = Path(tmp) / 'run'; run.mkdir()
+            got = fn.verify_bake_inputs(fn.Executor(), s, rows(), str(run), repo)
+            self.assertEqual(got['controlSha256'], manifest['disks'][-1]['sha256'])
+            shared = facts(); shared['lanes']['lanes'][0]['busy'] = ['dotnet']
+            run2 = Path(tmp) / 'run2'; run2.mkdir()
+            with self.assertRaises(fn.Refusal) as caught:
+                fn.verify_bake_inputs(fn.Executor(), s, rows(shared), str(run2), repo)
+            self.assertEqual(caught.exception.check, 'bake.target')
+
+
+class TreeXattrs(unittest.TestCase):
+    def test_user_xattrs_are_removed_so_they_never_enter_the_digest(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            f = Path(tmp) / 'a'; f.write_bytes(b'x')
+            try:
+                os.setxattr(f, 'user.fsgg-test', b'1')
+            except OSError:
+                self.skipTest('user xattrs unsupported on this filesystem')
+            fn.normalize_tree(tmp)
+            self.assertEqual(os.listxattr(f), [])
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(os, 'listxattr', return_value=['security.selinux']):
+            (Path(tmp) / 'a').write_bytes(b'x')
+            with self.assertRaises(fn.Refusal) as caught:
+                fn.normalize_tree(tmp)
+            self.assertEqual(caught.exception.check, 'bake.tree')
 
 if __name__ == '__main__':
     unittest.main(verbosity=1)

@@ -69,7 +69,7 @@ leave `pool.no-data-writers` Unknown.
 ## Inputs
 
 - **Selection** (`fsgg.fdev-native-window-selection/1`), bound by Root for each window:
-  - operation id and step, plus the Root comment on #4778 that names the operation;
+  - operation id and step, plus the Root comment on #1102 that names the operation;
   - clocks (pre-start, useful, retire, collector, collector retire, enclosing);
   - `ioCaps` as `rbps`, `wbps`, `riops` and `wiops` (no default is guessed);
   - `exemptCgroups`: the Root session and the readback actor;
@@ -90,7 +90,7 @@ leave `pool.no-data-writers` Unknown.
   the df input. When it is present, admission needs `memAvailableBytes` at or above the
   Root-set `hostMemoryMinAvailableBytes` within `hostMemoryMaxAgeSeconds`. When it is absent,
   `capacity.host-memory` is Unknown, never Supported, so a launch refuses.
-- **Selection marker.** The Root selection comment on #4778 must carry
+- **Selection marker.** The Root selection comment on #1102 must carry
   `<!-- fsgg:fdev-native-selection/v1 operation=<op> step=<step> -->`. Posts made with the same
   account cannot be told apart by author, and the launcher's own start-witness comment never
   carries this marker.
@@ -155,15 +155,50 @@ python3 -I -B fdev_native.py prepare-bake --request request.json --out <fresh di
   one, and the window record shows `guestUuidSource`. `bake-inputs.json` carries a `selectionFragment`
   (`guestUuid`, `readOnlyDisks`, `seedDir`) for Root to copy into the selection.
 
-Still owed for M1 (separate PRs on #1102):
+## M1 window rulings and the Commit (Root, [#1102 comment 6556672289](https://github.com/FS-GG/FS.GG.Coordination/issues/1102#issuecomment-6556672289))
 
-- the in-window acquisition phase;
-- the in-window control rebuild and digest match;
-- seed digest checks before start;
-- reading the result marker and wiring `--export-dir` in the collector;
-- the #4820 Commit;
-- the retirement helper;
-- observe-only resume.
+- **Posting target.** Selection comments, the start witness and comment reads use
+  FS.GG.Coordination#1102. The plan's issue .github#4778 is closed.
+- **Accepted Home Unknowns.** A selection may carry `rootAcceptedUnknowns`:
+  - `checks`: a subset of `capacity.host-partition` and `capacity.host-memory`;
+  - `ruling`: a URL to a comment on #1102.
+
+  Those rows stay **Unknown**, never Supported. Each carries `rootRuling`, plus fdev's own reading
+  (pool free bytes and inodes, or `MemAvailable`). Admission skips them; it never skips an
+  Unsupported row or any other check. The evidence records the ruling.
+- **I/O correspondence** stays `not-established`. Its `trackedBy` field is `FS-GG/.github#5187`.
+- **Bake binding.** A selection may carry `bake`, filled from `prepare-bake`'s `selectionFragment`.
+  It binds:
+  - the request and its digest;
+  - the control digest;
+  - the seed digests;
+  - the admitted acquisition `custody.json`;
+  - the builder uid, gid and mke2fs version.
+
+  In the window, before disk preparation, the launcher refuses unless all of the following hold:
+  - the request, seed and custody are unchanged;
+  - it runs as the bound builder uid/gid with the bound mke2fs (file ownership enters the digest);
+  - the control image it **rebuilds from its own entry exclusivity rows** matches the bound digest.
+
+  TARGET's `sharedCodexHost: false` therefore follows from this window's checks.
+- **Reproducible trees** also drop `user.*` extended attributes. Any other attribute (an ACL or a
+  security label) refuses.
+- **Bake result.** `bake.sh` checks two things before mounting anything:
+  - the apt units are masked;
+  - the DMI `product_uuid` equals TARGET's `systemUuid`. A casing-only difference reports `uuid-case`.
+
+  The masks persist into the qualified image, so runner guests never run apt timers. The serial line
+  is `FSGG-BAKE-RESULT/1 nonce=<request digest> stage=<first failing stage, or complete> status=<n>`.
+- **Collector.** It runs with `--export-dir /srv/bulk/native-chain` and `--nonce`. The bake qualifies
+  only when the guest unit's result is `success` with status 0 **and** exactly one distinct marker
+  carries this nonce with `complete 0`. A foreign nonce, conflicting markers or no marker do not
+  qualify.
+- **The M1 Commit.** A qualifying bake is exported with `cp --sparse=always`, fsynced and re-hashed.
+  Its closed packet (canonical JSON) is then fsynced into `/srv/bulk/native-chain/<op>/`, and its
+  directory is fsynced too. The collector prints the packet's sha256, which Root posts on #1102. A
+  failed bake is neither exported nor committed; its packet stays in the run directory.
+
+Still owed: the retirement helper with the four-check readback, and observe-only resume.
 
 ## Preconditions (each fails closed; Unknown is never success)
 
@@ -171,7 +206,7 @@ Still owed for M1 (separate PRs on #1102):
 |---|---|
 | `selection.valid` | Schema, clocks summing within the enclosing bound, exempt sessions, attestation, stock-image lock path, Home df shape |
 | `selection.operation-not-retired` | 83a08, 69db, 2ae4 and d2f2, plus any id sharing those short prefixes, refuse |
-| `selection.root-comment-binds-operation` | A comment on #4778 by an allowed Root account carries the selection marker for this operation and step (cooperative binding) |
+| `selection.root-comment-binds-operation` | A comment on #1102 by an allowed Root account carries the selection marker for this operation and step (cooperative binding) |
 | `claim.absent` | `/srv/v3-pool/native/claims/<op>` does not exist. The claim is `O_CREAT\|O_EXCL\|O_NOFOLLOW` and refuses forever. |
 | `kvm.device`, `kvm.nested` | `/dev/kvm` is a read-write character device and nested virtualisation is on |
 | `cgroup.v2-controllers`, `cgroup.cpuset-cpus`, `cgroup.user-io-delegated` | cgroup v2 with `cpuset cpu io memory pids`, CPUs 8-11 available, `io` delegated to the user manager |
@@ -223,7 +258,7 @@ Launch adds these checks:
 
 ## Window effects, in order
 
-1. Create the claim, then post the start witness comment on #4778.
+1. Create the claim, then post the start witness comment on #1102.
 2. Re-read capacity and exclusivity.
 3. Create the run directory, then write the caps manifest.
 4. Apply `io.max` caps through `systemctl set-property --runtime`.
