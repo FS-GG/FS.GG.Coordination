@@ -309,6 +309,15 @@
     "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
   ],
   "localReferences": []
+},
+{
+  "kind": "workflow",
+  "path": ".github/workflows/closing-keywords.yml",
+  "sha256": "6130cecd9ea7c8c74fa606df11959a9f43198ef31d42f0221ecec8f2d77027b9",
+  "externalReferences": [
+    "FS-GG/.github/.github/workflows/closing-keywords-receiver.yml@31632a60a2053c181a43eab22044ef8c7157c65d"
+  ],
+  "localReferences": []
 }
 ]
 }
