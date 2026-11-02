@@ -1,6 +1,6 @@
 # Ordinary assignment source kernel
 
-This source candidate implements Delivery [#1038](https://github.com/FS-GG/FS.GG.Coordination/issues/1038) under [LEARN #4647](https://github.com/FS-GG/.github/issues/4647) and the accepted [OR-first design](https://github.com/FS-GG/.github/blob/main/docs/coordination/2026-08-31-operations-research-first-agent-orchestration-design.md), especially sections 4.5–4.7, 5.2, 7.6 and 8.2. It adds pure contracts and decision checks. Existing production composition, experiment gates, protocol decoders, journals, runners and provider implementations continue to own their present behavior.
+This source candidate implements Delivery [#1038](https://github.com/FS-GG/FS.GG.Coordination/issues/1038) under [LEARN #4647](https://github.com/FS-GG/.github/issues/4647) and the [OR-first design](https://github.com/FS-GG/.github/blob/main/docs/coordination/2026-08-31-operations-research-first-agent-orchestration-design.md), especially sections 4.5–4.7, 5.2, 7.6 and 8.2. That design's status is Proposed, and no ADR adopts it (corrected 2026-11-02, [.github#5245](https://github.com/FS-GG/.github/issues/5245)). It adds pure contracts and decision checks. Existing production composition, experiment gates, protocol decoders, journals, runners and provider implementations continue to own their present behavior.
 
 ## Source contract
 
