@@ -51,7 +51,7 @@ class NativeFixture:
                              expectedSourceSha="a" * 40, expectedSourceTree="b" * 40,
                              expectedBindingSha256=sha(binding_path.read_bytes()), expectedFiles=self.files)
         provenance = dict(schema="fsgg.fourd.native-runtime-provenance/1", sourceSha="a" * 40, sourceTree="b" * 40,
-                          bindingSha256=self.producer["expectedBindingSha256"], files=self.files, sdkVersion="10.0.400",
+                          bindingSha256=self.producer["expectedBindingSha256"], files=self.files, sdkVersion="10.0.403",
                           runtimeVersion=self.call("native-runtime-info", {"schema":"fsgg.fourd.native-runtime-info-request/1"})[1]["runtimeVersion"], hostSha256=sha(host.read_bytes()))
         provenance_path = self.write("provenance.json", provenance)
         self.producer.update(provenancePath=str(provenance_path), expectedProvenanceSha256=sha(provenance_path.read_bytes()))

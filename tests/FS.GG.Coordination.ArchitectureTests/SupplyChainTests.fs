@@ -55,7 +55,7 @@ let ``repository SDK selection matches the exact candidate supply-chain pin`` ()
     let implementation =
         File.ReadAllText(Path.Combine(root, "eng/supply-chain-candidate.fsx"))
 
-    Assert.Equal("10.0.400", sdkVersion)
+    Assert.Equal("10.0.403", sdkVersion)
     Assert.Equal("disable", rollForward)
     Assert.Contains($"let pinnedDotnetSdkVersion = \"{sdkVersion}\"", implementation)
     Assert.Contains("Environment.SetEnvironmentVariable(\"DOTNET_ROLL_FORWARD\", null)", implementation)
@@ -229,3 +229,21 @@ let ``candidate implementation has one pack call and two clean consumers`` () =
         Assert.True(Directory.Exists directory)
         Assert.Single(Directory.GetFiles(directory, "*.fsproj")) |> ignore
         Assert.True(File.Exists(Path.Combine(directory, "Program.fs")))
+
+[<Fact>]
+let ``candidate generators pin the same SDK runtime and compiler digest as the supply chain`` () =
+    let pin (pattern: string) (text: string) =
+        let m = System.Text.RegularExpressions.Regex.Match(text, pattern)
+        Assert.True(m.Success, pattern)
+        m.Groups[1].Value
+
+    let supply = File.ReadAllText(Path.Combine(root, "eng/supply-chain-candidate.fsx"))
+    let sdk = pin "let pinnedDotnetSdkVersion = \"([^\"]+)\"" supply
+    let runtime = pin "let pinnedDotnetRuntimeVersion = \"([^\"]+)\"" supply
+    let fsc = pin "let pinnedFSharpCompilerSha256 =\\s*\"([0-9a-f]{64})\"" supply
+
+    for relativePath in [ "eng/orchestration-host-candidate.py"; "eng/orchestration-runner-client-candidate.py" ] do
+        let generator = File.ReadAllText(Path.Combine(root, relativePath))
+        Assert.Equal(sdk, pin "(?m)^SDK = \"([^\"]+)\"" generator)
+        Assert.Equal(runtime, pin "(?m)^RUNTIME = \"([^\"]+)\"" generator)
+        Assert.Equal(fsc, pin "(?m)^FSC_SHA256 = \"([0-9a-f]{64})\"" generator)

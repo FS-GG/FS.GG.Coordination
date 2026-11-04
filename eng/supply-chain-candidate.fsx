@@ -22,11 +22,11 @@ let packageProject =
     "src/FS.GG.Coordination.Protocol/FS.GG.Coordination.Protocol.fsproj"
 
 let packageLock = "src/FS.GG.Coordination.Protocol/packages.lock.json"
-let pinnedDotnetSdkVersion = "10.0.400"
-let pinnedDotnetRuntimeVersion = "10.0.11"
+let pinnedDotnetSdkVersion = "10.0.403"
+let pinnedDotnetRuntimeVersion = "10.0.14"
 
 let pinnedFSharpCompilerSha256 =
-    "3e82a7fb4fb386f645b538dd56b73e02eb77d12f453915c5ae029421343d5d18"
+    "b5c905fb71bb111a47dd695c911d3e62479ed6cdb43fc17b58dcd17d4a86b1a7"
 
 let versionPattern =
     Regex("^0\\.0\\.0-gs2-03-7\\.([0-9a-f]{12})$", RegexOptions.CultureInvariant)
