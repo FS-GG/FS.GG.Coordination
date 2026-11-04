@@ -19,6 +19,21 @@ on:
         required: false
         default: false
         type: boolean
+      sdk_profile_mode:
+        description: Fresh SDK preflight, publish, original-only observation or explicitly admitted forward
+        required: false
+        default: preflight
+        type: choice
+        options: [preflight, publish, observe, forward]
+      sdk_original_run:
+        description: Actual original native run for read-only observation; never a resend permit
+        required: false
+        type: string
+      cli_profile_repair:
+        description: Select the separately admitted fresh strict-ten-gate SDK successor
+        required: false
+        default: false
+        type: boolean
       cli_only:
         description: Select the separately admitted CLI-only successor
         required: false
@@ -64,7 +79,7 @@ concurrency:
 jobs:
   preflight:
     name: Read-only migration release feasibility [org-publication-writer]
-    if: inputs.preflight_only == true && !inputs.cli_only && !inputs.readback_only && !inputs.execution_pair && !inputs.pair_recovery
+    if: inputs.preflight_only == true && !inputs.cli_only && !inputs.readback_only && !inputs.execution_pair && !inputs.pair_recovery && !inputs.cli_profile_repair
     runs-on: ubuntu-latest
     timeout-minutes: 35
     permissions:
@@ -178,7 +193,7 @@ jobs:
           retention-days: 14
 
   publish:
-    if: inputs.preflight_only != true && !inputs.cli_only && !inputs.readback_only && !inputs.execution_pair && !inputs.pair_recovery
+    if: inputs.preflight_only != true && !inputs.cli_only && !inputs.readback_only && !inputs.execution_pair && !inputs.pair_recovery && !inputs.cli_profile_repair
     name: Qualify, publish, and read back exact portable CLI [org-publication-writer]
     runs-on: ubuntu-24.04
     timeout-minutes: 90
@@ -615,7 +630,7 @@ jobs:
           compression-level: 0
 
   cli_successor:
-    if: inputs.cli_only && !inputs.preflight_only && !inputs.execution_pair && !inputs.pair_recovery
+    if: inputs.cli_only && !inputs.preflight_only && !inputs.execution_pair && !inputs.pair_recovery && !inputs.cli_profile_repair
     name: Publish the admitted original CLI-only candidate [org-publication-writer]
     runs-on: ubuntu-24.04
     timeout-minutes: 65
@@ -948,7 +963,7 @@ jobs:
           retention-days: 90
 
   execution_pair_preflight:
-    if: inputs.execution_pair && inputs.preflight_only && !inputs.pair_recovery && !inputs.cli_only && !inputs.readback_only
+    if: inputs.execution_pair && inputs.preflight_only && !inputs.pair_recovery && !inputs.cli_only && !inputs.readback_only && !inputs.cli_profile_repair
     name: Observe original Execution pair without publication authority
     env:
       PYTHONOPTIMIZE: '0'
@@ -1045,7 +1060,7 @@ jobs:
           retention-days: 14
 
   execution_pair:
-    if: inputs.execution_pair && inputs.pair_recovery && !inputs.preflight_only && !inputs.cli_only && !inputs.readback_only
+    if: inputs.execution_pair && inputs.pair_recovery && !inputs.preflight_only && !inputs.cli_only && !inputs.readback_only && !inputs.cli_profile_repair
     name: Publish the admitted original routine Execution pair [org-publication-writer]
     runs-on: ubuntu-24.04
     timeout-minutes: 65
@@ -1507,5 +1522,376 @@ jobs:
         with:
           name: execution-pair-publication-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ env.READBACK_OUTPUT }}/
+          if-no-files-found: warn
+          retention-days: 90
+
+  sdk_profile_preflight:
+    name: sdk_profile_preflight
+    if: inputs.cli_profile_repair && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: read
+      packages: read
+    env:
+      PYTHONOPTIMIZE: '0'
+      PYTHONDONTWRITEBYTECODE: '1'
+      SDK_PROFILE_MODE: ${{ inputs.sdk_profile_mode }}
+      SDK_ORIGINAL_RUN: ${{ inputs.sdk_original_run }}
+      CLI_PROFILE_REPAIR: ${{ inputs.cli_profile_repair }}
+      CLI_ONLY: ${{ inputs.cli_only }}
+      EXECUTION_PAIR: ${{ inputs.execution_pair }}
+      PAIR_RECOVERY: ${{ inputs.pair_recovery }}
+      PREFLIGHT_ONLY: ${{ inputs.preflight_only }}
+      READBACK_ONLY: ${{ inputs.readback_only }}
+      OPERATION: ${{ inputs.operation }}
+      REQUESTED_SOURCE: ${{ inputs.source }}
+      REQUESTED_MERGE: ${{ inputs.protected_merge }}
+      REQUESTED_SHA256: ${{ inputs.expected_sha256 }}
+      REQUESTED_PUBLISHER: ${{ inputs.publisher_source }}
+    steps:
+      - name: Check out reviewed B without persisted credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Refuse disabled, mixed-mode or mismatched source before credentials
+        id: admitted
+        run: python3 -I -B eng/ordinary-sdk-publisher.py bind
+      - name: Execute guarded preflight caller
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          case "$SDK_PROFILE_MODE" in
+            preflight|publish) command=preflight ;;
+            observe|forward) command=qualify-original ;;
+            *) exit 3 ;;
+          esac
+          python3 -I -B eng/ordinary-sdk-publisher.py "$command" --workdir "$RUNNER_TEMP/sdk-profile-preflight"
+      - name: Retain original stage observations
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: ordinary-sdk-preflight-${{ github.run_id }}
+          path: ${{ runner.temp }}/sdk-profile-preflight/*
+          if-no-files-found: warn
+          retention-days: 90
+
+  sdk_profile_packages:
+    name: sdk_profile_packages
+    if: inputs.cli_profile_repair && github.ref == 'refs/heads/main' && (inputs.sdk_profile_mode == 'publish' || inputs.sdk_profile_mode == 'forward')
+    needs: [sdk_profile_preflight]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      actions: read
+      packages: write
+      id-token: write
+    env:
+      PYTHONOPTIMIZE: '0'
+      PYTHONDONTWRITEBYTECODE: '1'
+      SDK_PROFILE_MODE: ${{ inputs.sdk_profile_mode }}
+      SDK_ORIGINAL_RUN: ${{ inputs.sdk_original_run }}
+      CLI_PROFILE_REPAIR: ${{ inputs.cli_profile_repair }}
+      CLI_ONLY: ${{ inputs.cli_only }}
+      EXECUTION_PAIR: ${{ inputs.execution_pair }}
+      PAIR_RECOVERY: ${{ inputs.pair_recovery }}
+      PREFLIGHT_ONLY: ${{ inputs.preflight_only }}
+      READBACK_ONLY: ${{ inputs.readback_only }}
+      OPERATION: ${{ inputs.operation }}
+      REQUESTED_SOURCE: ${{ inputs.source }}
+      REQUESTED_MERGE: ${{ inputs.protected_merge }}
+      REQUESTED_SHA256: ${{ inputs.expected_sha256 }}
+      REQUESTED_PUBLISHER: ${{ inputs.publisher_source }}
+    steps:
+      - name: Check out reviewed B without persisted credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Refuse disabled, mixed-mode or mismatched source before credentials
+        id: admitted
+        run: python3 -I -B eng/ordinary-sdk-publisher.py bind
+      - name: Acquire existing organization publication writer serialization
+        shell: bash
+        timeout-minutes: 32
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LOCK_COMMIT: c799a9f9b21d52eb9766cf0950722e3e55145d39
+          LOCK_SCRIPT_SHA256: dca3fe60e5ebf4a6ff33e52b1ede6ee255b377790688e0958cb4ebcc90df53e6
+          LOCK_MAX_WAIT_MINUTES: '30'
+        run: |
+          set -euo pipefail
+          lock="$RUNNER_TEMP/sdk_publication_writer_lock.py"
+          curl --fail --silent --show-error --location --max-time 60 --output "$lock"             "https://raw.githubusercontent.com/FS-GG/.github/${LOCK_COMMIT}/scripts/publication_writer_lock.py"
+          echo "${LOCK_SCRIPT_SHA256}  ${lock}" | sha256sum --check --strict
+          python3 -I -B "$lock" acquire --max-wait-minutes "$LOCK_MAX_WAIT_MINUTES"
+      - name: Execute guarded preflight caller
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          case "$SDK_PROFILE_MODE" in
+            preflight|publish) command=preflight ;;
+            observe|forward) command=qualify-original ;;
+            *) exit 3 ;;
+          esac
+          python3 -I -B eng/ordinary-sdk-publisher.py "$command" --workdir "$RUNNER_TEMP/sdk-profile-before-package-credentials"
+      - name: Set up the pinned SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          global-json-file: global.json
+      - name: Mint existing ordinary protected-journal writer token
+        id: ledger
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          app-id: ${{ vars.FSGG_ORDINARY_LEDGER_APP_ID }}
+          private-key: ${{ secrets.FSGG_ORDINARY_LEDGER_APP_PRIVATE_KEY }}
+          owner: FS-GG
+          repositories: FS.GG.Coordination.Authority
+          permission-contents: write
+      - name: Bind existing ledger installation
+        env:
+          ACTUAL_INSTALLATION_ID: ${{ steps.ledger.outputs.installation-id }}
+          EXPECTED_INSTALLATION_ID: ${{ secrets.FSGG_ORDINARY_LEDGER_INSTALLATION_ID }}
+        run: test -n "$EXPECTED_INSTALLATION_ID" && test "$ACTUAL_INSTALLATION_ID" = "$EXPECTED_INSTALLATION_ID"
+      - name: Exchange existing workflow Trusted Publishing identity
+        id: successor-login
+        uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841
+        with:
+          user: ${{ steps.admitted.outputs.nuget_user }}
+      - name: Execute guarded packages caller
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ORDINARY_LEDGER_TOKEN: ${{ steps.ledger.outputs.token }}
+          NUGET_API_KEY: ${{ steps.successor-login.outputs.NUGET_API_KEY }}
+        run: python3 -I -B eng/ordinary-sdk-publisher.py packages --workdir "$RUNNER_TEMP/sdk-profile-packages"
+      - name: Retain original stage observations
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: ordinary-sdk-packages-${{ github.run_id }}
+          path: ${{ runner.temp }}/sdk-profile-packages/*
+          if-no-files-found: warn
+          retention-days: 90
+
+  sdk_profile_public_load:
+    name: sdk_profile_public_load
+    if: inputs.cli_profile_repair && github.ref == 'refs/heads/main' && (inputs.sdk_profile_mode == 'publish' || inputs.sdk_profile_mode == 'forward')
+    needs: [sdk_profile_packages]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: read
+    env:
+      PYTHONOPTIMIZE: '0'
+      PYTHONDONTWRITEBYTECODE: '1'
+      SDK_PROFILE_MODE: ${{ inputs.sdk_profile_mode }}
+      SDK_ORIGINAL_RUN: ${{ inputs.sdk_original_run }}
+      CLI_PROFILE_REPAIR: ${{ inputs.cli_profile_repair }}
+      CLI_ONLY: ${{ inputs.cli_only }}
+      EXECUTION_PAIR: ${{ inputs.execution_pair }}
+      PAIR_RECOVERY: ${{ inputs.pair_recovery }}
+      PREFLIGHT_ONLY: ${{ inputs.preflight_only }}
+      READBACK_ONLY: ${{ inputs.readback_only }}
+      OPERATION: ${{ inputs.operation }}
+      REQUESTED_SOURCE: ${{ inputs.source }}
+      REQUESTED_MERGE: ${{ inputs.protected_merge }}
+      REQUESTED_SHA256: ${{ inputs.expected_sha256 }}
+      REQUESTED_PUBLISHER: ${{ inputs.publisher_source }}
+    steps:
+      - name: Check out reviewed B without persisted credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Refuse disabled, mixed-mode or mismatched source before credentials
+        id: admitted
+        run: python3 -I -B eng/ordinary-sdk-publisher.py bind
+      - name: Set up the pinned SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          global-json-file: global.json
+      - name: Execute guarded public-load caller
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 -I -B eng/ordinary-sdk-publisher.py public-load --workdir "$RUNNER_TEMP/sdk-profile-public-load"
+      - name: Retain original stage observations
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: ordinary-sdk-public-load-${{ github.run_id }}
+          path: ${{ runner.temp }}/sdk-profile-public-load/ordinary-sdk-public-load.json
+          if-no-files-found: warn
+          retention-days: 90
+
+  sdk_profile_finalize:
+    name: sdk_profile_finalize
+    if: inputs.cli_profile_repair && github.ref == 'refs/heads/main' && (inputs.sdk_profile_mode == 'publish' || inputs.sdk_profile_mode == 'forward')
+    needs: [sdk_profile_preflight, sdk_profile_packages, sdk_profile_public_load]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: write
+      actions: read
+      packages: read
+    env:
+      PYTHONOPTIMIZE: '0'
+      PYTHONDONTWRITEBYTECODE: '1'
+      SDK_PROFILE_MODE: ${{ inputs.sdk_profile_mode }}
+      SDK_ORIGINAL_RUN: ${{ inputs.sdk_original_run }}
+      CLI_PROFILE_REPAIR: ${{ inputs.cli_profile_repair }}
+      CLI_ONLY: ${{ inputs.cli_only }}
+      EXECUTION_PAIR: ${{ inputs.execution_pair }}
+      PAIR_RECOVERY: ${{ inputs.pair_recovery }}
+      PREFLIGHT_ONLY: ${{ inputs.preflight_only }}
+      READBACK_ONLY: ${{ inputs.readback_only }}
+      OPERATION: ${{ inputs.operation }}
+      REQUESTED_SOURCE: ${{ inputs.source }}
+      REQUESTED_MERGE: ${{ inputs.protected_merge }}
+      REQUESTED_SHA256: ${{ inputs.expected_sha256 }}
+      REQUESTED_PUBLISHER: ${{ inputs.publisher_source }}
+    steps:
+      - name: Check out reviewed B without persisted credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Refuse disabled, mixed-mode or mismatched source before credentials
+        id: admitted
+        run: python3 -I -B eng/ordinary-sdk-publisher.py bind
+      - name: Acquire existing organization publication writer serialization
+        shell: bash
+        timeout-minutes: 32
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LOCK_COMMIT: c799a9f9b21d52eb9766cf0950722e3e55145d39
+          LOCK_SCRIPT_SHA256: dca3fe60e5ebf4a6ff33e52b1ede6ee255b377790688e0958cb4ebcc90df53e6
+          LOCK_MAX_WAIT_MINUTES: '30'
+        run: |
+          set -euo pipefail
+          lock="$RUNNER_TEMP/sdk_publication_writer_lock.py"
+          curl --fail --silent --show-error --location --max-time 60 --output "$lock"             "https://raw.githubusercontent.com/FS-GG/.github/${LOCK_COMMIT}/scripts/publication_writer_lock.py"
+          echo "${LOCK_SCRIPT_SHA256}  ${lock}" | sha256sum --check --strict
+          python3 -I -B "$lock" acquire --max-wait-minutes "$LOCK_MAX_WAIT_MINUTES"
+      - name: Execute guarded qualify-finalize caller
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 -I -B eng/ordinary-sdk-publisher.py qualify-finalize --workdir "$RUNNER_TEMP/sdk-profile-before-finalize-credentials"
+      - name: Set up the pinned SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          global-json-file: global.json
+      - name: Mint existing ordinary protected-journal writer token
+        id: ledger
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          app-id: ${{ vars.FSGG_ORDINARY_LEDGER_APP_ID }}
+          private-key: ${{ secrets.FSGG_ORDINARY_LEDGER_APP_PRIVATE_KEY }}
+          owner: FS-GG
+          repositories: FS.GG.Coordination.Authority
+          permission-contents: write
+      - name: Bind existing ledger installation
+        env:
+          ACTUAL_INSTALLATION_ID: ${{ steps.ledger.outputs.installation-id }}
+          EXPECTED_INSTALLATION_ID: ${{ secrets.FSGG_ORDINARY_LEDGER_INSTALLATION_ID }}
+        run: test -n "$EXPECTED_INSTALLATION_ID" && test "$ACTUAL_INSTALLATION_ID" = "$EXPECTED_INSTALLATION_ID"
+      - name: Mint existing complete tag-protection reader
+        id: policy
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          app-id: ${{ secrets.FSGG_DISPATCH_APP_ID }}
+          private-key: ${{ secrets.FSGG_DISPATCH_APP_PRIVATE_KEY }}
+          owner: FS-GG
+          repositories: FS.GG.Coordination
+          permission-administration: write
+      - name: Execute guarded finalize caller
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ORDINARY_LEDGER_TOKEN: ${{ steps.ledger.outputs.token }}
+          POLICY_TOKEN: ${{ steps.policy.outputs.token }}
+        run: python3 -I -B eng/ordinary-sdk-publisher.py finalize --workdir "$RUNNER_TEMP/sdk-profile-finalize"
+      - name: Retain original stage observations
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: ordinary-sdk-finalize-${{ github.run_id }}
+          path: ${{ runner.temp }}/sdk-profile-finalize/*
+          if-no-files-found: warn
+          retention-days: 90
+
+  sdk_profile_observe:
+    name: sdk_profile_observe
+    if: inputs.cli_profile_repair && github.ref == 'refs/heads/main' && inputs.sdk_profile_mode == 'observe'
+    needs: [sdk_profile_preflight]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: read
+      packages: read
+    env:
+      PYTHONOPTIMIZE: '0'
+      PYTHONDONTWRITEBYTECODE: '1'
+      SDK_PROFILE_MODE: ${{ inputs.sdk_profile_mode }}
+      SDK_ORIGINAL_RUN: ${{ inputs.sdk_original_run }}
+      CLI_PROFILE_REPAIR: ${{ inputs.cli_profile_repair }}
+      CLI_ONLY: ${{ inputs.cli_only }}
+      EXECUTION_PAIR: ${{ inputs.execution_pair }}
+      PAIR_RECOVERY: ${{ inputs.pair_recovery }}
+      PREFLIGHT_ONLY: ${{ inputs.preflight_only }}
+      READBACK_ONLY: ${{ inputs.readback_only }}
+      OPERATION: ${{ inputs.operation }}
+      REQUESTED_SOURCE: ${{ inputs.source }}
+      REQUESTED_MERGE: ${{ inputs.protected_merge }}
+      REQUESTED_SHA256: ${{ inputs.expected_sha256 }}
+      REQUESTED_PUBLISHER: ${{ inputs.publisher_source }}
+    steps:
+      - name: Check out reviewed B without persisted credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Refuse disabled, mixed-mode or mismatched source before credentials
+        id: admitted
+        run: python3 -I -B eng/ordinary-sdk-publisher.py bind
+      - name: Set up the pinned SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          global-json-file: global.json
+      - name: Mint existing ordinary protected-journal writer token
+        id: ledger
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          app-id: ${{ vars.FSGG_ORDINARY_LEDGER_APP_ID }}
+          private-key: ${{ secrets.FSGG_ORDINARY_LEDGER_APP_PRIVATE_KEY }}
+          owner: FS-GG
+          repositories: FS.GG.Coordination.Authority
+          permission-contents: read
+      - name: Bind existing ledger installation
+        env:
+          ACTUAL_INSTALLATION_ID: ${{ steps.ledger.outputs.installation-id }}
+          EXPECTED_INSTALLATION_ID: ${{ secrets.FSGG_ORDINARY_LEDGER_INSTALLATION_ID }}
+        run: test -n "$EXPECTED_INSTALLATION_ID" && test "$ACTUAL_INSTALLATION_ID" = "$EXPECTED_INSTALLATION_ID"
+      - name: Execute guarded observe caller
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ORDINARY_LEDGER_TOKEN: ${{ steps.ledger.outputs.token }}
+        run: python3 -I -B eng/ordinary-sdk-publisher.py observe --workdir "$RUNNER_TEMP/sdk-profile-observe"
+      - name: Retain original stage observations
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: ordinary-sdk-original-observation-${{ github.run_id }}
+          path: ${{ runner.temp }}/sdk-profile-observe/*
           if-no-files-found: warn
           retention-days: 90
