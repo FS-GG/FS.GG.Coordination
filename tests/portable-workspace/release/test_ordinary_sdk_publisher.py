@@ -208,6 +208,12 @@ class Controls(unittest.TestCase):
             before=dict(self.env);self.env[key]=value
             with self.subTest(key=key),self.assertRaises(P.Refused):self.invoke()
             self.assertEqual(self.w.tokens,[]);self.env=before
+    def test_preflight_or_observe_mode_cannot_select_a_package_send(self):
+        for mode in ('preflight','observe'):
+            self.env['SDK_PROFILE_MODE']=mode
+            if mode=='observe':self.env['SDK_ORIGINAL_RUN']='888'
+            with self.assertRaises(P.Refused):self.invoke('packages')
+            self.assertEqual(self.w.tokens,[]);self.assertEqual(self.w.sends,[])
     def test_positive_actual_package_caller_has_intent_before_each_send(self):
         self.invoke();self.assertEqual(self.w.sends,['github','nuget']);self.assertEqual(list(Journal.state.effects.values()),['verified','verified'])
     def test_archive_or_native_binding_failure_has_no_ledger_or_package_credential(self):
