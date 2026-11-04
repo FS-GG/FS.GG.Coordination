@@ -40,7 +40,7 @@ B_PATHS = frozenset({ADMISSION, WORKFLOW, 'eng/ordinary_sdk_publisher.py', 'eng/
 
 
 def publication_delta(paths):
-    return all(p in B_PATHS or p=='docs/atlas/catalog.json' or re.fullmatch(r'docs/atlas/records/[0-9a-f]{64}\.json',p) for p in paths)
+    return all(p in B_PATHS or p in {'eng/bootstrap-gates/compiler-and-tests.sh','eng/run-ordinary-sdk-publisher-controls.py','tests/portable-workspace/release/test_ordinary_sdk_publisher_runner.py'} or p=='docs/atlas/catalog.json' or re.fullmatch(r'docs/atlas/records/[0-9a-f]{64}\.json',p) for p in paths)
 
 def selection(admission):
     require(type(admission) is dict and set(admission)=={'schema','enabled','selection','sharedHelper','forward'}, 'admission fields differ')
