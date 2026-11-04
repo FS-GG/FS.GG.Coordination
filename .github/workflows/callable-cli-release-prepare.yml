@@ -403,6 +403,8 @@ jobs:
           test "$(git rev-parse refs/remotes/origin/main)" = "$CANDIDATE_SOURCE"
           test -z "$(git status --porcelain)"
           test ! -e "$CANDIDATE_OUTPUT"
+      - name: Exercise fresh preparation binding refusals with injected Git facts
+        run: python3 tests/portable-workspace/release/test_cli_profile_repair.py
       - name: Set up the pinned .NET SDK
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with:
