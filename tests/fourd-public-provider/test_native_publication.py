@@ -29,8 +29,8 @@ def candidate():
     hashes = {name: pub.sha(raw) for name, raw in files.items()}
     binding = pub.capsules.canonical(dict(schema='fsgg.fourd.typed-policy-binding/1', sourceSha=SOURCE, files=hashes))
     provenance = pub.capsules.canonical(dict(schema='fsgg.fourd.native-runtime-provenance/1', sourceSha=SOURCE,
-        sourceTree=TREE, bindingSha256=pub.sha(binding), files=hashes, sdkVersion='10.0.400',
-        runtimeVersion='10.0.13', hostSha256=pub.runtime_installation.profile()[0]['files']['dotnet']['sha256']))
+        sourceTree=TREE, bindingSha256=pub.sha(binding), files=hashes, sdkVersion='10.0.403',
+        runtimeVersion='10.0.14', hostSha256=pub.runtime_installation.profile()[0]['files']['dotnet']['sha256']))
     files.update({'typed-policy-binding.json': binding, 'native-runtime-provenance.json': provenance})
     archive = pub.canonical_tar(files)
     adapters = {name: ('adapter-'+name).encode() for name in pub.bootstrap.ADAPTERS}
@@ -319,7 +319,7 @@ class PublicationControls(unittest.TestCase):
             self.assertEqual(0,pub.main())
         result=json.loads(output.getvalue());self.assertTrue(result['candidateVerified']);self.assertFalse(result['publicationSelected'])
         self.assertEqual([],api.writes);self.assertFalse((directory/'journal.json').exists())
-        self.assertEqual('10.0.400',result['runtime']['sdkVersion'])
+        self.assertEqual('10.0.403',result['runtime']['sdkVersion'])
 
     def test_actual_readback_entrypoint_cannot_mutate_original_unknown(self):
         api=self.fixture();api.unknown_at=1
