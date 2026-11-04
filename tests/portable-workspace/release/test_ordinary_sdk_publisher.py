@@ -193,6 +193,79 @@ class Controls(unittest.TestCase):
         self.assertNotIn('secrets.',str(jobs['sdk_profile_public_load']))
         self.assertNotIn('NUGET_API_KEY',str(jobs['sdk_profile_finalize']))
         self.assertNotIn('contents: write',str(jobs['sdk_profile_packages']))
+    def pinned_lock(self):
+        import yaml
+        jobs=yaml.safe_load((ROOT/P.WORKFLOW).read_text())['jobs']
+        path=HELPER/'scripts/publication_writer_lock.py'
+        self.assertTrue(path.is_file(),'Place the exact workflow-pinned lock helper in FSGG_SHARED_HELPER_ROOT/scripts/publication_writer_lock.py; controls never download it')
+        for name in ('sdk_profile_packages','sdk_profile_finalize'):
+            commands=[v for v in jobs[name]['steps'] if 'LOCK_SCRIPT_SHA256' in v.get('env',{})]
+            self.assertEqual(len(commands),1)
+            self.assertEqual(commands[0]['env']['LOCK_COMMIT'],'c799a9f9b21d52eb9766cf0950722e3e55145d39')
+            self.assertEqual(P.sha(path.read_bytes()),commands[0]['env']['LOCK_SCRIPT_SHA256'])
+        spec=importlib.util.spec_from_file_location('sdk_pinned_publication_lock',path)
+        lock=importlib.util.module_from_spec(spec);spec.loader.exec_module(lock)
+        return lock,jobs
+    def lock_native_job(self,lock,job,*,job_id=700,runner='injected-writer',started='2026-01-01T00:00:00Z'):
+        # The pinned helper checks the native marker; this adapter also joins the
+        # actual YAML step to the helper/registry's canonical gate-step contract.
+        gates=[v for v in job['steps'] if v.get('name')==lock.GATE_STEP]
+        self.assertEqual(len(gates),1,'actual YAML lacks its unique canonical publication gate step')
+        self.assertIn('"$lock" acquire',gates[0]['run'])
+        return dict(id=job_id,name=job['name'],status='in_progress',runner_name=runner,started_at=started,
+                    steps=[dict(name=v.get('name',''),number=i) for i,v in enumerate(job['steps'],1)])
+    def lock_api(self,lock,records):
+        calls=[]
+        registry=dict(schema=1,gateStep=lock.GATE_STEP,writers=[dict(repo=P.REPO,workflows=[P.WORKFLOW])])
+        def get(path,raw=False):
+            calls.append((path,raw))
+            if path==f'/repos/{lock.REGISTRY_REPOSITORY}/contents/{lock.REGISTRY_PATH}?ref=main':return registry
+            if path==f'/repos/{P.REPO}/actions/runs/99/jobs?filter=latest&per_page=100':return {'jobs':copy.deepcopy(records)}
+            if path==f'/repos/{P.REPO}/actions/runs?status=in_progress&per_page=100&page=1':return {'workflow_runs':[dict(id=99,path=P.WORKFLOW)]}
+            raise AssertionError('unexpected pinned-lock fixture request '+path)
+        return types.SimpleNamespace(get=get),calls
+    def test_actual_yaml_writer_jobs_acquire_using_exact_pinned_lock(self):
+        lock,jobs=self.pinned_lock()
+        for name in ('sdk_profile_packages','sdk_profile_finalize'):
+            with self.subTest(job=name):
+                native=self.lock_native_job(lock,jobs[name]);api,calls=self.lock_api(lock,[native])
+                self.assertTrue(lock.participates(native))
+                found=lock.find_self(api,P.REPO,99,'injected-writer',lambda _:None)
+                self.assertEqual(found['job'],700)
+                result=lock.acquire(api,repo=P.REPO,run_id=99,runner_name='injected-writer',max_wait=10,
+                                    clock=lambda:lock.parse_time(native['started_at']),sleep=lambda _:None,
+                                    settle=0,confirm=0,log=lambda _:None)
+                self.assertEqual(result['job'],700);self.assertEqual(result['otherLiveParticipants'],0)
+                self.assertTrue(all(path.startswith('/repos/') for path,_ in calls))
+    def test_actual_yaml_missing_writer_marker_is_refused_by_pinned_find_self(self):
+        lock,jobs=self.pinned_lock()
+        for name in ('sdk_profile_packages','sdk_profile_finalize'):
+            with self.subTest(job=name):
+                altered=copy.deepcopy(jobs[name]);altered['name']=altered['name'].replace(lock.MARKER,'').strip()
+                native=self.lock_native_job(lock,altered);api,_=self.lock_api(lock,[native])
+                self.assertFalse(lock.participates(native))
+                with self.assertRaisesRegex(lock.LockError,'name lacks'):
+                    lock.find_self(api,P.REPO,99,'injected-writer',lambda _:None)
+    def test_actual_yaml_wrong_gate_step_fails_helper_registry_contract(self):
+        lock,jobs=self.pinned_lock()
+        for name in ('sdk_profile_packages','sdk_profile_finalize'):
+            with self.subTest(job=name):
+                altered=copy.deepcopy(jobs[name])
+                for step in altered['steps']:
+                    if step.get('name')==lock.GATE_STEP:step['name']='Acquire differently named lock'
+                with self.assertRaisesRegex(AssertionError,'canonical publication gate'):
+                    self.lock_native_job(lock,altered)
+                with self.assertRaisesRegex(lock.LockError,'different gate step'):
+                    lock.validate_registry(dict(schema=1,gateStep='Acquire differently named lock',writers=[dict(repo=P.REPO,workflows=[P.WORKFLOW])]))
+    def test_actual_yaml_writers_see_and_wait_for_older_pinned_lock_participant(self):
+        lock,jobs=self.pinned_lock()
+        mine=self.lock_native_job(lock,jobs['sdk_profile_finalize'])
+        older=self.lock_native_job(lock,jobs['sdk_profile_packages'],job_id=699,runner='injected-older',started='2025-12-31T23:59:59Z')
+        api,_=self.lock_api(lock,[mine,older]);now=[lock.parse_time(mine['started_at'])]
+        def sleep(seconds):now[0]+=max(1,seconds)
+        with self.assertRaisesRegex(lock.LockError,'not acquired'):
+            lock.acquire(api,repo=P.REPO,run_id=99,runner_name='injected-writer',max_wait=3,
+                         clock=lambda:now[0],sleep=sleep,settle=0,confirm=0,poll_first=1,poll_max=1,log=lambda _:None)
     def test_actual_disabled_commands_refuse_before_credentials(self):
         for command in ('bind','preflight','packages','public-load','finalize','observe','qualify-finalize','qualify-original'):
             env={'PATH':os.environ['PATH']}

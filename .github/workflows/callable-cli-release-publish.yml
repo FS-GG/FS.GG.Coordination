@@ -1581,7 +1581,7 @@ jobs:
           retention-days: 90
 
   sdk_profile_packages:
-    name: sdk_profile_packages
+    name: sdk_profile_packages [org-publication-writer]
     if: inputs.cli_profile_repair && github.ref == 'refs/heads/main' && (inputs.sdk_profile_mode == 'publish' || inputs.sdk_profile_mode == 'forward')
     needs: [sdk_profile_preflight]
     runs-on: ubuntu-24.04
@@ -1617,7 +1617,7 @@ jobs:
       - name: Refuse disabled, mixed-mode or mismatched source before credentials
         id: admitted
         run: python3 -I -B eng/ordinary-sdk-publisher.py bind
-      - name: Acquire existing organization publication writer serialization
+      - name: Acquire org publication writer lock
         shell: bash
         timeout-minutes: 32
         env:
@@ -1733,7 +1733,7 @@ jobs:
           retention-days: 90
 
   sdk_profile_finalize:
-    name: sdk_profile_finalize
+    name: sdk_profile_finalize [org-publication-writer]
     if: inputs.cli_profile_repair && github.ref == 'refs/heads/main' && (inputs.sdk_profile_mode == 'publish' || inputs.sdk_profile_mode == 'forward')
     needs: [sdk_profile_preflight, sdk_profile_packages, sdk_profile_public_load]
     runs-on: ubuntu-24.04
@@ -1768,7 +1768,7 @@ jobs:
       - name: Refuse disabled, mixed-mode or mismatched source before credentials
         id: admitted
         run: python3 -I -B eng/ordinary-sdk-publisher.py bind
-      - name: Acquire existing organization publication writer serialization
+      - name: Acquire org publication writer lock
         shell: bash
         timeout-minutes: 32
         env:
