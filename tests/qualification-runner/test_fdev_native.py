@@ -2000,6 +2000,40 @@ class CollectorCommit(unittest.TestCase):
         self.assertEqual(argv[argv.index('--export-dir') + 1], '/srv/bulk/native-chain')
         self.assertEqual(argv[argv.index('--nonce') + 1], NONCE)
 
+    def test_bake_collection_without_export_directory_refuses_before_packet_or_host_reads(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            run_dir = Path(tmp)
+            (run_dir / 'root.raw').write_bytes(b'image')
+            (run_dir / 'serial.log').write_text(f'FSGG-BAKE-RESULT/1 nonce={NONCE} stage=complete status=0\n')
+            host = FakeHost(tmp, {'g.service': {'ActiveState': 'inactive', 'SubState': 'dead',
+                            'Result': 'success', 'ExecMainStatus': '0', 'ControlGroup': ''}}, ROOT_SESSION)
+            with self.assertRaises(fn.Refusal) as caught:
+                fn.collect(host, str(run_dir), 'g.service', OP, nonce=NONCE)
+            self.assertEqual('collect.export-dir', caught.exception.check)
+            self.assertFalse((run_dir / 'result-packet.json').exists())
+            with mock.patch.object(fn, 'unit_show', side_effect=AssertionError('host reads must not start')):
+                with self.assertRaises(fn.Refusal):
+                    fn.collect(host, str(run_dir), 'g.service', OP, export_dir='', nonce=NONCE)
+
+    def test_cli_missing_bake_export_is_a_structured_refusal_before_host_observation(self):
+        with mock.patch.object(fn, 'LiveHost', return_value=object()), \
+                mock.patch.object(fn, 'unit_show', side_effect=AssertionError('host reads must not start')), \
+                contextlib.redirect_stderr(io.StringIO()) as errors:
+            code = fn.main(['collect', '--run-dir', '/inert-fixture', '--guest-unit', 'g',
+                            '--operation', OP, '--nonce', NONCE])
+        self.assertEqual(3, code)
+        self.assertEqual('collect.export-dir', json.loads(errors.getvalue())['refused']['check'])
+
+    def test_collection_without_a_bake_nonce_still_records_a_nonqualifying_local_packet(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            run_dir = Path(tmp)
+            (run_dir / 'root.raw').write_bytes(b'image'); (run_dir / 'serial.log').write_text('not a bake\n')
+            host = FakeHost(tmp, {'g.service': {'ActiveState': 'inactive', 'SubState': 'dead',
+                            'Result': 'success', 'ExecMainStatus': '0', 'ControlGroup': ''}}, ROOT_SESSION)
+            result = fn.collect(host, str(run_dir), 'g.service', OP)
+            self.assertFalse(result['packet']['qualifying']); self.assertIsNone(result['committed'])
+            self.assertTrue((run_dir / 'result-packet.json').is_file())
+
 
 REAL_LOCK = json.loads((ROOT / fn.NOBLE_LOCK).read_text())
 REAL_LOCK_BYTES = json.dumps(REAL_LOCK).encode()  # the bytes fake_sources(REAL_LOCK) puts on the control disk

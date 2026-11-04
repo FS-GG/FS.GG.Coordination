@@ -2228,6 +2228,8 @@ def collect(host, run_dir, guest_unit, op, export_dir=None, nonce=None, copy=Non
     """Observe the guest's exit, hash root.raw and join the bake marker. Only a qualifying bake is
     exported and committed: the closed packet is fsynced into <export_dir>/<op>/ and its sha256 is
     printed for Root to post on the owning issue. A failed bake keeps its packet in the run directory."""
+    if nonce:
+        require(bool(export_dir), 'collect.export-dir', 'bake collection requires --export-dir')
     props = unit_show(host, guest_unit)
     require(terminal(props), 'collect.guest-exit', f'{guest_unit} is {props.get("ActiveState")}/{props.get("SubState")}')
     cg = props.get('ControlGroup')

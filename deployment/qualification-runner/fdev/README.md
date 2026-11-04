@@ -193,6 +193,8 @@ python3 -I -B fdev_native.py prepare-bake --request request.json --out <fresh di
   only when the guest unit's result is `success` with status 0 **and** exactly one distinct marker
   carries this nonce with `complete 0`. A foreign nonce, conflicting markers or no marker do not
   qualify.
+  A bake nonce without an export directory refuses before host observation or packet writes. A
+  non-bake collection without a nonce may still record a nonqualifying local packet.
 - **The M1 Commit.** A qualifying bake is exported with `cp --sparse=always`, fsynced and re-hashed.
   Its closed packet (canonical JSON) is then fsynced into `/srv/bulk/native-chain/<op>/`, and its
   directory is fsynced too. The collector prints the packet's sha256, which Root posts on #1102. A
