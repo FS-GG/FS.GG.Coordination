@@ -305,8 +305,8 @@ match command with
 | "verify" when isPair -> verifyPair ()
 | "prepare" ->
     require
-        (Set.contains version (Set.ofList [ "0.1.1"; "0.1.2"; "0.1.3"; "0.1.4"; "0.1.5"; "0.1.6"; "0.1.7"; "0.2.0"; "0.2.1"; "0.3.0" ]))
-        "only reviewed callable CLI versions 0.1.1 through 0.1.7 and 0.2.0 through 0.2.1 and CLI-only 0.3.0 may be prepared"
+        (Set.contains version (Set.ofList [ "0.1.1"; "0.1.2"; "0.1.3"; "0.1.4"; "0.1.5"; "0.1.6"; "0.1.7"; "0.2.0"; "0.2.1"; "0.3.0"; "0.4.0" ]))
+        "only reviewed callable CLI versions 0.1.1 through 0.1.7 and 0.2.0 through 0.2.1 and CLI-only 0.3.0 / 0.4.0 may be prepared"
     require (projectPackageVersion () = version) "requested version does not equal the callable CLI PackageVersion"
     require (source.Length = 40 && source |> Seq.forall Uri.IsHexDigit) "source must be an exact 40-character Git SHA"
     require (capture repo "git" [ "rev-parse"; "HEAD" ] = source) "source does not equal HEAD"
@@ -349,8 +349,8 @@ match command with
         manifest.Add("tagAuthorized", false)
         manifest.Add("version", version)
         let ownership = JsonObject()
-        ownership.Add("githubPackages", if version = "0.3.0" then "not-observed-by-preparation" else "unverified-403")
-        ownership.Add("nugetOrg", if version = "0.3.0" then "not-observed-by-preparation" else "observed-404")
+        ownership.Add("githubPackages", if Set.contains version (Set [ "0.3.0"; "0.4.0" ]) then "not-observed-by-preparation" else "unverified-403")
+        ownership.Add("nugetOrg", if Set.contains version (Set [ "0.3.0"; "0.4.0" ]) then "not-observed-by-preparation" else "observed-404")
         ownership.Add("reservation", "unreserved")
         manifest.Add("ownership", ownership)
         File.WriteAllText(manifestPath, manifest.ToJsonString(JsonSerializerOptions(WriteIndented = false)) + "\n", UTF8Encoding(false))
@@ -362,10 +362,12 @@ match command with
         run repo "dotnet" [ "tool"; "install"; packageId; "--version"; version; "--tool-path"; installRoot; "--configfile"; config; "--no-cache" ]
         let installed = Path.Combine(installRoot, "fsgg-coordination")
         run scratch installed []
-        if version = "0.3.0" then
+        if Set.contains version (Set [ "0.3.0"; "0.4.0" ]) then
             let refusal = Path.Combine(scratch, "installed-execute-main-refusal.json")
             run repo "python3" [ "eng/test-callable-cli-installed-harness.py"; "--execute-main-refusal"; installed; refusal ]
             printfn "%s" (File.ReadAllText refusal)
+        if version = "0.4.0" then
+            run repo "python3" [ "eng/test-ordinary-sdk-profile.py"; "--tool"; installed ]
         for name in [ "toolchain-profile"; "command"; "result" ] do
             let expected = File.ReadAllBytes(Path.Combine(repo, "contracts", "portable-workspace", "v1", name + ".schema.json"))
             let actual = captureBytes scratch installed [ "workspace-contract"; "schema"; "export"; name ]

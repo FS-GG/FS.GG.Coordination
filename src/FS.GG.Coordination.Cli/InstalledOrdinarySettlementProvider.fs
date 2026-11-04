@@ -43,7 +43,8 @@ module InstalledOrdinarySettlementProvider =
           RequiredGateChecks =
             Set
                 [ "contract-coherence / coherence"; "projection"; "roster-closure"; "drift"; "claim-generation"
-                  "Lint every shell file in the repo (pinned shellcheck)"; "claim-fence"; "architecture-map reconcile" ] }
+                  "Lint every shell file in the repo (pinned shellcheck)"; "claim-fence"; "architecture-map reconcile"
+                  "no-silent-revert"; "board-linkage" ] }
 
     let private audioSourceProfile =
         { Name = "audio-v1"
@@ -455,6 +456,9 @@ module InstalledOrdinarySettlementProvider =
                || not (selectedPolicySourceValid (profile.Name <> dotGitHubSourceProfile.Name) profile policy.RootElement)
                || expectedChecks <> profile.RequiredSettlementChecks || actualChecks <> expectedChecks
                || expectedGateChecks <> profile.RequiredGateChecks || actualGateChecks <> expectedGateChecks
+               || qualification.GetProperty("requiredChecks").GetArrayLength() <> expectedChecks.Count
+               || qualification.GetProperty("requiredGateChecks").GetArrayLength() <> expectedGateChecks.Count
+               || gateChecksElement.GetArrayLength() <> profile.RequiredGateChecks.Count
                || (checksElement.EnumerateArray() |> Seq.forall checkValid |> not)
                || (gateChecksElement.EnumerateArray() |> Seq.forall checkValid |> not)
                || checks.Length <> profile.RequiredSettlementChecks.Count then Error "preflight-receipt-binding"

@@ -86,7 +86,8 @@ let private fixture () =
     fixtureFor
         [ "contract-coherence / coherence"; "routine-eligibility" ]
         [ "contract-coherence / coherence"; "projection"; "roster-closure"; "drift"; "claim-generation"
-          "Lint every shell file in the repo (pinned shellcheck)"; "claim-fence"; "architecture-map reconcile" ]
+          "Lint every shell file in the repo (pinned shellcheck)"; "claim-fence"; "architecture-map reconcile"
+          "no-silent-revert"; "board-linkage" ]
         None
 
 let private audioFixture () =
@@ -173,10 +174,49 @@ let private coordinationFixture () =
         (Some("coordination-v1", "FS-GG/FS.GG.Coordination", 1346720714L))
 
 [<Fact>]
-let ``installed provider binds exact two settlement and eight gate facts`` () =
+let ``installed provider binds exact two settlement and ten gate facts`` () =
     let receipt, policy = fixture ()
     let result = InstalledOrdinarySettlementProvider.validateReceiptFacts "ordinary-v2" "v2-ci-i1-ordinary-settlement-v1" (Encoding.UTF8.GetBytes(receipt.ToJsonString())) policy
     Assert.True(Result.isOk result)
+
+[<Fact>]
+let ``root profile keeps the two added gates mandatory in both policy and receipt`` () =
+    let required =
+        [ "contract-coherence / coherence"; "projection"; "roster-closure"; "drift"; "claim-generation"
+          "Lint every shell file in the repo (pinned shellcheck)"; "claim-fence"; "architecture-map reconcile"
+          "no-silent-revert"; "board-linkage" ]
+    let profile = InstalledOrdinarySettlementProvider.selectSourceProfile "dotgithub-v1" |> ok
+    Assert.Equal<Set<string>>(Set.ofList required, profile.RequiredGateChecks)
+    for excluded in [ Set [ "no-silent-revert" ]; Set [ "board-linkage" ]; Set [ "no-silent-revert"; "board-linkage" ] ] do
+        let receipt, policy =
+            fixtureFor [ "contract-coherence / coherence"; "routine-eligibility" ]
+                (required |> List.filter (fun name -> not (excluded.Contains name))) None
+        Assert.Equal(Error "preflight-receipt-binding",
+                     InstalledOrdinarySettlementProvider.validateReceiptFacts
+                         "ordinary-v2" "v2-ci-i1-ordinary-settlement-v1"
+                         (Encoding.UTF8.GetBytes(receipt.ToJsonString())) policy)
+
+[<Fact>]
+let ``root profile refuses duplicate settlement and gate entries in receipt and policy`` () =
+    for checkSet in [ "requiredChecks"; "requiredGateChecks" ] do
+        let receipt, policy = fixture ()
+        let checks = receipt[checkSet].AsArray()
+        checks.Add(checks[0].DeepClone())
+        Assert.Equal(Error "preflight-receipt-binding",
+                     InstalledOrdinarySettlementProvider.validateReceiptFacts
+                         "ordinary-v2" "v2-ci-i1-ordinary-settlement-v1"
+                         (Encoding.UTF8.GetBytes(receipt.ToJsonString())) policy)
+
+        let policyReceipt, policyBytes = fixture ()
+        let policyNode = JsonNode.Parse(policyBytes)
+        let expected = (policyNode["qualification"][checkSet]).AsArray()
+        expected.Add(expected[0].DeepClone())
+        let duplicatePolicy = Encoding.UTF8.GetBytes(policyNode.ToJsonString())
+        policyReceipt["policySha256"] <- SHA256.HashData duplicatePolicy |> Convert.ToHexString |> _.ToLowerInvariant()
+        Assert.Equal(Error "preflight-receipt-binding",
+                     InstalledOrdinarySettlementProvider.validateReceiptFacts
+                         "ordinary-v2" "v2-ci-i1-ordinary-settlement-v1"
+                         (Encoding.UTF8.GetBytes(policyReceipt.ToJsonString())) duplicatePolicy)
 
 [<Fact>]
 let ``source profiles are additive versioned and unknown selectors refuse`` () =
