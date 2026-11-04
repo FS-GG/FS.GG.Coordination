@@ -251,64 +251,72 @@
         "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
       ],
       "localReferences": []
+    },
+    {
+      "kind": "workflow",
+      "path": ".github/workflows/routine-eligibility.yml",
+      "sha256": "45bbb3d5fe1780ac135c1576b3fd76196f3cd636b33371b9f502a8795baf8d93",
+      "externalReferences": [],
+      "localReferences": []
+    },
+    {
+      "kind": "workflow",
+      "path": ".github/workflows/utel-auth-bootstrap-qualification.yml",
+      "sha256": "dd21d818f785f82fa19147c4349dd966b793f83c2fbcb8f915a0eb8735b32218",
+      "externalReferences": [
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
+      ],
+      "localReferences": []
+    },
+    {
+      "kind": "workflow",
+      "path": ".github/workflows/bar-hosted-capacity-probe.yml",
+      "sha256": "bdb9e212b7cddf4ee7a397c9c4d2decd58f3a17418967e147c5d0f2a19a66b8b",
+      "externalReferences": [
+        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
+      ],
+      "localReferences": []
+    },
+    {
+      "kind": "workflow",
+      "path": ".github/workflows/bar-hosted-domain-preflight.yml",
+      "sha256": "6005e37c141277e252e7991cd465fa069a31661865919276f1dce03cfdfd26d7",
+      "externalReferences": [
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
+      ],
+      "localReferences": []
+    },
+    {
+      "kind": "workflow",
+      "path": ".github/workflows/fourd-typed-source.yml",
+      "sha256": "e7c2e81c57f86354dfb4bbc76e62375f4fda62d04fbd92e4bfbe657e79462adc",
+      "externalReferences": [
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+        "actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38",
+        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
+      ],
+      "localReferences": []
+    },
+    {
+      "kind": "workflow",
+      "path": ".github/workflows/fourd-native-producer-publish.yml",
+      "sha256": "207a0a077ac1bff067fc0c72691dde7c71704a56b9dc96c456db0e2bd57e9066",
+      "externalReferences": [
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
+      ],
+      "localReferences": []
+    },
+    {
+      "kind": "workflow",
+      "path": ".github/workflows/closing-keywords.yml",
+      "sha256": "362288ac29eed0c8e9bc6f5a305cd7bac9a5b19ba07593861dd54e40998c372d",
+      "externalReferences": [
+        "FS-GG/.github/.github/workflows/closing-keywords-receiver.yml@10cee3d3b101a252f6500049b144edec8d8ef288"
+      ],
+      "localReferences": []
     }
-  ,
-{
-  "kind": "workflow",
-  "path": ".github/workflows/routine-eligibility.yml",
-  "sha256": "45bbb3d5fe1780ac135c1576b3fd76196f3cd636b33371b9f502a8795baf8d93",
-  "externalReferences": [],
-  "localReferences": []
-},
-{
-  "kind": "workflow",
-  "path": ".github/workflows/utel-auth-bootstrap-qualification.yml",
-  "sha256": "dd21d818f785f82fa19147c4349dd966b793f83c2fbcb8f915a0eb8735b32218",
-  "externalReferences": [
-    "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
-    "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
-  ],
-  "localReferences": []
-},
-{
-  "kind": "workflow",
-  "path": ".github/workflows/bar-hosted-capacity-probe.yml",
-  "sha256": "bdb9e212b7cddf4ee7a397c9c4d2decd58f3a17418967e147c5d0f2a19a66b8b",
-  "externalReferences": [
-    "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
-  ],
-  "localReferences": []
-},
-{
-  "kind": "workflow",
-  "path": ".github/workflows/bar-hosted-domain-preflight.yml",
-  "sha256": "6005e37c141277e252e7991cd465fa069a31661865919276f1dce03cfdfd26d7",
-  "externalReferences": [
-    "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
-    "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
-  ],
-  "localReferences": []
-},
-{
-  "kind": "workflow",
-  "path": ".github/workflows/fourd-typed-source.yml",
-  "sha256": "e7c2e81c57f86354dfb4bbc76e62375f4fda62d04fbd92e4bfbe657e79462adc",
-  "externalReferences": [
-    "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
-    "actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38",
-    "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
-  ],
-  "localReferences": []
-},
-{
-  "kind": "workflow",
-  "path": ".github/workflows/fourd-native-producer-publish.yml",
-  "sha256": "207a0a077ac1bff067fc0c72691dde7c71704a56b9dc96c456db0e2bd57e9066",
-  "externalReferences": [
-    "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
-    "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
-  ],
-  "localReferences": []
-}
-]
+  ]
 }
