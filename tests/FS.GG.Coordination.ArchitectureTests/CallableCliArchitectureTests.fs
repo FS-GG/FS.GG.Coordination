@@ -22,9 +22,9 @@ let ``callable CLI is the sole stable tool alongside the explicit Execution libr
             "<PackAsTool>true</PackAsTool>"
             "<ToolCommandName>fsgg-coordination</ToolCommandName>"
             "<PackageId>FS.GG.Coordination.Cli</PackageId>"
-            "<Version>0.3.0</Version>"
-            "<PackageVersion>0.3.0</PackageVersion>"
-            "<PackageReleaseNotes>Adds opt-in protected-main ordinary settlement storage and CLI-only successor qualification while preserving legacy settlement routes and the portable workspace v1 contract.</PackageReleaseNotes>"
+            "<Version>0.4.0</Version>"
+            "<PackageVersion>0.4.0</PackageVersion>"
+            "<PackageReleaseNotes>Require the current strict ten-gate dotgithub-v1 policy, including no-silent-revert and board-linkage, while preserving other source profiles and historical SDK 0.3.0 operations. Rejects duplicate required-check entries in policies and receipts.</PackageReleaseNotes>"
         ] do Assert.Contains(expected, project, StringComparison.Ordinal)
 
     let allowedPackableProjects =
@@ -75,7 +75,7 @@ let ``callable CLI release preparation binds reviewed version project and tag`` 
     let script = read "eng/callable-cli-release.fsx"
     for expected in
         [
-            "[ \"0.1.1\"; \"0.1.2\"; \"0.1.3\"; \"0.1.4\"; \"0.1.5\"; \"0.1.6\"; \"0.1.7\"; \"0.2.0\"; \"0.2.1\"; \"0.3.0\" ]"
+            "[ \"0.1.1\"; \"0.1.2\"; \"0.1.3\"; \"0.1.4\"; \"0.1.5\"; \"0.1.6\"; \"0.1.7\"; \"0.2.0\"; \"0.2.1\"; \"0.3.0\"; \"0.4.0\" ]"
             "projectPackageVersion () = version"
             "let tag = $\"v{version}\""
             "root.GetProperty(\"tag\").GetString() = tag"

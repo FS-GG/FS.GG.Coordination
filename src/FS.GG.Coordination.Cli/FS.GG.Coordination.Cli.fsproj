@@ -6,11 +6,11 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>fsgg-coordination</ToolCommandName>
     <PackageId>FS.GG.Coordination.Cli</PackageId>
-    <Version>0.3.0</Version>
-    <PackageVersion>0.3.0</PackageVersion>
+    <Version>0.4.0</Version>
+    <PackageVersion>0.4.0</PackageVersion>
     <Authors>FS-GG</Authors>
     <Description>Callable FS.GG Coordination boundary. Production effects remain governed by authoritative epoch and journal policy.</Description>
-    <PackageReleaseNotes>Adds opt-in protected-main ordinary settlement storage and CLI-only successor qualification while preserving legacy settlement routes and the portable workspace v1 contract.</PackageReleaseNotes>
+    <PackageReleaseNotes>Require the current strict ten-gate dotgithub-v1 policy, including no-silent-revert and board-linkage, while preserving other source profiles and historical SDK 0.3.0 operations. Rejects duplicate required-check entries in policies and receipts.</PackageReleaseNotes>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <RepositoryUrl>https://github.com/FS-GG/FS.GG.Coordination</RepositoryUrl>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
