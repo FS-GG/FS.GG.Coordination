@@ -95,6 +95,76 @@ leave `pool.no-data-writers` Unknown.
   account cannot be told apart by author, and the launcher's own start-witness comment never
   carries this marker.
 
+## M1 bake inputs (seed, control and input disks)
+
+These are the M0-deferred bake inputs ([FS.GG.Coordination#1102](https://github.com/FS-GG/FS.GG.Coordination/issues/1102)).
+Preparing them writes only into a fresh output directory. It selects, claims and starts nothing.
+
+```sh
+# A fresh canonical request. The guest UUID is chosen here, once.
+python3 -I -B fdev_native.py bake-request --operation <op> --source-revision <40-hex> > request.json
+# Seed, control image and (with --inputs) input image, plus bake-inputs.json.
+python3 -I -B fdev_native.py prepare-bake --request request.json --out <fresh dir> \
+    [--inputs <acquired population>] --expect-exclusive-window
+```
+
+- **Request** (`fsgg.fdev-native-bake-request/1`): exactly `operationId`, `step`,
+  `sourceRevision` and a random `guestUuid`, as canonical JSON. The sha256 of those exact bytes is
+  TARGET's `operatorAcceptanceSha256`. Root accepts the bake by citing that digest.
+- **Seed** (`seed/`, attached by QEMU `vvfat` with label `CIDATA`):
+  - `meta-data` holds a fresh instance id;
+  - `user-data` installs and updates no package, so the dpkg inventory stays the locked one;
+  - its `bootcmd` masks `apt-daily`, `apt-daily-upgrade` and `unattended-upgrades`;
+  - its `runcmd` mounts the control disk read-only by label, copies `bake.sh` to `/run` and runs it;
+  - `power_state` powers the guest off whatever the bake did.
+- **Control disk** (`control.ext4`, label `fsgg-control`) contains three things:
+  - `TARGET.json`;
+  - `fsgg-image-build-selection.json`, bound to TARGET's exact bytes and the guest UUID;
+  - `source/`, the Coordination files the guest uses, read from git at `sourceRevision`, never from the
+    working tree.
+
+  The Coordination source lives here, not on the input disk, because `validate_population` refuses
+  any file the lock does not pin.
+- **Input disk** (`inputs.ext4`, label `fsgg-inputs`): exactly the acquired population. It is checked
+  against the lock on the control disk before anything is written. Its modes and times are then
+  normalized in place; only metadata changes.
+- **Reproducibility.** Both images are built with `mke2fs -d` under these fixed settings:
+  - a cleared environment and no host `mke2fs.conf`;
+  - a fixed feature list and no journal;
+  - a filesystem UUID and hash seed derived from the operation and label;
+  - every inode time at 2024-01-01T00:00:00Z, with directories 0755 and files 0644 or 0755 as in git.
+
+  The same tree, operation, builder uid/gid and e2fsprogs version give the same bytes. The manifest
+  records the builder and the mke2fs version. Preparation refuses e2fsprogs older than 1.47.1, which
+  added `SOURCE_DATE_EPOCH`: 1.47.0, as on the Ubuntu 24.04 hosted runner, stamps the atime and ctime
+  of every copied inode with the build time. CI on that runner therefore checks the refusal, and the
+  image tests run where 1.47.1+ is installed (fdev has 1.47.4).
+- **`sharedCodexHost`.** TARGET states `false`, which the shared validator requires. That is only
+  the *expected* value at window entry: `--expect-exclusive-window` acknowledges it, and a `true` value
+  refuses before any disk is built. The launcher must rebuild the control image from its own entry
+  exclusivity rows and match the bound digest before the guest starts.
+- **`bake.sh`** runs in the guest as root:
+  - it mounts the input disk read-only at `/mnt/fsgg-qualification-inputs`;
+  - it installs the selection root-only, mode 0600, on tmpfs;
+  - it runs `provision-image.sh --apply` from the control disk's source subset;
+  - it then removes the selection and unmounts.
+
+  Its only result is one serial-console line, `FSGG-BAKE-RESULT/1 stage=<stage> status=<n>`. The first
+  failure is kept. A missing line is a failed bake.
+- **Launcher.** A selection may carry `guestUuid`. The launcher passes it to `-uuid` instead of a fresh
+  one, and the window record shows `guestUuidSource`. `bake-inputs.json` carries a `selectionFragment`
+  (`guestUuid`, `readOnlyDisks`, `seedDir`) for Root to copy into the selection.
+
+Still owed for M1 (separate PRs on #1102):
+
+- the in-window acquisition phase;
+- the in-window control rebuild and digest match;
+- seed digest checks before start;
+- reading the result marker and wiring `--export-dir` in the collector;
+- the #4820 Commit;
+- the retirement helper;
+- observe-only resume.
+
 ## Preconditions (each fails closed; Unknown is never success)
 
 | Check | Rule |
