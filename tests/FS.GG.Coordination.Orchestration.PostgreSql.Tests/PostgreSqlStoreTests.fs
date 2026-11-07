@@ -278,6 +278,26 @@ type PostgreSqlStoreTests() =
     let cancellationToken = CancellationToken.None
 
     [<Fact>]
+    member _.``root migration resource is selected by its exact name, not by a suffix the other scripts share``() =
+        let assembly = typeof<PostgreSqlStore>.Assembly
+        let names = assembly.GetManifestResourceNames()
+        let suffixMatches = names |> Array.filter (fun name -> name.EndsWith("Migration.sql", StringComparison.Ordinal))
+        // the old predicate was ambiguous: root, observer, pilot and execution scripts all end with "Migration.sql"
+        Assert.Equal(4, suffixMatches.Length)
+        Assert.Equal(1, names |> Array.filter (fun name -> name = PostgreSqlSchema.rootMigrationResource) |> Array.length)
+        use stream = assembly.GetManifestResourceStream PostgreSqlSchema.rootMigrationResource
+        use reader = new IO.StreamReader(stream)
+        let sql = reader.ReadToEnd()
+        Assert.StartsWith("-- Schema version 1.", sql)
+        Assert.Contains("CREATE TABLE IF NOT EXISTS fsgg_orchestration.store_metadata", sql)
+        Assert.DoesNotContain("observer_store_metadata", sql)
+        // order independence: with the other scripts first (as another manifest order would list them) the root is still selected
+        let reordered = Array.append (suffixMatches |> Array.filter ((<>) PostgreSqlSchema.rootMigrationResource)) [| PostgreSqlSchema.rootMigrationResource |]
+        Assert.Equal(Some PostgreSqlSchema.rootMigrationResource, PostgreSqlSchema.selectRootMigration reordered)
+        Assert.Equal(Some PostgreSqlSchema.rootMigrationResource, PostgreSqlSchema.selectRootMigration names)
+        Assert.Equal(None, PostgreSqlSchema.selectRootMigration (reordered |> Array.filter ((<>) PostgreSqlSchema.rootMigrationResource)))
+
+    [<Fact>]
     member _.``fixed causal raw admissions survive committed journal restart and emit genuine source digests``() =
         task {
             let! dataSource, identity = Fixture.reset ()

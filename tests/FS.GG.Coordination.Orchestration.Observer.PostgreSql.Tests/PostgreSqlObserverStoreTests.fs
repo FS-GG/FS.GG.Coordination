@@ -240,6 +240,54 @@ type PostgreSqlObserverStoreTests() =
     let cancellationToken = CancellationToken.None
 
     [<Fact>]
+    member _.``observer migration succeeds in HostInitialization order after the execution migration moves root to v2``() =
+        task {
+            use source = Fixture.dataSource "orchestration_o0"
+            let! _ = Fixture.sql "orchestration_o0" "DROP SCHEMA IF EXISTS fsgg_orchestration CASCADE"
+            let! identity = PostgreSqlSchema.migrate source cancellationToken
+            do! PostgreSqlPilotSchema.migrate source cancellationToken
+            do! PostgreSqlExecutionSchema.migrate source cancellationToken
+            do! PostgreSqlObserverSchema.migrate source cancellationToken
+            use! connection = source.OpenConnectionAsync()
+
+            use command =
+                new NpgsqlCommand(
+                    "SELECT r.schema_version, r.migration_state, o.schema_version, o.migration_state, o.backup_identity = r.backup_identity "
+                    + "FROM fsgg_orchestration.store_metadata r CROSS JOIN fsgg_orchestration.observer_store_metadata o WHERE r.singleton AND o.singleton",
+                    connection
+                )
+
+            use! reader = command.ExecuteReaderAsync()
+            let! found = reader.ReadAsync()
+            Assert.True(found)
+            Assert.Equal(2, reader.GetInt32 0)
+            Assert.Equal("ready", reader.GetString 1)
+            Assert.Equal(1, reader.GetInt32 2)
+            Assert.Equal("ready", reader.GetString 3)
+            Assert.True(reader.GetBoolean 4)
+            Assert.False(String.IsNullOrEmpty(string identity))
+        }
+
+    [<Fact>]
+    member _.``observer migration refuses a root schema that is not ready or of an unknown version``() =
+        task {
+            use source = Fixture.dataSource "orchestration_o0"
+
+            for update in
+                [ "UPDATE fsgg_orchestration.store_metadata SET schema_version = 3 WHERE singleton"
+                  "UPDATE fsgg_orchestration.store_metadata SET migration_state = 'applying' WHERE singleton" ] do
+                let! _ = Fixture.sql "orchestration_o0" "DROP SCHEMA IF EXISTS fsgg_orchestration CASCADE"
+                let! _ = PostgreSqlSchema.migrate source cancellationToken
+                let! _ = Fixture.sql "orchestration_o0" update
+
+                let! error =
+                    Assert.ThrowsAnyAsync<PostgresException>(fun () ->
+                        PostgreSqlObserverSchema.migrate source cancellationToken :> Task)
+
+                Assert.Contains("observer migration requires ready root schema", error.MessageText)
+        }
+
+    [<Fact>]
     member _.``canonical learning treatment survives store restart and concurrent ownership``() =
         task {
             let! source, identity = Fixture.reset ()

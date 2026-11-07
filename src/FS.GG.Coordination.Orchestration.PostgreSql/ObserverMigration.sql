@@ -14,8 +14,10 @@ BEGIN
     SELECT schema_version,migration_state,backup_identity
       INTO root_version,root_state,root_identity
       FROM fsgg_orchestration.store_metadata WHERE singleton;
-    IF NOT FOUND OR root_version <> 1 OR root_state <> 'ready' THEN
-        RAISE EXCEPTION 'observer migration requires ready root schema v1';
+    -- HostInitialization.initialize applies the execution migration before this one, and it moves a ready root schema from v1 to v2.
+    -- The observer tables depend only on the ready root, so either root version is accepted (as the execution migration accepts 1 and 2).
+    IF NOT FOUND OR root_version NOT IN (1, 2) OR root_state <> 'ready' THEN
+        RAISE EXCEPTION 'observer migration requires ready root schema v1 or v2';
     END IF;
     IF EXISTS (
         SELECT 1 FROM fsgg_orchestration.observer_store_metadata

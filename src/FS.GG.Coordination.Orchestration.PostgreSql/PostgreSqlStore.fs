@@ -126,13 +126,22 @@ module EventEnvelope =
 
 [<RequireQualifiedAccess>]
 module PostgreSqlSchema =
+    /// The root schema script, by its exact manifest name. A suffix match on "Migration.sql" also matches the observer,
+    /// pilot and execution scripts and would depend on manifest order (FS-GG/.github#5066).
+    [<Literal>]
+    let rootMigrationResource = "FS.GG.Coordination.Orchestration.PostgreSql.Migration.sql"
+
+    /// The root script among manifest resource names, whatever their order.
+    let selectRootMigration (names: string array) =
+        names |> Array.tryFind (fun name -> String.Equals(name, rootMigrationResource, StringComparison.Ordinal))
+
     let migrate (dataSource: NpgsqlDataSource) cancellationToken =
         task {
             let assembly = Assembly.GetExecutingAssembly()
 
             let resource =
                 assembly.GetManifestResourceNames()
-                |> Array.tryFind (fun name -> name.EndsWith("Migration.sql", StringComparison.Ordinal))
+                |> selectRootMigration
                 |> Option.defaultWith (fun () -> invalidOp "embedded migration missing")
 
             use stream = assembly.GetManifestResourceStream resource
