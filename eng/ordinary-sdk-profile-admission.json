@@ -1,0 +1,70 @@
+{
+  "schema": "fsgg.coordination.ordinary-sdk-profile-admission/1",
+  "enabled": true,
+  "selection": {
+    "operation": "publish-sdk-profile-040-965775d2b7e9",
+    "version": "0.4.0",
+    "source": "965775d2b7e9df0b225490429936496f4e8fb97e",
+    "tree": "ffbdf32db309b300a4d60414d88c4e80fe80e8ad",
+    "protectedMerge": "965775d2b7e9df0b225490429936496f4e8fb97e",
+    "candidate": {
+      "runId": 41992260121,
+      "artifactId": 13397798973,
+      "archiveSha256": "d21b339e301062cac39b2981678179973f70ed36aa1be654bc282e5c7e6ddff6",
+      "manifestSha256": "8f0ef69486a167be19434add6435a31aa9c902ff0ce555a9c1915d68502bd6f1",
+      "packageSha256": "262c366b4b0e0c766b302dac861806dd1a7a94b9b86e572f25eebbb31a31969f"
+    },
+    "journal": {
+      "id": "sdk-profile-040-965775d2b7e9"
+    },
+    "operator": "EHotwagner",
+    "nugetUser": "Paradigma11",
+    "publisherFiles": {
+      ".github/workflows/callable-cli-release-publish.yml": "ba23abf44241b4570a5ae42e2313a0ef395bf0645cc4858ce9c6e40f5cee2fcc",
+      "eng/ordinary-sdk-publisher.py": "40fb15cf288babd1b573cfe826f590a9c41146d8428e65b20bbd693c0d1b7411",
+      "eng/ordinary_sdk_publisher.py": "53621a073c1593b9b1d53181209a54bfb58378f0e7ddd0d35896ee5352f57403",
+      "evidence/github-substrate-v2/gs2-06-7/execution-pins-extension.json": "7788d9de80c4b8d4c5b046a27d6c1ce8d0cbacb6e115fff7763287ee820cc369",
+      "tests/portable-workspace/release/test_ordinary_sdk_publisher.py": "3127e3d89e5d4ed2f07979844e9cdaf0f51ff3f5461ac7517ce46162d260322d"
+    },
+    "liveEvidence": {
+      "ledger": {
+        "evidenceSha256": "a0dcf2d6c873726f5d8fdf07e5aa6b9403e13bafbb08220774794dee404ea04e",
+        "reference": "FS-GG/FS.GG.Coordination#1124 issuecomment-6709548904: env execution-pair-forward ledger App 4882140 (var+2 secret names), Authority bypass 24802693/21872113"
+      },
+      "namespace": {
+        "evidenceSha256": "4f9fef577d111a0cdd57f385341beed5bb6fc6844e5d16defeba9c76b32ba117",
+        "reference": "FS-GG/FS.GG.Coordination#1124 issuecomment-6709548904: nuget.org 0.4.0 404, tag/release v0.4.0 absent incl. drafts; GHP rechecked by vacant()"
+      },
+      "tagProtection": {
+        "evidenceSha256": "dd8803e611a7d4986b7ab99306819a41322ad639a41715b18a55b40baa88e0e2",
+        "reference": "FS-GG/FS.GG.Coordination#1124 issuecomment-6709548904: tag_projection of ruleset 21633398, rechecked before sends and at finalize"
+      },
+      "trustedPublishing": {
+        "evidenceSha256": "4f03e231c0dc5c9bb2874f6856382d5b205758af9678fffdc7552d4e4ae9866e",
+        "reference": "OWNER-REPORTED, NOT INSPECTED: Atlas github/nuget-trusted-publishing-policy-scope; Callable-Cli policy, user Paradigma11; native 0.3.0 login run 37979658494"
+      },
+      "operationAdmission": {
+        "evidenceSha256": "3e90cb303db491b4b752ae00b5903e3e15acceb6cf092dd42d8ab3d019fcd9c0",
+        "reference": "FS-GG/FS.GG.Coordination#1124 issuecomment-6709548904 (sha256 of exact body): one operation, sole writer; environment approvals stay with EHotwagner"
+      }
+    }
+  },
+  "sharedHelper": {
+    "repository": "FS-GG/.github",
+    "commit": "641072f56a40b384eb4ae611877a51ecb0685cd7",
+    "files": {
+      "scripts/release_successor_execution.py": "b5187d0ad7655cf49b5f0458cf65c06e02973a78b8442531f5d8d8254473e697",
+      "scripts/release_successor_journal.py": "16a41b86465eb9651d3758b2d5ffc842525c39d86cc313232bb3e0bfb45f19ee",
+      "scripts/release_successor_provider.py": "ca1f54fa7414fb6b0626e87cab8be45d888f0f0e306b5e1b3c468e835ff67096",
+      "scripts/release_successor_admission.py": "17073aa84dcec104742bc507af5b8f82ba08e1e07ba24aa05149238f60a490f6",
+      "scripts/release-successor-publish.py": "cb5500e3ef92691d2515110e6abd0e38f833656ac52b6f45f9e85102f3bdbf33",
+      "scripts/authority-state-import.py": "ccf87a351daa6e83fe313a09bde0854c88abae54146eb11e24c0903c014f5197",
+      "scripts/fsgg_feed.py": "f7650429432417af72168c288cdee347b338328848870cb4f2f18d6b62d0733f"
+    },
+    "boundIntentFence": {
+      "evidenceSha256": "b5187d0ad7655cf49b5f0458cf65c06e02973a78b8442531f5d8d8254473e697",
+      "reference": "FS-GG/.github#4805 @ 641072f56a40b384eb4ae611877a51ecb0685cd7"
+    }
+  },
+  "forward": null
+}

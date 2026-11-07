@@ -40,7 +40,28 @@ COUNTS = {}
 SOURCE, TREE, PUBLISHER, RUN, OPERATOR = '7' * 40, 'b' * 40, '9' * 40, 4242, 'EHotwagner'
 POLICY_HASH = '5182bb35a6dd682cef84ac9ce4210cfd09f38b7410d8c9cf9bae42866bcb81da'
 ORIGINAL_ADMISSION_SHA256 = 'f0859d88276effeaf3a3b038b79b448809557cb7b8c6e32d509b2bd791e20826'
-ORIGINAL_PUBLISHER_SHA256 = '5847d9ecb31ef4bd4382a332bd27fa31cbac2b9ee8a8252f5e2d16cc6dc6a54f'
+ORIGINAL_PUBLISHER_SHA256 = 'ba23abf44241b4570a5ae42e2313a0ef395bf0645cc4858ce9c6e40f5cee2fcc'
+# The publisher as protected at 965775d2, before the fresh strict-ten-gate CLI 0.4 route
+# (FS-GG/FS.GG.Coordination#1124). The only change since is that route: its three dispatch inputs, one
+# mutual-exclusion guard on each of the five pre-existing jobs, and the appended sdk_profile_* jobs.
+PRE_SDK_PROFILE_PUBLISHER_SHA256 = '5847d9ecb31ef4bd4382a332bd27fa31cbac2b9ee8a8252f5e2d16cc6dc6a54f'
+SDK_PROFILE_GUARD = ' && !inputs.cli_profile_repair'
+SDK_PROFILE_INPUTS = '''      sdk_profile_mode:
+        description: Fresh SDK preflight, publish, original-only observation or explicitly admitted forward
+        required: false
+        default: preflight
+        type: choice
+        options: [preflight, publish, observe, forward]
+      sdk_original_run:
+        description: Actual original native run for read-only observation; never a resend permit
+        required: false
+        type: string
+      cli_profile_repair:
+        description: Select the separately admitted fresh strict-ten-gate SDK successor
+        required: false
+        default: false
+        type: boolean
+'''
 # The original 0.3.0 publisher as admitted, before the org publication writer lock (FS-GG/.github ADR-0097).
 # The only change since is the lock gate, its job-name marker and the bounded wait added to job timeouts.
 PRE_LOCK_PUBLISHER_SHA256 = 'ac736727db6dbf7a4d4c16d8daea9e9e684a2bca32c970389b4df80324a44908'
@@ -73,6 +94,18 @@ def without_lock_gate(text):
             line = '    timeout-minutes: %d' % (int(match.group(1)) - LOCK_WAIT_MINUTES)
         out.append(line)
     return '\n'.join(out)
+def without_sdk_profile_route(text):
+    """Undo exactly the #1124 SDK route; refuse if anything else moved or a job follows it."""
+    head, separator, tail = text.partition('\n  sdk_profile_preflight:\n')
+    assert separator, 'SDK route jobs absent'
+    appended = re.findall(r'(?m)^  ([A-Za-z0-9_-]+):$', '  sdk_profile_preflight:\n' + tail)
+    assert appended and all(name.startswith('sdk_profile_') for name in appended), 'job appended after the SDK route'
+    assert head.count(SDK_PROFILE_INPUTS) == 1, 'SDK route inputs differ'
+    head = head.replace(SDK_PROFILE_INPUTS, '', 1)
+    assert head.count(SDK_PROFILE_GUARD) == 5 and all(line.startswith('    if: ') for line in head.split('\n') if SDK_PROFILE_GUARD in line), 'SDK route guards differ'
+    return head.replace(SDK_PROFILE_GUARD, '')
+
+
 READBACK = runpy.run_path(str(ROOT / 'eng/write-callable-cli-release-readback.py'))
 # Synthetic forward S1 receivers: the fixed originals pin exactly 0.3.0 and cannot receive a forward pair.
 FORWARD_RECEIVERS = {'sdd-s1': {'commit': 'd' * 40},
@@ -577,7 +610,9 @@ def committed_state_controls():
     assert sha(original) == ORIGINAL_ADMISSION_SHA256, 'original 0.3.0 admission changed'
     publish = (ROOT / '.github/workflows/callable-cli-release-publish.yml').read_bytes()
     assert sha(publish) == ORIGINAL_PUBLISHER_SHA256, 'original 0.3.0 publisher changed'
-    assert sha(without_lock_gate(publish.decode()).encode()) == PRE_LOCK_PUBLISHER_SHA256, 'original 0.3.0 publisher differs by more than the publication writer lock'
+    pre_sdk = without_sdk_profile_route(publish.decode())
+    assert sha(pre_sdk.encode()) == PRE_SDK_PROFILE_PUBLISHER_SHA256, 'original 0.3.0 publisher differs by more than the fresh SDK route'
+    assert sha(without_lock_gate(pre_sdk).encode()) == PRE_LOCK_PUBLISHER_SHA256, 'original 0.3.0 publisher differs by more than the publication writer lock'
     original_admission = json.loads(original)
     assert original_admission['enabled'] is False and original_admission['version'] == '0.3.0'
     must_refuse('original admission is not a forward admission', F.validate_admission, original_admission)

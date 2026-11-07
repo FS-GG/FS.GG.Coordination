@@ -1156,7 +1156,8 @@ let ``bootstrap control surface stays typed thin and bounded`` () =
     // The canonical accounting census adds the receipt-guard invocation, the helper self-test and
     // one derived-census line to the aggregate gate; the canonical-quint subject guard adds one so a
     // removed subject is still named before the pure helper runs: measured 877 -> 881.
-    Assert.InRange(gateLines, 1, 881)
+    // The fresh SDK 0.4 publisher controls add one hash-pinned runner invocation: 881 -> 882.
+    Assert.InRange(gateLines, 1, 882)
     // Producer invocations add eight distinct lines; the compiler subject guard adds one.
     // Focused host-allocation tests add three: start time, test invocation, and fresh TRX census.
     // Focused finite-custody tests add three more distinct lines: measured 643 -> 646.
@@ -1165,7 +1166,8 @@ let ``bootstrap control surface stays typed thin and bounded`` () =
     // The same three lines are distinct: 658 -> 661.
     // The managed-group owner invocation is one more distinct line: 661 -> 662.
     // The same accounting census adds four distinct lines and the subject guard one more: measured 662 -> 667.
-    Assert.InRange(uniqueGateLines, 1, 667)
+    // The SDK 0.4 publisher runner invocation is one more distinct line: 667 -> 668.
+    Assert.InRange(uniqueGateLines, 1, 668)
     // One shared source orchestrator has its own bound; retain both legacy caps.
     Assert.InRange(lineCount "eng/bootstrap-gates/source-preflight.sh", 1, 160)
     Assert.DoesNotContain("requiredRunFragments", core)
