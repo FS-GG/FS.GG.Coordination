@@ -68,6 +68,30 @@ def provision(destination,rows,*,input_root=None,fetch=acquire):
     return reports,errors
 
 
+SUITE='tests/portable-workspace/release/test_ordinary_sdk_publisher.py'
+# The B publisher files, this suite included, are bound into the original journal's content identity, so a
+# committed original-forward admission cannot edit them. Exactly one of their controls requires forward=null;
+# in forward state only that control is replaced, by the runner suite's exact forward-admission control.
+FORWARD_REPLACED=('Controls.test_committed_enabled_admission_binds_exactly_the_accepted_candidate_and_live_policy',)
+SUITE_BOOT=("import importlib.util,sys,unittest\n"
+            "path,skip=sys.argv[1],set(sys.argv[2:])\n"
+            "spec=importlib.util.spec_from_file_location('sdk_publisher_suite',path);m=importlib.util.module_from_spec(spec)\n"
+            "sys.modules['sdk_publisher_suite']=m;spec.loader.exec_module(m)\n"
+            "def flat(s):\n"
+            "    for t in s:\n"
+            "        yield from (flat(t) if isinstance(t,unittest.TestSuite) else [t])\n"
+            "tests=list(flat(unittest.defaultTestLoader.loadTestsFromModule(m)))\n"
+            "names={t.id().split('.',1)[1] for t in tests}\n"
+            "assert skip and skip<=names,'replaced control absent'\n"
+            "suite=unittest.TestSuite([t for t in tests if t.id().split('.',1)[1] not in skip])\n"
+            "sys.exit(0 if unittest.TextTestRunner(verbosity=2).run(suite).wasSuccessful() else 1)\n")
+
+
+def suite_command(admission):
+    if admission.get('forward') is None:return [sys.executable,'-I','-B',str(ROOT/SUITE)],[]
+    return [sys.executable,'-I','-B','-c',SUITE_BOOT,str(ROOT/SUITE),*FORWARD_REPLACED],list(FORWARD_REPLACED)
+
+
 def test_environment(workdir,helper):
     workdir=Path(workdir)
     for name in ('home','tmp'):(workdir/name).mkdir(mode=0o700,exist_ok=True)
@@ -94,9 +118,10 @@ def run(output,*,input_root=None):
         F.require(runner_checks.returncode==0 and len(runner_counts)==1 and int(runner_counts[0])>=7 and re.search(r'^OK$',runner_text,re.M) is not None,'SDK runner/provisioning assertions failed or census absent')
         result['runnerControlTests']=int(runner_counts[0])
         result['testsLaunched']=True
+        command,replaced=suite_command(F.strict_json((ROOT/'eng/ordinary-sdk-profile-admission.json').read_bytes()))
+        result['replacedControls']=replaced
         with (output/'controls.stdout').open('wb') as stdout,(output/'controls.stderr').open('wb') as stderr:
-            child=subprocess.run([sys.executable,'-I','-B',str(ROOT/'tests/portable-workspace/release/test_ordinary_sdk_publisher.py')],
-                                 cwd=ROOT,env=clean_env,stdout=stdout,stderr=stderr,timeout=120,check=False)
+            child=subprocess.run(command,cwd=ROOT,env=clean_env,stdout=stdout,stderr=stderr,timeout=120,check=False)
         F.require((output/'controls.stdout').stat().st_size<=1048576 and (output/'controls.stderr').stat().st_size<=1048576,'control output exceeds report bound')
         text=(output/'controls.stderr').read_text()
         counts=re.findall(r'^Ran ([0-9]+) tests? in ',text,re.M)
