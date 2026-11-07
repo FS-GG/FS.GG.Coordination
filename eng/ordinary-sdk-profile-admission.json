@@ -22,9 +22,9 @@
     "publisherFiles": {
       ".github/workflows/callable-cli-release-publish.yml": "ba23abf44241b4570a5ae42e2313a0ef395bf0645cc4858ce9c6e40f5cee2fcc",
       "eng/ordinary-sdk-publisher.py": "40fb15cf288babd1b573cfe826f590a9c41146d8428e65b20bbd693c0d1b7411",
-      "eng/ordinary_sdk_publisher.py": "2338ed4bc0410f6264babcba36106828ac2f6c5284051d87514492c559de05a8",
+      "eng/ordinary_sdk_publisher.py": "53621a073c1593b9b1d53181209a54bfb58378f0e7ddd0d35896ee5352f57403",
       "evidence/github-substrate-v2/gs2-06-7/execution-pins-extension.json": "7788d9de80c4b8d4c5b046a27d6c1ce8d0cbacb6e115fff7763287ee820cc369",
-      "tests/portable-workspace/release/test_ordinary_sdk_publisher.py": "8845cb787581d979f2f566631dc1de294840d84cc1f057912800e74532c27429"
+      "tests/portable-workspace/release/test_ordinary_sdk_publisher.py": "3127e3d89e5d4ed2f07979844e9cdaf0f51ff3f5461ac7517ce46162d260322d"
     },
     "liveEvidence": {
       "ledger": {

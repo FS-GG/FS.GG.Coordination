@@ -253,7 +253,7 @@ class Controls(unittest.TestCase):
                 'eng/run-ordinary-sdk-publisher-controls.py','evidence/github-substrate-v2/gs2-06-7/execution-pins-extension.json',
                 'tests/portable-workspace/release/test_execution_pair_forward.py','tests/portable-workspace/release/test_execution_pair_release.py',
                 'tests/portable-workspace/release/test_ordinary_sdk_publisher.py','tests/portable-workspace/release/test_ordinary_sdk_publisher_runner.py',
-                'tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs']
+                'tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs','tests/FS.GG.Coordination.Orchestration.Host.Tests/OrdinaryAssignmentPolicyTests.fs']
         self.assertTrue(P.publication_delta(actual))
         # When protected A is in the checkout, the real delta (not this typed list) must bind too.
         probe=subprocess.run(['git','diff','--name-only','--no-renames','965775d2b7e9df0b225490429936496f4e8fb97e','HEAD'],cwd=ROOT,capture_output=True,text=True)

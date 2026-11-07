@@ -43,7 +43,7 @@ def publication_delta(paths):
     # The two frozen 0.3.0/0.3.1 control suites are test-only: they prove the old routes are unchanged by this one.
     return all(p in B_PATHS or p in {'eng/bootstrap-gates/compiler-and-tests.sh','eng/run-ordinary-sdk-publisher-controls.py','tests/portable-workspace/release/test_ordinary_sdk_publisher_runner.py',
                'tests/portable-workspace/release/test_execution_pair_forward.py','tests/portable-workspace/release/test_execution_pair_release.py',
-               'tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs'} or p=='docs/atlas/catalog.json' or re.fullmatch(r'docs/atlas/records/[0-9a-f]{64}\.json',p) for p in paths)
+               'tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs','tests/FS.GG.Coordination.Orchestration.Host.Tests/OrdinaryAssignmentPolicyTests.fs'} or p=='docs/atlas/catalog.json' or re.fullmatch(r'docs/atlas/records/[0-9a-f]{64}\.json',p) for p in paths)
 
 def selection(admission):
     require(type(admission) is dict and set(admission)=={'schema','enabled','selection','sharedHelper','forward'}, 'admission fields differ')
