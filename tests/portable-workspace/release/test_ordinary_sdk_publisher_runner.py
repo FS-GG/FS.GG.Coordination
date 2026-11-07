@@ -81,11 +81,19 @@ class RunnerControls(unittest.TestCase):
         body=source.split('def '+replaced[0].split('.')[1],1)[1].split('\n    def ',1)[0]
         self.assertIn("self.assertIsNone(committed['forward'])",body)
         import subprocess,sys
+        helper=os.environ.get('FSGG_SHARED_HELPER_ROOT')
+        self.assertTrue(helper and Path(helper,'scripts/release_successor_execution.py').is_file(),'runner supplies the verified helper root')
         with tempfile.TemporaryDirectory() as temporary:
-            # The bootstrap refuses a replaced name that is not an actual control of the suite.
-            result=subprocess.run([sys.executable,'-I','-B','-c',R.SUITE_BOOT,str(ROOT/R.SUITE),'Controls.test_absent'],cwd=temporary,
-                                  env={'PATH':os.environ.get('PATH','/usr/bin:/bin'),'FSGG_SHARED_HELPER_ROOT':temporary},capture_output=True,timeout=60)
-            self.assertNotEqual(result.returncode,0)
+            # With the real helper the suite imports, so the bootstrap itself must refuse an unknown name.
+            env={'PATH':os.environ.get('PATH','/usr/bin:/bin'),'FSGG_SHARED_HELPER_ROOT':helper,'HOME':temporary,'TMPDIR':temporary}
+            result=subprocess.run([sys.executable,'-I','-B','-c',R.SUITE_BOOT,str(ROOT/R.SUITE),'Controls.test_absent'],cwd=temporary,env=env,capture_output=True,timeout=60)
+            self.assertNotEqual(result.returncode,0);self.assertIn(b'replaced control absent',result.stderr)
+    def test_runner_requires_the_exact_declared_population(self):
+        runner=(ROOT/'eng/run-ordinary-sdk-publisher-controls.py').read_text()
+        self.assertIn("int(counts[0])==declared_tests(SUITE)-len(replaced)",runner)
+        self.assertIn("int(runner_counts[0])==declared_tests('tests/portable-workspace/release/test_ordinary_sdk_publisher_runner.py')",runner)
+        self.assertNotIn('>=32',runner);self.assertNotIn('>=7',runner)
+        self.assertGreaterEqual(R.declared_tests(R.SUITE),42)
     def test_committed_forward_admission_is_the_exact_original_continuation(self):
         import json
         a=P.strict_json((ROOT/P.ADMISSION).read_bytes())

@@ -66,6 +66,16 @@ VERIFY_DEFAULT=(b"Verifying FS.GG.Coordination.Cli.0.3.0\nSignature type: Reposi
                 b"Successfully verified package 'FS.GG.Coordination.Cli.0.3.0'.\n")
 
 
+def committed_delta_problems(paths,admission,listed):
+    """The real A-to-B delta binds only while the committed route is enabled."""
+    if admission.get('enabled') is not True:return []
+    problems=[]
+    plain=lambda values:{p for p in values if not p.startswith('docs/atlas/records/')}
+    if plain(paths)!=plain(listed):problems.append(('population',sorted(plain(paths)^plain(listed))))
+    if not P.publication_delta(paths):problems.append(('publication-delta',))
+    return problems
+
+
 class Journal:
     state=None; writes=[]; fail_cas=False; lose_cas=False
     def __init__(self,*args,**kw):pass
@@ -255,16 +265,27 @@ class Controls(unittest.TestCase):
                 'tests/portable-workspace/release/test_ordinary_sdk_publisher.py','tests/portable-workspace/release/test_ordinary_sdk_publisher_runner.py',
                 'tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs','tests/FS.GG.Coordination.Orchestration.Host.Tests/OrdinaryAssignmentPolicyTests.fs']
         self.assertTrue(P.publication_delta(actual))
-        # When protected A is in the checkout, the real delta (not this typed list) must bind too.
+        # Only an enabled committed route binds the real A-to-B delta; a retired route must not
+        # constrain unrelated repository changes (FS-GG/FS.GG.Coordination#1124 retirement).
         probe=subprocess.run(['git','diff','--name-only','--no-renames','965775d2b7e9df0b225490429936496f4e8fb97e','HEAD'],cwd=ROOT,capture_output=True,text=True)
         if probe.returncode==0:
-            self.assertEqual(set(probe.stdout.split())-{p for p in probe.stdout.split() if p.startswith('docs/atlas/records/')},
-                             {p for p in actual if not p.startswith('docs/atlas/records/')})
-            self.assertTrue(P.publication_delta(probe.stdout.split()))
+            self.assertEqual(committed_delta_problems(probe.stdout.split(),json.loads((ROOT/P.ADMISSION).read_bytes()),actual),[])
         for outside in ('src/FS.GG.Coordination.Cli/InstalledOrdinarySettlementProvider.fs','eng/execution_pair_forward.py',
                         '.github/workflows/callable-cli-release-prepare.yml','eng/execution-pair-release-admission.json',
                         'tests/portable-workspace/release/test_cli_profile_repair.py','docs/atlas/records/x.json'):
             with self.subTest(path=outside):self.assertFalse(P.publication_delta([*actual,outside]))
+    def test_retired_route_admits_unrelated_paths_and_enabled_route_still_binds(self):
+        unrelated=['src/FS.GG.Coordination.Orchestration.PostgreSql/ObserverMigration.fs','tests/FS.GG.Coordination.UnitTests/Fixture.fs']
+        listed=['eng/ordinary-sdk-profile-admission.json','docs/atlas/catalog.json']
+        disabled={'enabled':False,'selection':None,'forward':None}
+        self.assertEqual(committed_delta_problems([*listed,*unrelated],disabled,listed),[])
+        enabled={'enabled':True,'selection':self.s,'forward':None}
+        self.assertEqual(committed_delta_problems(listed,enabled,listed),[])
+        self.assertNotEqual(committed_delta_problems([*listed,*unrelated],enabled,listed),[])
+        committed=json.loads((ROOT/P.ADMISSION).read_bytes())
+        if not committed['enabled']:
+            # A disabled route refuses before binding, so its A-to-B rule can never refuse an unrelated change.
+            with self.assertRaisesRegex(P.Refused,'disabled; selection absent'):P.selection(committed)
     def pinned_lock(self):
         import yaml
         jobs=yaml.safe_load((ROOT/P.WORKFLOW).read_text())['jobs']

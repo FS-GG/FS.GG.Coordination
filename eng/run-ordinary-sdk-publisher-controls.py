@@ -87,6 +87,11 @@ SUITE_BOOT=("import importlib.util,sys,unittest\n"
             "sys.exit(0 if unittest.TextTestRunner(verbosity=2).run(suite).wasSuccessful() else 1)\n")
 
 
+def declared_tests(path):
+    """Exact population: every unittest method the suite source declares."""
+    return len(re.findall(r'(?m)^    def test_',(ROOT/path).read_text()))
+
+
 def suite_command(admission):
     if admission.get('forward') is None:return [sys.executable,'-I','-B',str(ROOT/SUITE)],[]
     return [sys.executable,'-I','-B','-c',SUITE_BOOT,str(ROOT/SUITE),*FORWARD_REPLACED],list(FORWARD_REPLACED)
@@ -115,7 +120,8 @@ def run(output,*,input_root=None):
                                          cwd=ROOT,env=clean_env,stdout=stdout,stderr=stderr,timeout=30,check=False)
         runner_text=(output/'runner-controls.stderr').read_text()
         runner_counts=re.findall(r'^Ran ([0-9]+) tests? in ',runner_text,re.M)
-        F.require(runner_checks.returncode==0 and len(runner_counts)==1 and int(runner_counts[0])>=7 and re.search(r'^OK$',runner_text,re.M) is not None,'SDK runner/provisioning assertions failed or census absent')
+        F.require(runner_checks.returncode==0 and len(runner_counts)==1 and int(runner_counts[0])==declared_tests('tests/portable-workspace/release/test_ordinary_sdk_publisher_runner.py')
+                  and re.search(r'^OK$',runner_text,re.M) is not None,'SDK runner/provisioning assertions failed or census absent')
         result['runnerControlTests']=int(runner_counts[0])
         result['testsLaunched']=True
         command,replaced=suite_command(F.strict_json((ROOT/'eng/ordinary-sdk-profile-admission.json').read_bytes()))
@@ -125,7 +131,8 @@ def run(output,*,input_root=None):
         F.require((output/'controls.stdout').stat().st_size<=1048576 and (output/'controls.stderr').stat().st_size<=1048576,'control output exceeds report bound')
         text=(output/'controls.stderr').read_text()
         counts=re.findall(r'^Ran ([0-9]+) tests? in ',text,re.M)
-        F.require(child.returncode==0 and len(counts)==1 and int(counts[0])>=32 and re.search(r'^OK$',text,re.M) is not None,'SDK publisher assertions failed or test census absent')
+        F.require(child.returncode==0 and len(counts)==1 and int(counts[0])==declared_tests(SUITE)-len(replaced)
+                  and re.search(r'^OK$',text,re.M) is not None,'SDK publisher assertions failed or test census absent')
         result.update(status='passed',tests=int(counts[0]),exit=child.returncode)
     except Exception as error:
         result.update(status='refused',cause=str(error) if isinstance(error,F.Refused) else type(error).__name__)
