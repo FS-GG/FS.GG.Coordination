@@ -12,6 +12,7 @@ import sys
 import tempfile
 import types
 import unittest
+import time
 from unittest.mock import patch
 import zipfile
 
@@ -193,12 +194,53 @@ class Controls(unittest.TestCase):
         self.assertNotIn('secrets.',str(jobs['sdk_profile_public_load']))
         self.assertNotIn('NUGET_API_KEY',str(jobs['sdk_profile_finalize']))
         self.assertNotIn('contents: write',str(jobs['sdk_profile_packages']))
+    def test_actual_ledger_credentials_resolve_only_in_existing_protected_environment(self):
+        # The ledger App id/key/installation exist only as execution-pair-forward environment
+        # values; a job without that environment would mint with empty inputs after the lock.
+        import yaml
+        jobs=yaml.safe_load((ROOT/P.WORKFLOW).read_text())['jobs']
+        ledger=[n for n,j in jobs.items() if n.startswith('sdk_profile_') and 'FSGG_ORDINARY_LEDGER' in str(j)]
+        self.assertEqual(sorted(ledger),['sdk_profile_finalize','sdk_profile_observe','sdk_profile_packages'])
+        for name,job in jobs.items():
+            if not name.startswith('sdk_profile_'):continue
+            with self.subTest(job=name):
+                if name in ledger:self.assertEqual(job.get('environment'),'execution-pair-forward')
+                else:
+                    self.assertNotIn('environment',job);self.assertNotIn('secrets.',str(job))
+    def test_actual_writer_jobs_take_the_lock_immediately_after_checkout(self):
+        # ADR-0097 coverage: only checkout may precede the gate, and every credential-minting
+        # job is a marked participant. Admission/binding still precedes every credential.
+        import yaml
+        jobs=yaml.safe_load((ROOT/P.WORKFLOW).read_text())['jobs']
+        for name in ('sdk_profile_packages','sdk_profile_finalize','sdk_profile_observe'):
+            with self.subTest(job=name):
+                steps=jobs[name]['steps'];self.assertIn('[org-publication-writer]',jobs[name]['name'])
+                self.assertTrue(steps[0]['uses'].startswith('actions/checkout@'))
+                self.assertEqual(steps[1]['name'],'Acquire org publication writer lock')
+                self.assertEqual(steps[2]['run'],'python3 -I -B eng/ordinary-sdk-publisher.py bind')
+                self.assertEqual([i for i,v in enumerate(steps) if v.get('name')=='Acquire org publication writer lock'],[1])
+                self.assertGreater(jobs[name]['timeout-minutes'],int(steps[1]['env']['LOCK_MAX_WAIT_MINUTES']))
+        for name in ('sdk_profile_preflight','sdk_profile_public_load'):
+            self.assertNotIn('[org-publication-writer]',jobs[name]['name'])
+            self.assertNotIn('create-github-app-token',str(jobs[name]));self.assertNotIn('NuGet/login',str(jobs[name]))
+    def test_publication_delta_admits_exactly_the_actual_A_to_B_population(self):
+        actual=['.github/workflows/callable-cli-release-publish.yml','docs/atlas/catalog.json',
+                'docs/atlas/records/'+'a'*64+'.json','eng/bootstrap-gates/compiler-and-tests.sh',
+                'eng/ordinary-sdk-profile-admission.json','eng/ordinary-sdk-publisher.py','eng/ordinary_sdk_publisher.py',
+                'eng/run-ordinary-sdk-publisher-controls.py','evidence/github-substrate-v2/gs2-06-7/execution-pins-extension.json',
+                'tests/portable-workspace/release/test_execution_pair_forward.py','tests/portable-workspace/release/test_execution_pair_release.py',
+                'tests/portable-workspace/release/test_ordinary_sdk_publisher.py','tests/portable-workspace/release/test_ordinary_sdk_publisher_runner.py']
+        self.assertTrue(P.publication_delta(actual))
+        for outside in ('src/FS.GG.Coordination.Cli/InstalledOrdinarySettlementProvider.fs','eng/execution_pair_forward.py',
+                        '.github/workflows/callable-cli-release-prepare.yml','eng/execution-pair-release-admission.json',
+                        'tests/portable-workspace/release/test_cli_profile_repair.py','docs/atlas/records/x.json'):
+            with self.subTest(path=outside):self.assertFalse(P.publication_delta([*actual,outside]))
     def pinned_lock(self):
         import yaml
         jobs=yaml.safe_load((ROOT/P.WORKFLOW).read_text())['jobs']
         path=HELPER/'scripts/publication_writer_lock.py'
         self.assertTrue(path.is_file(),'Place the exact workflow-pinned lock helper in FSGG_SHARED_HELPER_ROOT/scripts/publication_writer_lock.py; controls never download it')
-        for name in ('sdk_profile_packages','sdk_profile_finalize'):
+        for name in ('sdk_profile_packages','sdk_profile_finalize','sdk_profile_observe'):
             commands=[v for v in jobs[name]['steps'] if 'LOCK_SCRIPT_SHA256' in v.get('env',{})]
             self.assertEqual(len(commands),1)
             self.assertEqual(commands[0]['env']['LOCK_COMMIT'],'c799a9f9b21d52eb9766cf0950722e3e55145d39')
@@ -226,7 +268,7 @@ class Controls(unittest.TestCase):
         return types.SimpleNamespace(get=get),calls
     def test_actual_yaml_writer_jobs_acquire_using_exact_pinned_lock(self):
         lock,jobs=self.pinned_lock()
-        for name in ('sdk_profile_packages','sdk_profile_finalize'):
+        for name in ('sdk_profile_packages','sdk_profile_finalize','sdk_profile_observe'):
             with self.subTest(job=name):
                 native=self.lock_native_job(lock,jobs[name]);api,calls=self.lock_api(lock,[native])
                 self.assertTrue(lock.participates(native))
@@ -422,8 +464,16 @@ class Controls(unittest.TestCase):
         self.assertTrue(all(v=='verified' for v in Journal.state.effects.values()))
         self.assertTrue(any(k.startswith('github/run-999/') for k in Journal.state.effects))
         self.assertTrue(any(k.startswith('nuget/run-1000/publisher-'+'e'*40) for k in Journal.state.effects))
+    def test_observation_window_and_native_budget_cover_nuget_validation_within_writer_job(self):
+        import yaml
+        jobs=yaml.safe_load((ROOT/P.WORKFLOW).read_text())['jobs']
+        budget=P.NativeBudget();self.assertGreater(budget.deadline-time.monotonic(),P.OBSERVATION_SECONDS)
+        self.assertGreaterEqual(P.OBSERVATION_SECONDS,20*60);self.assertGreater(budget.remaining,3*P.OBSERVATION_SECONDS//P.OBSERVATION_CADENCE_SECONDS)
+        for name in ('sdk_profile_packages','sdk_profile_finalize'):
+            wait=int(next(v for v in jobs[name]['steps'] if v.get('name')=='Acquire org publication writer lock')['env']['LOCK_MAX_WAIT_MINUTES'])
+            self.assertLess(P.OBSERVATION_SECONDS+10*60,(jobs[name]['timeout-minutes']-wait)*60)
     def test_acknowledged_send_outlives_original_visibility_window_then_forwards_without_replay(self):
-        ticks=iter((0,61,122,183));self.advance_clock=lambda:next(ticks)
+        window=P.OBSERVATION_SECONDS;ticks=iter((0,window//2,window,window+1));self.advance_clock=lambda:next(ticks)
         self.w.hide_packages=True
         with self.assertRaisesRegex(P.Refused,'original observation bound exhausted'):self.invoke()
         self.assertEqual(self.w.sends,['github']);self.assertIn('intent',Journal.state.effects.values())

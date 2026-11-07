@@ -1584,8 +1584,9 @@ jobs:
     name: sdk_profile_packages [org-publication-writer]
     if: inputs.cli_profile_repair && github.ref == 'refs/heads/main' && (inputs.sdk_profile_mode == 'publish' || inputs.sdk_profile_mode == 'forward')
     needs: [sdk_profile_preflight]
+    environment: execution-pair-forward
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 90
     permissions:
       contents: read
       actions: read
@@ -1614,9 +1615,6 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
-      - name: Refuse disabled, mixed-mode or mismatched source before credentials
-        id: admitted
-        run: python3 -I -B eng/ordinary-sdk-publisher.py bind
       - name: Acquire org publication writer lock
         shell: bash
         timeout-minutes: 32
@@ -1627,10 +1625,14 @@ jobs:
           LOCK_MAX_WAIT_MINUTES: '30'
         run: |
           set -euo pipefail
-          lock="$RUNNER_TEMP/sdk_publication_writer_lock.py"
-          curl --fail --silent --show-error --location --max-time 60 --output "$lock"             "https://raw.githubusercontent.com/FS-GG/.github/${LOCK_COMMIT}/scripts/publication_writer_lock.py"
+          lock="$RUNNER_TEMP/publication_writer_lock.py"
+          curl --fail --silent --show-error --location --output "$lock" \
+            "https://raw.githubusercontent.com/FS-GG/.github/${LOCK_COMMIT}/scripts/publication_writer_lock.py"
           echo "${LOCK_SCRIPT_SHA256}  ${lock}" | sha256sum --check --strict
           python3 -I -B "$lock" acquire --max-wait-minutes "$LOCK_MAX_WAIT_MINUTES"
+      - name: Refuse disabled, mixed-mode or mismatched source before credentials
+        id: admitted
+        run: python3 -I -B eng/ordinary-sdk-publisher.py bind
       - name: Execute guarded preflight caller
         env:
           GH_TOKEN: ${{ github.token }}
@@ -1736,8 +1738,9 @@ jobs:
     name: sdk_profile_finalize [org-publication-writer]
     if: inputs.cli_profile_repair && github.ref == 'refs/heads/main' && (inputs.sdk_profile_mode == 'publish' || inputs.sdk_profile_mode == 'forward')
     needs: [sdk_profile_preflight, sdk_profile_packages, sdk_profile_public_load]
+    environment: execution-pair-forward
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 90
     permissions:
       contents: write
       actions: read
@@ -1765,9 +1768,6 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
-      - name: Refuse disabled, mixed-mode or mismatched source before credentials
-        id: admitted
-        run: python3 -I -B eng/ordinary-sdk-publisher.py bind
       - name: Acquire org publication writer lock
         shell: bash
         timeout-minutes: 32
@@ -1778,10 +1778,14 @@ jobs:
           LOCK_MAX_WAIT_MINUTES: '30'
         run: |
           set -euo pipefail
-          lock="$RUNNER_TEMP/sdk_publication_writer_lock.py"
-          curl --fail --silent --show-error --location --max-time 60 --output "$lock"             "https://raw.githubusercontent.com/FS-GG/.github/${LOCK_COMMIT}/scripts/publication_writer_lock.py"
+          lock="$RUNNER_TEMP/publication_writer_lock.py"
+          curl --fail --silent --show-error --location --output "$lock" \
+            "https://raw.githubusercontent.com/FS-GG/.github/${LOCK_COMMIT}/scripts/publication_writer_lock.py"
           echo "${LOCK_SCRIPT_SHA256}  ${lock}" | sha256sum --check --strict
           python3 -I -B "$lock" acquire --max-wait-minutes "$LOCK_MAX_WAIT_MINUTES"
+      - name: Refuse disabled, mixed-mode or mismatched source before credentials
+        id: admitted
+        run: python3 -I -B eng/ordinary-sdk-publisher.py bind
       - name: Execute guarded qualify-finalize caller
         env:
           GH_TOKEN: ${{ github.token }}
@@ -1829,11 +1833,12 @@ jobs:
           retention-days: 90
 
   sdk_profile_observe:
-    name: sdk_profile_observe
+    name: sdk_profile_observe [org-publication-writer]
     if: inputs.cli_profile_repair && github.ref == 'refs/heads/main' && inputs.sdk_profile_mode == 'observe'
     needs: [sdk_profile_preflight]
+    environment: execution-pair-forward
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 45
     permissions:
       contents: read
       actions: read
@@ -1861,6 +1866,21 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
+      - name: Acquire org publication writer lock
+        shell: bash
+        timeout-minutes: 32
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LOCK_COMMIT: c799a9f9b21d52eb9766cf0950722e3e55145d39
+          LOCK_SCRIPT_SHA256: dca3fe60e5ebf4a6ff33e52b1ede6ee255b377790688e0958cb4ebcc90df53e6
+          LOCK_MAX_WAIT_MINUTES: '30'
+        run: |
+          set -euo pipefail
+          lock="$RUNNER_TEMP/publication_writer_lock.py"
+          curl --fail --silent --show-error --location --output "$lock" \
+            "https://raw.githubusercontent.com/FS-GG/.github/${LOCK_COMMIT}/scripts/publication_writer_lock.py"
+          echo "${LOCK_SCRIPT_SHA256}  ${lock}" | sha256sum --check --strict
+          python3 -I -B "$lock" acquire --max-wait-minutes "$LOCK_MAX_WAIT_MINUTES"
       - name: Refuse disabled, mixed-mode or mismatched source before credentials
         id: admitted
         run: python3 -I -B eng/ordinary-sdk-publisher.py bind

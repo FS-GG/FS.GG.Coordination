@@ -30,12 +30,12 @@ def required_inputs():
     rows=[dict(path=p,repository=pin['repository'],commit=pin['commit'],sha256=h) for p,h in pin['files'].items()]
     jobs=yaml.safe_load((ROOT/'.github/workflows/callable-cli-release-publish.yml').read_bytes())['jobs']
     locks=[]
-    for name in ('sdk_profile_packages','sdk_profile_finalize'):
+    for name in ('sdk_profile_packages','sdk_profile_finalize','sdk_profile_observe'):
         steps=[s for s in jobs[name]['steps'] if s.get('name')=='Acquire org publication writer lock']
         F.require(len(steps)==1,'SDK writer canonical lock step absent')
         env=steps[0]['env'];commit=F.hexid(env['LOCK_COMMIT'],40,'publication lock commit');digest=F.hexid(env['LOCK_SCRIPT_SHA256'],64,'publication lock digest')
         locks.append(dict(path='scripts/publication_writer_lock.py',repository='FS-GG/.github',commit=commit,sha256=digest))
-    F.require(locks[0]==locks[1],'SDK writers use different lock pins')
+    F.require(all(lock==locks[0] for lock in locks),'SDK writers use different lock pins')
     rows.append(locks[0])
     F.require(len(rows)==8 and len({r['path'] for r in rows})==8,'SDK control input population differs')
     return rows

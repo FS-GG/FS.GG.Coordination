@@ -40,7 +40,9 @@ B_PATHS = frozenset({ADMISSION, WORKFLOW, 'eng/ordinary_sdk_publisher.py', 'eng/
 
 
 def publication_delta(paths):
-    return all(p in B_PATHS or p in {'eng/bootstrap-gates/compiler-and-tests.sh','eng/run-ordinary-sdk-publisher-controls.py','tests/portable-workspace/release/test_ordinary_sdk_publisher_runner.py'} or p=='docs/atlas/catalog.json' or re.fullmatch(r'docs/atlas/records/[0-9a-f]{64}\.json',p) for p in paths)
+    # The two frozen 0.3.0/0.3.1 control suites are test-only: they prove the old routes are unchanged by this one.
+    return all(p in B_PATHS or p in {'eng/bootstrap-gates/compiler-and-tests.sh','eng/run-ordinary-sdk-publisher-controls.py','tests/portable-workspace/release/test_ordinary_sdk_publisher_runner.py',
+               'tests/portable-workspace/release/test_execution_pair_forward.py','tests/portable-workspace/release/test_execution_pair_release.py'} or p=='docs/atlas/catalog.json' or re.fullmatch(r'docs/atlas/records/[0-9a-f]{64}\.json',p) for p in paths)
 
 def selection(admission):
     require(type(admission) is dict and set(admission)=={'schema','enabled','selection','sharedHelper','forward'}, 'admission fields differ')
@@ -270,16 +272,23 @@ class Provider:
         return self.engine.Dispatch('applied')
 
 
+# NuGet.org validates and signs a push before its flat container serves it; that commonly takes
+# minutes. The window matches the order of the Execution pair forward stage (45 min, which
+# completed 0.3.1) while fitting the 60-minute working budget of a 90-minute writer job.
+OBSERVATION_SECONDS=40*60
+OBSERVATION_CADENCE_SECONDS=15
+
+
 def advance(engine,s,planned,journal,admission,provider,context,*,sleep=time.sleep,clock=time.monotonic):
     """Existing engine owns intent CAS and fence. Unknown sends stop this invocation."""
     fence=engine.execution.BoundIntentFence('sdk-'+str(context['runId'])+'-'+provider.stage)
-    deadline=clock()+120
-    for _ in range(len(planned)*3+24):
+    deadline=clock()+OBSERVATION_SECONDS
+    for _ in range(len(planned)*3+OBSERVATION_SECONDS//OBSERVATION_CADENCE_SECONDS+24):
         result=engine.execution.advance_effects(content_id(s),planned,journal,admission,provider,fence=fence)
         if provider.uncertain: raise Refused('possible-send retained in protected journal; reconcile original; no resend')
         if result=='complete': return {'status':'verified','contentId':content_id(s),'effects':list(provider.stage=='packages' and EFFECTS[:2] or EFFECTS),'sends':list(fence.sends)}
         require(clock()<deadline,'original observation bound exhausted; retain journal; no retry')
-        sleep(2)
+        sleep(OBSERVATION_CADENCE_SECONDS)
     raise Refused('finite transition bound exhausted; retain original')
 
 
@@ -342,7 +351,8 @@ def acquire_public(api,transport,token,s,context):
 
 
 class NativeBudget:
-    def __init__(self,*,clock=time.monotonic,seconds=600,requests=1024):
+    # One finite native budget per command: preparation plus the whole observation window.
+    def __init__(self,*,clock=time.monotonic,seconds=OBSERVATION_SECONDS+10*60,requests=2048):
         self.clock,self.deadline,self.remaining=clock,clock()+seconds,requests
     def reserve(self):
         require(self.clock()<self.deadline and self.remaining>0,'original native request/time bound exhausted')

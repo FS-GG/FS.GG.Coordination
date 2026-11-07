@@ -277,18 +277,21 @@ def pair_observation_controls():
     for forbidden in ('NuGet/login','setup-dotnet','dotnet ','git tag','nuget push','actions/attest','id-token:','packages: write','contents: write'):
         assert forbidden not in text,forbidden
     assert 'permission-administration: write' in text and 'scoped policy observation remains disabled' in text
-    for flags in __import__('itertools').product((False,True),repeat=5):
-        execution,preflight,cli,readback,recovery=flags
-        values={'execution_pair':execution,'preflight_only':preflight,'cli_only':cli,'readback_only':readback,'pair_recovery':recovery}
+    # The fresh #1124 SDK selector is a sixth flag: when selected, every pre-existing job is inactive.
+    for flags in __import__('itertools').product((False,True),repeat=6):
+        execution,preflight,cli,readback,recovery,repair=flags
+        values={'execution_pair':execution,'preflight_only':preflight,'cli_only':cli,'readback_only':readback,'pair_recovery':recovery,'cli_profile_repair':repair}
         active=[]
         for name in ('execution_pair_preflight','execution_pair','preflight','publish','cli_successor'):
             expression=next(line[8:] for line in workflow.split('\n  '+name+':\n',1)[1].splitlines() if line.startswith('    if: ')).replace('&&',' and ').replace('!= true','!= True').replace('== true','== True')
             expression=re.sub(r'!inputs\.([a-z_]+)',r'not inputs.\1',expression)
             for key,value in values.items():expression=expression.replace('inputs.'+key,str(value))
             if eval(expression,{'__builtins__':{}}):active.append(name)
-        if execution and preflight:
+        if repair:
+            assert active==[],flags
+        elif execution and preflight:
             assert active==(['execution_pair_preflight'] if not cli and not readback and not recovery else []),flags
-        if execution and not preflight:
+        elif execution and not preflight:
             assert active==(['execution_pair'] if not cli and not readback and recovery else []),flags
         assert len(active)<=1,flags
     a=json.loads((ROOT/'eng/execution-pair-release-admission.json').read_bytes())
@@ -711,7 +714,7 @@ def pair_recovery_source_controls():
         except (ValueError,KeyError):pass
         else:raise AssertionError(mode)
     text=(ROOT/'.github/workflows/callable-cli-release-publish.yml').read_text()
-    job=text.split('\n  execution_pair:\n',1)[1]
+    job=re.split(r'(?m)^  [A-Za-z0-9_-]+:$',text.split('\n  execution_pair:\n',1)[1],maxsplit=1)[0]
     assert 'inputs.pair_recovery' in job.splitlines()[0] and '!inputs.readback_only' in job.splitlines()[0]
     assert 'actions/attest@' not in job and 'Attest only the retained pair inputs' not in job
     assert 'gh attestation verify' in job and "<<'PY_PAIR_ATTESTATION'" in job

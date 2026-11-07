@@ -20,7 +20,6 @@ PYTHONDONTWRITEBYTECODE=1 python3 eng/tests/choreo-c2-tlc-retry/test_diagnostics
 # The original 0.3.0 pair controls and the dormant forward pair route run inert against the exact pinned shared journal engine.
 PYTHONDONTWRITEBYTECODE=1 python3 tests/portable-workspace/release/test_execution_pair_release.py
 PYTHONDONTWRITEBYTECODE=1 FSGG_REQUIRE_CLEAN_CANDIDATE=1 python3 tests/portable-workspace/release/test_execution_pair_forward.py
-# SDK controls get a fresh private input tree; no caller credentials enter the test child.
 python3 -I -B eng/run-ordinary-sdk-publisher-controls.py --output "$RUNNER_TEMP/compiler-and-tests/ordinary-sdk-publisher"
 dotnet build FS.GG.Coordination.sln --configuration Release --no-restore --warnaserror
 host_tests_started_ns="$(date +%s%N)"
