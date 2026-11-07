@@ -29,6 +29,13 @@ module EventEnvelope =
 
 [<RequireQualifiedAccess>]
 module PostgreSqlSchema =
+    /// The exact manifest name of the embedded root schema script.
+    [<Literal>]
+    val rootMigrationResource: string = "FS.GG.Coordination.Orchestration.PostgreSql.Migration.sql"
+
+    /// The root schema script among manifest resource names, independent of their order.
+    val selectRootMigration: string array -> string option
+
     val migrate: NpgsqlDataSource -> CancellationToken -> Task<string>
 
 type PostgreSqlStore =
