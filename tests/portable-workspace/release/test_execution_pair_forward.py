@@ -40,7 +40,7 @@ COUNTS = {}
 SOURCE, TREE, PUBLISHER, RUN, OPERATOR = '7' * 40, 'b' * 40, '9' * 40, 4242, 'EHotwagner'
 POLICY_HASH = '5182bb35a6dd682cef84ac9ce4210cfd09f38b7410d8c9cf9bae42866bcb81da'
 ORIGINAL_ADMISSION_SHA256 = 'f0859d88276effeaf3a3b038b79b448809557cb7b8c6e32d509b2bd791e20826'
-ORIGINAL_PUBLISHER_SHA256 = 'cac72a0cb73dd5e262230622556142c29a4da4129ff6b1d8909e06e16c900042'
+ORIGINAL_PUBLISHER_SHA256 = 'ba23abf44241b4570a5ae42e2313a0ef395bf0645cc4858ce9c6e40f5cee2fcc'
 # The publisher as protected at 965775d2, before the fresh strict-ten-gate CLI 0.4 route
 # (FS-GG/FS.GG.Coordination#1124). The only change since is that route: its three dispatch inputs, one
 # mutual-exclusion guard on each of the five pre-existing jobs, and the appended sdk_profile_* jobs.

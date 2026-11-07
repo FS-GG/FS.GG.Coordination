@@ -49,6 +49,23 @@ def fixture():
     return s,package,manifest,raw
 
 
+# Actual shapes measured 2026-11-07: GET rulesets/21633398 (update parameter omitted, viewer
+# metadata present) and `dotnet nuget verify --all -v normal` (SDK 10.0.403) on served 0.3.0.
+LIVE_TAG_RULESET=dict(id=21633398,name='release-tags-immutable',target='tag',source_type='Repository',source='FS-GG/FS.GG.Coordination',enforcement='active',
+                      conditions={'ref_name':{'exclude':[],'include':['refs/tags/v*','refs/tags/execution/v*']}},
+                      rules=[{'type':'deletion'},{'type':'non_fast_forward'},{'type':'required_signatures'},{'type':'update'}],
+                      node_id='RRS_fixture',created_at='2026-08-27T09:36:56.365+02:00',updated_at='2026-10-12T13:19:45.228+02:00',
+                      bypass_actors=[],current_user_can_bypass='never',_links={'self':{'href':'fixture'},'html':{'href':'fixture'}})
+VERIFY_NORMAL=(b"Verifying FS.GG.Coordination.Cli.0.3.0\n\nSignature Hash Algorithm: SHA256\nSignature type: Repository\n"
+               b"Service index: https://api.nuget.org/v3/index.json\nOwners: Paradigma11\n"
+               b"Verifying the repository primary signature with certificate: \n"
+               b"  Subject Name: CN=NuGet.org Repository by Microsoft, O=NuGet.org Repository by Microsoft, L=Redmond, S=Washington, C=US\n"
+               b"Successfully verified package 'FS.GG.Coordination.Cli.0.3.0'.\n")
+VERIFY_DEFAULT=(b"Verifying FS.GG.Coordination.Cli.0.3.0\nSignature type: Repository\n"
+                b"Verifying the repository primary signature with certificate: \n"
+                b"Successfully verified package 'FS.GG.Coordination.Cli.0.3.0'.\n")
+
+
 class Journal:
     state=None; writes=[]; fail_cas=False; lose_cas=False
     def __init__(self,*args,**kw):pass
@@ -72,6 +89,7 @@ class World:
         self.feeds={};self.sends=[];self.gets=[];self.tokens=[];self.tags=None;self.release=None;self.assets={}
         self.run_id=999;self.run_heads={999:'c'*40};self.main='c'*40;self.main_reads=0;self.stale_at=None;self.journal_change_at=None;self.lost_send=False;self.reject_send=False
         self.overrides={};self.hide_packages=False;self.publics={};self.lost_feed=None;self.lost_asset=None
+        self.foreign_releases=[];self.selftest=archive({'selftest.nuspec':b'<package/>','.signature.p7s':b'synthetic-public-signature'});self.verify_output=VERIFY_NORMAL
     def get(self,path):
         self.gets.append(path)
         if path in self.overrides:return copy.deepcopy(self.overrides[path])
@@ -96,11 +114,13 @@ class World:
             if self.tags is None:raise ENGINE.provider.NotFound('fixture absent')
             return self.tags
         if path==f'repos/{P.REPO}/releases/tags/v{P.VERSION}':
-            if self.release is None:raise ENGINE.provider.NotFound('fixture absent')
+            # Live behaviour: the by-tag endpoint 404s for a draft (.github#3578).
+            if self.release is None or self.release.get('draft') is not False:raise ENGINE.provider.NotFound('fixture absent')
             return self.release
+        if path==f'repos/{P.REPO}/releases?per_page=100&page=1':
+            return [*self.foreign_releases,*([self.release] if self.release is not None else [])]
         if path.endswith('/releases/1/assets?per_page=100'):return [{'id':i,'name':n} for i,(n,_) in enumerate(self.assets.items(),1)]
-        if path.endswith('/rulesets/21633398'):
-            v=json.loads((ROOT/'eng/repository-settings/release-tag-ruleset.json').read_bytes());v['id']=21633398;return v
+        if path.endswith('/rulesets/21633398'):return copy.deepcopy(LIVE_TAG_RULESET)
         raise AssertionError('unexpected native fixture request '+path)
     def transport(self,url,*,headers=None,cap=None,**kw):
         if url.endswith('/artifacts/101/zip'):
@@ -109,12 +129,15 @@ class World:
         if '/actions/artifacts/' in url:
             artifact=int(url.rsplit('/',2)[1]);return 200,self.publics.get(artifact-1000)
         if url.endswith('/fs.gg.coordination.cli/index.json'):return 200,P.canonical({'versions':['0.3.0']})
+        if url==P.F.feed_url('nuget',P.PACKAGE,'0.3.0'):return 200,self.selftest
         for feed in ('github','nuget'):
             if url==P.F.feed_url(feed,P.PACKAGE,P.VERSION):
                 return (200,self.feeds[feed]) if feed in self.feeds and not self.hide_packages else (404,b'')
         raise AssertionError('unexpected transport fixture request '+url)
     def execute(self,argv,root,**kw):
-        if argv[:3]==['dotnet','nuget','verify']:return types.SimpleNamespace(stdout=b'Repository Service index: https://api.nuget.org/v3/index.json',stderr=b'')
+        if argv[:3]==['dotnet','nuget','verify']:
+            assert argv[-3:]==['--all','-v','normal'],argv
+            return types.SimpleNamespace(stdout=self.verify_output,stderr=b'')
         if argv[:3]==['dotnet','tool','install']:
             installed=Path(argv[argv.index('--tool-path')+1]);package_root=installed/'.store'/P.PACKAGE.lower()/P.VERSION/P.PACKAGE.lower()/P.VERSION
             with zipfile.ZipFile(io.BytesIO(self.package)) as z:
@@ -175,7 +198,7 @@ class Controls(unittest.TestCase):
              patch.object(P,'bounded_api',return_value=self.w.api),patch.object(P.F,'UrllibTransport',return_value=types.SimpleNamespace(get=self.w.transport)), \
              patch.object(ENGINE.journal,'ProtectedReleaseJournal',Journal),patch.object(ENGINE.route,'classify_journal_destination',return_value=(Journal.state is None,'d'*40)), \
              patch.object(ENGINE.route,'authority_main',return_value='d'*40),patch.object(ENGINE.route,'ProtectedPublisherAdmission',side_effect=lambda gate,*a:gate), \
-             patch.object(P.F,'load_engine',return_value=ENGINE),patch.object(entry,'execute',side_effect=self.w.execute),patch.object(P,'advance',side_effect=lambda *a,**kw:advancing(*a,**kw,sleep=lambda _:None,**({'clock':self.advance_clock} if self.advance_clock else {}))):
+             patch.object(P.F,'load_engine',return_value=ENGINE),patch.object(entry,'execute',side_effect=self.w.execute),patch.object(entry,'PUBLIC_SELFTEST_SHA256',P.sha(self.w.selftest)),patch.object(P,'advance',side_effect=lambda *a,**kw:advancing(*a,**kw,sleep=lambda _:None,**({'clock':self.advance_clock} if self.advance_clock else {}))):
             entry.run(command,self.root/('work-'+command+'-'+str(len(list(self.root.iterdir())))),admission_path=self.path,original_run=original_run)
     def test_actual_workflow_orders_inputs_before_credentials_and_isolates_public_load(self):
         import yaml
@@ -229,8 +252,15 @@ class Controls(unittest.TestCase):
                 'eng/ordinary-sdk-profile-admission.json','eng/ordinary-sdk-publisher.py','eng/ordinary_sdk_publisher.py',
                 'eng/run-ordinary-sdk-publisher-controls.py','evidence/github-substrate-v2/gs2-06-7/execution-pins-extension.json',
                 'tests/portable-workspace/release/test_execution_pair_forward.py','tests/portable-workspace/release/test_execution_pair_release.py',
-                'tests/portable-workspace/release/test_ordinary_sdk_publisher.py','tests/portable-workspace/release/test_ordinary_sdk_publisher_runner.py']
+                'tests/portable-workspace/release/test_ordinary_sdk_publisher.py','tests/portable-workspace/release/test_ordinary_sdk_publisher_runner.py',
+                'tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs']
         self.assertTrue(P.publication_delta(actual))
+        # When protected A is in the checkout, the real delta (not this typed list) must bind too.
+        probe=subprocess.run(['git','diff','--name-only','--no-renames','965775d2b7e9df0b225490429936496f4e8fb97e','HEAD'],cwd=ROOT,capture_output=True,text=True)
+        if probe.returncode==0:
+            self.assertEqual(set(probe.stdout.split())-{p for p in probe.stdout.split() if p.startswith('docs/atlas/records/')},
+                             {p for p in actual if not p.startswith('docs/atlas/records/')})
+            self.assertTrue(P.publication_delta(probe.stdout.split()))
         for outside in ('src/FS.GG.Coordination.Cli/InstalledOrdinarySettlementProvider.fs','eng/execution_pair_forward.py',
                         '.github/workflows/callable-cli-release-prepare.yml','eng/execution-pair-release-admission.json',
                         'tests/portable-workspace/release/test_cli_profile_repair.py','docs/atlas/records/x.json'):
@@ -441,6 +471,39 @@ class Controls(unittest.TestCase):
         for name,mutate in drifts.items():
             changed=copy.deepcopy(live);mutate(changed)
             with self.subTest(drift=name),self.assertRaises(P.Refused):P.tag_policy(changed,self.s)
+    def test_signature_requires_normal_verbosity_repository_identity(self):
+        self.w.verify_output=VERIFY_NORMAL
+        with patch.object(entry,'execute',side_effect=self.w.execute):
+            entry.signature(b'fixture',self.root)
+            for output in (VERIFY_DEFAULT,VERIFY_NORMAL.replace(b'Signature type: Repository',b'Signature type: Author'),
+                           VERIFY_NORMAL.replace(b'https://api.nuget.org/v3/index.json',b'https://evil.invalid/v3/index.json'),
+                           VERIFY_NORMAL.replace(b'Successfully verified',b'Failed to verify')):
+                self.w.verify_output=output
+                with self.subTest(output=output[:40]),self.assertRaises(P.Refused):entry.signature(b'fixture',self.root)
+    def test_pre_send_policy_or_verifier_failure_has_no_journal_or_send(self):
+        for case in ('policy','verifier','selftest-bytes'):
+            with self.subTest(case=case):
+                Journal.state=None;self.w.sends=[];self.w.overrides={};self.w.verify_output=VERIFY_NORMAL
+                selftest=self.w.selftest
+                if case=='policy':
+                    drift=copy.deepcopy(LIVE_TAG_RULESET);drift['rules'].pop(2);self.w.overrides[f'repos/{P.REPO}/rulesets/21633398']=drift
+                elif case=='verifier':self.w.verify_output=VERIFY_DEFAULT
+                with self.assertRaises(P.Refused):
+                    if case=='selftest-bytes':
+                        with patch.object(entry,'PUBLIC_SELFTEST_SHA256','0'*64):
+                            entry.signature_selftest(types.SimpleNamespace(get=self.w.transport),self.root)
+                        raise AssertionError('unreachable')
+                    self.invoke()
+                self.assertIsNone(Journal.state);self.assertEqual(self.w.sends,[]);self.w.selftest=selftest
+        self.w.overrides={};self.w.verify_output=VERIFY_NORMAL
+    def test_draft_release_found_through_bounded_list_and_foreign_draft_occupies(self):
+        self.invoke();self.complete_public_receipt();self.invoke('finalize')
+        self.assertIn(f'repos/{P.REPO}/releases?per_page=100&page=1',self.w.gets)
+        self.assertEqual(self.w.release['draft'],False);self.assertEqual(len(self.w.assets),3)
+        fresh=World(self.s,self.package,self.manifest,self.raw);fresh.foreign_releases=[{'id':7,'tag_name':'v'+P.VERSION,'draft':True,'body':'foreign','target_commitish':'e'*40}]
+        with self.assertRaisesRegex(P.Refused,'occupied'):P.vacant(fresh.api('t'),types.SimpleNamespace(get=fresh.transport),'t',self.s,ENGINE.provider.NotFound)
+        fresh.foreign_releases=[{'id':7,'tag_name':'v'+P.VERSION}]*2
+        with self.assertRaisesRegex(P.Refused,'duplicate'):P.find_release(fresh.api('t'),ENGINE.provider.NotFound)
     def test_native_budget_caps_bytes_calls_and_late_results(self):
         calls=[]
         class Response:

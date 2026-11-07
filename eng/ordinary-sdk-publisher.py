@@ -30,12 +30,26 @@ def execute(argv,root,*,timeout=120):
     return subprocess.run(argv,cwd=root,env=child_env(root),capture_output=True,timeout=timeout,check=True)
 
 
+# Only normal verbosity prints the repository signature's service index (measured on the
+# served, repository-signed 0.3.0 with SDK 10.0.403); the default verbosity omits it.
+PUBLIC_SELFTEST_VERSION='0.3.0'
+PUBLIC_SELFTEST_SHA256='a3109097120cf5bff50e05345b9ec26bbdc86410bf25546a79a755c1e2e2572c'
+
+
 def signature(raw,root):
-    path=root/'served-signature.nupkg';path.write_bytes(raw)
-    result=execute(['dotnet','nuget','verify',str(path),'--all'],root,timeout=60)
+    path=root/('served-signature-'+P.sha(raw)[:16]+'.nupkg');path.write_bytes(raw)
+    result=execute(['dotnet','nuget','verify',str(path),'--all','-v','normal'],root,timeout=60)
     P.require(len(result.stdout)+len(result.stderr)<=65536,'signature output bound exceeded')
-    report=(result.stdout+result.stderr).decode('utf-8',errors='replace').lower()
-    P.require('repository' in report and 'https://api.nuget.org/v3/index.json' in report,'NuGet repository signature identity absent')
+    lines={line.strip() for line in (result.stdout+result.stderr).decode('utf-8',errors='replace').splitlines()}
+    P.require('Signature type: Repository' in lines and 'Service index: https://api.nuget.org/v3/index.json' in lines,'NuGet repository signature identity absent')
+    P.require(any(line.startswith("Successfully verified package '") for line in lines),'NuGet signature verification not reported')
+
+
+def signature_selftest(transport,root):
+    """Before any send, the actual verifier accepts a known repository-signed public package."""
+    raw=P.F.fetch_feed(transport,'',PUBLIC_SELFTEST_VERSION,'nuget',P.PACKAGE)
+    P.require(raw is not None and P.sha(raw)==PUBLIC_SELFTEST_SHA256,'public signature self-test package differs')
+    signature(raw,root)
 
 
 def public_load(s,context,directory,transport,root):
@@ -130,6 +144,11 @@ def run(command,workdir,*,admission_path=None,original_run=None):
                         nuget_key=env('NUGET_API_KEY') if command=='packages' else '',runner=lambda argv:execute(argv,workdir,timeout=300),
                         signature=lambda raw:signature(raw,workdir),readback=readback)
     provider.final_effects=planned
+    if command=='packages':
+        # Pre-send qualification of the paths finalization depends on: exact tag protection through
+        # the same policy reader, the actual signature verifier, and the bounded release lookup.
+        P.tag_policy(api_class(env('POLICY_TOKEN')).get(f'repos/{P.REPO}/rulesets/21633398'),s)
+        signature_selftest(transport,workdir)
     if command=='packages' and mode=='publish':
         P.require(fresh,'fresh package dispatch requires unused journal; preserve/reconcile original')
         P.vacant(api,transport,token,s,engine.provider.NotFound)

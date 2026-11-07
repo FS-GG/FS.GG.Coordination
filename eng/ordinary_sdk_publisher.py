@@ -42,7 +42,8 @@ B_PATHS = frozenset({ADMISSION, WORKFLOW, 'eng/ordinary_sdk_publisher.py', 'eng/
 def publication_delta(paths):
     # The two frozen 0.3.0/0.3.1 control suites are test-only: they prove the old routes are unchanged by this one.
     return all(p in B_PATHS or p in {'eng/bootstrap-gates/compiler-and-tests.sh','eng/run-ordinary-sdk-publisher-controls.py','tests/portable-workspace/release/test_ordinary_sdk_publisher_runner.py',
-               'tests/portable-workspace/release/test_execution_pair_forward.py','tests/portable-workspace/release/test_execution_pair_release.py'} or p=='docs/atlas/catalog.json' or re.fullmatch(r'docs/atlas/records/[0-9a-f]{64}\.json',p) for p in paths)
+               'tests/portable-workspace/release/test_execution_pair_forward.py','tests/portable-workspace/release/test_execution_pair_release.py',
+               'tests/FS.GG.Coordination.ArchitectureTests/BootstrapCiTests.fs'} or p=='docs/atlas/catalog.json' or re.fullmatch(r'docs/atlas/records/[0-9a-f]{64}\.json',p) for p in paths)
 
 def selection(admission):
     require(type(admission) is dict and set(admission)=={'schema','enabled','selection','sharedHelper','forward'}, 'admission fields differ')
@@ -145,6 +146,26 @@ def candidate(api, transport, token, s, directory):
     return directory
 
 
+def find_release(api,not_found):
+    try: return api.get(f'repos/{REPO}/releases/tags/v{VERSION}')
+    except not_found: pass
+    for page in range(1,11):
+        rows=api.get(f'repos/{REPO}/releases?per_page=100&page={page}')
+        require(type(rows) is list and len(rows)<=100,'release list differs')
+        matches=[r for r in rows if type(r) is dict and r.get('tag_name')=='v'+VERSION]
+        require(len(matches)<=1,'duplicate releases share the fresh tag')
+        if matches: return matches[0]
+        if len(rows)<100: return None
+    raise Refused('release list exceeds bounded lookup')
+
+
+def owned_release(api,not_found,marker,source):
+    value=find_release(api,not_found)
+    if value is None: return None
+    require(value.get('tag_name')=='v'+VERSION and value.get('body')==marker and value.get('target_commitish')==source,'foreign release collision')
+    return value
+
+
 def runtime_selection(s,context):
     require(set(context)=={'sha','runId'} and type(context['runId']) is int and context['runId']>0,'original native context absent')
     F.hexid(context['sha'],40,'original publisher')
@@ -204,10 +225,9 @@ class Provider:
         self.stage,self.github_token,self.nuget_key,self.runner,self.signature,self.readback=stage,github_token,nuget_key,runner,signature,readback
         self.marker='ordinary-sdk-profile:'+content_id(s); self.uncertain=False
     def release(self):
-        try: value=self.api.get(f'repos/{REPO}/releases/tags/v{VERSION}')
-        except self.engine.provider.NotFound: return None
-        require(value.get('tag_name')=='v'+VERSION and value.get('body')==self.marker and value.get('target_commitish')==self.s['source'],'foreign release collision')
-        return value
+        # GET releases/tags/{tag} 404s for a draft (.github#3578), so absence there falls back to
+        # the bounded authenticated release list before any draft is declared absent.
+        return owned_release(self.api,self.engine.provider.NotFound,self.marker,self.s['source'])
     def assets(self):
         release=self.release(); require(release is not None,'owned release absent')
         rows=self.api.get(f"repos/{REPO}/releases/{release['id']}/assets?per_page=100")
@@ -326,10 +346,10 @@ def vacant(api,transport,token,s,not_found):
     require(status==200 and VERSION not in F.parse_versions(raw),'public namespace occupied/unknown')
     for feed in ('github','nuget'):
         require(F.fetch_feed(transport,token,VERSION,feed,PACKAGE) is None,'feed cell occupied')
-    for path in (f'repos/{REPO}/git/ref/tags/v{VERSION}',f'repos/{REPO}/releases/tags/v{VERSION}'):
-        try: api.get(path)
-        except not_found: continue
-        raise Refused('fresh tag/release occupied')
+    try: api.get(f'repos/{REPO}/git/ref/tags/v{VERSION}')
+    except not_found: pass
+    else: raise Refused('fresh tag/release occupied')
+    require(find_release(api,not_found) is None,'fresh tag/release occupied')
 
 
 def public_receipt(s,context,raw):

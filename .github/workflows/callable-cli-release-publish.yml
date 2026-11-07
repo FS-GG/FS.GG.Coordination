@@ -1662,6 +1662,15 @@ jobs:
           ACTUAL_INSTALLATION_ID: ${{ steps.ledger.outputs.installation-id }}
           EXPECTED_INSTALLATION_ID: ${{ secrets.FSGG_ORDINARY_LEDGER_INSTALLATION_ID }}
         run: test -n "$EXPECTED_INSTALLATION_ID" && test "$ACTUAL_INSTALLATION_ID" = "$EXPECTED_INSTALLATION_ID"
+      - name: Mint existing complete tag-protection reader
+        id: policy
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          app-id: ${{ secrets.FSGG_DISPATCH_APP_ID }}
+          private-key: ${{ secrets.FSGG_DISPATCH_APP_PRIVATE_KEY }}
+          owner: FS-GG
+          repositories: FS.GG.Coordination
+          permission-administration: write
       - name: Exchange existing workflow Trusted Publishing identity
         id: successor-login
         uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841
@@ -1671,6 +1680,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           ORDINARY_LEDGER_TOKEN: ${{ steps.ledger.outputs.token }}
+          POLICY_TOKEN: ${{ steps.policy.outputs.token }}
           NUGET_API_KEY: ${{ steps.successor-login.outputs.NUGET_API_KEY }}
         run: python3 -I -B eng/ordinary-sdk-publisher.py packages --workdir "$RUNNER_TEMP/sdk-profile-packages"
       - name: Retain original stage observations
