@@ -66,5 +66,24 @@
       "reference": "FS-GG/.github#4805 @ 641072f56a40b384eb4ae611877a51ecb0685cd7"
     }
   },
-  "forward": null
+  "forward": {
+    "originalRun": 42399710679,
+    "originalPublisher": "15c3dc9107cd0dabcc45a18896573cb2eeab9d71",
+    "contentId": "sha256:7bdc436f7bf3691567980e8d51c4a1239564248bbb26355d4a6d0fee01108978",
+    "checkpoint": {
+      "generation": 5,
+      "effects": {
+        "github/run-42399710679/publisher-15c3dc9107cd0dabcc45a18896573cb2eeab9d71": "verified",
+        "nuget/run-42399710679/publisher-15c3dc9107cd0dabcc45a18896573cb2eeab9d71": "verified"
+      }
+    },
+    "tagEvidence": {
+      "evidenceSha256": "dd8803e611a7d4986b7ab99306819a41322ad639a41715b18a55b40baa88e0e2",
+      "reference": "FS-GG/FS.GG.Coordination#1124 issuecomment-6711277838: tag_projection of ruleset 21633398 re-read ~19:15Z; rechecked before sends and at finalize"
+    },
+    "authorization": {
+      "evidenceSha256": "5a2f522fad9bffc5a6c35fc6f0fd9ba35afe55e76524f19a1415de270e980391",
+      "reference": "FS-GG/FS.GG.Coordination#1124 issuecomment-6711277838 (sha256 of exact body): readback + proposed original-forward; merging this reviewed PR is Root admission"
+    }
+  }
 }
