@@ -338,11 +338,29 @@ class Controls(unittest.TestCase):
         with self.assertRaisesRegex(lock.LockError,'not acquired'):
             lock.acquire(api,repo=P.REPO,run_id=99,runner_name='injected-writer',max_wait=3,
                          clock=lambda:now[0],sleep=sleep,settle=0,confirm=0,poll_first=1,poll_max=1,log=lambda _:None)
-    def test_actual_disabled_commands_refuse_before_credentials(self):
+    def test_actual_committed_admission_refuses_outside_native_caller_before_credentials(self):
+        committed=json.loads((ROOT/P.ADMISSION).read_bytes())
+        expected=b'publisher caller differs: GITHUB_REPOSITORY' if committed['enabled'] else b'disabled; selection absent'
         for command in ('bind','preflight','packages','public-load','finalize','observe','qualify-finalize','qualify-original'):
             env={'PATH':os.environ['PATH']}
             result=subprocess.run([sys.executable,str(ROOT/'eng/ordinary-sdk-publisher.py'),command,'--workdir',str(self.root/command)],env=env,capture_output=True,timeout=10)
-            self.assertEqual(result.returncode,3);self.assertIn(b'disabled; selection absent',result.stderr);self.assertFalse((self.root/command).exists())
+            self.assertEqual(result.returncode,3);self.assertIn(expected,result.stderr);self.assertFalse((self.root/command).exists())
+    def test_committed_enabled_admission_binds_exactly_the_accepted_candidate_and_live_policy(self):
+        committed=json.loads((ROOT/P.ADMISSION).read_bytes())
+        if not committed['enabled']:
+            self.assertIsNone(committed['selection']);self.assertIsNone(committed['forward']);return
+        s=P.selection(committed);self.assertIsNone(committed['forward'])
+        source='965775d2b7e9df0b225490429936496f4e8fb97e'
+        self.assertEqual({k:s[k] for k in ('operation','version','source','tree','protectedMerge','journal','operator','nugetUser')},
+                         dict(operation='publish-sdk-profile-040-965775d2b7e9',version='0.4.0',source=source,tree='ffbdf32db309b300a4d60414d88c4e80fe80e8ad',
+                              protectedMerge=source,journal={'id':'sdk-profile-040-965775d2b7e9'},operator='EHotwagner',nugetUser='Paradigma11'))
+        self.assertEqual(s['candidate'],dict(runId=41992260121,artifactId=13397798973,archiveSha256='d21b339e301062cac39b2981678179973f70ed36aa1be654bc282e5c7e6ddff6',
+                                             manifestSha256='8f0ef69486a167be19434add6435a31aa9c902ff0ce555a9c1915d68502bd6f1',
+                                             packageSha256='262c366b4b0e0c766b302dac861806dd1a7a94b9b86e572f25eebbb31a31969f'))
+        self.assertEqual(s['publisherFiles'],{n:P.sha((ROOT/n).read_bytes()) for n in P.B_PATHS-{P.ADMISSION}})
+        self.assertEqual(s['liveEvidence']['tagProtection']['evidenceSha256'],P.sha(P.canonical(P.tag_projection(LIVE_TAG_RULESET))))
+        self.assertEqual(committed['sharedHelper'],PIN)
+        self.assertTrue(all(len(v['reference'])<=200 for v in s['liveEvidence'].values()))
     def test_selection_refuses_absent_and_malformed_native_ids(self):
         a=json.loads(self.path.read_bytes());self.assertEqual(P.selection(a),self.s)
         for key,value in [('runId',None),('runId',True),('artifactId',0),('archiveSha256','0'*64),('packageSha256',None)]:
