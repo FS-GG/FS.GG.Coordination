@@ -292,11 +292,22 @@ def advance(engine,s,planned,journal,admission,provider,context,*,sleep=time.sle
     raise Refused('finite transition bound exhausted; retain original')
 
 
-def tag_policy(actual,s):
+def tag_projection(actual):
+    """Viewer-independent policy projection. The REST response omits the default update parameter
+    and carries viewer/link metadata (current_user_can_bypass, _links, node_id, timestamps), so only
+    the desired keys plus id are hashed; an omitted update parameter means its default false."""
     desired=strict_json((ROOT/'eng/repository-settings/release-tag-ruleset.json').read_bytes())
     require(type(actual) is dict and actual.get('id')==21633398 and 'bypass_actors' in actual,'tag protection incomplete')
-    require({k:actual.get(k) for k in desired}==desired,'tag protection differs')
-    require(sha(canonical(actual))==s.get('forwardTagEvidence',s['liveEvidence']['tagProtection'])['evidenceSha256'],'selected tag protection evidence changed')
+    rules=actual.get('rules')
+    require(type(rules) is list and all(type(r) is dict for r in rules),'tag protection rules malformed')
+    rules=[{**r,'parameters':{'update_allows_fetch_and_merge':False}} if r.get('type')=='update' and set(r)=={'type'} else r for r in rules]
+    projection={**{k:actual.get(k) for k in desired},'rules':rules,'id':actual['id']}
+    require({k:projection[k] for k in desired}==desired,'tag protection differs')
+    return projection
+
+
+def tag_policy(actual,s):
+    require(sha(canonical(tag_projection(actual)))==s.get('forwardTagEvidence',s['liveEvidence']['tagProtection'])['evidenceSha256'],'selected tag protection evidence changed')
 
 
 def vacant(api,transport,token,s,not_found):

@@ -423,6 +423,24 @@ class Controls(unittest.TestCase):
         sends=list(self.w.sends)
         with self.assertRaises((P.Refused,ENGINE.EngineRefused)):self.invoke('finalize')
         self.assertEqual(self.w.sends,sends)
+    def test_tag_policy_projection_accepts_actual_rest_shape_and_refuses_drift(self):
+        # Shape of the live GET (2026-11-07): default update parameter omitted, viewer/link metadata present.
+        live=dict(id=21633398,name='release-tags-immutable',target='tag',source_type='Repository',source=P.REPO,enforcement='active',
+                  conditions={'ref_name':{'exclude':[],'include':['refs/tags/v*','refs/tags/execution/v*']}},
+                  rules=[{'type':'deletion'},{'type':'non_fast_forward'},{'type':'required_signatures'},{'type':'update'}],
+                  node_id='fixture',created_at='2026-08-27T09:36:56.365+02:00',updated_at='2026-10-12T13:19:45.228+02:00',
+                  bypass_actors=[],current_user_can_bypass='never',_links={'self':{'href':'fixture'}})
+        P.tag_policy(live,self.s)
+        for viewer in ('always','pull_requests_only'):
+            P.tag_policy({**live,'current_user_can_bypass':viewer,'node_id':'other','_links':{}},self.s)
+        drifts={'bypass-absent':lambda v:v.pop('bypass_actors'),'bypass-actor':lambda v:v.update(bypass_actors=[{'actor_id':1,'actor_type':'Integration','bypass_mode':'always'}]),
+                'update-allows-merge':lambda v:v['rules'][3].update(parameters={'update_allows_fetch_and_merge':True}),
+                'signature-dropped':lambda v:v['rules'].pop(2),'extra-rule':lambda v:v['rules'].append({'type':'creation'}),
+                'evaluate':lambda v:v.update(enforcement='evaluate'),'scope':lambda v:v['conditions']['ref_name']['include'].pop(),
+                'id':lambda v:v.update(id=1),'rules-malformed':lambda v:v.update(rules=['update'])}
+        for name,mutate in drifts.items():
+            changed=copy.deepcopy(live);mutate(changed)
+            with self.subTest(drift=name),self.assertRaises(P.Refused):P.tag_policy(changed,self.s)
     def test_native_budget_caps_bytes_calls_and_late_results(self):
         calls=[]
         class Response:
